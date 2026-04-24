@@ -7,8 +7,8 @@ from app.services.auth_service import authenticate_bearer, authorize_scope
 from app.services.log_service import read_run_logs
 from app.services.project_service import list_projects
 from app.services.queue_service import replay_dlq_for_run
-from app.services.run_service import create_run, get_run, list_runs, mark_run_running
-from app.services.task_service import list_tasks_by_run
+from app.services.run_service import create_run, get_pipeline_dag, get_run, list_pipelines, list_runs, mark_run_running
+from app.services.task_service import get_task_by_id, list_tasks_by_run
 
 router = APIRouter()
 
@@ -70,6 +70,37 @@ def list_runs_v1(
     }
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/pipelines")
+def list_pipelines_v1(
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "limit": limit,
+        "offset": offset,
+        "items": list_pipelines(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset),
+    }
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/dag")
+def get_pipeline_dag_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return get_pipeline_dag(tenant_id=tenant_id, project_id=project_id, pipeline_id=pipeline_id)
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}")
 def get_run_v1(tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
@@ -96,6 +127,21 @@ def list_run_tasks_v1(
         "run_id": run_id,
         "items": list_tasks_by_run(run_id),
     }
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}")
+def get_task_v1(
+    tenant_id: str,
+    project_id: str,
+    task_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    task = get_task_by_id(tenant_id=tenant_id, project_id=project_id, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task_not_found")
+    return task
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/dlq/replay")

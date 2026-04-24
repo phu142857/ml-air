@@ -25,6 +25,14 @@ export type LogItem = {
   message: string;
 };
 
+export type PipelineItem = {
+  pipeline_id: string;
+  latest_run_id: string;
+  latest_status: string;
+  updated_at: string;
+  total_runs: number;
+};
+
 function authHeaders(token: string) {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -96,4 +104,24 @@ export async function replayDlq(tenantId: string, projectId: string, runId: stri
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { run_id: string; replayed: number };
+}
+
+export async function fetchPipelines(tenantId: string, projectId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines?limit=100`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: PipelineItem[] };
+}
+
+export async function fetchPipelineDag(tenantId: string, projectId: string, pipelineId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${pipelineId}/dag`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { pipeline_id: string; run_id?: string; nodes: Array<{ id: string; label: string; status: string }>; edges: Array<{ source: string; target: string }> };
 }

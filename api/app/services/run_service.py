@@ -125,3 +125,84 @@ def list_runs(tenant_id: str, project_id: str, limit: int = 50, offset: int = 0)
             )
             rows = cur.fetchall()
     return [_row_to_run(row) for row in rows]
+
+
+def list_pipelines(tenant_id: str, project_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
+    safe_limit = max(1, min(limit, 200))
+    safe_offset = max(0, offset)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                WITH ranked AS (
+                    SELECT
+                        pipeline_id,
+                        run_id,
+                        status,
+                        updated_at,
+                        ROW_NUMBER() OVER (PARTITION BY pipeline_id ORDER BY updated_at DESC) AS rn,
+                        COUNT(*) OVER (PARTITION BY pipeline_id) AS total_runs
+                    FROM runs
+                    WHERE tenant_id = %s AND project_id = %s
+                )
+                SELECT pipeline_id, run_id, status, updated_at, total_runs
+                FROM ranked
+                WHERE rn = 1
+                ORDER BY updated_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (tenant_id, project_id, safe_limit, safe_offset),
+            )
+            rows = cur.fetchall()
+
+    return [
+        {
+            "pipeline_id": row[0],
+            "latest_run_id": row[1],
+            "latest_status": row[2],
+            "updated_at": row[3].isoformat(),
+            "total_runs": row[4],
+        }
+        for row in rows
+    ]
+
+
+def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT run_id
+                FROM runs
+                WHERE tenant_id = %s AND project_id = %s AND pipeline_id = %s
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, pipeline_id),
+            )
+            latest = cur.fetchone()
+
+            if not latest:
+                return {"pipeline_id": pipeline_id, "nodes": [], "edges": []}
+
+            run_id = latest[0]
+            cur.execute(
+                """
+                SELECT task_id, status
+                FROM tasks
+                WHERE run_id = %s
+                ORDER BY created_at ASC
+                """,
+                (run_id,),
+            )
+            task_rows = cur.fetchall()
+
+    nodes = [
+        {"id": row[0], "label": row[0], "status": row[1]}
+        for row in task_rows
+    ]
+    edges = []
+    for idx in range(1, len(task_rows)):
+        edges.append({"source": task_rows[idx - 1][0], "target": task_rows[idx][0]})
+
+    return {"pipeline_id": pipeline_id, "run_id": run_id, "nodes": nodes, "edges": edges}

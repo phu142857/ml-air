@@ -27,6 +27,7 @@
 - [x] Phase 4 - Next.js frontend foundation (TypeScript, Tailwind, TanStack Query, React Flow, Recharts)
 - [x] Phase 4 - migrated operational UI flow into Next.js and removed legacy static `index.html`
 - [x] Phase 4 - frontend componentization (layout/sections split for maintainability)
+- [x] Phase 4 - route-based frontend pages (`/dashboard`, `/pipelines`, `/runs`, `/tasks`, `/settings`)
 - [x] Phase 5 - RBAC + tenant/project scope enforcement (dev bearer tokens)
 - [x] Phase 5 - JWT integration (HS256 claims validation)
 - [x] Phase 5 - OAuth2 issuer/JWKS integration (JWT RS256 via JWKS URL)
