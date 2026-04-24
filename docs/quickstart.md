@@ -87,6 +87,28 @@ curl "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<ru
 curl "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/logs"
 ```
 
+## Tracking APIs quick check
+
+```bash
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/experiments" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"baseline-exp","description":"first experiment"}'
+
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/params" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"lr","value":"0.001"}'
+
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/metrics" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"accuracy","value":0.95,"step":1}'
+
+curl "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/tracking" \
+  -H "Authorization: Bearer viewer-token"
+```
+
 ## Stream logs via WebSocket
 
 ```bash

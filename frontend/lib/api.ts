@@ -33,6 +33,13 @@ export type PipelineItem = {
   total_runs: number;
 };
 
+export type RunTracking = {
+  run_id: string;
+  params: Array<{ key: string; value: string; logged_at: string }>;
+  metrics: Array<{ key: string; value: number; step: number; logged_at: string }>;
+  artifacts: Array<{ artifact_id: string; path: string; uri?: string | null; logged_at: string }>;
+};
+
 export type PluginItem = {
   name: string;
   version: string;
@@ -144,6 +151,27 @@ export async function fetchTask(tenantId: string, projectId: string, taskId: str
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as TaskItem & { tenant_id: string; project_id: string; pipeline_id: string };
+}
+
+export async function fetchRunTracking(tenantId: string, projectId: string, runId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/runs/${runId}/tracking`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunTracking;
+}
+
+export async function compareRunMetrics(tenantId: string, projectId: string, runIds: string[], token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/runs/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({ run_ids: runIds })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: Array<{ run_id: string; key: string; value: number; step: number; logged_at: string }> };
 }
 
 export async function fetchPlugins(token: string) {

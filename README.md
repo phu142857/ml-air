@@ -12,6 +12,7 @@ ML-AIR is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestr
 - `docs/operations-disaster-recovery-checklist.md`: DR activation checklist.
 - `docs/operations-slo-sla-incident-runbook.md`: SLO/SLA and incident handling guide.
 - `docs/plugin-development-guide.md`: plugin contract and packaging guide.
+- `sdk/`: lightweight client helpers (`log_param`, `log_metric`, `log_artifact`) for plugin/runtime tracking.
 
 ## Repository Skeleton
 

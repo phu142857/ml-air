@@ -3,6 +3,13 @@ import asyncio
 from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from app.services.model_registry_service import (
+    create_model,
+    create_model_version,
+    list_model_versions,
+    list_models,
+    promote_model_version,
+)
 from app.plugins.registry import plugin_registry
 from app.services.auth_service import authenticate_bearer, authorize_scope
 from app.services.log_service import read_run_logs
@@ -10,6 +17,15 @@ from app.services.project_service import list_projects
 from app.services.queue_service import replay_dlq_for_run
 from app.services.run_service import create_run, get_pipeline_dag, get_run, list_pipelines, list_runs, mark_run_running
 from app.services.task_service import get_task_by_id, list_tasks_by_run
+from app.services.tracking_service import (
+    compare_runs,
+    create_experiment,
+    get_run_tracking,
+    list_experiments,
+    log_artifact,
+    log_metric,
+    log_param,
+)
 from app.services.trace_service import get_trace_id
 
 router = APIRouter()
@@ -17,6 +33,7 @@ router = APIRouter()
 
 class TriggerRunIn(BaseModel):
     pipeline_id: str = Field(min_length=1)
+    experiment_id: str | None = None
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
     max_parallel_tasks: int = Field(default=1, ge=1, le=20)
@@ -28,6 +45,47 @@ class PluginValidateIn(BaseModel):
 
 class PluginToggleIn(BaseModel):
     enabled: bool = True
+
+
+class CreateExperimentIn(BaseModel):
+    name: str = Field(min_length=1)
+    description: str | None = None
+
+
+class LogParamIn(BaseModel):
+    key: str = Field(min_length=1)
+    value: str
+
+
+class LogMetricIn(BaseModel):
+    key: str = Field(min_length=1)
+    value: float
+    step: int = 0
+
+
+class LogArtifactIn(BaseModel):
+    path: str = Field(min_length=1)
+    uri: str | None = None
+
+
+class CompareRunsIn(BaseModel):
+    run_ids: list[str] = Field(default_factory=list)
+
+
+class CreateModelIn(BaseModel):
+    name: str = Field(min_length=1)
+    description: str | None = None
+
+
+class CreateModelVersionIn(BaseModel):
+    run_id: str | None = None
+    artifact_uri: str | None = None
+    stage: str = "staging"
+
+
+class PromoteModelVersionIn(BaseModel):
+    version: int = Field(ge=1)
+    stage: str = "production"
 
 
 @router.get("/tenants/{tenant_id}/projects")
@@ -58,6 +116,7 @@ def trigger_run_v1(
         priority=payload.priority,
         max_parallel_tasks=payload.max_parallel_tasks,
         trace_id=get_trace_id(),
+        experiment_id=payload.experiment_id,
     )
     return run
 
@@ -222,6 +281,145 @@ def whoami_v1(authorization: str | None = Header(default=None)) -> dict:
         "tenant_id": principal.tenant_id,
         "project_ids": principal.project_ids,
     }
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/experiments")
+def create_experiment_v1(
+    tenant_id: str, project_id: str, payload: CreateExperimentIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return create_experiment(tenant_id=tenant_id, project_id=project_id, name=payload.name, description=payload.description)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/experiments")
+def list_experiments_v1(
+    tenant_id: str, project_id: str, limit: int = 100, offset: int = 0, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {"items": list_experiments(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset)}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/params")
+def log_param_v1(
+    tenant_id: str, project_id: str, run_id: str, payload: LogParamIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return log_param(run_id=run_id, key=payload.key, value=payload.value)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/metrics")
+def log_metric_v1(
+    tenant_id: str, project_id: str, run_id: str, payload: LogMetricIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return log_metric(run_id=run_id, key=payload.key, value=payload.value, step=payload.step)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/artifacts")
+def log_artifact_v1(
+    tenant_id: str, project_id: str, run_id: str, payload: LogArtifactIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return log_artifact(run_id=run_id, path=payload.path, uri=payload.uri)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tracking")
+def get_run_tracking_v1(
+    tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return get_run_tracking(run_id)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/compare")
+def compare_runs_v1(
+    tenant_id: str, project_id: str, payload: CompareRunsIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    # verify run scope before compare
+    safe_ids: list[str] = []
+    for run_id in payload.run_ids:
+        run = get_run(run_id)
+        if run and run["tenant_id"] == tenant_id and run["project_id"] == project_id:
+            safe_ids.append(run_id)
+    return compare_runs(safe_ids)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models")
+def create_model_v1(
+    tenant_id: str, project_id: str, payload: CreateModelIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return create_model(tenant_id=tenant_id, project_id=project_id, name=payload.name, description=payload.description)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models")
+def list_models_v1(
+    tenant_id: str, project_id: str, limit: int = 100, offset: int = 0, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {"items": list_models(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset)}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")
+def create_model_version_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: CreateModelVersionIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return create_model_version(
+        model_id=model_id, run_id=payload.run_id, artifact_uri=payload.artifact_uri, stage=payload.stage
+    )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")
+def list_model_versions_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {"items": list_model_versions(model_id)}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/promote")
+def promote_model_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: PromoteModelVersionIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    try:
+        return promote_model_version(model_id=model_id, version=payload.version, stage=payload.stage)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/plugins")

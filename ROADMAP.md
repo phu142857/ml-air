@@ -51,6 +51,11 @@
 - [x] Phase 7 - plugin runtime APIs (`/v1/plugins`, `/v1/plugins/{name}`, `/validate`, `/reload`, `/toggle`)
 - [x] Phase 7 - plugin loader/registry baseline (entry points, duplicate/invalid skip, enable/disable)
 - [x] Phase 7 - plugin-aware UI in control plane settings (list/detail/ui_schema/validate/toggle/reload)
+- [x] Phase 8 - tracking metadata schema (experiments, params, metrics, artifacts) + model registry baseline tables
+- [x] Phase 8 - tracking APIs (`/experiments`, `/runs/{id}/params|metrics|artifacts`, `/runs/{id}/tracking`, `/runs/compare`)
+- [x] Phase 8 - model registry APIs (`/models`, `/models/{id}/versions`, `/models/{id}/promote`)
+- [x] Phase 8 - SDK logging helpers (`sdk.log_param`, `sdk.log_metric`, `sdk.log_artifact`)
+- [x] Phase 8 - runs compare UX baseline (multi-select runs + metrics compare output)
 
 ## Definition of Production-Ready
 

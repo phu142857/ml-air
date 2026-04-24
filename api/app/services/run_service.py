@@ -13,8 +13,9 @@ def _row_to_run(row: tuple) -> dict:
         "idempotency_key": row[5],
         "priority": row[6],
         "max_parallel_tasks": row[7],
-        "created_at": row[8].isoformat(),
-        "updated_at": row[9].isoformat(),
+        "experiment_id": row[8],
+        "created_at": row[9].isoformat(),
+        "updated_at": row[10].isoformat(),
     }
 
 
@@ -26,6 +27,7 @@ def create_run(
     priority: str = "normal",
     max_parallel_tasks: int = 1,
     trace_id: str | None = None,
+    experiment_id: str | None = None,
 ) -> dict:
     normalized_priority = priority.lower()
     if normalized_priority not in {"high", "normal", "low"}:
@@ -35,7 +37,7 @@ def create_run(
             if idempotency_key:
                 cur.execute(
                     """
-                    SELECT run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, created_at, updated_at
+                    SELECT run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id, created_at, updated_at
                     FROM runs
                     WHERE tenant_id = %s AND project_id = %s AND idempotency_key = %s
                     """,
@@ -48,9 +50,9 @@ def create_run(
             run_id = str(uuid4())
             cur.execute(
                 """
-                INSERT INTO runs(run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, created_at, updated_at
+                INSERT INTO runs(run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id, created_at, updated_at
                 """,
                 (
                     run_id,
@@ -61,6 +63,7 @@ def create_run(
                     idempotency_key,
                     normalized_priority,
                     max_parallel_tasks,
+                    experiment_id,
                 ),
             )
             created = cur.fetchone()
@@ -85,7 +88,7 @@ def get_run(run_id: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, created_at, updated_at
+                SELECT run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id, created_at, updated_at
                 FROM runs
                 WHERE run_id = %s
                 """,
@@ -117,7 +120,7 @@ def list_runs(tenant_id: str, project_id: str, limit: int = 50, offset: int = 0)
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, created_at, updated_at
+                SELECT run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id, created_at, updated_at
                 FROM runs
                 WHERE tenant_id = %s AND project_id = %s
                 ORDER BY created_at DESC
