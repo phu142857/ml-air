@@ -4,20 +4,25 @@
 
 - [x] Phase 1 - monorepo skeleton (`frontend/api/executor/sdk/deploy/docs`)
 - [x] Phase 1 - API v1 skeleton and tenant/project scoped run APIs
-- [x] Phase 1 - Postgres persistence for `runs` and `tasks` (bootstrap from app startup)
-- [ ] Phase 1 - Alembic migrations initialized
+- [x] Phase 1 - Postgres persistence for `runs` and `tasks` (managed by migration)
+- [x] Phase 1 - Alembic migrations initialized
 - [x] Phase 1 - local quickstart via docker compose
 - [x] Phase 2 - Redis queue wired (`runs:new`, `tasks:default`, `tasks:done`)
 - [x] Phase 2 - stateless `executor` service consuming queue
 - [x] Phase 2 - queue-backed flow API -> scheduler -> worker
-- [ ] Phase 2 - concurrency control (`max_parallel_tasks`, queue priority)
+- [x] Phase 2 - concurrency control (`max_parallel_tasks`, queue priority)
 - [x] Phase 3 - dedicated `scheduler` service separated from API
 - [x] Phase 3 - state transitions persisted in DB (`PENDING/RUNNING/SUCCESS/FAILED`)
 - [x] Phase 3 - transition guard basic (invalid transition blocked)
-- [ ] Phase 3 - retry/backoff engine and DLQ replay endpoint
-- [ ] Phase 4 - UI DAG/run timeline + realtime logs
-- [ ] Phase 5 - JWT/RBAC + tenant policy enforcement
-- [ ] Phase 6 - Helm/K8s + CI/CD pipeline
+- [x] Phase 3 - retry/backoff engine and DLQ replay endpoint
+- [x] Phase 4 - backend realtime run log API + WebSocket stream
+- [x] Phase 4 - UI run detail/task timeline + realtime logs (MVP)
+- [x] Phase 4 - runs dashboard (list/filter/select + auto refresh)
+- [x] Phase 5 - RBAC + tenant/project scope enforcement (dev bearer tokens)
+- [x] Phase 5 - JWT integration (HS256 claims validation)
+- [x] Phase 5 - OAuth2 issuer/JWKS integration (JWT RS256 via JWKS URL)
+- [x] Phase 6 - Helm/K8s baseline chart (`charts/ml-air`)
+- [ ] Phase 6 - CI/CD pipeline (build/push/deploy automation)
 
 ## Definition of Production-Ready
 

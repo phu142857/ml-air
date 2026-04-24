@@ -9,7 +9,7 @@ from redis import Redis
 RUN_ALLOWED_TRANSITIONS = {
     "PENDING": {"RUNNING", "FAILED", "CANCELLED"},
     "RUNNING": {"SUCCESS", "FAILED", "CANCELLED"},
-    "FAILED": set(),
+    "FAILED": {"RUNNING"},
     "SUCCESS": set(),
     "CANCELLED": set(),
 }
@@ -31,6 +31,32 @@ def _redis() -> Redis:
 
 def _db_url() -> str:
     return os.getenv("ML_AIR_DATABASE_URL", "postgresql://mlair:mlair@postgres:5432/mlair")
+
+
+def _queue_name_for_priority(priority: str) -> str:
+    if priority == "high":
+        return "mlair:tasks:high"
+    if priority == "low":
+        return "mlair:tasks:low"
+    return "mlair:tasks:default"
+
+
+def _project_running_tasks(tenant_id: str, project_id: str) -> int:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM tasks t
+                JOIN runs r ON r.run_id = t.run_id
+                WHERE r.tenant_id = %s
+                  AND r.project_id = %s
+                  AND t.status = 'RUNNING'
+                """,
+                (tenant_id, project_id),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
 
 
 def _transition_run_status(run_id: str, next_status: str) -> None:
@@ -73,6 +99,16 @@ def _upsert_or_transition_task(task_id: str, run_id: str, next_status: str, atte
             )
 
 
+def _load_task_retry_policy(task_id: str) -> tuple[int, int]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT max_attempts, backoff_ms FROM tasks WHERE task_id = %s", (task_id,))
+            row = cur.fetchone()
+            if not row:
+                return (3, 1000)
+            return (int(row[0]), int(row[1]))
+
+
 def main() -> None:
     client = _redis()
     print("scheduler started")
@@ -83,18 +119,28 @@ def main() -> None:
             run_event = json.loads(raw_payload)
             run_id = run_event["run_id"]
             task_id = f"{run_id}:task:1"
-            _transition_run_status(run_id, "RUNNING")
-            _upsert_or_transition_task(task_id=task_id, run_id=run_id, next_status="PENDING", attempt=1)
-            _upsert_or_transition_task(task_id=task_id, run_id=run_id, next_status="RUNNING", attempt=1)
-            task_event = {
-                "event_type": "task_ready",
-                "run_id": run_id,
-                "task_id": task_id,
-                "attempt": 1,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            client.rpush("mlair:tasks:default", json.dumps(task_event))
-            print(f"scheduled run {run_id} -> task {task_id}")
+            tenant_id = run_event.get("tenant_id", "default")
+            project_id = run_event.get("project_id", "default_project")
+            max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
+            if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
+                client.rpush("mlair:runs:new", raw_payload)
+                time.sleep(0.2)
+            else:
+                _transition_run_status(run_id, "RUNNING")
+                _upsert_or_transition_task(task_id=task_id, run_id=run_id, next_status="PENDING", attempt=1)
+                _upsert_or_transition_task(task_id=task_id, run_id=run_id, next_status="RUNNING", attempt=1)
+                queue_name = _queue_name_for_priority(run_event.get("priority", "normal"))
+                task_event = {
+                    "event_type": "task_ready",
+                    "run_id": run_id,
+                    "task_id": task_id,
+                    "attempt": 1,
+                    "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
+                    "priority": run_event.get("priority", "normal"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                client.rpush(queue_name, json.dumps(task_event))
+                print(f"scheduled run {run_id} -> task {task_id} ({queue_name})")
 
         done_msg = client.blpop("mlair:tasks:done", timeout=1)
         if done_msg:
@@ -109,7 +155,43 @@ def main() -> None:
             if done_event["status"] == "SUCCESS":
                 _transition_run_status(done_event["run_id"], "SUCCESS")
             else:
-                _transition_run_status(done_event["run_id"], "FAILED")
+                max_attempts, backoff_ms = _load_task_retry_policy(done_event["task_id"])
+                current_attempt = int(done_event.get("attempt", 1))
+                if current_attempt < max_attempts:
+                    retry_attempt = current_attempt + 1
+                    _upsert_or_transition_task(
+                        task_id=done_event["task_id"],
+                        run_id=done_event["run_id"],
+                        next_status="RETRY",
+                        attempt=retry_attempt,
+                    )
+                    _upsert_or_transition_task(
+                        task_id=done_event["task_id"],
+                        run_id=done_event["run_id"],
+                        next_status="RUNNING",
+                        attempt=retry_attempt,
+                    )
+                    delay_seconds = (backoff_ms * (2 ** (current_attempt - 1))) / 1000.0
+                    time.sleep(delay_seconds)
+                    retry_event = {
+                        "event_type": "task_ready",
+                        "run_id": done_event["run_id"],
+                        "task_id": done_event["task_id"],
+                        "attempt": retry_attempt,
+                        "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
+                        "priority": done_event.get("priority", "normal"),
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    retry_queue = _queue_name_for_priority(done_event.get("priority", "normal"))
+                    client.rpush(retry_queue, json.dumps(retry_event))
+                    print(
+                        f'retry task {done_event["task_id"]} attempt {retry_attempt}/{max_attempts} '
+                        f'after {delay_seconds:.2f}s'
+                    )
+                else:
+                    _transition_run_status(done_event["run_id"], "FAILED")
+                    client.rpush("mlair:tasks:dlq", raw_done)
+                    print(f'task moved to dlq: {done_event["task_id"]}')
             print(
                 f'completed task {done_event["task_id"]} with {done_event["status"]} '
                 f'for run {done_event["run_id"]}'

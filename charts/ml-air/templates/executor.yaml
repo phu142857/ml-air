@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-air-executor
+spec:
+  replicas: {{ .Values.executor.replicaCount }}
+  selector:
+    matchLabels:
+      app: ml-air-executor
+  template:
+    metadata:
+      labels:
+        app: ml-air-executor
+    spec:
+      containers:
+        - name: executor
+          image: "{{ .Values.executor.image.repository }}:{{ .Values.executor.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: ML_AIR_REDIS_URL
+              value: {{ .Values.executor.env.redisUrl | quote }}
+            - name: ML_AIR_DATABASE_URL
+              value: {{ .Values.executor.env.databaseUrl | quote }}

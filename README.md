@@ -17,6 +17,7 @@ ML-AIR is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestr
 - `executor/`: task runner/worker service.
 - `sdk/`: plugin and integration contracts.
 - `deploy/`: Docker Compose and deployment assets.
+- `charts/`: Helm chart for Kubernetes baseline deploy.
 - `docs/`: operating docs and guides.
 
 ## Design Principles
@@ -31,6 +32,7 @@ ML-AIR is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestr
 
 ```bash
 docker compose -f deploy/docker-compose.quickstart.yml up -d --build
+open http://localhost:38080
 curl http://localhost:8080/health
 curl "http://localhost:8080/v1/tenants/default/projects?limit=10"
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/runs" \

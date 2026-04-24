@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-air-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-air-redis
+  template:
+    metadata:
+      labels:
+        app: ml-air-redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.redis.servicePort }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-air-redis
+spec:
+  selector:
+    app: ml-air-redis
+  ports:
+    - port: {{ .Values.redis.servicePort }}
+      targetPort: {{ .Values.redis.servicePort }}

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-air-scheduler
+spec:
+  replicas: {{ .Values.scheduler.replicaCount }}
+  selector:
+    matchLabels:
+      app: ml-air-scheduler
+  template:
+    metadata:
+      labels:
+        app: ml-air-scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: "{{ .Values.scheduler.image.repository }}:{{ .Values.scheduler.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: ML_AIR_REDIS_URL
+              value: {{ .Values.scheduler.env.redisUrl | quote }}
+            - name: ML_AIR_DATABASE_URL
+              value: {{ .Values.scheduler.env.databaseUrl | quote }}

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-air-api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      app: ml-air-api
+  template:
+    metadata:
+      labels:
+        app: ml-air-api
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ML_AIR_REDIS_URL
+              value: {{ .Values.api.env.redisUrl | quote }}
+            - name: ML_AIR_DATABASE_URL
+              value: {{ .Values.api.env.databaseUrl | quote }}
+            - name: ML_AIR_JWT_HS256_SECRET
+              value: {{ .Values.api.env.jwtHs256Secret | quote }}
+            - name: ML_AIR_JWT_ISSUER
+              value: {{ .Values.api.env.jwtIssuer | quote }}
+            - name: ML_AIR_JWT_AUDIENCE
+              value: {{ .Values.api.env.jwtAudience | quote }}
+            - name: ML_AIR_JWT_JWKS_URL
+              value: {{ .Values.api.env.jwtJwksUrl | quote }}
+            - name: ML_AIR_JWT_JWKS_CACHE_TTL_SECONDS
+              value: {{ .Values.api.env.jwtJwksCacheTtlSeconds | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-air-api
+spec:
+  type: {{ .Values.api.service.type }}
+  selector:
+    app: ml-air-api
+  ports:
+    - port: {{ .Values.api.service.port }}
+      targetPort: 8080

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-air-frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: ml-air-frontend
+  template:
+    metadata:
+      labels:
+        app: ml-air-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-air-frontend
+spec:
+  type: {{ .Values.frontend.service.type }}
+  selector:
+    app: ml-air-frontend
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: 80

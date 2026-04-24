@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ML-AIR UI (Phase 4)</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+      .wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+      .card { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      input, select, button { border-radius: 8px; border: 1px solid #475569; background: #0b1220; color: #e2e8f0; padding: 8px 10px; }
+      button { cursor: pointer; background: #1d4ed8; border: none; }
+      button.secondary { background: #334155; }
+      pre { margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow: auto; background: #020617; padding: 10px; border-radius: 8px; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { border-bottom: 1px solid #334155; text-align: left; padding: 8px; }
+      .small { font-size: 12px; color: #94a3b8; }
+      .ok { color: #22c55e; }
+      .bad { color: #ef4444; }
+      .chip { border-radius: 999px; padding: 2px 8px; font-size: 12px; display: inline-block; }
+      .chip-pending { background: #334155; color: #e2e8f0; }
+      .chip-running { background: #1d4ed8; color: #dbeafe; }
+      .chip-success { background: #166534; color: #dcfce7; }
+      .chip-failed { background: #7f1d1d; color: #fee2e2; }
+      .clickable { cursor: pointer; }
+      .clickable:hover { background: #1e293b; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>ML-AIR Run Console</h1>
+      <div class="small">Phase 4 UI: run detail + task timeline + realtime logs</div>
+
+      <div class="card">
+        <h3>Context</h3>
+        <div class="grid">
+          <input id="apiBase" value="http://localhost:8080" placeholder="API Base URL" />
+          <input id="authToken" value="maintainer-token" placeholder="Bearer token (viewer-token / maintainer-token / admin-token)" />
+          <input id="tenantId" value="default" placeholder="tenant_id" />
+          <input id="projectId" value="default_project" placeholder="project_id" />
+          <input id="runId" placeholder="run_id (filled after trigger)" />
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Trigger Run</h3>
+        <div class="grid">
+          <input id="pipelineId" value="demo_pipeline" placeholder="pipeline_id" />
+          <input id="idempotencyKey" value="ui-demo-001" placeholder="idempotency_key" />
+          <select id="priority">
+            <option value="high">high</option>
+            <option value="normal" selected>normal</option>
+            <option value="low">low</option>
+          </select>
+          <input id="maxParallel" type="number" min="1" max="20" value="2" placeholder="max_parallel_tasks" />
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button id="triggerBtn">Trigger</button>
+          <span id="triggerStatus" class="small"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <button id="autoBtn" class="secondary">Auto Refresh: OFF</button>
+          <button id="refreshBtn" class="secondary">Refresh Run + Tasks + Logs</button>
+          <button id="streamBtn">Start Live Logs</button>
+          <button id="stopStreamBtn" class="secondary">Stop Live Logs</button>
+          <span id="wsStatus" class="small">WS: idle</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Runs Dashboard</h3>
+        <table>
+          <thead>
+            <tr><th>run_id</th><th>pipeline</th><th>status</th><th>priority</th><th>updated_at</th></tr>
+          </thead>
+          <tbody id="runsBody"></tbody>
+        </table>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Run Detail</h3>
+          <pre id="runDetail">{}</pre>
+        </div>
+        <div class="card">
+          <h3>Task Timeline</h3>
+          <table>
+            <thead>
+              <tr><th>task_id</th><th>status</th><th>attempt</th><th>updated_at</th></tr>
+            </thead>
+            <tbody id="tasksBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Logs</h3>
+        <pre id="logsBox"></pre>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let ws = null;
+      let autoTimer = null;
+
+      function apiBase() { return $("apiBase").value.replace(/\/$/, ""); }
+      function tenantId() { return $("tenantId").value.trim(); }
+      function projectId() { return $("projectId").value.trim(); }
+      function runId() { return $("runId").value.trim(); }
+      function authToken() { return $("authToken").value.trim(); }
+      function authHeaders() {
+        return authToken() ? { "Authorization": `Bearer ${authToken()}` } : {};
+      }
+
+      function appendLog(line) {
+        const box = $("logsBox");
+        box.textContent += line + "\n";
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function statusChip(status) {
+        const s = String(status || "").toUpperCase();
+        if (s === "RUNNING") return `<span class="chip chip-running">${s}</span>`;
+        if (s === "SUCCESS") return `<span class="chip chip-success">${s}</span>`;
+        if (s === "FAILED") return `<span class="chip chip-failed">${s}</span>`;
+        return `<span class="chip chip-pending">${s || "UNKNOWN"}</span>`;
+      }
+
+      async function triggerRun() {
+        $("triggerStatus").textContent = "triggering...";
+        const payload = {
+          pipeline_id: $("pipelineId").value.trim(),
+          idempotency_key: $("idempotencyKey").value.trim() || null,
+          priority: $("priority").value,
+          max_parallel_tasks: Number($("maxParallel").value || "1")
+        };
+        const url = `${apiBase()}/v1/tenants/${tenantId()}/projects/${projectId()}/runs`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(JSON.stringify(data));
+        $("runId").value = data.run_id;
+        $("triggerStatus").innerHTML = `<span class="ok">run created: ${data.run_id}</span>`;
+        await refreshAll();
+      }
+
+      async function refreshRun() {
+        if (!runId()) return;
+        const url = `${apiBase()}/v1/tenants/${tenantId()}/projects/${projectId()}/runs/${runId()}`;
+        const res = await fetch(url, { headers: authHeaders() });
+        const data = await res.json();
+        $("runDetail").textContent = JSON.stringify(data, null, 2);
+      }
+
+      async function refreshRuns() {
+        const url = `${apiBase()}/v1/tenants/${tenantId()}/projects/${projectId()}/runs?limit=50`;
+        const res = await fetch(url, { headers: authHeaders() });
+        const data = await res.json();
+        const rows = (data.items || []).map((r) => `
+          <tr class="clickable" data-run-id="${r.run_id}">
+            <td>${r.run_id}</td>
+            <td>${r.pipeline_id}</td>
+            <td>${statusChip(r.status)}</td>
+            <td>${r.priority}</td>
+            <td>${r.updated_at}</td>
+          </tr>
+        `).join("");
+        $("runsBody").innerHTML = rows;
+        $("runsBody").querySelectorAll("tr[data-run-id]").forEach((tr) => {
+          tr.onclick = async () => {
+            $("runId").value = tr.getAttribute("data-run-id");
+            await refreshAll();
+          };
+        });
+      }
+
+      async function refreshTasks() {
+        if (!runId()) return;
+        const url = `${apiBase()}/v1/tenants/${tenantId()}/projects/${projectId()}/runs/${runId()}/tasks`;
+        const res = await fetch(url, { headers: authHeaders() });
+        const data = await res.json();
+        const rows = (data.items || []).map((t) =>
+          `<tr><td>${t.task_id}</td><td>${t.status}</td><td>${t.attempt}</td><td>${t.updated_at}</td></tr>`
+        ).join("");
+        $("tasksBody").innerHTML = rows;
+      }
+
+      async function refreshLogs() {
+        if (!runId()) return;
+        const url = `${apiBase()}/v1/tenants/${tenantId()}/projects/${projectId()}/runs/${runId()}/logs`;
+        const res = await fetch(url, { headers: authHeaders() });
+        const data = await res.json();
+        $("logsBox").textContent = (data.items || []).map((x) => `[${x.ts}] ${x.level} ${x.message}`).join("\n");
+      }
+
+      async function refreshAll() {
+        await Promise.all([refreshRuns(), refreshRun(), refreshTasks(), refreshLogs()]);
+      }
+
+      function startWs() {
+        if (!runId()) return;
+        if (ws) ws.close();
+        const wsBase = apiBase().replace("http://", "ws://").replace("https://", "wss://");
+        const token = encodeURIComponent(authToken());
+        const url = `${wsBase}/v1/tenants/${tenantId()}/projects/${projectId()}/runs/${runId()}/logs/ws?token=${token}`;
+        ws = new WebSocket(url);
+        $("wsStatus").textContent = "WS: connecting...";
+        ws.onopen = () => { $("wsStatus").innerHTML = '<span class="ok">WS: connected</span>'; };
+        ws.onclose = () => { $("wsStatus").textContent = "WS: closed"; };
+        ws.onerror = () => { $("wsStatus").innerHTML = '<span class="bad">WS: error</span>'; };
+        ws.onmessage = (evt) => {
+          try {
+            const entry = JSON.parse(evt.data);
+            appendLog(`[${entry.ts}] ${entry.level} ${entry.message}`);
+          } catch (_) {
+            appendLog(evt.data);
+          }
+        };
+      }
+
+      function stopWs() {
+        if (ws) ws.close();
+        ws = null;
+        $("wsStatus").textContent = "WS: idle";
+      }
+
+      function toggleAutoRefresh() {
+        if (autoTimer) {
+          clearInterval(autoTimer);
+          autoTimer = null;
+          $("autoBtn").textContent = "Auto Refresh: OFF";
+          return;
+        }
+        autoTimer = setInterval(() => {
+          refreshAll().catch(console.error);
+        }, 2000);
+        $("autoBtn").textContent = "Auto Refresh: ON";
+      }
+
+      $("triggerBtn").onclick = () => triggerRun().catch((e) => {
+        $("triggerStatus").innerHTML = `<span class="bad">${String(e)}</span>`;
+      });
+      $("refreshBtn").onclick = () => refreshAll().catch(console.error);
+      $("autoBtn").onclick = toggleAutoRefresh;
+      $("streamBtn").onclick = startWs;
+      $("stopStreamBtn").onclick = stopWs;
+      refreshAll().catch(console.error);
+    </script>
+  </body>
+</html>

@@ -1,4 +1,15 @@
 services:
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: ml-air-frontend
+    ports:
+      - "38080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
   api:
     build:
       context: ../api
@@ -7,6 +18,7 @@ services:
     environment:
       ML_AIR_REDIS_URL: redis://redis:6379/0
       ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
+      ML_AIR_JWT_HS256_SECRET: mlair-dev-jwt-secret-32bytes-minimum-key
     ports:
       - "8080:8080"
     depends_on:

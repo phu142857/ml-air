@@ -1,0 +1,75 @@
+global:
+  imagePullPolicy: IfNotPresent
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/ml-air-frontend
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 80
+
+api:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/ml-air-api
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    redisUrl: redis://ml-air-redis:6379/0
+    databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
+    jwtHs256Secret: change-me-32-byte-secret
+    jwtIssuer: ""
+    jwtAudience: ""
+    jwtJwksUrl: ""
+    jwtJwksCacheTtlSeconds: "300"
+
+scheduler:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/ml-air-scheduler
+    tag: latest
+  env:
+    redisUrl: redis://ml-air-redis:6379/0
+    databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
+
+executor:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/ml-air-executor
+    tag: latest
+  env:
+    redisUrl: redis://ml-air-redis:6379/0
+    databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
+
+redis:
+  image: redis:7-alpine
+  servicePort: 6379
+
+postgres:
+  image: postgres:16
+  servicePort: 5432
+  auth:
+    user: mlair
+    password: mlair
+    database: mlair
+  storage:
+    size: 5Gi
+
+minio:
+  image: minio/minio:latest
+  servicePort: 9000
+  consolePort: 9001
+  auth:
+    rootUser: minio
+    rootPassword: miniopassword
+  storage:
+    size: 10Gi
+
+ingress:
+  enabled: false
+  className: ""
+  host: ml-air.local
