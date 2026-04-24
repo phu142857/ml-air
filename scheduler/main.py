@@ -3,6 +3,7 @@ import os
 import time
 from datetime import datetime, timezone
 
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from psycopg import connect
 from redis import Redis
 
@@ -22,6 +23,37 @@ TASK_ALLOWED_TRANSITIONS = {
     "SUCCESS": set(),
     "CANCELLED": set(),
 }
+
+TASK_COMPLETED_TOTAL = Counter(
+    "mlair_scheduler_task_completed_total",
+    "Number of completed tasks observed by scheduler",
+    ["status"],
+)
+RUN_SCHEDULED_TOTAL = Counter(
+    "mlair_scheduler_run_scheduled_total",
+    "Number of runs accepted and scheduled by scheduler",
+)
+RUN_REQUEUED_TOTAL = Counter(
+    "mlair_scheduler_run_requeued_total",
+    "Number of runs requeued due to max parallel limits",
+)
+RETRY_ENQUEUED_TOTAL = Counter(
+    "mlair_scheduler_retry_enqueued_total",
+    "Number of retry tasks enqueued by scheduler",
+)
+DLQ_PUSHED_TOTAL = Counter(
+    "mlair_scheduler_dlq_pushed_total",
+    "Number of tasks pushed to DLQ",
+)
+PROJECT_RUNNING_TASKS = Gauge(
+    "mlair_scheduler_project_running_tasks",
+    "Current running tasks per tenant/project",
+    ["tenant_id", "project_id"],
+)
+LOOP_DURATION_SECONDS = Histogram(
+    "mlair_scheduler_loop_duration_seconds",
+    "Scheduler loop duration in seconds",
+)
 
 
 def _redis() -> Redis:
@@ -110,9 +142,12 @@ def _load_task_retry_policy(task_id: str) -> tuple[int, int]:
 
 
 def main() -> None:
+    metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
+    start_http_server(metrics_port)
     client = _redis()
-    print("scheduler started")
+    print(f"scheduler started (metrics on :{metrics_port})")
     while True:
+        loop_started = time.perf_counter()
         run_msg = client.blpop("mlair:runs:new", timeout=1)
         if run_msg:
             _, raw_payload = run_msg
@@ -124,6 +159,7 @@ def main() -> None:
             max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
             if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
                 client.rpush("mlair:runs:new", raw_payload)
+                RUN_REQUEUED_TOTAL.inc()
                 time.sleep(0.2)
             else:
                 _transition_run_status(run_id, "RUNNING")
@@ -137,9 +173,14 @@ def main() -> None:
                     "attempt": 1,
                     "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
                     "priority": run_event.get("priority", "normal"),
+                    "trace_id": run_event.get("trace_id"),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 client.rpush(queue_name, json.dumps(task_event))
+                RUN_SCHEDULED_TOTAL.inc()
+                PROJECT_RUNNING_TASKS.labels(tenant_id=tenant_id, project_id=project_id).set(
+                    _project_running_tasks(tenant_id=tenant_id, project_id=project_id)
+                )
                 print(f"scheduled run {run_id} -> task {task_id} ({queue_name})")
 
         done_msg = client.blpop("mlair:tasks:done", timeout=1)
@@ -180,10 +221,12 @@ def main() -> None:
                         "attempt": retry_attempt,
                         "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
                         "priority": done_event.get("priority", "normal"),
+                        "trace_id": done_event.get("trace_id"),
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     }
                     retry_queue = _queue_name_for_priority(done_event.get("priority", "normal"))
                     client.rpush(retry_queue, json.dumps(retry_event))
+                    RETRY_ENQUEUED_TOTAL.inc()
                     print(
                         f'retry task {done_event["task_id"]} attempt {retry_attempt}/{max_attempts} '
                         f'after {delay_seconds:.2f}s'
@@ -191,13 +234,16 @@ def main() -> None:
                 else:
                     _transition_run_status(done_event["run_id"], "FAILED")
                     client.rpush("mlair:tasks:dlq", raw_done)
+                    DLQ_PUSHED_TOTAL.inc()
                     print(f'task moved to dlq: {done_event["task_id"]}')
+            TASK_COMPLETED_TOTAL.labels(status=done_event["status"]).inc()
             print(
                 f'completed task {done_event["task_id"]} with {done_event["status"]} '
                 f'for run {done_event["run_id"]}'
             )
 
         time.sleep(0.05)
+        LOOP_DURATION_SECONDS.observe(time.perf_counter() - loop_started)
 
 
 if __name__ == "__main__":

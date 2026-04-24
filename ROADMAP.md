@@ -21,6 +21,7 @@
 - [x] Phase 4 - tabbed control plane UI (Dashboard/Runs/Run Detail/Logs/Pipelines/Settings)
 - [x] Phase 4 - guided workflow UI v2 (Dashboard -> Pipeline List/Detail -> Run Detail -> Task Detail)
 - [x] Phase 4 - DAG visualization with status color + click-to-task-debug flow
+- [x] Phase 4 - DAG failed-node highlight (strong visual emphasis + status legend)
 - [x] Phase 4 - task debug UX improvements (log search filter + Run Detail DLQ replay action)
 - [x] Phase 4 - production-style error handling UI (global error banner + contextual parsing + retry last action)
 - [x] Phase 4 - modern dashboard shell (topbar + collapsible-style sidebar + main workspace layout)
@@ -30,6 +31,10 @@
 - [x] Phase 4 - route-based frontend pages (`/dashboard`, `/pipelines`, `/runs`, `/tasks`, `/settings`)
 - [x] Phase 4 - deep-link routes for debugging (`/pipelines/[pipelineId]`, `/runs/[runId]`, `/tasks/[taskId]`)
 - [x] Phase 4 - shared frontend context for tenant/project/token + env-based API base URL
+- [x] Phase 4 - Prometheus metrics baseline for api/scheduler/worker (`/metrics`, `:9102`, `:9103`)
+- [x] Phase 4 - local Prometheus scrape for api/scheduler/worker via quickstart compose (`:39090`)
+- [x] Phase 4 - Grafana dashboards + Prometheus alert rules in local quickstart (`:33000`)
+- [x] Phase 4 - request correlation id (`X-Trace-Id`) propagation API -> scheduler -> executor -> logs
 - [x] Phase 5 - RBAC + tenant/project scope enforcement (dev bearer tokens)
 - [x] Phase 5 - JWT integration (HS256 claims validation)
 - [x] Phase 5 - OAuth2 issuer/JWKS integration (JWT RS256 via JWKS URL)

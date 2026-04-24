@@ -34,6 +34,9 @@ services:
     environment:
       ML_AIR_REDIS_URL: redis://redis:6379/0
       ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
+      ML_AIR_SCHEDULER_METRICS_PORT: 9102
+    ports:
+      - "9102:9102"
     depends_on:
       - redis
       - postgres
@@ -47,6 +50,9 @@ services:
     environment:
       ML_AIR_REDIS_URL: redis://redis:6379/0
       ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
+      ML_AIR_EXECUTOR_METRICS_PORT: 9103
+    ports:
+      - "9103:9103"
     depends_on:
       - redis
       - postgres
@@ -84,6 +90,39 @@ services:
       - "9001:9001"
     volumes:
       - ml_air_minio:/data
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: ml-air-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts:/etc/prometheus/alerts:ro
+    ports:
+      - "39090:9090"
+    depends_on:
+      - api
+      - scheduler
+      - executor
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: ml-air-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "33000:3000"
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
 volumes:

@@ -25,6 +25,7 @@ def create_run(
     idempotency_key: str | None,
     priority: str = "normal",
     max_parallel_tasks: int = 1,
+    trace_id: str | None = None,
 ) -> dict:
     normalized_priority = priority.lower()
     if normalized_priority not in {"high", "normal", "low"}:
@@ -73,6 +74,7 @@ def create_run(
             "pipeline_id": pipeline_id,
             "priority": normalized_priority,
             "max_parallel_tasks": max_parallel_tasks,
+            "trace_id": trace_id,
         }
     )
     return _row_to_run(created)

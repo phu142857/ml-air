@@ -9,6 +9,7 @@ from app.services.project_service import list_projects
 from app.services.queue_service import replay_dlq_for_run
 from app.services.run_service import create_run, get_pipeline_dag, get_run, list_pipelines, list_runs, mark_run_running
 from app.services.task_service import get_task_by_id, list_tasks_by_run
+from app.services.trace_service import get_trace_id
 
 router = APIRouter()
 
@@ -47,6 +48,7 @@ def trigger_run_v1(
         idempotency_key=payload.idempotency_key,
         priority=payload.priority,
         max_parallel_tasks=payload.max_parallel_tasks,
+        trace_id=get_trace_id(),
     )
     return run
 
