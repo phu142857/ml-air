@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
-import { fetchRun, fetchRunLogs, fetchRunTasks, replayDlq } from "@/lib/api";
+import { fetchRun, fetchRunLogs, fetchRunTasks, fetchRunTracking, replayDlq } from "@/lib/api";
 import { LogsSection } from "@/components/sections/logs-section";
+import { RunTrackingSection } from "@/components/sections/run-tracking-section";
 import { useAppContext } from "@/lib/app-context";
 
 export default function RunDetailPage() {
@@ -27,6 +28,10 @@ export default function RunDetailPage() {
   const logsQuery = useQuery({
     queryKey: ["run-logs", runId],
     queryFn: () => fetchRunLogs(tenantId, projectId, runId, token)
+  });
+  const trackingQuery = useQuery({
+    queryKey: ["run-tracking", runId],
+    queryFn: () => fetchRunTracking(tenantId, projectId, runId, token)
   });
 
   const tasks = tasksQuery.data?.items ?? [];
@@ -61,14 +66,17 @@ export default function RunDetailPage() {
           void runQuery.refetch();
           void tasksQuery.refetch();
           void logsQuery.refetch();
+          void trackingQuery.refetch();
         }}
         onReplayDlq={async () => {
           await replayDlq(tenantId, projectId, runId, token);
           await runQuery.refetch();
           await tasksQuery.refetch();
           await logsQuery.refetch();
+          await trackingQuery.refetch();
         }}
       />
+      <RunTrackingSection tracking={trackingQuery.data ?? null} />
     </RouteShell>
   );
 }

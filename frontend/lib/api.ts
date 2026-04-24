@@ -50,6 +50,26 @@ export type PluginItem = {
   enabled: boolean;
 };
 
+export type ModelItem = {
+  model_id: string;
+  tenant_id: string;
+  project_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ModelVersionItem = {
+  version_id: string;
+  model_id: string;
+  version: number;
+  run_id?: string | null;
+  artifact_uri?: string | null;
+  stage: string;
+  created_at: string;
+};
+
 function authHeaders(token: string) {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -224,4 +244,74 @@ export async function togglePlugin(pluginName: string, enabled: boolean, token: 
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { plugin: string; enabled: boolean };
+}
+
+export async function fetchModels(tenantId: string, projectId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: ModelItem[] };
+}
+
+export async function createModel(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  payload: { name: string; description?: string | null }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelItem;
+}
+
+export async function fetchModelVersions(tenantId: string, projectId: string, modelId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/versions`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: ModelVersionItem[] };
+}
+
+export async function createModelVersion(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  payload: { run_id?: string | null; artifact_uri?: string | null; stage?: string }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelVersionItem;
+}
+
+export async function promoteModelVersion(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  payload: { version: number; stage?: string }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/promote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelVersionItem;
 }

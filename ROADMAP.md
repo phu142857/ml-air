@@ -56,6 +56,8 @@
 - [x] Phase 8 - model registry APIs (`/models`, `/models/{id}/versions`, `/models/{id}/promote`)
 - [x] Phase 8 - SDK logging helpers (`sdk.log_param`, `sdk.log_metric`, `sdk.log_artifact`)
 - [x] Phase 8 - runs compare UX baseline (multi-select runs + metrics compare output)
+- [x] Phase 8 - runs compare chart + run detail tracking panel (params/metrics/artifacts)
+- [x] Phase 8 - model registry UI baseline (models list, create version, promote workflow)
 
 ## Definition of Production-Ready
 

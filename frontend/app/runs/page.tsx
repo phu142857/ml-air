@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { RouteShell } from "@/components/layout/route-shell";
 import { LogsSection } from "@/components/sections/logs-section";
 import { compareRunMetrics, fetchRun, fetchRunLogs, fetchRuns, fetchRunTasks, replayDlq } from "@/lib/api";
@@ -20,7 +21,7 @@ export default function RunsPage() {
   const [runDetail, setRunDetail] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
   const [compareRunIds, setCompareRunIds] = useState<string[]>([]);
-  const [compareResult, setCompareResult] = useState<string>("");
+  const [compareChartData, setCompareChartData] = useState<Array<Record<string, number | string>>>([]);
 
   const { data } = useQuery({
     queryKey: ["runs", tenantId, projectId],
@@ -47,17 +48,18 @@ export default function RunsPage() {
 
   async function runCompare() {
     if (compareRunIds.length < 2) {
-      setCompareResult("Select at least 2 runs for compare.");
+      setCompareChartData([]);
       return;
     }
     const result = await compareRunMetrics(tenantId, projectId, compareRunIds, token);
-    const grouped = new Map<string, number>();
+    const grouped = new Map<number, Record<string, number | string>>();
     result.items.forEach((row) => {
-      const k = `${row.run_id}:${row.key}`;
-      grouped.set(k, row.value);
+      const stepKey = row.step ?? 0;
+      const existing = grouped.get(stepKey) ?? { step: stepKey };
+      existing[`${row.run_id}:${row.key}`] = row.value;
+      grouped.set(stepKey, existing);
     });
-    const lines = Array.from(grouped.entries()).map(([k, v]) => `${k} = ${v}`);
-    setCompareResult(lines.join("\n") || "No metrics found.");
+    setCompareChartData(Array.from(grouped.values()).sort((a, b) => Number(a.step) - Number(b.step)));
   }
 
   return (
@@ -75,9 +77,34 @@ export default function RunsPage() {
             Compare Selected
           </button>
         </div>
-        <pre className="min-h-16 rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
-          {compareResult || "Select 2-4 runs and click Compare Selected."}
-        </pre>
+        {compareChartData.length ? (
+          <div className="h-72 rounded-xl border border-slate-700 bg-slate-900 p-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={compareChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="step" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip />
+                <Legend />
+                {Object.keys(compareChartData[0] || {})
+                  .filter((k) => k !== "step")
+                  .map((key, idx) => (
+                    <Line
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      dot={false}
+                      stroke={["#60a5fa", "#34d399", "#f59e0b", "#f472b6", "#22d3ee"][idx % 5]}
+                    />
+                  ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <pre className="min-h-16 rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
+            Select 2-4 runs and click Compare Selected.
+          </pre>
+        )}
       </section>
       <LogsSection
         runId={runId}
