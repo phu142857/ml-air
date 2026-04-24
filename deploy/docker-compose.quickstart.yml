@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: ml-air-frontend
     ports:
-      - "38080:80"
+      - "38080:3000"
     depends_on:
       - api
     restart: unless-stopped

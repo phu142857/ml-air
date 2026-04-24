@@ -1,0 +1,44 @@
+frontend:
+  image:
+    repository: ghcr.io/your-org/ml-air-frontend
+    tag: latest
+
+api:
+  image:
+    repository: ghcr.io/your-org/ml-air-api
+    tag: latest
+  env:
+    jwtIssuer: ""
+    jwtAudience: ""
+    jwtJwksUrl: ""
+  secret:
+    # Prefer existing/external secret in staging.
+    existingSecretName: ml-air-api-secrets
+    key: jwtHs256Secret
+    value: "__from_secret__"
+    externalSecret:
+      enabled: false
+      secretStoreRef:
+        name: ""
+        kind: ClusterSecretStore
+      remoteRef:
+        key: ""
+        property: ""
+    sealedSecret:
+      enabled: false
+      encryptedData: ""
+
+scheduler:
+  image:
+    repository: ghcr.io/your-org/ml-air-scheduler
+    tag: latest
+
+executor:
+  image:
+    repository: ghcr.io/your-org/ml-air-executor
+    tag: latest
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ml-air-staging.internal

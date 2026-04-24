@@ -18,11 +18,23 @@
 - [x] Phase 4 - backend realtime run log API + WebSocket stream
 - [x] Phase 4 - UI run detail/task timeline + realtime logs (MVP)
 - [x] Phase 4 - runs dashboard (list/filter/select + auto refresh)
+- [x] Phase 4 - tabbed control plane UI (Dashboard/Runs/Run Detail/Logs/Pipelines/Settings)
+- [x] Phase 4 - guided workflow UI v2 (Dashboard -> Pipeline List/Detail -> Run Detail -> Task Detail)
+- [x] Phase 4 - DAG visualization with status color + click-to-task-debug flow
+- [x] Phase 4 - task debug UX improvements (log search filter + Run Detail DLQ replay action)
+- [x] Phase 4 - production-style error handling UI (global error banner + contextual parsing + retry last action)
+- [x] Phase 4 - modern dashboard shell (topbar + collapsible-style sidebar + main workspace layout)
+- [x] Phase 4 - Next.js frontend foundation (TypeScript, Tailwind, TanStack Query, React Flow, Recharts)
+- [x] Phase 4 - migrated operational UI flow into Next.js and removed legacy static `index.html`
+- [x] Phase 4 - frontend componentization (layout/sections split for maintainability)
 - [x] Phase 5 - RBAC + tenant/project scope enforcement (dev bearer tokens)
 - [x] Phase 5 - JWT integration (HS256 claims validation)
 - [x] Phase 5 - OAuth2 issuer/JWKS integration (JWT RS256 via JWKS URL)
 - [x] Phase 6 - Helm/K8s baseline chart (`charts/ml-air`)
-- [ ] Phase 6 - CI/CD pipeline (build/push/deploy automation)
+- [x] Phase 6 - CI/CD pipeline (build + GHCR publish workflows)
+- [x] Phase 6 - deploy automation (Helm staging rollout + rollback workflow)
+- [x] Phase 6 - smoke validation checklist (API auth/RBAC, run lifecycle, retry/DLQ, logs, Helm lint/template, deploy guard)
+- [x] Phase 6 - one-command quality gate (`make test-all`)
 
 ## Definition of Production-Ready
 

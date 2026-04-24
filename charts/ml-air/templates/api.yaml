@@ -24,7 +24,10 @@ spec:
             - name: ML_AIR_DATABASE_URL
               value: {{ .Values.api.env.databaseUrl | quote }}
             - name: ML_AIR_JWT_HS256_SECRET
-              value: {{ .Values.api.env.jwtHs256Secret | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
+                  key: {{ .Values.api.secret.key }}
             - name: ML_AIR_JWT_ISSUER
               value: {{ .Values.api.env.jwtIssuer | quote }}
             - name: ML_AIR_JWT_AUDIENCE

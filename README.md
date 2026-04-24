@@ -39,3 +39,22 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
   -H "Content-Type: application/json" \
   -d '{"pipeline_id":"demo_pipeline","idempotency_key":"demo-001"}'
 ```
+
+## CI/CD
+
+- CI workflow: `.github/workflows/ci.yml`
+  - Python syntax check
+  - Helm lint + template render
+  - Docker build check for `api/scheduler/executor/frontend`
+- Image publish workflow: `.github/workflows/publish-images.yml`
+  - Trigger by tag `v*.*.*` or manual dispatch
+  - Push images to `ghcr.io/<owner>/ml-air-<service>`
+- Helm deploy workflow (staging): `.github/workflows/deploy-helm-staging.yml`
+  - Trigger by tag `v*.*.*` or manual dispatch
+  - Deploy chart `charts/ml-air` to namespace `ml-air-staging`
+  - Auto rollback on deploy failure
+
+### Required CI/CD secrets
+
+- `KUBE_CONFIG_DATA`: base64 kubeconfig for staging cluster
+- `ML_AIR_JWT_HS256_SECRET`: runtime JWT secret for staging API

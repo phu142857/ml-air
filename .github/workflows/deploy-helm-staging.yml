@@ -1,0 +1,86 @@
+name: deploy-helm-staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (e.g. sha-abc123 or v1.0.0)"
+        required: false
+        default: "latest"
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: ml-air-staging
+      RELEASE_NAME: ml-air
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.2
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${KUBE_CONFIG_DATA}" | base64 -d > ~/.kube/config
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG_DATA }}" ]; then
+            echo "Missing secret: KUBE_CONFIG_DATA"
+            exit 1
+          fi
+          if [ -z "${{ secrets.ML_AIR_JWT_HS256_SECRET }}" ]; then
+            echo "Missing secret: ML_AIR_JWT_HS256_SECRET"
+            exit 1
+          fi
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "value=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Helm upgrade --install
+        run: |
+          kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+          helm upgrade --install "${RELEASE_NAME}" charts/ml-air \
+            --namespace "${NAMESPACE}" \
+            --values charts/ml-air/values-staging.yaml \
+            --set frontend.image.repository=ghcr.io/${{ github.repository_owner }}/ml-air-frontend \
+            --set api.image.repository=ghcr.io/${{ github.repository_owner }}/ml-air-api \
+            --set scheduler.image.repository=ghcr.io/${{ github.repository_owner }}/ml-air-scheduler \
+            --set executor.image.repository=ghcr.io/${{ github.repository_owner }}/ml-air-executor \
+            --set frontend.image.tag=${{ steps.tag.outputs.value }} \
+            --set api.image.tag=${{ steps.tag.outputs.value }} \
+            --set scheduler.image.tag=${{ steps.tag.outputs.value }} \
+            --set executor.image.tag=${{ steps.tag.outputs.value }} \
+            --set-string api.secret.value=${{ secrets.ML_AIR_JWT_HS256_SECRET }} \
+            --wait --timeout 10m
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          helm rollback "${RELEASE_NAME}" --namespace "${NAMESPACE}" || true

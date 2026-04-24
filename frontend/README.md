@@ -1,10 +1,17 @@
 # frontend
 
-UI workspace for ML-AIR control plane.
+Next.js frontend for ML-AIR control plane.
 
-Current quickstart ships a lightweight static run console:
+Stack:
 
-- trigger run
-- view run detail
-- view task timeline
-- stream run logs via WebSocket
+- Next.js (App Router) + React + TypeScript
+- Tailwind CSS
+- TanStack Query (React Query)
+- Radix/shadcn-style primitives
+- Recharts
+- React Flow
+
+Run locally:
+
+- `npm install`
+- `npm run dev`

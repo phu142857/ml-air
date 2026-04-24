@@ -21,11 +21,27 @@ api:
   env:
     redisUrl: redis://ml-air-redis:6379/0
     databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
-    jwtHs256Secret: change-me-32-byte-secret
     jwtIssuer: ""
     jwtAudience: ""
     jwtJwksUrl: ""
     jwtJwksCacheTtlSeconds: "300"
+  secret:
+    # If set, API will read JWT secret from an existing Kubernetes Secret.
+    # Otherwise chart-managed Secret `ml-air-api-secrets` is used.
+    existingSecretName: ""
+    key: jwtHs256Secret
+    value: change-me-32-byte-secret
+    externalSecret:
+      enabled: false
+      secretStoreRef:
+        name: ""
+        kind: ClusterSecretStore
+      remoteRef:
+        key: ""
+        property: ""
+    sealedSecret:
+      enabled: false
+      encryptedData: ""
 
 scheduler:
   replicaCount: 1
