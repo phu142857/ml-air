@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.services.model_registry_service import (
@@ -15,7 +15,18 @@ from app.services.auth_service import authenticate_bearer, authorize_scope
 from app.services.log_service import read_run_logs
 from app.services.project_service import list_projects
 from app.services.queue_service import replay_dlq_for_run
-from app.services.run_service import create_run, get_pipeline_dag, get_run, list_pipelines, list_runs, mark_run_running
+from app.services import pipeline_version_service
+from app.services import search_service
+from app.services import lineage_service
+from app.services.run_service import (
+    create_replay_run,
+    create_run,
+    get_pipeline_dag,
+    get_run,
+    list_pipelines,
+    list_runs,
+    mark_run_running,
+)
 from app.services.task_service import get_task_by_id, list_tasks_by_run
 from app.services.tracking_service import (
     compare_runs,
@@ -39,6 +50,25 @@ class TriggerRunIn(BaseModel):
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
     max_parallel_tasks: int = Field(default=1, ge=1, le=20)
+    pipeline_version_id: str | None = None
+    use_latest_pipeline_version: bool = False
+
+
+class LineageIngestIn(BaseModel):
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    lineage: dict = Field(default_factory=dict)
+
+
+class CreatePipelineVersionIn(BaseModel):
+    config: dict = Field(default_factory=dict)
+
+
+class ReplayRunIn(BaseModel):
+    from_task_id: str = Field(min_length=1)
+    idempotency_key: str | None = None
+    plugin_name: str | None = None
+    context: dict = Field(default_factory=dict)
 
 
 class PluginValidateIn(BaseModel):
@@ -121,6 +151,8 @@ def trigger_run_v1(
         experiment_id=payload.experiment_id,
         plugin_name=payload.plugin_name,
         plugin_context=payload.context,
+        pipeline_version_id=payload.pipeline_version_id,
+        use_latest_pipeline_version=payload.use_latest_pipeline_version,
     )
     return run
 
@@ -366,6 +398,201 @@ def compare_runs_v1(
         if run and run["tenant_id"] == tenant_id and run["project_id"] == project_id:
             safe_ids.append(run_id)
     return compare_runs(safe_ids)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/search")
+def search_v1(
+    tenant_id: str,
+    project_id: str,
+    q: str = "",
+    item_type: str = Query("all", alias="type"),
+    limit: int = 20,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not search_service.check_search_rate(tenant_id):
+        raise HTTPException(status_code=429, detail="search_rate_limited")
+    tf = item_type if item_type in ("run", "task", "dataset", "all") else "all"
+    return search_service.search(
+        tenant_id=tenant_id, project_id=project_id, q=q, type_filter=tf, limit=limit, offset=offset
+    )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets")
+def list_datasets_v1(
+    tenant_id: str, project_id: str, limit: int = 100, offset: int = 0, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {"items": lineage_service.list_datasets(tenant_id, project_id, limit, offset)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
+def get_dataset_v1(
+    tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = lineage_service.get_dataset(tenant_id, project_id, dataset_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return row
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions")
+def list_dataset_versions_v1(
+    tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {"items": lineage_service.list_dataset_versions(tenant_id, project_id, dataset_id)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/lineage/runs/{run_id}")
+def lineage_for_run_v1(
+    tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return lineage_service.get_lineage_for_run(tenant_id, project_id, run_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/lineage")
+def lineage_neighborhood_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_version_id: str = Query(..., min_length=1),
+    depth: int = 2,
+    direction: str = "both",
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    d = direction if direction in ("up", "down", "both") else "both"
+    return lineage_service.get_lineage_neighborhood(
+        tenant_id, project_id, dataset_version_id, depth=depth, direction=d
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/lineage/ingest")
+def lineage_ingest_v1(
+    tenant_id: str, project_id: str, payload: LineageIngestIn, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(payload.run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return lineage_service.ingest_lineage_from_task(
+        tenant_id, project_id, payload.run_id, payload.task_id, payload.lineage
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/versions")
+def create_pipeline_version_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    payload: CreatePipelineVersionIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return pipeline_version_service.create_pipeline_version(tenant_id, project_id, pipeline_id, payload.config)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/versions")
+def list_pipeline_versions_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {
+        "items": pipeline_version_service.list_pipeline_versions(
+            tenant_id, project_id, pipeline_id, limit=limit, offset=offset
+        )
+    }
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/pipeline-versions/{version_id}")
+def get_pipeline_version_v1(
+    tenant_id: str, project_id: str, version_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = pipeline_version_service.get_pipeline_version(version_id)
+    if not row or row.get("tenant_id") != tenant_id or row.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="pipeline_version_not_found")
+    return row
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/pipeline-versions/{version_id}/diff")
+def diff_pipeline_version_v1(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    other: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    a = pipeline_version_service.get_pipeline_version(version_id)
+    b = pipeline_version_service.get_pipeline_version(other)
+    if not a or a.get("tenant_id") != tenant_id or a.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="pipeline_version_not_found")
+    if not b or b.get("tenant_id") != tenant_id or b.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="other_version_not_found")
+    ca, cb = a.get("config") or {}, b.get("config") or {}
+    keys = sorted(set(ca) | set(cb))
+    changes = [
+        {
+            "key": k,
+            "left": ca.get(k),
+            "right": cb.get(k),
+        }
+        for k in keys
+        if ca.get(k) != cb.get(k)
+    ]
+    return {"version_id_a": version_id, "version_id_b": other, "changed_keys": [c["key"] for c in changes], "details": changes}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/replay")
+def replay_run_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    payload: ReplayRunIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    try:
+        return create_replay_run(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            parent_run_id=run_id,
+            from_task_id=payload.from_task_id,
+            idempotency_key=payload.idempotency_key,
+            trace_id=get_trace_id(),
+            plugin_name=payload.plugin_name,
+            plugin_context=payload.context,
+        )
+    except ValueError as exc:
+        if str(exc) == "replay_parent_not_found":
+            raise HTTPException(status_code=404, detail="run_not_found") from exc
+        raise
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models")

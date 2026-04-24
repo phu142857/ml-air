@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
-import { fetchRun, fetchRunLogs, fetchRunTasks, fetchRunTracking, replayDlq } from "@/lib/api";
+import { fetchRun, fetchRunLogs, fetchRunTasks, fetchRunTracking, replayDlq, replayFromTask } from "@/lib/api";
 import { LogsSection } from "@/components/sections/logs-section";
+import { RunTimelineSection } from "@/components/sections/run-timeline-section";
 import { RunTrackingSection } from "@/components/sections/run-tracking-section";
 import { useAppContext } from "@/lib/app-context";
 
@@ -51,6 +52,32 @@ export default function RunDetailPage() {
         >
           Back to Runs
         </button>
+      </div>
+      <RunTimelineSection
+        runId={runId}
+        tasks={tasks}
+        onOpenTask={(tid) => router.push(`/tasks/${tid}`)}
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="rounded-lg border border-amber-600/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-100"
+          onClick={async () => {
+            const t = tasks[0]?.task_id;
+            if (!t) return;
+            const idem = `replay-${Date.now()}`;
+            const r = await replayFromTask(tenantId, projectId, runId, token, { from_task_id: t, idempotency_key: idem });
+            router.push(`/runs/${r.run_id}`);
+          }}
+        >
+          Partial replay (from first task)
+        </button>
+        <a
+          className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300"
+          href={`/lineage?runId=${encodeURIComponent(runId)}`}
+        >
+          View lineage
+        </a>
       </div>
       <LogsSection
         runId={runId}

@@ -131,6 +131,22 @@ def _upsert_or_transition_task(task_id: str, run_id: str, next_status: str, atte
             )
 
 
+def _update_task_telemetry(task_id: str, started_at: str | None, finished_at: str | None, error_message: str | None) -> None:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET started_at = COALESCE(%s::timestamptz, started_at),
+                    finished_at = COALESCE(%s::timestamptz, finished_at),
+                    error_message = COALESCE(%s, error_message),
+                    updated_at = NOW()
+                WHERE task_id = %s
+                """,
+                (started_at, finished_at, error_message, task_id),
+            )
+
+
 def _load_task_retry_policy(task_id: str) -> tuple[int, int]:
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -178,6 +194,8 @@ def main() -> None:
                     "trace_id": run_event.get("trace_id"),
                     "plugin_name": run_event.get("plugin_name"),
                     "context": run_event.get("context", {}),
+                    "pipeline_version_id": run_event.get("pipeline_version_id"),
+                    "config_snapshot": run_event.get("config_snapshot"),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 client.rpush(queue_name, json.dumps(task_event))
@@ -196,6 +214,18 @@ def main() -> None:
                 run_id=done_event["run_id"],
                 next_status=done_event["status"],
                 attempt=int(done_event.get("attempt", 1)),
+            )
+            pex = done_event.get("plugin_exec")
+            err = None
+            if done_event.get("status") != "SUCCESS" and pex and isinstance(pex, dict):
+                err = pex.get("error") or pex.get("stderr") or "task_failed"
+            elif done_event.get("status") != "SUCCESS":
+                err = "task_failed"
+            _update_task_telemetry(
+                done_event["task_id"],
+                done_event.get("started_at"),
+                done_event.get("finished_at"),
+                err,
             )
             if done_event["status"] == "SUCCESS":
                 _transition_run_status(done_event["run_id"], "SUCCESS")
@@ -230,6 +260,8 @@ def main() -> None:
                         "trace_id": done_event.get("trace_id"),
                         "plugin_name": done_event.get("plugin_name"),
                         "context": done_event.get("context", {}),
+                        "pipeline_version_id": done_event.get("pipeline_version_id"),
+                        "config_snapshot": done_event.get("config_snapshot"),
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     }
                     retry_queue = _queue_name_for_priority(done_event.get("priority", "normal"))

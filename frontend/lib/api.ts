@@ -16,7 +16,11 @@ export type TaskItem = {
   task_id: string;
   status: string;
   attempt: number;
+  created_at?: string;
   updated_at?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  error_message?: string | null;
 };
 
 export type LogItem = {
@@ -314,4 +318,134 @@ export async function promoteModelVersion(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ModelVersionItem;
+}
+
+export type SearchResultItem = {
+  type: "run" | "task" | "dataset";
+  href: string;
+  run_id?: string;
+  task_id?: string;
+  dataset_id?: string;
+  name?: string;
+  status?: string;
+  pipeline_id?: string;
+  error_message?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export async function searchApi(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  q: string,
+  type: "all" | "run" | "task" | "dataset" = "all"
+) {
+  const sp = new URLSearchParams({ q, type, limit: "20" });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/search?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { q: string; items: SearchResultItem[] };
+}
+
+export async function fetchLineageForRun(tenantId: string, projectId: string, runId: string, token: string) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/lineage/runs/${runId}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    run_id: string;
+    edges: Array<{
+      edge_id: string;
+      task_id: string;
+      input_version_id: string | null;
+      output_version_id: string | null;
+    }>;
+  };
+}
+
+export async function fetchLineageNeighborhood(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  datasetVersionId: string,
+  depth: number = 2,
+  direction: "up" | "down" | "both" = "both"
+) {
+  const sp = new URLSearchParams({
+    dataset_version_id: datasetVersionId,
+    depth: String(depth),
+    direction
+  });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/lineage?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    center: string;
+    edges: Array<{
+      edge_id: string;
+      run_id: string;
+      task_id: string;
+      input_dataset_version_id: string | null;
+      output_dataset_version_id: string | null;
+    }>;
+    dataset_version_ids: string[];
+  };
+}
+
+export async function listPipelineVersionsApi(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${encodeURIComponent(pipelineId)}/versions`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: Array<{ version_id: string; version: number; config: unknown; created_at: string }> };
+}
+
+export async function getPipelineVersionDiff(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  versionId: string,
+  otherVersionId: string
+) {
+  const sp = new URLSearchParams({ other: otherVersionId });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipeline-versions/${versionId}/diff?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { changed_keys: string[]; details: Array<{ key: string; left: unknown; right: unknown }> };
+}
+
+export async function replayFromTask(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+  body: { from_task_id: string; idempotency_key?: string | null }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/runs/${runId}/replay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunItem;
 }

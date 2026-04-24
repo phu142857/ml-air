@@ -76,6 +76,37 @@ def _tracking_post(path: str, payload: dict) -> None:
         print(f"tracking post failed path={path} err={exc}")
 
 
+def _lineage_ingest(task: dict, plugin_result: dict) -> None:
+    result = plugin_result.get("result")
+    if not isinstance(result, dict) or "lineage" not in result:
+        return
+    base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
+    token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    tenant_id = task.get("tenant_id", "default")
+    project_id = task.get("project_id", "default_project")
+    run_id = task.get("run_id")
+    task_id = task.get("task_id")
+    if not run_id or not task_id:
+        return
+    path = f"/v1/tenants/{tenant_id}/projects/{project_id}/lineage/ingest"
+    body = {
+        "run_id": run_id,
+        "task_id": task_id,
+        "lineage": result.get("lineage") or {},
+    }
+    req = urllib.request.Request(
+        url=f"{base}{path}",
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        data=json.dumps(body).encode("utf-8"),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            return
+    except urllib.error.URLError as exc:
+        print(f"lineage ingest failed: {exc}")
+
+
 def _log_plugin_tracking(task: dict, plugin_result: dict) -> None:
     result = plugin_result.get("result")
     if not isinstance(result, dict):
@@ -148,6 +179,7 @@ def main() -> None:
                 status = "FAILED"
             else:
                 _log_plugin_tracking(task=task, plugin_result=plugin_exec)
+                _lineage_ingest(task=task, plugin_result=plugin_exec)
         TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
         TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(time.perf_counter() - task_start)
         print(
@@ -193,27 +225,25 @@ def main() -> None:
                 }
             ),
         )
-        client.rpush(
-            "mlair:tasks:done",
-            json.dumps(
-                {
-                    "event_type": "task_finished",
-                    "run_id": task["run_id"],
-                    "task_id": task["task_id"],
-                    "status": status,
-                    "attempt": task["attempt"],
-                    "pipeline_id": pipeline_id,
-                    "priority": task.get("priority", "normal"),
-                    "tenant_id": tenant_id,
-                    "project_id": project_id,
-                    "trace_id": trace_id,
-                    "plugin_name": plugin_name,
-                    "plugin_exec": plugin_exec,
-                    "started_at": started_at,
-                    "finished_at": finished_at,
-                }
-            ),
-        )
+        done_payload = {
+            "event_type": "task_finished",
+            "run_id": task["run_id"],
+            "task_id": task["task_id"],
+            "status": status,
+            "attempt": task["attempt"],
+            "pipeline_id": pipeline_id,
+            "priority": task.get("priority", "normal"),
+            "tenant_id": tenant_id,
+            "project_id": project_id,
+            "trace_id": trace_id,
+            "plugin_name": plugin_name,
+            "plugin_exec": plugin_exec,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "pipeline_version_id": task.get("pipeline_version_id"),
+            "config_snapshot": task.get("config_snapshot"),
+        }
+        client.rpush("mlair:tasks:done", json.dumps(done_payload))
         QUEUE_INFLIGHT.labels(queue=queue_name).dec()
 
 

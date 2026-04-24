@@ -13,7 +13,18 @@ def main() -> int:
         metrics = context.get("metrics", {"accuracy": {"value": 0.9, "step": 1}})
         params = context.get("params", {"source": "plugin"})
         artifacts = context.get("artifacts", [{"path": "plugin_output.json", "uri": "s3://mlair/plugin/output.json"}])
-        out = {"params": params, "metrics": metrics, "artifacts": artifacts}
+        lineage = context.get(
+            "lineage",
+            {
+                "inputs": [
+                    {"name": "raw_data", "version": "v1", "uri": "s3://mlair/bucket/raw.parquet"},
+                ],
+                "outputs": [
+                    {"name": "clean_data", "version": "v1", "uri": "s3://mlair/bucket/clean.parquet"},
+                ],
+            },
+        )
+        out = {"params": params, "metrics": metrics, "artifacts": artifacts, "lineage": lineage}
     else:
         out = {"params": {}, "metrics": {}, "artifacts": []}
 

@@ -17,6 +17,8 @@ class PluginMeta(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     outputs: dict[str, Any] = Field(default_factory=dict)
     ui_schema: dict[str, Any] | None = None
+    # Logical I/O names for dataset lineage: {"inputs": ["raw_data"], "outputs": ["clean_data"]}
+    lineage: dict[str, list[str]] | None = None
 
     def assert_compatible(self) -> None:
         if Version(self.engine_version) < MIN_ENGINE_VERSION:

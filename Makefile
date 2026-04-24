@@ -50,6 +50,14 @@ test-smoke-phase2:
 	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
 	python scripts/test_smoke_phase2.py
 
+.PHONY: test-smoke-v03
+test-smoke-v03:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT=$(ML_AIR_PROJECT_ID) \
+	ML_AIR_TOKEN=$${ML_AIR_TOKEN:-maintainer-token} \
+	python scripts/test_smoke_v03.py
+
 .PHONY: test-observability
 test-observability:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
@@ -66,7 +74,7 @@ incident-drill:
 	bash scripts/incident_drill.sh
 
 .PHONY: test-all
-test-all: test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-observability test-helm
+test-all: test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-smoke-v03 test-observability test-helm
 
 .PHONY: backup-db
 backup-db:

@@ -62,6 +62,7 @@
 - [x] Phase 8 - model registry smoke automation (`make test-smoke-model-registry`) + quickstart flow docs
 - [x] Phase 8 - full phase2 smoke automation (`make test-smoke-phase2`) wired into `make test-all`
 - [x] Phase 8 - plugin->tracking auto hook baseline (executor plugin result auto logs params/metrics/artifacts)
+- [x] v0.3 / Product Phase 3 - baseline: lineage schema + API + executor ingest, pipeline versions + run bind + diff API, search API + topbar, timeline + partial replay + lineage UI (see `docs/lineage-replay-v03.md` + `make test-smoke-v03`)
 
 ## Milestone: v0.2.0 — ML tracking + model registry (MLflow-like layer) — **COMPLETE**
 
@@ -86,6 +87,47 @@ Use this when cutting the Git tag so artifacts and docs stay aligned.
 - [ ] Document breaking changes (if any) in release notes; v0.2.0 is the first tagged milestone for the tracking/registry surface—call out new env vars and migration `0003` if upgrading from an older checkout.
 - [ ] Tag: `git tag -a v0.2.0 -m "v0.2.0: ML tracking, model registry, plugin→tracking hook"`; push tag to trigger `publish-images.yml` if using GHCR.
 - [ ] Optional: pin `docs/quickstart.md` / README “current release” one-liner to v0.2.0 after tag.
+
+## Milestone: v0.3.0 — Product Phase 3 (lineage + pipeline versioning + debug UX) — **IN PROGRESS (core shipped)**
+
+**Naming note:** Roadmap items above use historical “Phase 1–8” delivery slices. **Product Phase 3** here is the *next product milestone* after v0.2.0 (Airflow-lite + MLflow-lite usable). Target tag: **v0.3.0**.
+
+### Why this bundle (not random features)
+
+Orchestration (run → task → plugin) and ML tracking/registry are in place, but operators still lack **“what happened to the data”**: dataset identity, **versioned** pipeline definitions, and **debuggability** at run/task granularity. This milestone closes that gap before investing in marketplace/SaaS/multi-region.
+
+### Core — data lineage
+
+- [x] **Datasets + `dataset_versions` + `lineage_edges`** (tenant/project scoped, Alembic `0004_v03_lineage`); idempotent `idempotency_key` on edges.
+- [x] **Plugin / runtime**: `PluginMeta.lineage` (optional) + result `lineage: { inputs, outputs }` → `POST .../lineage/ingest` (executor after success).
+- [ ] **Loader** strict validation of lineage slot names; **backfill** job — follow-up.
+
+### UI — lineage
+
+- [x] **Lineage** route `/lineage` (React Flow; `?runId=` or dataset version for neighborhood). Sidebar link **Lineage**.
+- [ ] **Dataset detail** card + full upstream/downstream UX polish; **run history** per dataset.
+
+### Versioning — pipelines
+
+- [x] **`pipeline_versions`**, `runs.pipeline_version_id` + `config_snapshot`, `use_latest_pipeline_version` / `pipeline_version_id` on trigger, scheduler/executor pass `config_snapshot` in task events, diff API `.../pipeline-versions/{id}/diff?other=`.
+- [ ] **Dedicated diff page** in UI (API ready).
+
+### Debug UX
+
+- [x] **Timeline** on run detail, **error_message** on tasks (scheduler/executor), scroll to last failed; **partial replay** `POST .../runs/{id}/replay` + shortcut on run page.
+- [ ] **Multi-task DAG** partial replay (same API; scheduler extension later).
+
+### Search
+
+- [x] **`GET .../search`**, `pg_trgm` indexes, rate limit (MVP), **topbar** + `/search` page.
+
+### Optional (nice to have in v0.3.x)
+
+- [ ] **Cost / resource** per task: CPU/RAM if available from runtime, wall duration (already partially observable — unify in API + UI table).
+
+### Explicitly out of scope for v0.3.0
+
+- Plugin marketplace, SaaS billing, multi-region active/active — **defer** until lineage + versioning + debug are solid.
 
 ## Definition of Production-Ready
 
