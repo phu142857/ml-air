@@ -5,11 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchRuns } from "@/lib/api";
 import { OverviewSection } from "@/components/sections/overview-section";
 import { RouteShell } from "@/components/layout/route-shell";
+import { useAppContext } from "@/lib/app-context";
 
 export default function DashboardPage() {
-  const tenantId = "default";
-  const projectId = "default_project";
-  const token = "maintainer-token";
+  const { tenantId, projectId, token } = useAppContext();
   const { data, isFetching } = useQuery({
     queryKey: ["runs", tenantId, projectId],
     queryFn: () => fetchRuns(tenantId, projectId, token)

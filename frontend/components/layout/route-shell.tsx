@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { PropsWithChildren } from "react";
+import { Topbar } from "./topbar";
 
 type NavItem = "Dashboard" | "Pipelines" | "Runs" | "Tasks" | "Settings";
 
@@ -22,13 +23,7 @@ const navItems: Array<{ key: NavItem; href: string }> = [
 export function RouteShell({ activeNav, title, subtitle, children }: Props) {
   return (
     <div className="min-h-screen bg-bg-main text-slate-100">
-      <header className="flex h-16 items-center justify-between border-b border-slate-700 bg-bg-muted px-6">
-        <div className="flex items-center gap-3">
-          <div className="text-lg font-semibold">ML-AIR</div>
-          <input className="w-80 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" placeholder="Search pipeline, run, task..." />
-        </div>
-        <div className="text-xs text-slate-400">default/default_project</div>
-      </header>
+      <Topbar />
 
       <div className="grid min-h-[calc(100vh-64px)] grid-cols-[220px_1fr]">
         <aside className="border-r border-slate-700 bg-bg-muted p-4">

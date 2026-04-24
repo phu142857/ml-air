@@ -2,14 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { DagView } from "@/components/pipeline/dag-view";
 import { RouteShell } from "@/components/layout/route-shell";
 import { fetchPipelineDag, fetchPipelines } from "@/lib/api";
+import { useAppContext } from "@/lib/app-context";
 
 export default function PipelinesPage() {
-  const tenantId = "default";
-  const projectId = "default_project";
-  const token = "maintainer-token";
+  const router = useRouter();
+  const { tenantId, projectId, token } = useAppContext();
   const [selectedPipeline, setSelectedPipeline] = useState("demo_pipeline");
 
   const { data } = useQuery({
@@ -45,7 +46,10 @@ export default function PipelinesPage() {
                   <tr
                     key={item.pipeline_id}
                     className="cursor-pointer border-t border-slate-800 hover:bg-slate-800/70"
-                    onClick={() => setSelectedPipeline(item.pipeline_id)}
+                    onClick={() => {
+                      setSelectedPipeline(item.pipeline_id);
+                      router.push(`/pipelines/${item.pipeline_id}`);
+                    }}
                   >
                     <td className="px-3 py-2">{item.pipeline_id}</td>
                     <td className="px-3 py-2">{item.latest_status}</td>

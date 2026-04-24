@@ -125,3 +125,13 @@ export async function fetchPipelineDag(tenantId: string, projectId: string, pipe
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { pipeline_id: string; run_id?: string; nodes: Array<{ id: string; label: string; status: string }>; edges: Array<{ source: string; target: string }> };
 }
+
+export async function fetchTask(tenantId: string, projectId: string, taskId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/tasks/${taskId}`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as TaskItem & { tenant_id: string; project_id: string; pipeline_id: string };
+}

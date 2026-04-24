@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { LogsSection } from "@/components/sections/logs-section";
 import { fetchRun, fetchRunLogs, fetchRuns, fetchRunTasks, replayDlq } from "@/lib/api";
 import { RunsHistorySection } from "@/components/sections/runs-history-section";
+import { useAppContext } from "@/lib/app-context";
 
 export default function RunsPage() {
-  const tenantId = "default";
-  const projectId = "default_project";
-  const token = "maintainer-token";
+  const router = useRouter();
+  const { tenantId, projectId, token } = useAppContext();
   const [runId, setRunId] = useState("");
   const [taskId, setTaskId] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -25,6 +26,7 @@ export default function RunsPage() {
   });
 
   async function loadRunContext(nextRunId: string) {
+    router.push(`/runs/${nextRunId}`);
     setRunId(nextRunId);
     const [run, runTasks, runLogs] = await Promise.all([
       fetchRun(tenantId, projectId, nextRunId, token),
