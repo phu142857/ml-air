@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, PropsWithChildren, useContext, useMemo, useState } from "react";
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from "react";
 
 type AppContextValue = {
   tenantId: string;
@@ -12,11 +12,33 @@ type AppContextValue = {
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
+const STORAGE_KEY = "ml-air:ui-context";
 
 export function AppContextProvider({ children }: PropsWithChildren) {
   const [tenantId, setTenantId] = useState("default");
   const [projectId, setProjectId] = useState("default_project");
   const [token, setToken] = useState("maintainer-token");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<Pick<AppContextValue, "tenantId" | "projectId" | "token">>;
+      if (typeof parsed.tenantId === "string" && parsed.tenantId.trim()) setTenantId(parsed.tenantId);
+      if (typeof parsed.projectId === "string" && parsed.projectId.trim()) setProjectId(parsed.projectId);
+      if (typeof parsed.token === "string" && parsed.token.trim()) setToken(parsed.token);
+    } catch {
+      // ignore invalid localStorage payload
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tenantId, projectId, token }));
+    } catch {
+      // ignore storage write failures
+    }
+  }, [tenantId, projectId, token]);
 
   const value = useMemo(
     () => ({ tenantId, projectId, token, setTenantId, setProjectId, setToken }),
