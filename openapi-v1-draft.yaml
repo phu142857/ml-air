@@ -1,0 +1,295 @@
+openapi: 3.1.0
+info:
+  title: ML-AIR API
+  version: 0.1.0-draft
+  description: |
+    Draft API contract for ML-AIR v1.
+    All resources are tenant/project scoped by design.
+
+servers:
+  - url: https://api.ml-air.example.com
+
+tags:
+  - name: Pipelines
+  - name: Runs
+  - name: Tasks
+  - name: Models
+  - name: Serving
+  - name: Audit
+
+paths:
+  /v1/tenants/{tenant_id}/projects:
+    get:
+      tags: [Pipelines]
+      summary: List projects in tenant
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines:
+    get:
+      tags: [Pipelines]
+      summary: List pipelines
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: OK
+    post:
+      tags: [Pipelines]
+      summary: Create pipeline
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PipelineCreate"
+      responses:
+        "201":
+          description: Created
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/dag:
+    get:
+      tags: [Pipelines]
+      summary: Get DAG graph
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineId"
+      responses:
+        "200":
+          description: OK
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/runs:
+    post:
+      tags: [Runs]
+      summary: Trigger run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunTrigger"
+      responses:
+        "202":
+          description: Accepted
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}:
+    get:
+      tags: [Runs]
+      summary: Get run detail
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: OK
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks in run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: OK
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs:
+    get:
+      tags: [Tasks]
+      summary: Get task logs
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: OK
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models:
+    get:
+      tags: [Models]
+      summary: List model versions
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: OK
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_version}/approval:
+    get:
+      tags: [Models]
+      summary: Get model approval state
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelVersion"
+      responses:
+        "200":
+          description: OK
+    put:
+      tags: [Models]
+      summary: Update model approval state
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelApprovalUpdate"
+      responses:
+        "200":
+          description: Updated
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_version}/promote:
+    post:
+      tags: [Serving]
+      summary: Promote model version to slot
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoteRequest"
+      responses:
+        "200":
+          description: Promoted
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/serving/route:
+    get:
+      tags: [Serving]
+      summary: Resolve current route by slot
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - in: query
+          name: use_case_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: slot
+          required: false
+          schema:
+            type: string
+            enum: [candidate, challenger, champion, canary]
+            default: champion
+      responses:
+        "200":
+          description: OK
+
+components:
+  parameters:
+    TenantId:
+      in: path
+      name: tenant_id
+      required: true
+      schema:
+        type: string
+    ProjectId:
+      in: path
+      name: project_id
+      required: true
+      schema:
+        type: string
+    PipelineId:
+      in: path
+      name: pipeline_id
+      required: true
+      schema:
+        type: string
+    RunId:
+      in: path
+      name: run_id
+      required: true
+      schema:
+        type: string
+    TaskId:
+      in: path
+      name: task_id
+      required: true
+      schema:
+        type: string
+    ModelVersion:
+      in: path
+      name: model_version
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    Project:
+      type: object
+      properties:
+        project_id:
+          type: string
+        name:
+          type: string
+    PipelineCreate:
+      type: object
+      required: [name, dag]
+      properties:
+        name:
+          type: string
+        dag:
+          type: object
+    RunTrigger:
+      type: object
+      properties:
+        parameters:
+          type: object
+          additionalProperties: true
+        idempotency_key:
+          type: string
+    ModelApprovalUpdate:
+      type: object
+      required: [approval_status]
+      properties:
+        approval_status:
+          type: string
+          enum: [pending_manual_approval, approved, rejected]
+        reason:
+          type: string
+    PromoteRequest:
+      type: object
+      required: [use_case_key, slot]
+      properties:
+        use_case_key:
+          type: string
+        slot:
+          type: string
+          enum: [candidate, challenger, champion, canary]
+        metadata:
+          type: object
+          additionalProperties: true

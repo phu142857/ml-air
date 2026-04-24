@@ -1,0 +1,79 @@
+services:
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: ml-air-api
+    environment:
+      ML_AIR_REDIS_URL: redis://redis:6379/0
+      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: ../scheduler
+      dockerfile: Dockerfile
+    container_name: ml-air-scheduler
+    environment:
+      ML_AIR_REDIS_URL: redis://redis:6379/0
+      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  executor:
+    build:
+      context: ../executor
+      dockerfile: Dockerfile
+    container_name: ml-air-executor
+    environment:
+      ML_AIR_REDIS_URL: redis://redis:6379/0
+      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ml-air-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: ml-air-postgres
+    environment:
+      POSTGRES_USER: mlair
+      POSTGRES_PASSWORD: mlair
+      POSTGRES_DB: mlair
+    ports:
+      - "5432:5432"
+    volumes:
+      - ml_air_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: ml-air-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniopassword
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ml_air_minio:/data
+    restart: unless-stopped
+
+volumes:
+  ml_air_pgdata:
+  ml_air_minio:
