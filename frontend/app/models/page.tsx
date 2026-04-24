@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import {
   createModel,
@@ -13,6 +14,7 @@ import {
 import { useAppContext } from "@/lib/app-context";
 
 export default function ModelsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { tenantId, projectId, token } = useAppContext();
   const [selectedModelId, setSelectedModelId] = useState("");
@@ -110,7 +112,20 @@ export default function ModelsPage() {
                     onClick={() => setSelectedModelId(model.model_id)}
                   >
                     <td className="px-3 py-2">{model.name}</td>
-                    <td className="px-3 py-2">{model.updated_at}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{model.updated_at}</span>
+                        <button
+                          className="rounded-md bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/models/${model.model_id}`);
+                          }}
+                        >
+                          Open
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

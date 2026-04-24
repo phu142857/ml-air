@@ -58,6 +58,7 @@
 - [x] Phase 8 - runs compare UX baseline (multi-select runs + metrics compare output)
 - [x] Phase 8 - runs compare chart + run detail tracking panel (params/metrics/artifacts)
 - [x] Phase 8 - model registry UI baseline (models list, create version, promote workflow)
+- [x] Phase 8 - model deep-link UI (`/models/[modelId]`) with stage filter + rollback action
 
 ## Definition of Production-Ready
 
