@@ -9,19 +9,34 @@ echo "[1/6] API health"
 curl -fsS "${API_BASE_URL}/health" >/dev/null
 
 echo "[2/6] API metrics endpoint"
-curl -fsS "${API_BASE_URL}/metrics" | rg -q "mlair_api_"
+api_metrics="$(mktemp)"
+curl -fsS "${API_BASE_URL}/metrics" >"${api_metrics}"
+rg -q "mlair_api_" "${api_metrics}"
+rm -f "${api_metrics}"
 
 echo "[3/6] Scheduler metrics endpoint"
-curl -fsS "http://localhost:9102/metrics" | rg -q "mlair_scheduler_"
+scheduler_metrics="$(mktemp)"
+curl -fsS "http://localhost:9102/metrics" >"${scheduler_metrics}"
+rg -q "mlair_scheduler_" "${scheduler_metrics}"
+rm -f "${scheduler_metrics}"
 
 echo "[4/6] Executor metrics endpoint"
-curl -fsS "http://localhost:9103/metrics" | rg -q "mlair_executor_"
+executor_metrics="$(mktemp)"
+curl -fsS "http://localhost:9103/metrics" >"${executor_metrics}"
+rg -q "mlair_executor_" "${executor_metrics}"
+rm -f "${executor_metrics}"
 
 echo "[5/6] Prometheus targets/rules readiness"
 curl -fsS "${PROM_URL}/-/ready" >/dev/null
-curl -fsS "${PROM_URL}/api/v1/rules" | rg -q "MlAirTaskFailuresDetected"
+prom_rules="$(mktemp)"
+curl -fsS "${PROM_URL}/api/v1/rules" >"${prom_rules}"
+rg -q "MlAirTaskFailuresDetected" "${prom_rules}"
+rm -f "${prom_rules}"
 
 echo "[6/6] Grafana health"
-curl -fsS "${GRAFANA_URL}/api/health" | rg -q "\"database\":\"ok\""
+grafana_health="$(mktemp)"
+curl -fsS "${GRAFANA_URL}/api/health" >"${grafana_health}"
+rg -q "\"database\"\\s*:\\s*\"ok\"" "${grafana_health}"
+rm -f "${grafana_health}"
 
 echo "[PASS] observability stack is healthy"

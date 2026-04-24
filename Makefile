@@ -36,6 +36,20 @@ test-helm:
 	helm template ml-air charts/ml-air -f charts/ml-air/values-staging.yaml >/tmp/mlair-rendered.yaml
 	python scripts/check_deploy_config.py
 
+.PHONY: test-smoke-model-registry
+test-smoke-model-registry:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/test_smoke_model_registry.py
+
+.PHONY: test-smoke-phase2
+test-smoke-phase2:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/test_smoke_phase2.py
+
 .PHONY: test-observability
 test-observability:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
@@ -52,7 +66,7 @@ incident-drill:
 	bash scripts/incident_drill.sh
 
 .PHONY: test-all
-test-all: test-smoke-mlair test-observability test-helm
+test-all: test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-observability test-helm
 
 .PHONY: backup-db
 backup-db:

@@ -109,6 +109,37 @@ curl "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<ru
   -H "Authorization: Bearer viewer-token"
 ```
 
+## Model registry quick check
+
+```bash
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/models" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"demo-model","description":"baseline model"}'
+
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/versions" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"artifact_uri":"s3://mlair/demo-model/v1/model.pkl","stage":"staging"}'
+
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/promote" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"version":1,"stage":"production"}'
+```
+
+## Run model registry smoke test
+
+```bash
+make test-smoke-model-registry
+```
+
+## Run full Phase 2 smoke (tracking + compare + registry)
+
+```bash
+make test-smoke-phase2
+```
+
 ## Stream logs via WebSocket
 
 ```bash

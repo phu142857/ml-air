@@ -59,6 +59,8 @@
 - [x] Phase 8 - runs compare chart + run detail tracking panel (params/metrics/artifacts)
 - [x] Phase 8 - model registry UI baseline (models list, create version, promote workflow)
 - [x] Phase 8 - model deep-link UI (`/models/[modelId]`) with stage filter + rollback action
+- [x] Phase 8 - model registry smoke automation (`make test-smoke-model-registry`) + quickstart flow docs
+- [x] Phase 8 - full phase2 smoke automation (`make test-smoke-phase2`) wired into `make test-all`
 
 ## Definition of Production-Ready
 
