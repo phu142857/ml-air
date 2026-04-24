@@ -43,6 +43,14 @@
 - [x] Phase 6 - deploy automation (Helm staging rollout + rollback workflow)
 - [x] Phase 6 - smoke validation checklist (API auth/RBAC, run lifecycle, retry/DLQ, logs, Helm lint/template, deploy guard)
 - [x] Phase 6 - one-command quality gate (`make test-all`)
+- [x] Phase 6 - Operations runbooks (backup/restore, DR checklist, SLO/SLA + incident runbook)
+- [x] Phase 6 - Operations automation (`make backup-db`, `make restore-db`)
+- [x] Phase 6 - Observability validation automation (`make test-observability`)
+- [x] Phase 6 - Incident drill automation (`make incident-drill`)
+- [x] Phase 7 - plugin contract baseline (`sdk/plugin_contract.py` with schema + version checks)
+- [x] Phase 7 - plugin runtime APIs (`/v1/plugins`, `/v1/plugins/{name}`, `/validate`, `/reload`, `/toggle`)
+- [x] Phase 7 - plugin loader/registry baseline (entry points, duplicate/invalid skip, enable/disable)
+- [x] Phase 7 - plugin-aware UI in control plane settings (list/detail/ui_schema/validate/toggle/reload)
 
 ## Definition of Production-Ready
 

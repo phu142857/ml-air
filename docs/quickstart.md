@@ -66,6 +66,19 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 docker compose -f deploy/docker-compose.quickstart.yml logs -f scheduler executor
 ```
 
+## Validate observability stack
+
+```bash
+make test-observability
+```
+
+## Plugin runtime quick check
+
+```bash
+curl -H "Authorization: Bearer viewer-token" \
+  "http://localhost:8080/v1/plugins"
+```
+
 ## Read run and task status
 
 ```bash

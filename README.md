@@ -8,6 +8,10 @@ ML-AIR is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestr
 - `openapi-v1-draft.yaml`: API contract draft for v1.
 - `ROADMAP.md`: implementation milestones (30/60/90 days).
 - `docs/quickstart.md`: local quickstart commands.
+- `docs/operations-backup-restore.md`: backup/restore runbook.
+- `docs/operations-disaster-recovery-checklist.md`: DR activation checklist.
+- `docs/operations-slo-sla-incident-runbook.md`: SLO/SLA and incident handling guide.
+- `docs/plugin-development-guide.md`: plugin contract and packaging guide.
 
 ## Repository Skeleton
 

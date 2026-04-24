@@ -33,6 +33,16 @@ export type PipelineItem = {
   total_runs: number;
 };
 
+export type PluginItem = {
+  name: string;
+  version: string;
+  engine_version: string;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  ui_schema?: Record<string, unknown> | null;
+  enabled: boolean;
+};
+
 function authHeaders(token: string) {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -134,4 +144,56 @@ export async function fetchTask(tenantId: string, projectId: string, taskId: str
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as TaskItem & { tenant_id: string; project_id: string; pipeline_id: string };
+}
+
+export async function fetchPlugins(token: string) {
+  const res = await fetch(`${API_BASE}/v1/plugins`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: PluginItem[]; errors?: Array<{ entry_point: string; error: string }> };
+}
+
+export async function fetchPlugin(pluginName: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/plugins/${encodeURIComponent(pluginName)}`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as PluginItem;
+}
+
+export async function validatePlugin(pluginName: string, context: Record<string, unknown>, token: string) {
+  const res = await fetch(`${API_BASE}/v1/plugins/${encodeURIComponent(pluginName)}/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({ context })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { plugin: string; valid: boolean };
+}
+
+export async function reloadPlugins(token: string) {
+  const res = await fetch(`${API_BASE}/v1/plugins/reload`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { loaded: number; errors: Array<{ entry_point: string; error: string }> };
+}
+
+export async function togglePlugin(pluginName: string, enabled: boolean, token: string) {
+  const res = await fetch(`${API_BASE}/v1/plugins/${encodeURIComponent(pluginName)}/toggle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({ enabled })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { plugin: string; enabled: boolean };
 }

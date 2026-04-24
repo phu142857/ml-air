@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.api.routes.v1 import router as v1_router
+from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
 from app.services.trace_service import normalize_trace_id, set_trace_id
 
@@ -38,6 +39,7 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 @app.on_event("startup")
 def on_startup() -> None:
     assert_db_connection()
+    plugin_registry.reload()
 
 
 @app.middleware("http")

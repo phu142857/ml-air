@@ -4,6 +4,8 @@ ML_AIR_BASE_URL ?= http://localhost:8080
 ML_AIR_TENANT_ID ?= default
 ML_AIR_PROJECT_ID ?= default_project
 COMPOSE_FILE ?= deploy/docker-compose.quickstart.yml
+BACKUP_DIR ?= backups/postgres
+BACKUP_FILE ?=
 
 .PHONY: build
 build:
@@ -34,5 +36,33 @@ test-helm:
 	helm template ml-air charts/ml-air -f charts/ml-air/values-staging.yaml >/tmp/mlair-rendered.yaml
 	python scripts/check_deploy_config.py
 
+.PHONY: test-observability
+test-observability:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_PROMETHEUS_URL=http://localhost:39090 \
+	ML_AIR_GRAFANA_URL=http://localhost:33000 \
+	bash scripts/check_observability.sh
+
+.PHONY: incident-drill
+incident-drill:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_PROMETHEUS_URL=http://localhost:39090 \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	bash scripts/incident_drill.sh
+
 .PHONY: test-all
-test-all: test-smoke-mlair test-helm
+test-all: test-smoke-mlair test-observability test-helm
+
+.PHONY: backup-db
+backup-db:
+	mkdir -p $(BACKUP_DIR)
+	docker compose -f $(COMPOSE_FILE) exec -T postgres pg_dump -U mlair -d mlair -Fc > $(BACKUP_DIR)/mlair_$$(date +%Y%m%d_%H%M%S).dump
+	@echo "Backup created in $(BACKUP_DIR)"
+
+.PHONY: restore-db
+restore-db:
+	@if [ -z "$(BACKUP_FILE)" ]; then echo "BACKUP_FILE is required. Example: make restore-db BACKUP_FILE=backups/postgres/mlair_YYYYMMDD_HHMMSS.dump"; exit 1; fi
+	@if [ ! -f "$(BACKUP_FILE)" ]; then echo "Backup file not found: $(BACKUP_FILE)"; exit 1; fi
+	docker compose -f $(COMPOSE_FILE) exec -T postgres pg_restore -U mlair -d mlair --clean --if-exists < $(BACKUP_FILE)
+	@echo "Restore completed from $(BACKUP_FILE)"

@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from app.plugins.registry import plugin_registry
 from app.services.auth_service import authenticate_bearer, authorize_scope
 from app.services.log_service import read_run_logs
 from app.services.project_service import list_projects
@@ -19,6 +20,14 @@ class TriggerRunIn(BaseModel):
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
     max_parallel_tasks: int = Field(default=1, ge=1, le=20)
+
+
+class PluginValidateIn(BaseModel):
+    context: dict = Field(default_factory=dict)
+
+
+class PluginToggleIn(BaseModel):
+    enabled: bool = True
 
 
 @router.get("/tenants/{tenant_id}/projects")
@@ -213,3 +222,53 @@ def whoami_v1(authorization: str | None = Header(default=None)) -> dict:
         "tenant_id": principal.tenant_id,
         "project_ids": principal.project_ids,
     }
+
+
+@router.get("/plugins")
+def list_plugins_v1(authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="viewer")
+    return {"items": [item.__dict__ for item in plugin_registry.list()], "errors": plugin_registry.errors()}
+
+
+@router.get("/plugins/{plugin_name}")
+def get_plugin_v1(plugin_name: str, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="viewer")
+    plugin = plugin_registry.get(plugin_name)
+    if not plugin:
+        raise HTTPException(status_code=404, detail="plugin_not_found")
+    return plugin.__dict__
+
+
+@router.post("/plugins/{plugin_name}/validate")
+def validate_plugin_v1(plugin_name: str, payload: PluginValidateIn, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="maintainer")
+    plugin = plugin_registry.plugin_instance(plugin_name)
+    if not plugin:
+        raise HTTPException(status_code=404, detail="plugin_not_found_or_disabled")
+    validate_fn = getattr(plugin, "validate", None)
+    if not callable(validate_fn):
+        raise HTTPException(status_code=400, detail="plugin_validate_not_implemented")
+    try:
+        result = bool(validate_fn(payload.context))
+        return {"plugin": plugin_name, "valid": result}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"plugin_validation_failed: {exc}") from exc
+
+
+@router.post("/plugins/reload")
+def reload_plugins_v1(authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="admin")
+    return plugin_registry.reload()
+
+
+@router.post("/plugins/{plugin_name}/toggle")
+def toggle_plugin_v1(plugin_name: str, payload: PluginToggleIn, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="admin")
+    if not plugin_registry.enable(plugin_name, payload.enabled):
+        raise HTTPException(status_code=404, detail="plugin_not_found")
+    return {"plugin": plugin_name, "enabled": payload.enabled}
