@@ -416,6 +416,41 @@ export async function listPipelineVersionsApi(
   return data as { items: Array<{ version_id: string; version: number; config: unknown; created_at: string }> };
 }
 
+export async function createPipelineVersionApi(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string,
+  config: Record<string, unknown>
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${encodeURIComponent(pipelineId)}/versions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ config })
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { version_id: string; version: number; config: unknown; created_at: string; pipeline_id: string };
+}
+
+export async function getPipelineVersionApi(
+  tenantId: string,
+  projectId: string,
+  versionId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipeline-versions/${versionId}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { version_id: string; version: number; config: unknown; created_at: string; pipeline_id: string };
+}
+
 export async function getPipelineVersionDiff(
   tenantId: string,
   projectId: string,

@@ -110,7 +110,7 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 ### Versioning — pipelines
 
 - [x] **`pipeline_versions`**, `runs.pipeline_version_id` + `config_snapshot`, `use_latest_pipeline_version` / `pipeline_version_id` on trigger, scheduler/executor pass `config_snapshot` in task events, diff API `.../pipeline-versions/{id}/diff?other=`.
-- [ ] **Dedicated diff page** in UI (API ready).
+- [x] **UI**: `/pipelines/[pipelineId]/versions` (create + list), `/pipelines/[pipelineId]/diff` (side-by-side key diff), links from pipeline list/detail.
 
 ### Debug UX
 

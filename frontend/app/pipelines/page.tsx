@@ -39,6 +39,7 @@ export default function PipelinesPage() {
                   <th className="px-3 py-2 text-left">Pipeline</th>
                   <th className="px-3 py-2 text-left">Status</th>
                   <th className="px-3 py-2 text-left">Runs</th>
+                  <th className="px-3 py-2 text-left">Versions</th>
                 </tr>
               </thead>
               <tbody>
@@ -54,6 +55,15 @@ export default function PipelinesPage() {
                     <td className="px-3 py-2">{item.pipeline_id}</td>
                     <td className="px-3 py-2">{item.latest_status}</td>
                     <td className="px-3 py-2">{item.total_runs}</td>
+                    <td
+                      className="px-3 py-2 text-blue-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/pipelines/${encodeURIComponent(item.pipeline_id)}/versions`);
+                      }}
+                    >
+                      open
+                    </td>
                   </tr>
                 ))}
               </tbody>
