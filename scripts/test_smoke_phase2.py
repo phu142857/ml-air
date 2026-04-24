@@ -129,6 +129,36 @@ def main() -> int:
         has_artifact = any(x.get("path") == "model.pkl" for x in b.get("artifacts", [])) if isinstance(b, dict) else False
         record("tracking-read", c == 200 and has_param and has_metric and has_artifact, f"{c}")
 
+    # 3b) plugin -> tracking auto hook
+    c, b = req(
+        "POST",
+        f"/v1/tenants/{TENANT}/projects/{PROJECT}/runs",
+        "maintainer-token",
+        {
+            "pipeline_id": "demo_pipeline",
+            "idempotency_key": f"phase2-plugin-{tag}",
+            "plugin_name": "echo_tracking",
+            "context": {
+                "params": {"plugin_mode": "enabled"},
+                "metrics": {"plugin_score": {"value": 0.77, "step": 1}},
+                "artifacts": [{"path": "plugin_artifact.json", "uri": f"s3://mlair/plugin/{tag}.json"}],
+            },
+        },
+    )
+    plugin_run = b.get("run_id") if c == 200 else None
+    record("trigger-plugin-run", c == 200 and bool(plugin_run), f"{c} {b}")
+    if plugin_run:
+        record("plugin-run-success", wait_run_status(plugin_run, "SUCCESS", timeout_s=20), f"run_id={plugin_run}")
+        c, b = req("GET", f"/v1/tenants/{TENANT}/projects/{PROJECT}/runs/{plugin_run}/tracking", "viewer-token")
+        has_plugin_metric = any(x.get("key") == "plugin_score" for x in b.get("metrics", [])) if isinstance(b, dict) else False
+        has_plugin_param = any(x.get("key") == "plugin_mode" for x in b.get("params", [])) if isinstance(b, dict) else False
+        has_plugin_artifact = any(x.get("path") == "plugin_artifact.json" for x in b.get("artifacts", [])) if isinstance(b, dict) else False
+        record(
+            "plugin-tracking-hook",
+            c == 200 and has_plugin_metric and has_plugin_param and has_plugin_artifact,
+            f"{c}",
+        )
+
     # 4) compare
     if run1 and run2:
         c, b = req(

@@ -61,6 +61,31 @@
 - [x] Phase 8 - model deep-link UI (`/models/[modelId]`) with stage filter + rollback action
 - [x] Phase 8 - model registry smoke automation (`make test-smoke-model-registry`) + quickstart flow docs
 - [x] Phase 8 - full phase2 smoke automation (`make test-smoke-phase2`) wired into `make test-all`
+- [x] Phase 8 - plugin->tracking auto hook baseline (executor plugin result auto logs params/metrics/artifacts)
+
+## Milestone: v0.2.0 — ML tracking + model registry (MLflow-like layer) — **COMPLETE**
+
+This milestone matches the “Phase 2” product scope: experiment tracking, run compare, model registry, and plugin → tracking integration—not the early roadmap timeslice “Phase 2 (queue + worker)”, which is already delivered above.
+
+### Exit criteria (all satisfied for v0.2.0)
+
+- [x] **Schema + migrations**: `experiments`, `run_params`, `run_metrics` (incl. step), `run_artifacts`, `models`, `model_versions`, `runs.experiment_id` applied via Alembic.
+- [x] **Tracking APIs**: create/list experiments; log param/metric/artifact; `GET .../tracking`; `POST .../runs/compare`.
+- [x] **Model registry APIs**: create model; create/list versions; promote with stage rules (`staging` / `production` / `archived`).
+- [x] **SDK**: `mlair` helpers read `ML_AIR_TENANT_ID` / `ML_AIR_PROJECT_ID` / `ML_AIR_RUN_ID` and call the tracking API.
+- [x] **UI**: run compare (metric key + chart + last/best summary); run detail panel for params/metrics/artifacts; models list, version create/promote/rollback, `/models/[modelId]` deep link.
+- [x] **Plugin → tracking**: executor posts plugin JSON result (params/metrics/artifacts) to tracking after successful plugin runs.
+- [x] **Quality gate**: `make test-smoke-model-registry` and `make test-smoke-phase2` pass; both wired into `make test-all`.
+
+### Release checklist (tag `v0.2.0`)
+
+Use this when cutting the Git tag so artifacts and docs stay aligned.
+
+- [ ] `make up` (or full quickstart) then `make test-all` (includes smoke, phase2, observability, Helm).
+- [ ] Confirm Alembic head applies on a fresh database (`api` against same image/commit as tag).
+- [ ] Document breaking changes (if any) in release notes; v0.2.0 is the first tagged milestone for the tracking/registry surface—call out new env vars and migration `0003` if upgrading from an older checkout.
+- [ ] Tag: `git tag -a v0.2.0 -m "v0.2.0: ML tracking, model registry, plugin→tracking hook"`; push tag to trigger `publish-images.yml` if using GHCR.
+- [ ] Optional: pin `docs/quickstart.md` / README “current release” one-liner to v0.2.0 after tag.
 
 ## Definition of Production-Ready
 

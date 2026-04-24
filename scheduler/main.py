@@ -171,9 +171,13 @@ def main() -> None:
                     "run_id": run_id,
                     "task_id": task_id,
                     "attempt": 1,
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
                     "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
                     "priority": run_event.get("priority", "normal"),
                     "trace_id": run_event.get("trace_id"),
+                    "plugin_name": run_event.get("plugin_name"),
+                    "context": run_event.get("context", {}),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 client.rpush(queue_name, json.dumps(task_event))
@@ -219,9 +223,13 @@ def main() -> None:
                         "run_id": done_event["run_id"],
                         "task_id": done_event["task_id"],
                         "attempt": retry_attempt,
+                        "tenant_id": done_event.get("tenant_id", "default"),
+                        "project_id": done_event.get("project_id", "default_project"),
                         "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
                         "priority": done_event.get("priority", "normal"),
                         "trace_id": done_event.get("trace_id"),
+                        "plugin_name": done_event.get("plugin_name"),
+                        "context": done_event.get("context", {}),
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     }
                     retry_queue = _queue_name_for_priority(done_event.get("priority", "normal"))

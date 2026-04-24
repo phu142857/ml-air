@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+import json
+import sys
+
+
+def main() -> int:
+    plugin_name = sys.argv[1] if len(sys.argv) > 1 else ""
+    raw = sys.stdin.read().strip() or "{}"
+    context = json.loads(raw)
+
+    if plugin_name == "echo_tracking":
+        metrics = context.get("metrics", {"accuracy": {"value": 0.9, "step": 1}})
+        params = context.get("params", {"source": "plugin"})
+        artifacts = context.get("artifacts", [{"path": "plugin_output.json", "uri": "s3://mlair/plugin/output.json"}])
+        out = {"params": params, "metrics": metrics, "artifacts": artifacts}
+    else:
+        out = {"params": {}, "metrics": {}, "artifacts": []}
+
+    print(json.dumps(out))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

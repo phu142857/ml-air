@@ -28,6 +28,8 @@ def create_run(
     max_parallel_tasks: int = 1,
     trace_id: str | None = None,
     experiment_id: str | None = None,
+    plugin_name: str | None = None,
+    plugin_context: dict | None = None,
 ) -> dict:
     normalized_priority = priority.lower()
     if normalized_priority not in {"high", "normal", "low"}:
@@ -78,6 +80,8 @@ def create_run(
             "priority": normalized_priority,
             "max_parallel_tasks": max_parallel_tasks,
             "trace_id": trace_id,
+            "plugin_name": plugin_name,
+            "context": plugin_context or {},
         }
     )
     return _row_to_run(created)

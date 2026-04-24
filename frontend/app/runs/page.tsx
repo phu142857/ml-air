@@ -22,6 +22,8 @@ export default function RunsPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [compareRunIds, setCompareRunIds] = useState<string[]>([]);
   const [compareChartData, setCompareChartData] = useState<Array<Record<string, number | string>>>([]);
+  const [selectedMetricKey, setSelectedMetricKey] = useState("accuracy");
+  const [compareSummary, setCompareSummary] = useState<string>("");
 
   const { data } = useQuery({
     queryKey: ["runs", tenantId, projectId],
@@ -53,13 +55,23 @@ export default function RunsPage() {
     }
     const result = await compareRunMetrics(tenantId, projectId, compareRunIds, token);
     const grouped = new Map<number, Record<string, number | string>>();
+    const stats = new Map<string, { last: number; best: number }>();
     result.items.forEach((row) => {
+      if (row.key !== selectedMetricKey) return;
       const stepKey = row.step ?? 0;
       const existing = grouped.get(stepKey) ?? { step: stepKey };
-      existing[`${row.run_id}:${row.key}`] = row.value;
+      existing[row.run_id] = row.value;
       grouped.set(stepKey, existing);
+
+      const current = stats.get(row.run_id);
+      if (!current) stats.set(row.run_id, { last: row.value, best: row.value });
+      else stats.set(row.run_id, { last: row.value, best: Math.max(current.best, row.value) });
     });
     setCompareChartData(Array.from(grouped.values()).sort((a, b) => Number(a.step) - Number(b.step)));
+    const summary = Array.from(stats.entries())
+      .map(([run, v]) => `${run}: last=${v.last.toFixed(4)} best=${v.best.toFixed(4)}`)
+      .join(" | ");
+    setCompareSummary(summary || `No metric '${selectedMetricKey}' found on selected runs.`);
   }
 
   return (
@@ -73,9 +85,23 @@ export default function RunsPage() {
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-200">Compare Runs (metrics)</h2>
-          <button className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500" onClick={runCompare}>
-            Compare Selected
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              value={selectedMetricKey}
+              onChange={(e) => setSelectedMetricKey(e.target.value)}
+              placeholder="metric key (e.g. accuracy)"
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
+            />
+            <button
+              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500"
+              onClick={runCompare}
+            >
+              Compare Selected
+            </button>
+          </div>
+        </div>
+        <div className="mb-2 rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-300">
+          {compareSummary || "Summary will appear after compare."}
         </div>
         {compareChartData.length ? (
           <div className="h-72 rounded-xl border border-slate-700 bg-slate-900 p-2">

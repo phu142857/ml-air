@@ -3,6 +3,8 @@ import os
 import random
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
@@ -58,6 +60,56 @@ def _run_plugin_subprocess(plugin_name: str, context: dict) -> dict:
         return {"ok": False, "error": f"invalid_json_output: {exc}", "stdout": (proc.stdout or "").strip()}
 
 
+def _tracking_post(path: str, payload: dict) -> None:
+    base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
+    token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    req = urllib.request.Request(
+        url=f"{base}{path}",
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        data=json.dumps(payload).encode("utf-8"),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5):
+            return
+    except urllib.error.URLError as exc:
+        print(f"tracking post failed path={path} err={exc}")
+
+
+def _log_plugin_tracking(task: dict, plugin_result: dict) -> None:
+    result = plugin_result.get("result")
+    if not isinstance(result, dict):
+        return
+    tenant_id = task.get("tenant_id", "default")
+    project_id = task.get("project_id", "default_project")
+    run_id = task.get("run_id")
+    if not run_id:
+        return
+    base = f"/v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}"
+
+    params = result.get("params")
+    if isinstance(params, dict):
+        for key, value in params.items():
+            _tracking_post(f"{base}/params", {"key": str(key), "value": str(value)})
+
+    metrics = result.get("metrics")
+    if isinstance(metrics, dict):
+        for key, value in metrics.items():
+            if isinstance(value, dict):
+                _tracking_post(
+                    f"{base}/metrics",
+                    {"key": str(key), "value": float(value.get("value", 0.0)), "step": int(value.get("step", 0))},
+                )
+            else:
+                _tracking_post(f"{base}/metrics", {"key": str(key), "value": float(value), "step": 0})
+
+    artifacts = result.get("artifacts")
+    if isinstance(artifacts, list):
+        for item in artifacts:
+            if isinstance(item, dict):
+                _tracking_post(f"{base}/artifacts", {"path": str(item.get("path", "")), "uri": item.get("uri")})
+
+
 def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_EXECUTOR_METRICS_PORT", "9103"))
     start_http_server(metrics_port)
@@ -71,6 +123,8 @@ def main() -> None:
         queue_name, raw_payload = message
         QUEUE_INFLIGHT.labels(queue=queue_name).inc()
         task = json.loads(raw_payload)
+        tenant_id = task.get("tenant_id", "default")
+        project_id = task.get("project_id", "default_project")
         trace_id = task.get("trace_id")
         started_at = datetime.now(timezone.utc).isoformat()
         duration = random.uniform(0.2, 0.7)
@@ -92,6 +146,8 @@ def main() -> None:
             plugin_exec = _run_plugin_subprocess(plugin_name=plugin_name, context=task.get("context", {}))
             if not plugin_exec.get("ok"):
                 status = "FAILED"
+            else:
+                _log_plugin_tracking(task=task, plugin_result=plugin_exec)
         TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
         TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(time.perf_counter() - task_start)
         print(
@@ -104,6 +160,8 @@ def main() -> None:
                     "attempt": task["attempt"],
                     "pipeline_id": pipeline_id,
                     "priority": task.get("priority", "normal"),
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
                     "trace_id": trace_id,
                     "plugin_name": plugin_name,
                     "plugin_exec": plugin_exec,
@@ -125,6 +183,8 @@ def main() -> None:
                         "attempt": task["attempt"],
                         "pipeline_id": pipeline_id,
                         "priority": task.get("priority", "normal"),
+                        "tenant_id": tenant_id,
+                        "project_id": project_id,
                         "trace_id": trace_id,
                         "plugin_name": plugin_name,
                         "plugin_exec": plugin_exec,
@@ -144,6 +204,8 @@ def main() -> None:
                     "attempt": task["attempt"],
                     "pipeline_id": pipeline_id,
                     "priority": task.get("priority", "normal"),
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
                     "trace_id": trace_id,
                     "plugin_name": plugin_name,
                     "plugin_exec": plugin_exec,

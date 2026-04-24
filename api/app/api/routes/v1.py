@@ -34,6 +34,8 @@ router = APIRouter()
 class TriggerRunIn(BaseModel):
     pipeline_id: str = Field(min_length=1)
     experiment_id: str | None = None
+    plugin_name: str | None = None
+    context: dict = Field(default_factory=dict)
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
     max_parallel_tasks: int = Field(default=1, ge=1, le=20)
@@ -117,6 +119,8 @@ def trigger_run_v1(
         max_parallel_tasks=payload.max_parallel_tasks,
         trace_id=get_trace_id(),
         experiment_id=payload.experiment_id,
+        plugin_name=payload.plugin_name,
+        plugin_context=payload.context,
     )
     return run
 
