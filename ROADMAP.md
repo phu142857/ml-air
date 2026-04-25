@@ -117,7 +117,8 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Timeline** on run detail, **error_message** on tasks (scheduler/executor), scroll to last failed; **partial replay** `POST .../runs/{id}/replay` + shortcut on run page.
 - [x] **Multi-task DAG scheduler baseline** from `config_snapshot` (`tasks[]` with `depends_on` or sequential `steps[]`), including replay downstream from `replay_from_task_id`.
 - [x] **Replay from true mid-DAG with baseline gating**: scheduler skips upstream only if parent run task already `SUCCESS`; otherwise replay is blocked/fails fast.
-- [ ] **Artifact-level gating hardening**: verify concrete artifact presence/checksum before skip (beyond task-status check).
+- [x] **Artifact-level gating baseline**: replay skip requires parent task `SUCCESS` **and** artifact evidence (`lineage_edges` or `run_artifacts` match). Configurable via `ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE` (default on).
+- [ ] **Artifact-level checksum hardening**: strict checksum/manifest verification before skip.
 
 ### Search
 

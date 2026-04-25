@@ -268,6 +268,43 @@ def _load_parent_success_tasks(parent_run_id: str) -> set[str]:
     return {_task_key(parent_run_id, r[0]) for r in rows}
 
 
+def _has_parent_artifact_evidence(parent_run_id: str, task_key: str) -> bool:
+    full_task_id = f"{parent_run_id}:{task_key}"
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM lineage_edges
+                WHERE run_id = %s AND task_id = %s
+                LIMIT 1
+                """,
+                (parent_run_id, full_task_id),
+            )
+            if cur.fetchone():
+                return True
+            cur.execute(
+                """
+                SELECT 1
+                FROM run_artifacts
+                WHERE run_id = %s
+                  AND (
+                    path ILIKE %s OR
+                    path ILIKE %s OR
+                    COALESCE(uri, '') ILIKE %s
+                  )
+                LIMIT 1
+                """,
+                (
+                    parent_run_id,
+                    f"%{task_key}%",
+                    f"%{full_task_id}%",
+                    f"%{task_key}%",
+                ),
+            )
+            return bool(cur.fetchone())
+
+
 def _init_replay_tasks_with_gating(
     run_id: str,
     parent_run_id: str,
@@ -279,21 +316,25 @@ def _init_replay_tasks_with_gating(
     Skip upstream tasks only when corresponding parent task succeeded.
     Returns True when gating passes, False when at least one required upstream task is missing.
     """
+    require_evidence = os.getenv("ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE", "1") != "0"
     parent_success = _load_parent_success_tasks(parent_run_id)
     gating_ok = True
     for key in sorted(plan.keys()):
         full = f"{run_id}:{key}"
         if key in skipped:
-            if key in parent_success:
+            if key in parent_success and (not require_evidence or _has_parent_artifact_evidence(parent_run_id, key)):
                 _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="SUCCESS", attempt=1)
             else:
                 # Do not fake-success this upstream node if parent did not produce it successfully.
                 _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="FAILED", attempt=1)
+                reason = "missing_parent_success"
+                if key in parent_success and require_evidence:
+                    reason = "missing_parent_artifact_evidence"
                 _update_task_telemetry(
                     task_id=full,
                     started_at=None,
                     finished_at=datetime.now(timezone.utc).isoformat(),
-                    error_message=f"replay_gating_blocked_missing_parent_success:{key}",
+                    error_message=f"replay_gating_blocked_{reason}:{key}",
                 )
                 gating_ok = False
         else:
