@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import socket
@@ -24,7 +25,7 @@ def _http_ok(url: str, timeout: float = 3.0) -> bool:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             return 200 <= resp.status < 400
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except (urllib.error.URLError, TimeoutError, ValueError, http.client.HTTPException, OSError):
         return False
 
 
