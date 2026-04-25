@@ -53,6 +53,17 @@
   - `ML_AIR_MANIFEST_SIGNING_ALGORITHM`: `hmac-sha256` (default) or `ed25519`.
   - For `ed25519`, provide signer private key(s) (`ML_AIR_MANIFEST_ED25519_PRIVATE_KEY` / `...PRIVATE_KEYS_JSON`) and verifier public key(s) (`ML_AIR_MANIFEST_ED25519_PUBLIC_KEY` / `...PUBLIC_KEYS_JSON`).
   - Keys in JSON/single env can use escaped newlines (`\\n`) for `.env` compatibility; runtime unescapes automatically.
+  - Managed key provider baseline:
+    - `ML_AIR_MANIFEST_KEY_PROVIDER=env|file` (default `env`)
+    - `ML_AIR_MANIFEST_MANAGED_KEYS_FILE=/path/to/manifest-keys.json` when provider is `file`
+    - JSON shape supports: `active_key_id`, `allowed_key_ids[]`, `hmac_keys{}`, `ed25519_private_keys{}`, `ed25519_public_keys{}`
+    - Key entries can reference env vars via `env:VAR_NAME` (runtime resolves from process env / `.env`).
+    - Sample file: `deploy/security/manifest-keys.sample.json`
+    - Local dev file (ignored by git): `deploy/security/manifest-keys.local.json` via `make init-manifest-keys-local`
+    - Rotation guard check: `make test-manifest-key-rotation` (or `python scripts/check_manifest_key_rotation.py --file ... --algorithm ...`)
+  - Strict lifecycle policy:
+    - `ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE=1` disables fallback-to-single-key behavior and requires active `kid` to exist in configured keysets.
+    - `ML_AIR_MANIFEST_ALLOWED_KEY_IDS=v1,v2` (or `allowed_key_ids` in managed JSON) enforces verification/signing allowlist by `kid`.
 - Policy:
   - task config can declare `required_artifacts` list (on `tasks[]` item in `config_snapshot`) and replay skip checks those markers against manifest artifacts when signed-manifest gating is enabled.
   - Manifest payload shape is validated at API ingress, and scheduler re-validates payload consistency with parent run/task before replay skip.

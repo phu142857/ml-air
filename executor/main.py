@@ -8,6 +8,7 @@ import urllib.request
 import hashlib
 import hmac
 import base64
+from functools import lru_cache
 from datetime import datetime, timezone
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
@@ -105,11 +106,66 @@ def _canonical_json(payload: dict) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+@lru_cache(maxsize=1)
+def _managed_keys_blob() -> dict:
+    provider = os.getenv("ML_AIR_MANIFEST_KEY_PROVIDER", "env").strip().lower()
+    if provider != "file":
+        return {}
+    path = os.getenv("ML_AIR_MANIFEST_MANAGED_KEYS_FILE", "").strip()
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            parsed = json.load(f)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _strict_key_lifecycle() -> bool:
+    return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "0") == "1"
+
+
+def _allowed_key_ids() -> set[str]:
+    managed = _managed_keys_blob().get("allowed_key_ids")
+    if isinstance(managed, list):
+        return {str(x).strip() for x in managed if str(x).strip()}
+    raw = os.getenv("ML_AIR_MANIFEST_ALLOWED_KEY_IDS", "").strip()
+    if not raw:
+        return set()
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+
+def _managed_keyset(kind: str) -> dict[str, str]:
+    blob = _managed_keys_blob()
+    raw = blob.get(kind)
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        ks = str(k).strip()
+        vs = str(v).strip()
+        if vs.startswith("env:"):
+            env_name = vs[4:].strip()
+            vs = os.getenv(env_name, "").strip()
+        if ks and vs:
+            out[ks] = vs
+    return out
+
+
 def _manifest_keys() -> tuple[str, dict[str, str]]:
-    active = os.getenv("ML_AIR_MANIFEST_ACTIVE_KEY_ID", "v1").strip() or "v1"
+    managed_active = str(_managed_keys_blob().get("active_key_id", "")).strip()
+    active = managed_active or os.getenv("ML_AIR_MANIFEST_ACTIVE_KEY_ID", "v1").strip() or "v1"
     single = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    managed_hmac = _managed_keyset("hmac_keys")
+    if managed_hmac:
+        if _strict_key_lifecycle() and active not in managed_hmac:
+            raise RuntimeError("strict_key_lifecycle_active_kid_missing")
+        return active, managed_hmac
     raw = os.getenv("ML_AIR_MANIFEST_SIGNING_KEYS_JSON", "").strip()
     if not raw:
+        if _strict_key_lifecycle():
+            raise RuntimeError("strict_key_lifecycle_hmac_keyset_missing")
         return active, {active: single}
     try:
         parsed = json.loads(raw)
@@ -123,8 +179,10 @@ def _manifest_keys() -> tuple[str, dict[str, str]]:
         vs = str(v).strip()
         if ks and vs:
             keyset[ks] = vs
-    if active not in keyset:
+    if active not in keyset and not _strict_key_lifecycle():
         keyset[active] = single
+    if _strict_key_lifecycle() and active not in keyset:
+        raise RuntimeError("strict_key_lifecycle_active_kid_missing")
     return active, keyset
 
 
@@ -136,6 +194,10 @@ def _manifest_algorithm() -> str:
 
 
 def _manifest_private_key_for_kid(key_id: str) -> str | None:
+    managed_ed = _managed_keyset("ed25519_private_keys")
+    if managed_ed:
+        v = managed_ed.get(key_id, "").strip()
+        return v.replace("\\n", "\n") or None
     raw = os.getenv("ML_AIR_MANIFEST_ED25519_PRIVATE_KEYS_JSON", "").strip()
     if raw:
         try:
@@ -172,6 +234,9 @@ def _sign_manifest(payload: dict) -> tuple[str, str, str]:
     algo = _manifest_algorithm()
     active_kid, keyset = _manifest_keys()
     msg = _canonical_json(payload).encode("utf-8")
+    allowed = _allowed_key_ids()
+    if allowed and active_kid not in allowed:
+        raise RuntimeError(f"key_id_not_allowed:{active_kid}")
     if algo == "ed25519":
         key_pem = _manifest_private_key_for_kid(active_kid)
         if not key_pem:
@@ -188,7 +253,11 @@ def _sign_manifest(payload: dict) -> tuple[str, str, str]:
             return algo, active_kid, sig
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"ed25519_sign_failed:{exc}") from exc
-    key = keyset.get(active_kid) or os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    key = keyset.get(active_kid)
+    if not key and not _strict_key_lifecycle():
+        key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    if not key:
+        raise RuntimeError(f"missing_hmac_key_for_kid:{active_kid}")
     sig = hmac.new(key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     return "hmac-sha256", active_kid, sig
 

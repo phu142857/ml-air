@@ -15,6 +15,15 @@ jobs:
       - name: Validate env sync (.env.example vs compose refs)
         run: python scripts/check_env_sync.py
 
+  manifest-key-rotation-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate manifest key rotation policy file
+        run: python scripts/check_manifest_key_rotation.py --file deploy/security/manifest-keys.sample.json --algorithm hmac-sha256
+
   deploy-config-guard:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,15 @@
+{
+  "active_key_id": "v2",
+  "allowed_key_ids": ["v1", "v2"],
+  "hmac_keys": {
+    "v1": "replace-with-old-hmac-key",
+    "v2": "replace-with-new-hmac-key"
+  },
+  "ed25519_private_keys": {
+    "v2": "-----BEGIN PRIVATE KEY-----\\nREPLACE_ME\\n-----END PRIVATE KEY-----\\n"
+  },
+  "ed25519_public_keys": {
+    "v1": "-----BEGIN PUBLIC KEY-----\\nREPLACE_OLD_PUBLIC_KEY\\n-----END PUBLIC KEY-----\\n",
+    "v2": "-----BEGIN PUBLIC KEY-----\\nREPLACE_NEW_PUBLIC_KEY\\n-----END PUBLIC KEY-----\\n"
+  }
+}

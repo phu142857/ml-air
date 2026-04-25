@@ -14,6 +14,19 @@ docker compose -f deploy/docker-compose.quickstart.yml up -d --build
 
 `api` service runs `alembic upgrade head` on startup before serving requests.
 
+Optional (managed manifest keys for local dev):
+
+```bash
+make init-manifest-keys-local
+```
+
+Then switch `.env` to file provider when needed:
+
+```bash
+ML_AIR_MANIFEST_KEY_PROVIDER=file
+ML_AIR_MANIFEST_MANAGED_KEYS_FILE=deploy/security/manifest-keys.local.json
+```
+
 ## Check API health
 
 ```bash

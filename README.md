@@ -66,6 +66,10 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 - Every time a new environment variable is introduced in code/compose/scripts, update both `.env` and `.env.example` in the same change.
 - Keep `.env` for local runtime values and `.env.example` as the documented template.
 - Guard command: `make test-env-sync` (also enforced in CI).
+- Managed manifest key rotation guard: `make test-manifest-key-rotation`.
+- Rotation guard reads key file path from `.env` via `ML_AIR_MANIFEST_MANAGED_KEYS_FILE` (fallback to local/sample).
+- `make test-all` includes both guards (`test-env-sync`, `test-manifest-key-rotation`) before smoke/observability/helm checks.
+- Local managed key bootstrap: `make init-manifest-keys-local` (creates ignored local key file from sample).
 
 ### Required CI/CD secrets
 

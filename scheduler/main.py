@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import base64
+from functools import lru_cache
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from psycopg import connect
@@ -365,11 +366,66 @@ def _canonical_json(payload: dict) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+@lru_cache(maxsize=1)
+def _managed_keys_blob() -> dict:
+    provider = os.getenv("ML_AIR_MANIFEST_KEY_PROVIDER", "env").strip().lower()
+    if provider != "file":
+        return {}
+    path = os.getenv("ML_AIR_MANIFEST_MANAGED_KEYS_FILE", "").strip()
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            parsed = json.load(f)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _strict_key_lifecycle() -> bool:
+    return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "0") == "1"
+
+
+def _allowed_key_ids() -> set[str]:
+    managed = _managed_keys_blob().get("allowed_key_ids")
+    if isinstance(managed, list):
+        return {str(x).strip() for x in managed if str(x).strip()}
+    raw = os.getenv("ML_AIR_MANIFEST_ALLOWED_KEY_IDS", "").strip()
+    if not raw:
+        return set()
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+
+def _managed_keyset(kind: str) -> dict[str, str]:
+    blob = _managed_keys_blob()
+    raw = blob.get(kind)
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        ks = str(k).strip()
+        vs = str(v).strip()
+        if vs.startswith("env:"):
+            env_name = vs[4:].strip()
+            vs = os.getenv(env_name, "").strip()
+        if ks and vs:
+            out[ks] = vs
+    return out
+
+
 def _manifest_verify_key(key_id: str) -> str | None:
-    active = os.getenv("ML_AIR_MANIFEST_ACTIVE_KEY_ID", "v1").strip() or "v1"
+    managed_active = str(_managed_keys_blob().get("active_key_id", "")).strip()
+    active = managed_active or os.getenv("ML_AIR_MANIFEST_ACTIVE_KEY_ID", "v1").strip() or "v1"
     default_key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    managed_hmac = _managed_keyset("hmac_keys")
+    if managed_hmac:
+        if _strict_key_lifecycle() and active not in managed_hmac:
+            return None
+        return managed_hmac.get(key_id)
     raw = os.getenv("ML_AIR_MANIFEST_SIGNING_KEYS_JSON", "").strip()
     if not raw:
+        if _strict_key_lifecycle():
+            return None
         if key_id == active or key_id == "v1":
             return default_key
         return None
@@ -380,7 +436,7 @@ def _manifest_verify_key(key_id: str) -> str | None:
     if not isinstance(parsed, dict):
         return default_key if key_id == active else None
     val = parsed.get(key_id)
-    if val is None and key_id == active:
+    if val is None and key_id == active and not _strict_key_lifecycle():
         return default_key
     if val is None:
         return None
@@ -389,6 +445,10 @@ def _manifest_verify_key(key_id: str) -> str | None:
 
 
 def _manifest_verify_public_key_for_kid(key_id: str) -> str | None:
+    managed_ed = _managed_keyset("ed25519_public_keys")
+    if managed_ed:
+        v = managed_ed.get(key_id, "").strip()
+        return v.replace("\\n", "\n") or None
     raw = os.getenv("ML_AIR_MANIFEST_ED25519_PUBLIC_KEYS_JSON", "").strip()
     if raw:
         try:
@@ -406,6 +466,9 @@ def _manifest_verify_public_key_for_kid(key_id: str) -> str | None:
 
 
 def _verify_manifest_signature(algorithm: str, key_id: str, signature: str, payload: dict) -> bool:
+    allowed = _allowed_key_ids()
+    if allowed and key_id not in allowed:
+        return False
     if algorithm == "ed25519":
         try:
             key_pem = _manifest_verify_public_key_for_kid(key_id)

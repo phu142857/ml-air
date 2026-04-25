@@ -133,7 +133,10 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Security observability baseline**: manifest sign/post and verify failure metrics + alert rules.
 - [x] **Security dashboard visibility**: Grafana panels for manifest verify/post outcomes.
 - [x] **Security incident runbook (manifest/replay)**: reason-based triage/mitigation playbook for verify/post failures (`docs/operations-manifest-security-runbook.md`).
-- [ ] **Manifest policy hardening**: managed key integration (KMS/Vault) + strict key lifecycle/rotation policy.
+- [x] **Manifest policy hardening (baseline)**: managed key provider integration (`env|file` compatible with KMS/Vault sidecar sync) + strict key lifecycle/allowlist policy (`kid` allowlist + strict active key checks).
+- [x] **Manifest key rotation ops DX**: sample managed key file + rotation guard script/target (`deploy/security/manifest-keys.sample.json`, `scripts/check_manifest_key_rotation.py`, `make test-manifest-key-rotation`).
+- [x] **Rotation policy CI gate**: manifest key rotation guard enforced in CI and `make test-all`.
+- [x] **Local managed-key workflow**: ignored local key file bootstrap + guard fallback to local file when present (`make init-manifest-keys-local`, `MANIFEST_KEYS_FILE` resolution).
 
 ### Search
 

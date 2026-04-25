@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+-include .env
 
 ML_AIR_BASE_URL ?= http://localhost:8080
 ML_AIR_TENANT_ID ?= default
@@ -11,6 +12,9 @@ BACKFILL_OFFSET ?= 0
 BACKFILL_TENANT_ID ?=
 BACKFILL_PROJECT_ID ?=
 BACKFILL_REPORT_PATH ?=
+MANIFEST_KEYS_LOCAL_FILE ?= deploy/security/manifest-keys.local.json
+MANIFEST_KEYS_SAMPLE_FILE ?= deploy/security/manifest-keys.sample.json
+MANIFEST_KEYS_FILE ?= $(if $(ML_AIR_MANIFEST_MANAGED_KEYS_FILE),$(ML_AIR_MANIFEST_MANAGED_KEYS_FILE),$(if $(wildcard $(MANIFEST_KEYS_LOCAL_FILE)),$(MANIFEST_KEYS_LOCAL_FILE),$(MANIFEST_KEYS_SAMPLE_FILE)))
 
 BACKFILL_ARGS = --limit $(BACKFILL_LIMIT) --offset $(BACKFILL_OFFSET)
 ifneq ($(strip $(BACKFILL_TENANT_ID)),)
@@ -52,6 +56,27 @@ test-helm:
 .PHONY: test-env-sync
 test-env-sync:
 	python scripts/check_env_sync.py
+
+.PHONY: test-manifest-key-rotation
+test-manifest-key-rotation:
+	@if [ ! -f "$(MANIFEST_KEYS_FILE)" ]; then \
+		echo "[FAIL] Managed key file not found: $(MANIFEST_KEYS_FILE)"; \
+		exit 1; \
+	fi
+	ML_AIR_MANIFEST_SIGNING_KEY="$(ML_AIR_MANIFEST_SIGNING_KEY)" \
+	ML_AIR_MANIFEST_ED25519_PRIVATE_KEY="$(ML_AIR_MANIFEST_ED25519_PRIVATE_KEY)" \
+	ML_AIR_MANIFEST_ED25519_PUBLIC_KEY="$(ML_AIR_MANIFEST_ED25519_PUBLIC_KEY)" \
+	python scripts/check_manifest_key_rotation.py --file $(MANIFEST_KEYS_FILE) --algorithm hmac-sha256
+
+.PHONY: init-manifest-keys-local
+init-manifest-keys-local:
+	@if [ -f "$(MANIFEST_KEYS_LOCAL_FILE)" ]; then \
+		echo "Local key file already exists: $(MANIFEST_KEYS_LOCAL_FILE)"; \
+	else \
+		cp "$(MANIFEST_KEYS_SAMPLE_FILE)" "$(MANIFEST_KEYS_LOCAL_FILE)"; \
+		echo "Created local key file: $(MANIFEST_KEYS_LOCAL_FILE)"; \
+		echo "IMPORTANT: replace placeholder key values before use."; \
+	fi
 
 .PHONY: gen-ed25519-env
 gen-ed25519-env:
@@ -217,7 +242,7 @@ incident-drill:
 	bash scripts/incident_drill.sh
 
 .PHONY: test-all
-test-all: test-env-sync test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-smoke-v03 test-observability test-helm
+test-all: test-env-sync test-manifest-key-rotation test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-smoke-v03 test-observability test-helm
 
 .PHONY: backup-db
 backup-db:
