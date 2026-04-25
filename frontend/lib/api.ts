@@ -21,6 +21,9 @@ export type TaskItem = {
   started_at?: string | null;
   finished_at?: string | null;
   error_message?: string | null;
+  duration_ms?: number | null;
+  cpu_time_seconds?: number | null;
+  memory_rss_kb?: number | null;
 };
 
 export type LogItem = {

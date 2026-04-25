@@ -69,6 +69,11 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                   style={{ left: `${left}%`, width: `${width}%` }}
                 />
               </div>
+              <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-400">
+                <span>wall: {t.duration_ms != null ? `${t.duration_ms}ms` : "-"}</span>
+                <span>cpu: {t.cpu_time_seconds != null ? `${t.cpu_time_seconds.toFixed(4)}s` : "-"}</span>
+                <span>rss: {t.memory_rss_kb != null ? `${t.memory_rss_kb}KB` : "-"}</span>
+              </div>
               {t.error_message && <p className="mt-1 break-all text-xs text-red-300">{t.error_message}</p>}
             </div>
           );

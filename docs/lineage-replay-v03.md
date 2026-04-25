@@ -3,6 +3,7 @@
 ## Database
 
 - Migration `0004_v03_lineage` adds: `datasets`, `dataset_versions`, `lineage_edges` (idempotent by `idempotency_key`), `pipeline_versions`, `runs.pipeline_version_id`, `config_snapshot`, `replay_of_run_id`, `replay_from_task_id`, `plugin_name`, `plugin_context`, and task telemetry (`started_at`, `finished_at`, `error_message`). Requires extension `pg_trgm` for search indexes.
+- Migration `0007_task_resource_usage` adds task resource telemetry columns: `duration_ms`, `cpu_time_seconds`, `memory_rss_kb`.
 
 ## Lineage
 
@@ -96,4 +97,5 @@
 
 - **Lineage** (`/lineage`, optional `?runId=` or set dataset version id for neighborhood), node-click **dataset detail panel** (dataset/version/uri), run history per dataset, and one-hop upstream/downstream highlight.
 - **Search** (`/search?q=`), run **timeline** and **partial replay** on run detail, global search in the top bar.
+- **Resource telemetry (baseline)**: run timeline cards show `wall` duration, `cpu` time, and `rss` memory per task.
 - **Pipeline config**: `/pipelines/{id}/versions` (immutable versions + JSON editor), `/pipelines/{id}/diff?left={version_id}&right={version_id}` (top-level key diff). From **Pipelines** list use column “Versions”, or open a pipeline and use **Versions** / **Config diff**.

@@ -3,6 +3,7 @@ import os
 import random
 import subprocess
 import time
+import resource
 import urllib.error
 import urllib.request
 import hashlib
@@ -372,6 +373,8 @@ def main() -> None:
         if pipeline_id.startswith("slow"):
             duration = 3.0
         task_start = time.perf_counter()
+        cpu_start = time.process_time()
+        rss_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         time.sleep(duration)
         finished_at = datetime.now(timezone.utc).isoformat()
         status = "SUCCESS"
@@ -389,9 +392,13 @@ def main() -> None:
             else:
                 _log_plugin_tracking(task=task, plugin_result=plugin_exec)
                 _lineage_ingest(task=task, plugin_result=plugin_exec)
+        wall_seconds = time.perf_counter() - task_start
+        cpu_seconds = max(0.0, time.process_time() - cpu_start)
+        rss_end = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_kb = int(max(rss_start, rss_end))
         _post_manifest(task=task, plugin_result=plugin_exec, status=status)
         TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
-        TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(time.perf_counter() - task_start)
+        TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(wall_seconds)
         print(
             json.dumps(
                 {
@@ -410,6 +417,11 @@ def main() -> None:
                     "queue": queue_name,
                     "started_at": started_at,
                     "finished_at": finished_at,
+                    "resource_usage": {
+                        "duration_ms": int(wall_seconds * 1000),
+                        "cpu_time_seconds": cpu_seconds,
+                        "memory_rss_kb": rss_kb,
+                    },
                 }
             )
         )
@@ -451,6 +463,11 @@ def main() -> None:
             "context": task.get("context", {}),
             "started_at": started_at,
             "finished_at": finished_at,
+            "resource_usage": {
+                "duration_ms": int(wall_seconds * 1000),
+                "cpu_time_seconds": cpu_seconds,
+                "memory_rss_kb": rss_kb,
+            },
             "pipeline_version_id": task.get("pipeline_version_id"),
             "config_snapshot": task.get("config_snapshot"),
             "replay_from_task_id": task.get("replay_from_task_id"),

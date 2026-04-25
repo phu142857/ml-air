@@ -141,7 +141,15 @@ def _upsert_or_transition_task(task_id: str, run_id: str, next_status: str, atte
             )
 
 
-def _update_task_telemetry(task_id: str, started_at: str | None, finished_at: str | None, error_message: str | None) -> None:
+def _update_task_telemetry(
+    task_id: str,
+    started_at: str | None,
+    finished_at: str | None,
+    error_message: str | None,
+    duration_ms: int | None = None,
+    cpu_time_seconds: float | None = None,
+    memory_rss_kb: int | None = None,
+) -> None:
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -150,10 +158,13 @@ def _update_task_telemetry(task_id: str, started_at: str | None, finished_at: st
                 SET started_at = COALESCE(%s::timestamptz, started_at),
                     finished_at = COALESCE(%s::timestamptz, finished_at),
                     error_message = COALESCE(%s, error_message),
+                    duration_ms = COALESCE(%s, duration_ms),
+                    cpu_time_seconds = COALESCE(%s, cpu_time_seconds),
+                    memory_rss_kb = COALESCE(%s, memory_rss_kb),
                     updated_at = NOW()
                 WHERE task_id = %s
                 """,
-                (started_at, finished_at, error_message, task_id),
+                (started_at, finished_at, error_message, duration_ms, cpu_time_seconds, memory_rss_kb, task_id),
             )
 
 
@@ -756,6 +767,9 @@ def main() -> None:
                 done_event.get("started_at"),
                 done_event.get("finished_at"),
                 err,
+                int((done_event.get("resource_usage") or {}).get("duration_ms")) if (done_event.get("resource_usage") or {}).get("duration_ms") is not None else None,
+                float((done_event.get("resource_usage") or {}).get("cpu_time_seconds")) if (done_event.get("resource_usage") or {}).get("cpu_time_seconds") is not None else None,
+                int((done_event.get("resource_usage") or {}).get("memory_rss_kb")) if (done_event.get("resource_usage") or {}).get("memory_rss_kb") is not None else None,
             )
             if done_event["status"] == "SUCCESS":
                 max_parallel_tasks, replay_from_task_id, replay_of_run_id = _load_run_replay_meta(done_event["run_id"])

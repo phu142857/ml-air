@@ -7,7 +7,7 @@ def list_tasks_by_run(run_id: str) -> list[dict]:
             cur.execute(
                 """
                 SELECT task_id, run_id, status, attempt, max_attempts, backoff_ms, created_at, updated_at,
-                       started_at, finished_at, error_message
+                       started_at, finished_at, error_message, duration_ms, cpu_time_seconds, memory_rss_kb
                 FROM tasks
                 WHERE run_id = %s
                 ORDER BY created_at ASC
@@ -31,6 +31,9 @@ def list_tasks_by_run(run_id: str) -> list[dict]:
                 "started_at": row[8].isoformat() if row[8] else None,
                 "finished_at": row[9].isoformat() if row[9] else None,
                 "error_message": row[10],
+                "duration_ms": row[11],
+                "cpu_time_seconds": float(row[12]) if row[12] is not None else None,
+                "memory_rss_kb": row[13],
             }
         )
     return out
@@ -44,7 +47,7 @@ def get_task_by_id(tenant_id: str, project_id: str, task_id: str) -> dict | None
                 SELECT
                     t.task_id, t.run_id, t.status, t.attempt, t.max_attempts, t.backoff_ms, t.created_at, t.updated_at,
                     r.tenant_id, r.project_id, r.pipeline_id,
-                    t.started_at, t.finished_at, t.error_message
+                    t.started_at, t.finished_at, t.error_message, t.duration_ms, t.cpu_time_seconds, t.memory_rss_kb
                 FROM tasks t
                 JOIN runs r ON r.run_id = t.run_id
                 WHERE r.tenant_id = %s AND r.project_id = %s AND t.task_id = %s
@@ -73,4 +76,7 @@ def get_task_by_id(tenant_id: str, project_id: str, task_id: str) -> dict | None
         "started_at": row[11].isoformat() if row[11] else None,
         "finished_at": row[12].isoformat() if row[12] else None,
         "error_message": row[13],
+        "duration_ms": row[14],
+        "cpu_time_seconds": float(row[15]) if row[15] is not None else None,
+        "memory_rss_kb": row[16],
     }

@@ -144,7 +144,7 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 
 ### Optional (nice to have in v0.3.x)
 
-- [ ] **Cost / resource** per task: CPU/RAM if available from runtime, wall duration (already partially observable — unify in API + UI table).
+- [x] **Cost / resource** per task: CPU/RAM if available from runtime, wall duration (already partially observable — unify in API + UI table).
 - [x] **Env hygiene rule**: any new environment variable must be added to both `.env` and `.env.example` in the same change.
 - [x] **Env sync guard automation**: `scripts/check_env_sync.py` + `make test-env-sync` + CI gate (`env-sync-guard` job).
 
