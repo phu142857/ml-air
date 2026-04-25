@@ -40,6 +40,14 @@ test-helm:
 test-env-sync:
 	python scripts/check_env_sync.py
 
+.PHONY: gen-ed25519-env
+gen-ed25519-env:
+	python scripts/generate_ed25519_env.py --kid v1
+
+.PHONY: enable-ed25519-dev
+enable-ed25519-dev:
+	python scripts/generate_ed25519_env.py --kid v1 --write-env --env-path .env
+
 .PHONY: test-smoke-model-registry
 test-smoke-model-registry:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \

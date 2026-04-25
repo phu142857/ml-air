@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 import hashlib
 import hmac
+import base64
 from datetime import datetime, timezone
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
@@ -121,6 +122,30 @@ def _manifest_keys() -> tuple[str, dict[str, str]]:
     return active, keyset
 
 
+def _manifest_algorithm() -> str:
+    alg = os.getenv("ML_AIR_MANIFEST_SIGNING_ALGORITHM", "hmac-sha256").strip().lower()
+    if alg in {"hmac-sha256", "ed25519"}:
+        return alg
+    return "hmac-sha256"
+
+
+def _manifest_private_key_for_kid(key_id: str) -> str | None:
+    raw = os.getenv("ML_AIR_MANIFEST_ED25519_PRIVATE_KEYS_JSON", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            v = parsed.get(key_id)
+            if v:
+                s = str(v).strip().replace("\\n", "\n")
+                if s:
+                    return s
+    single = os.getenv("ML_AIR_MANIFEST_ED25519_PRIVATE_KEY", "").strip().replace("\\n", "\n")
+    return single or None
+
+
 def _build_manifest_payload(task: dict, plugin_result: dict | None, status: str) -> dict:
     result = plugin_result.get("result") if isinstance(plugin_result, dict) else {}
     artifacts = result.get("artifacts") if isinstance(result, dict) else []
@@ -138,12 +163,28 @@ def _build_manifest_payload(task: dict, plugin_result: dict | None, status: str)
 
 
 def _sign_manifest(payload: dict) -> tuple[str, str, str]:
-    algo = "hmac-sha256"
+    algo = _manifest_algorithm()
     active_kid, keyset = _manifest_keys()
-    key = keyset.get(active_kid) or os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
     msg = _canonical_json(payload).encode("utf-8")
+    if algo == "ed25519":
+        key_pem = _manifest_private_key_for_kid(active_kid)
+        if not key_pem:
+            raise RuntimeError("missing_ed25519_private_key")
+        try:
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+            private_key = serialization.load_pem_private_key(key_pem.encode("utf-8"), password=None)
+            if not isinstance(private_key, Ed25519PrivateKey):
+                raise RuntimeError("invalid_ed25519_private_key_type")
+            raw_sig = private_key.sign(msg)
+            sig = base64.b64encode(raw_sig).decode("ascii")
+            return algo, active_kid, sig
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"ed25519_sign_failed:{exc}") from exc
+    key = keyset.get(active_kid) or os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
     sig = hmac.new(key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-    return algo, active_kid, sig
+    return "hmac-sha256", active_kid, sig
 
 
 def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
@@ -154,7 +195,11 @@ def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
     tenant_id = task.get("tenant_id", "default")
     project_id = task.get("project_id", "default_project")
     payload = _build_manifest_payload(task=task, plugin_result=plugin_result, status=status)
-    algorithm, key_id, signature = _sign_manifest(payload)
+    try:
+        algorithm, key_id, signature = _sign_manifest(payload)
+    except Exception as exc:  # noqa: BLE001
+        print(f"manifest sign failed: {exc}")
+        return
     _api_post(
         f"/v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest",
         {"algorithm": algorithm, "key_id": key_id, "signature": signature, "payload": payload},

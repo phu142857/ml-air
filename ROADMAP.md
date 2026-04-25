@@ -121,7 +121,11 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Artifact-level checksum hardening (toggle)**: replay skip can require lineage-output checksum evidence via `ML_AIR_REPLAY_REQUIRE_CHECKSUM=1`.
 - [x] **Manifest policy baseline**: signed task manifest (`hmac-sha256`) stored server-side; replay skip can require valid signature (`ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST=1`) and match `required_artifacts` policy from task config.
 - [x] **Manifest key rotation baseline**: `key_id` persisted with manifest; executor signs with active `kid`; scheduler verifies using keyset (`ML_AIR_MANIFEST_SIGNING_KEYS_JSON` + active fallback).
-- [ ] **Manifest policy hardening**: asymmetric signatures, stricter per-task schema enforcement, key management integration.
+- [x] **Manifest payload schema hardening**: API enforces typed payload shape; scheduler verifies payload consistency (`run_id/task_id/status/artifacts/lineage`) before replay skip.
+- [x] **Asymmetric signature baseline**: manifest signing/verifying supports `ed25519` (alongside HMAC) with `kid` keyset envs.
+- [x] **Ed25519 DX utility**: keypair env snippet generator (`scripts/generate_ed25519_env.py`, `make gen-ed25519-env`) + escaped-newline key support.
+- [x] **One-command local enable**: `make enable-ed25519-dev` auto-updates `.env` with generated Ed25519 keyset.
+- [ ] **Manifest policy hardening**: managed key integration (KMS/Vault) + strict key lifecycle/rotation policy.
 
 ### Search
 

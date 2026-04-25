@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import base64
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from psycopg import connect
@@ -382,7 +383,40 @@ def _manifest_verify_key(key_id: str) -> str | None:
     return out or None
 
 
+def _manifest_verify_public_key_for_kid(key_id: str) -> str | None:
+    raw = os.getenv("ML_AIR_MANIFEST_ED25519_PUBLIC_KEYS_JSON", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            v = parsed.get(key_id)
+            if v:
+                s = str(v).strip().replace("\\n", "\n")
+                if s:
+                    return s
+    single = os.getenv("ML_AIR_MANIFEST_ED25519_PUBLIC_KEY", "").strip().replace("\\n", "\n")
+    return single or None
+
+
 def _verify_manifest_signature(algorithm: str, key_id: str, signature: str, payload: dict) -> bool:
+    if algorithm == "ed25519":
+        try:
+            key_pem = _manifest_verify_public_key_for_kid(key_id)
+            if not key_pem:
+                return False
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+            pub = serialization.load_pem_public_key(key_pem.encode("utf-8"))
+            if not isinstance(pub, Ed25519PublicKey):
+                return False
+            raw_sig = base64.b64decode(signature.encode("ascii"), validate=True)
+            pub.verify(raw_sig, _canonical_json(payload).encode("utf-8"))
+            return True
+        except Exception:  # noqa: BLE001
+            return False
     if algorithm != "hmac-sha256":
         return False
     key = _manifest_verify_key(key_id)
@@ -427,6 +461,36 @@ def _manifest_satisfies_required_artifacts(payload: dict, required: list[str]) -
     return True
 
 
+def _manifest_payload_valid_for_task(parent_run_id: str, task_key: str, payload: dict) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    required_keys = {"run_id", "task_id", "status", "pipeline_id", "attempt", "artifacts", "lineage", "finished_at"}
+    if not required_keys.issubset(set(payload.keys())):
+        return False
+    if str(payload.get("run_id", "")) != parent_run_id:
+        return False
+    expected_task_id = f"{parent_run_id}:{task_key}"
+    if str(payload.get("task_id", "")) != expected_task_id:
+        return False
+    if str(payload.get("status", "")).upper() != "SUCCESS":
+        return False
+    if not isinstance(payload.get("attempt"), int) or int(payload.get("attempt")) < 1:
+        return False
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        return False
+    for item in artifacts:
+        if not isinstance(item, dict):
+            return False
+        if not str(item.get("path", "")).strip():
+            return False
+    if not isinstance(payload.get("lineage"), dict):
+        return False
+    if not str(payload.get("finished_at", "")).strip():
+        return False
+    return True
+
+
 def _init_replay_tasks_with_gating(
     run_id: str,
     parent_run_id: str,
@@ -457,6 +521,7 @@ def _init_replay_tasks_with_gating(
                 manifest_ok = bool(
                     m
                     and _verify_manifest_signature(m[0], m[1], m[2], m[3])
+                    and _manifest_payload_valid_for_task(parent_run_id, key, m[3])
                     and _manifest_satisfies_required_artifacts(m[3], required_artifacts)
                 )
             if success_ok and artifact_ok and checksum_ok and manifest_ok:

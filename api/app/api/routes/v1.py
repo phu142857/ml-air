@@ -121,11 +121,27 @@ class PromoteModelVersionIn(BaseModel):
     stage: str = "production"
 
 
+class ManifestArtifactIn(BaseModel):
+    path: str = Field(min_length=1)
+    uri: str | None = None
+
+
+class ManifestPayloadIn(BaseModel):
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    pipeline_id: str = Field(min_length=1)
+    attempt: int = Field(ge=1)
+    artifacts: list[ManifestArtifactIn] = Field(default_factory=list)
+    lineage: dict = Field(default_factory=dict)
+    finished_at: str = Field(min_length=1)
+
+
 class TaskManifestIn(BaseModel):
     algorithm: str = Field(default="hmac-sha256", min_length=1)
     key_id: str = Field(default="v1", min_length=1)
     signature: str = Field(min_length=1)
-    payload: dict = Field(default_factory=dict)
+    payload: ManifestPayloadIn
 
 
 @router.get("/tenants/{tenant_id}/projects")
@@ -401,7 +417,7 @@ def upsert_task_manifest_v1(
         algorithm=payload.algorithm,
         key_id=payload.key_id,
         signature=payload.signature,
-        payload=payload.payload,
+        payload=payload.payload.model_dump(),
     )
 
 

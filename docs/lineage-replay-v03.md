@@ -36,12 +36,25 @@
   - `ML_AIR_MANIFEST_ACTIVE_KEY_ID` (default `v1`) for signing.
   - `ML_AIR_MANIFEST_SIGNING_KEYS_JSON` (optional JSON map, e.g. `{"v1":"key1","v2":"key2"}`) for sign/verify keyset.
   - `ML_AIR_MANIFEST_SIGNING_KEY` remains fallback for single-key/dev mode.
+  - `ML_AIR_MANIFEST_SIGNING_ALGORITHM`: `hmac-sha256` (default) or `ed25519`.
+  - For `ed25519`, provide signer private key(s) (`ML_AIR_MANIFEST_ED25519_PRIVATE_KEY` / `...PRIVATE_KEYS_JSON`) and verifier public key(s) (`ML_AIR_MANIFEST_ED25519_PUBLIC_KEY` / `...PUBLIC_KEYS_JSON`).
+  - Keys in JSON/single env can use escaped newlines (`\\n`) for `.env` compatibility; runtime unescapes automatically.
 - Policy:
   - task config can declare `required_artifacts` list (on `tasks[]` item in `config_snapshot`) and replay skip checks those markers against manifest artifacts when signed-manifest gating is enabled.
+  - Manifest payload shape is validated at API ingress, and scheduler re-validates payload consistency with parent run/task before replay skip.
 
 ## Search
 
 - `GET .../search?q=...&type=run|task|dataset|all` (rate-limited per tenant, dev implementation).
+
+## Dev utility
+
+- Generate Ed25519 env snippet:
+  - `make gen-ed25519-env`
+  - or `python scripts/generate_ed25519_env.py --kid v1`
+- Auto-write `.env` for local dev:
+  - `make enable-ed25519-dev`
+  - or `python scripts/generate_ed25519_env.py --kid v1 --write-env --env-path .env`
 
 ## UI
 
