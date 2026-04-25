@@ -135,6 +135,25 @@ make smoke-quickstart
 
 `make seed-demo` provisions a 3-task demo pipeline version and creates a successful demo run using plugin `echo_tracking` with metrics + lineage.
 
+## Gate 1 lock check (Day 3)
+
+```bash
+make gate1-lock
+```
+
+This command validates the complete onboarding path:
+
+- preflight checks (`doctor`)
+- build/start stack (`rebuild`)
+- stack health (`health`)
+- seed demo run
+- smoke quickstart assertions
+
+Constraints for Gate 1:
+
+- No `docker exec`
+- No config edits outside `.env`
+
 ## Plugin runtime quick check
 
 ```bash

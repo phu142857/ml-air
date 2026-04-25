@@ -48,6 +48,13 @@ doctor:
 fresh-machine-test:
 	python scripts/fresh_machine_test.py --compose-file $(COMPOSE_FILE)
 
+.PHONY: gate1-lock
+gate1-lock:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/gate1_lock_check.py --compose-file $(COMPOSE_FILE) --max-seconds 300
+
 .PHONY: rebuild
 rebuild:
 	docker compose -f $(COMPOSE_FILE) up -d --build
