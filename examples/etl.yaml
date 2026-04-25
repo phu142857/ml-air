@@ -1,0 +1,25 @@
+pipeline_id: app_etl_pipeline
+priority: normal
+max_parallel_tasks: 1
+plugin_name: app_etl_adapter
+use_latest_pipeline_version: true
+context:
+  params:
+    source: app_etl
+    job: nightly
+  metrics:
+    rows_processed:
+      step: 1
+      value: 10000
+  artifacts:
+    - path: app/etl/output.parquet
+      uri: s3://mlair/app/etl/output.parquet
+  lineage:
+    inputs:
+      - name: app_etl_source
+        version: v1
+        uri: s3://mlair/app/etl/source.parquet
+    outputs:
+      - name: app_etl_output
+        version: v1
+        uri: s3://mlair/app/etl/output.parquet

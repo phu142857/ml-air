@@ -141,6 +141,18 @@ smoke-quickstart:
 	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
 	python scripts/smoke_quickstart.py
 
+.PHONY: day6-check
+day6-check:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	COMPOSE_FILE=$(COMPOSE_FILE) \
+	python scripts/day6_integration_check.py
+
+.PHONY: day7-check
+day7-check:
+	python scripts/day7_gate_check.py
+
 .PHONY: backfill-lineage
 backfill-lineage:
 	docker compose -f $(COMPOSE_FILE) up -d --build api

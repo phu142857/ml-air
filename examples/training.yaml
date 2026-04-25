@@ -1,0 +1,25 @@
+pipeline_id: fail_once_app_training_pipeline
+priority: normal
+max_parallel_tasks: 1
+plugin_name: app_train_adapter
+use_latest_pipeline_version: true
+context:
+  params:
+    source: app_training
+    model: baseline
+  metrics:
+    train_accuracy:
+      step: 1
+      value: 0.92
+  artifacts:
+    - path: app/training/model.pkl
+      uri: s3://mlair/app/training/model.pkl
+  lineage:
+    inputs:
+      - name: app_training_raw
+        version: v1
+        uri: s3://mlair/app/training/raw.parquet
+    outputs:
+      - name: app_training_features
+        version: v1
+        uri: s3://mlair/app/training/features.parquet
