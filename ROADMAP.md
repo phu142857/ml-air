@@ -100,7 +100,8 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 
 - [x] **Datasets + `dataset_versions` + `lineage_edges`** (tenant/project scoped, Alembic `0004_v03_lineage`); idempotent `idempotency_key` on edges.
 - [x] **Plugin / runtime**: `PluginMeta.lineage` (optional) + result `lineage: { inputs, outputs }` → `POST .../lineage/ingest` (executor after success).
-- [ ] **Loader** strict validation of lineage slot names; **backfill** job — follow-up.
+- [x] **Loader** strict validation of lineage slot names (`PluginMeta.lineage` shape + slot naming constraints in plugin loader).
+- [x] **Backfill job** for historical lineage from manifest payload (`scripts/backfill_lineage_from_manifests.py`, `make backfill-lineage`).
 
 ### UI — lineage
 

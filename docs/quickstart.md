@@ -146,6 +146,16 @@ make test-smoke-model-registry
 make test-smoke-phase2
 ```
 
+## Backfill lineage from manifests (optional)
+
+Use this after enabling lineage/signature features on an existing environment to rebuild missing `lineage_edges` from stored manifest payloads:
+
+```bash
+make backfill-lineage
+```
+
+This command runs inside the `api` container, so you do not need local Python dependency setup.
+
 ## Stream logs via WebSocket
 
 ```bash

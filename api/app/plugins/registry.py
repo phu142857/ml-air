@@ -14,6 +14,7 @@ class RegisteredPlugin:
     inputs: dict[str, Any]
     outputs: dict[str, Any]
     ui_schema: dict[str, Any] | None
+    lineage: dict[str, list[str]] | None
     enabled: bool
 
 
@@ -38,6 +39,7 @@ class PluginRegistry:
             "inputs": getattr(meta, "inputs", {}),
             "outputs": getattr(meta, "outputs", {}),
             "ui_schema": getattr(meta, "ui_schema", None),
+            "lineage": getattr(meta, "lineage", None),
         }
 
     def register(self, plugin: Any) -> None:
@@ -60,6 +62,7 @@ class PluginRegistry:
             inputs=meta.get("inputs", {}) or {},
             outputs=meta.get("outputs", {}) or {},
             ui_schema=meta.get("ui_schema"),
+            lineage=meta.get("lineage"),
             enabled=self._enabled.get(name, False),
         )
 

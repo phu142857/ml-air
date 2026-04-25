@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from importlib.metadata import entry_points
 from typing import Any
 
@@ -9,6 +10,7 @@ from packaging.version import InvalidVersion, Version
 logger = logging.getLogger(__name__)
 PLUGIN_GROUP = "mlair.plugins"
 MIN_ENGINE_VERSION = Version("1.0.0")
+_SLOT_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_:-]{0,63}$")
 
 
 def _as_meta(plugin: Any) -> dict[str, Any]:
@@ -26,6 +28,7 @@ def _as_meta(plugin: Any) -> dict[str, Any]:
         "inputs": getattr(meta, "inputs", {}),
         "outputs": getattr(meta, "outputs", {}),
         "ui_schema": getattr(meta, "ui_schema", None),
+        "lineage": getattr(meta, "lineage", None),
     }
 
 
@@ -39,6 +42,36 @@ def _validate_meta(meta: dict[str, Any]) -> None:
             f"incompatible engine_version={meta['engine_version']}, minimum is {MIN_ENGINE_VERSION}"
         )
     Version(str(meta["version"]))  # validate semver-ish format
+    _validate_lineage_meta(meta.get("lineage"))
+
+
+def _validate_lineage_meta(lineage: Any) -> None:
+    if lineage is None:
+        return
+    if not isinstance(lineage, dict):
+        raise ValueError("invalid lineage meta: expected object")
+    allowed_keys = {"inputs", "outputs"}
+    unknown = [k for k in lineage.keys() if k not in allowed_keys]
+    if unknown:
+        raise ValueError(f"invalid lineage meta keys: {unknown}")
+    for key in ("inputs", "outputs"):
+        slots = lineage.get(key, [])
+        if slots is None:
+            continue
+        if not isinstance(slots, list):
+            raise ValueError(f"invalid lineage.{key}: expected list[str]")
+        seen: set[str] = set()
+        for raw_slot in slots:
+            slot = str(raw_slot).strip()
+            if not slot:
+                raise ValueError(f"invalid lineage.{key}: empty slot name")
+            if not _SLOT_NAME_RE.match(slot):
+                raise ValueError(
+                    f"invalid lineage.{key} slot '{slot}': use pattern {_SLOT_NAME_RE.pattern}"
+                )
+            if slot in seen:
+                raise ValueError(f"invalid lineage.{key}: duplicate slot '{slot}'")
+            seen.add(slot)
 
 
 def load_plugins() -> tuple[dict[str, Any], list[dict[str, str]]]:

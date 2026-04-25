@@ -8,8 +8,12 @@
 
 - Plugins may return `lineage: { "inputs": [...], "outputs": [...] }` with `name`, `version`, `uri` per slot.
 - The executor calls `POST /v1/tenants/{tenant}/projects/{project}/lineage/ingest` after a successful plugin run (maintainer token).
+- Plugin loader validates lineage slot names in `PluginMeta.lineage` strictly (`inputs`/`outputs` only, unique slot names, naming pattern).
 - Query neighborhood: `GET .../lineage?dataset_version_id=...&depth=2&direction=both`
 - Per run: `GET .../lineage/runs/{run_id}`
+- Backfill historical lineage from manifests:
+  - `make backfill-lineage`
+  - or container command: `docker compose -f deploy/docker-compose.quickstart.yml exec -T api python scripts/backfill_lineage_from_manifests.py --tenant-id default --project-id default_project --limit 1000`
 
 ## Pipeline versions
 

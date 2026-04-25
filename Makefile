@@ -70,6 +70,11 @@ test-smoke-v03:
 	ML_AIR_TOKEN=$${ML_AIR_TOKEN:-maintainer-token} \
 	python scripts/test_smoke_v03.py
 
+.PHONY: backfill-lineage
+backfill-lineage:
+	docker compose -f $(COMPOSE_FILE) up -d --build api
+	docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py --limit 1000
+
 .PHONY: test-observability
 test-observability:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
