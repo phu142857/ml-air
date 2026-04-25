@@ -123,6 +123,7 @@ class PromoteModelVersionIn(BaseModel):
 
 class TaskManifestIn(BaseModel):
     algorithm: str = Field(default="hmac-sha256", min_length=1)
+    key_id: str = Field(default="v1", min_length=1)
     signature: str = Field(min_length=1)
     payload: dict = Field(default_factory=dict)
 
@@ -398,6 +399,7 @@ def upsert_task_manifest_v1(
         run_id=run_id,
         task_id=task_id,
         algorithm=payload.algorithm,
+        key_id=payload.key_id,
         signature=payload.signature,
         payload=payload.payload,
     )

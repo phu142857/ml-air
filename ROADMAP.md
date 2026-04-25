@@ -120,7 +120,8 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Artifact-level gating baseline**: replay skip requires parent task `SUCCESS` **and** artifact evidence (`lineage_edges` or `run_artifacts` match). Configurable via `ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE` (default on).
 - [x] **Artifact-level checksum hardening (toggle)**: replay skip can require lineage-output checksum evidence via `ML_AIR_REPLAY_REQUIRE_CHECKSUM=1`.
 - [x] **Manifest policy baseline**: signed task manifest (`hmac-sha256`) stored server-side; replay skip can require valid signature (`ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST=1`) and match `required_artifacts` policy from task config.
-- [ ] **Manifest policy hardening**: key rotation / key id support, asymmetric signatures, stricter per-task schema enforcement.
+- [x] **Manifest key rotation baseline**: `key_id` persisted with manifest; executor signs with active `kid`; scheduler verifies using keyset (`ML_AIR_MANIFEST_SIGNING_KEYS_JSON` + active fallback).
+- [ ] **Manifest policy hardening**: asymmetric signatures, stricter per-task schema enforcement, key management integration.
 
 ### Search
 

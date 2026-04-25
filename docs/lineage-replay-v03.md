@@ -25,13 +25,17 @@
   - `ML_AIR_REPLAY_REQUIRE_CHECKSUM=1`: parent lineage output must include checksum evidence.
   - `ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST=1`: parent must have valid signed manifest and satisfy `required_artifacts` policy for skipped tasks.
 
-## Signed manifests (baseline)
+## Signed manifests (baseline + key rotation)
 
-- New table: `task_artifact_manifests` (migration `0005_task_artifact_manifests`) stores `algorithm`, `signature`, and canonical JSON payload per `(run_id, task_id)`.
+- New tables/migrations:
+  - `0005_task_artifact_manifests`: stores `algorithm`, `signature`, canonical JSON payload per `(run_id, task_id)`.
+  - `0006_manifest_key_id`: adds `key_id` for key rotation.
 - Executor posts manifest to:
   - `POST /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest`
 - Signing key:
-  - `ML_AIR_MANIFEST_SIGNING_KEY` (default dev key; override in real deployments).
+  - `ML_AIR_MANIFEST_ACTIVE_KEY_ID` (default `v1`) for signing.
+  - `ML_AIR_MANIFEST_SIGNING_KEYS_JSON` (optional JSON map, e.g. `{"v1":"key1","v2":"key2"}`) for sign/verify keyset.
+  - `ML_AIR_MANIFEST_SIGNING_KEY` remains fallback for single-key/dev mode.
 - Policy:
   - task config can declare `required_artifacts` list (on `tasks[]` item in `config_snapshot`) and replay skip checks those markers against manifest artifacts when signed-manifest gating is enabled.
 

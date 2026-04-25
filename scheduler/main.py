@@ -331,13 +331,13 @@ def _has_parent_checksum_evidence(parent_run_id: str, task_key: str) -> bool:
             return bool(cur.fetchone())
 
 
-def _load_parent_task_manifest(parent_run_id: str, task_key: str) -> tuple[str, str, dict] | None:
+def _load_parent_task_manifest(parent_run_id: str, task_key: str) -> tuple[str, str, str, dict] | None:
     full_task_id = f"{parent_run_id}:{task_key}"
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT algorithm, signature, payload
+                SELECT algorithm, key_id, signature, payload
                 FROM task_artifact_manifests
                 WHERE run_id = %s AND task_id = %s
                 LIMIT 1
@@ -347,22 +347,47 @@ def _load_parent_task_manifest(parent_run_id: str, task_key: str) -> tuple[str, 
             row = cur.fetchone()
             if not row:
                 return None
-            payload = row[2]
+            payload = row[3]
             if isinstance(payload, str):
                 payload = json.loads(payload)
             if not isinstance(payload, dict):
                 return None
-            return row[0], row[1], payload
+            return row[0], row[1], row[2], payload
 
 
 def _canonical_json(payload: dict) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
-def _verify_manifest_signature(algorithm: str, signature: str, payload: dict) -> bool:
+def _manifest_verify_key(key_id: str) -> str | None:
+    active = os.getenv("ML_AIR_MANIFEST_ACTIVE_KEY_ID", "v1").strip() or "v1"
+    default_key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    raw = os.getenv("ML_AIR_MANIFEST_SIGNING_KEYS_JSON", "").strip()
+    if not raw:
+        if key_id == active or key_id == "v1":
+            return default_key
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return default_key if key_id == active else None
+    if not isinstance(parsed, dict):
+        return default_key if key_id == active else None
+    val = parsed.get(key_id)
+    if val is None and key_id == active:
+        return default_key
+    if val is None:
+        return None
+    out = str(val).strip()
+    return out or None
+
+
+def _verify_manifest_signature(algorithm: str, key_id: str, signature: str, payload: dict) -> bool:
     if algorithm != "hmac-sha256":
         return False
-    key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    key = _manifest_verify_key(key_id)
+    if not key:
+        return False
     expected = hmac.new(key.encode("utf-8"), _canonical_json(payload).encode("utf-8"), hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
@@ -431,8 +456,8 @@ def _init_replay_tasks_with_gating(
                 required_artifacts = _required_artifacts_for_task(plan, config_snapshot, key)
                 manifest_ok = bool(
                     m
-                    and _verify_manifest_signature(m[0], m[1], m[2])
-                    and _manifest_satisfies_required_artifacts(m[2], required_artifacts)
+                    and _verify_manifest_signature(m[0], m[1], m[2], m[3])
+                    and _manifest_satisfies_required_artifacts(m[3], required_artifacts)
                 )
             if success_ok and artifact_ok and checksum_ok and manifest_ok:
                 _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="SUCCESS", attempt=1)

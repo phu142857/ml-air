@@ -12,6 +12,7 @@ def upsert_task_manifest(
     run_id: str,
     task_id: str,
     algorithm: str,
+    key_id: str,
     signature: str,
     payload: dict,
 ) -> dict:
@@ -19,19 +20,20 @@ def upsert_task_manifest(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO task_artifact_manifests (manifest_id, run_id, task_id, algorithm, signature, payload)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO task_artifact_manifests (manifest_id, run_id, task_id, algorithm, key_id, signature, payload)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (run_id, task_id) DO UPDATE
                 SET algorithm = EXCLUDED.algorithm,
+                    key_id = EXCLUDED.key_id,
                     signature = EXCLUDED.signature,
                     payload = EXCLUDED.payload,
                     created_at = NOW()
-                RETURNING manifest_id, run_id, task_id, algorithm, signature, payload, created_at
+                RETURNING manifest_id, run_id, task_id, algorithm, key_id, signature, payload, created_at
                 """,
-                (str(uuid4()), run_id, task_id, algorithm, signature, Json(payload)),
+                (str(uuid4()), run_id, task_id, algorithm, key_id, signature, Json(payload)),
             )
             row = cur.fetchone()
-    payload_row = row[5]
+    payload_row = row[6]
     if isinstance(payload_row, str):
         payload_row = json.loads(payload_row)
     return {
@@ -39,7 +41,8 @@ def upsert_task_manifest(
         "run_id": row[1],
         "task_id": row[2],
         "algorithm": row[3],
-        "signature": row[4],
+        "key_id": row[4],
+        "signature": row[5],
         "payload": payload_row,
-        "created_at": row[6].isoformat(),
+        "created_at": row[7].isoformat(),
     }

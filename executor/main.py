@@ -98,6 +98,29 @@ def _canonical_json(payload: dict) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+def _manifest_keys() -> tuple[str, dict[str, str]]:
+    active = os.getenv("ML_AIR_MANIFEST_ACTIVE_KEY_ID", "v1").strip() or "v1"
+    single = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    raw = os.getenv("ML_AIR_MANIFEST_SIGNING_KEYS_JSON", "").strip()
+    if not raw:
+        return active, {active: single}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return active, {active: single}
+    if not isinstance(parsed, dict):
+        return active, {active: single}
+    keyset: dict[str, str] = {}
+    for k, v in parsed.items():
+        ks = str(k).strip()
+        vs = str(v).strip()
+        if ks and vs:
+            keyset[ks] = vs
+    if active not in keyset:
+        keyset[active] = single
+    return active, keyset
+
+
 def _build_manifest_payload(task: dict, plugin_result: dict | None, status: str) -> dict:
     result = plugin_result.get("result") if isinstance(plugin_result, dict) else {}
     artifacts = result.get("artifacts") if isinstance(result, dict) else []
@@ -114,12 +137,13 @@ def _build_manifest_payload(task: dict, plugin_result: dict | None, status: str)
     }
 
 
-def _sign_manifest(payload: dict) -> tuple[str, str]:
+def _sign_manifest(payload: dict) -> tuple[str, str, str]:
     algo = "hmac-sha256"
-    key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    active_kid, keyset = _manifest_keys()
+    key = keyset.get(active_kid) or os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
     msg = _canonical_json(payload).encode("utf-8")
     sig = hmac.new(key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-    return algo, sig
+    return algo, active_kid, sig
 
 
 def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
@@ -130,10 +154,10 @@ def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
     tenant_id = task.get("tenant_id", "default")
     project_id = task.get("project_id", "default_project")
     payload = _build_manifest_payload(task=task, plugin_result=plugin_result, status=status)
-    algorithm, signature = _sign_manifest(payload)
+    algorithm, key_id, signature = _sign_manifest(payload)
     _api_post(
         f"/v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest",
-        {"algorithm": algorithm, "signature": signature, "payload": payload},
+        {"algorithm": algorithm, "key_id": key_id, "signature": signature, "payload": payload},
         timeout=10,
     )
 
