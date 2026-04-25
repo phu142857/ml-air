@@ -168,6 +168,19 @@ def _load_run_limits(run_id: str) -> tuple[int, str | None]:
             return (max(1, int(row[0])), row[1])
 
 
+def _load_run_replay_meta(run_id: str) -> tuple[int, str | None, str | None]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT max_parallel_tasks, replay_from_task_id, replay_of_run_id FROM runs WHERE run_id = %s",
+                (run_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return (1, None, None)
+            return (max(1, int(row[0])), row[1], row[2])
+
+
 def _task_key(run_id: str, task_id: str) -> str:
     prefix = f"{run_id}:"
     if task_id.startswith(prefix):
@@ -238,6 +251,54 @@ def _init_run_tasks(run_id: str, plan: dict[str, list[str]], selected: set[str],
             _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="SUCCESS", attempt=1)
         else:
             _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="PENDING", attempt=1)
+
+
+def _load_parent_success_tasks(parent_run_id: str) -> set[str]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT task_id
+                FROM tasks
+                WHERE run_id = %s AND status = 'SUCCESS'
+                """,
+                (parent_run_id,),
+            )
+            rows = cur.fetchall()
+    return {_task_key(parent_run_id, r[0]) for r in rows}
+
+
+def _init_replay_tasks_with_gating(
+    run_id: str,
+    parent_run_id: str,
+    plan: dict[str, list[str]],
+    selected: set[str],
+    skipped: set[str],
+) -> bool:
+    """
+    Skip upstream tasks only when corresponding parent task succeeded.
+    Returns True when gating passes, False when at least one required upstream task is missing.
+    """
+    parent_success = _load_parent_success_tasks(parent_run_id)
+    gating_ok = True
+    for key in sorted(plan.keys()):
+        full = f"{run_id}:{key}"
+        if key in skipped:
+            if key in parent_success:
+                _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="SUCCESS", attempt=1)
+            else:
+                # Do not fake-success this upstream node if parent did not produce it successfully.
+                _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="FAILED", attempt=1)
+                _update_task_telemetry(
+                    task_id=full,
+                    started_at=None,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    error_message=f"replay_gating_blocked_missing_parent_success:{key}",
+                )
+                gating_ok = False
+        else:
+            _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="PENDING", attempt=1)
+    return gating_ok
 
 
 def _list_run_task_states(run_id: str) -> dict[str, tuple[str, int]]:
@@ -334,7 +395,21 @@ def main() -> None:
                 _transition_run_status(run_id, "RUNNING")
                 plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
                 selected, skipped = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
-                _init_run_tasks(run_id=run_id, plan=plan, selected=selected, skipped=skipped)
+                replay_parent = run_event.get("replay_of_run_id")
+                if replay_parent:
+                    gating_ok = _init_replay_tasks_with_gating(
+                        run_id=run_id,
+                        parent_run_id=replay_parent,
+                        plan=plan,
+                        selected=selected,
+                        skipped=skipped,
+                    )
+                    if not gating_ok:
+                        _transition_run_status(run_id, "FAILED")
+                        print(f"replay gating failed for run {run_id} from parent {replay_parent}")
+                        continue
+                else:
+                    _init_run_tasks(run_id=run_id, plan=plan, selected=selected, skipped=skipped)
                 scheduled = _schedule_ready_tasks(client=client, run_event=run_event)
                 if scheduled > 0:
                     RUN_SCHEDULED_TOTAL.inc()
@@ -366,7 +441,7 @@ def main() -> None:
                 err,
             )
             if done_event["status"] == "SUCCESS":
-                max_parallel_tasks, replay_from_task_id = _load_run_limits(done_event["run_id"])
+                max_parallel_tasks, replay_from_task_id, replay_of_run_id = _load_run_replay_meta(done_event["run_id"])
                 run_event = {
                     "run_id": done_event["run_id"],
                     "tenant_id": done_event.get("tenant_id", "default"),
@@ -379,6 +454,7 @@ def main() -> None:
                     "pipeline_version_id": done_event.get("pipeline_version_id"),
                     "config_snapshot": done_event.get("config_snapshot"),
                     "replay_from_task_id": replay_from_task_id,
+                    "replay_of_run_id": replay_of_run_id,
                     "max_parallel_tasks": max_parallel_tasks,
                 }
                 _schedule_ready_tasks(client=client, run_event=run_event)
