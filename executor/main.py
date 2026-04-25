@@ -238,10 +238,12 @@ def main() -> None:
             "trace_id": trace_id,
             "plugin_name": plugin_name,
             "plugin_exec": plugin_exec,
+            "context": task.get("context", {}),
             "started_at": started_at,
             "finished_at": finished_at,
             "pipeline_version_id": task.get("pipeline_version_id"),
             "config_snapshot": task.get("config_snapshot"),
+            "replay_from_task_id": task.get("replay_from_task_id"),
         }
         client.rpush("mlair:tasks:done", json.dumps(done_payload))
         QUEUE_INFLIGHT.labels(queue=queue_name).dec()

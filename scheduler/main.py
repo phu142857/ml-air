@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
@@ -157,6 +158,159 @@ def _load_task_retry_policy(task_id: str) -> tuple[int, int]:
             return (int(row[0]), int(row[1]))
 
 
+def _load_run_limits(run_id: str) -> tuple[int, str | None]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT max_parallel_tasks, replay_from_task_id FROM runs WHERE run_id = %s", (run_id,))
+            row = cur.fetchone()
+            if not row:
+                return (1, None)
+            return (max(1, int(row[0])), row[1])
+
+
+def _task_key(run_id: str, task_id: str) -> str:
+    prefix = f"{run_id}:"
+    if task_id.startswith(prefix):
+        return task_id[len(prefix) :]
+    return task_id
+
+
+def _build_task_plan(run_id: str, config_snapshot: dict | None) -> dict[str, list[str]]:
+    if not isinstance(config_snapshot, dict):
+        return {"task:1": []}
+    tasks_cfg = config_snapshot.get("tasks")
+    if isinstance(tasks_cfg, list) and tasks_cfg:
+        out: dict[str, list[str]] = {}
+        for item in tasks_cfg:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id", "")).strip()
+            if not key:
+                continue
+            depends = item.get("depends_on") or []
+            deps = [str(x).strip() for x in depends if str(x).strip()]
+            out[key] = deps
+        if out:
+            return out
+    steps = config_snapshot.get("steps")
+    if isinstance(steps, list) and steps:
+        out: dict[str, list[str]] = {}
+        prev: str | None = None
+        for raw in steps:
+            key = str(raw).strip()
+            if not key:
+                continue
+            out[key] = [prev] if prev else []
+            prev = key
+        if out:
+            return out
+    return {"task:1": []}
+
+
+def _apply_replay_filter(plan: dict[str, list[str]], replay_from_task_id: str | None, run_id: str) -> tuple[set[str], set[str]]:
+    keys = set(plan.keys())
+    if not replay_from_task_id:
+        return keys, set()
+    start = _task_key(run_id, replay_from_task_id)
+    if start not in keys:
+        return keys, set()
+    children: dict[str, list[str]] = defaultdict(list)
+    for node, deps in plan.items():
+        for dep in deps:
+            children[dep].append(node)
+    selected: set[str] = {start}
+    q: deque[str] = deque([start])
+    while q:
+        cur = q.popleft()
+        for nxt in children.get(cur, []):
+            if nxt in selected:
+                continue
+            selected.add(nxt)
+            q.append(nxt)
+    skipped = keys - selected
+    return selected, skipped
+
+
+def _init_run_tasks(run_id: str, plan: dict[str, list[str]], selected: set[str], skipped: set[str]) -> None:
+    for key in sorted(plan.keys()):
+        full = f"{run_id}:{key}"
+        if key in skipped:
+            _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="SUCCESS", attempt=1)
+        else:
+            _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="PENDING", attempt=1)
+
+
+def _list_run_task_states(run_id: str) -> dict[str, tuple[str, int]]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT task_id, status, attempt
+                FROM tasks
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            )
+            rows = cur.fetchall()
+    return {_task_key(run_id, r[0]): (r[1], int(r[2])) for r in rows}
+
+
+def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attempt: int) -> None:
+    queue_name = _queue_name_for_priority(run_event.get("priority", "normal"))
+    task_event = {
+        "event_type": "task_ready",
+        "run_id": run_event["run_id"],
+        "task_id": full_task_id,
+        "attempt": attempt,
+        "tenant_id": run_event.get("tenant_id", "default"),
+        "project_id": run_event.get("project_id", "default_project"),
+        "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
+        "priority": run_event.get("priority", "normal"),
+        "trace_id": run_event.get("trace_id"),
+        "plugin_name": run_event.get("plugin_name"),
+        "context": run_event.get("context", {}),
+        "pipeline_version_id": run_event.get("pipeline_version_id"),
+        "config_snapshot": run_event.get("config_snapshot"),
+        "replay_from_task_id": run_event.get("replay_from_task_id"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _upsert_or_transition_task(task_id=full_task_id, run_id=run_event["run_id"], next_status="RUNNING", attempt=attempt)
+    client.rpush(queue_name, json.dumps(task_event))
+
+
+def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
+    run_id = run_event["run_id"]
+    plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
+    selected, _ = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
+    states = _list_run_task_states(run_id)
+    max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
+    tenant_id = run_event.get("tenant_id", "default")
+    project_id = run_event.get("project_id", "default_project")
+    scheduled = 0
+    for key in sorted(selected):
+        st, attempt = states.get(key, ("PENDING", 1))
+        if st != "PENDING":
+            continue
+        deps = plan.get(key, [])
+        if any(states.get(dep, ("PENDING", 1))[0] != "SUCCESS" for dep in deps):
+            continue
+        if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
+            break
+        _enqueue_task_event(client=client, run_event=run_event, full_task_id=f"{run_id}:{key}", attempt=attempt)
+        scheduled += 1
+    return scheduled
+
+
+def _sync_run_status_after_task(run_id: str, plan: dict[str, list[str]], selected: set[str]) -> None:
+    states = _list_run_task_states(run_id)
+    selected_states = [states.get(key, ("PENDING", 1))[0] for key in selected]
+    if selected_states and all(s == "SUCCESS" for s in selected_states):
+        _transition_run_status(run_id, "SUCCESS")
+        return
+    if any(s == "FAILED" for s in selected_states):
+        _transition_run_status(run_id, "FAILED")
+
+
 def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
     start_http_server(metrics_port)
@@ -169,7 +323,6 @@ def main() -> None:
             _, raw_payload = run_msg
             run_event = json.loads(raw_payload)
             run_id = run_event["run_id"]
-            task_id = f"{run_id}:task:1"
             tenant_id = run_event.get("tenant_id", "default")
             project_id = run_event.get("project_id", "default_project")
             max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
@@ -179,31 +332,16 @@ def main() -> None:
                 time.sleep(0.2)
             else:
                 _transition_run_status(run_id, "RUNNING")
-                _upsert_or_transition_task(task_id=task_id, run_id=run_id, next_status="PENDING", attempt=1)
-                _upsert_or_transition_task(task_id=task_id, run_id=run_id, next_status="RUNNING", attempt=1)
-                queue_name = _queue_name_for_priority(run_event.get("priority", "normal"))
-                task_event = {
-                    "event_type": "task_ready",
-                    "run_id": run_id,
-                    "task_id": task_id,
-                    "attempt": 1,
-                    "tenant_id": tenant_id,
-                    "project_id": project_id,
-                    "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
-                    "priority": run_event.get("priority", "normal"),
-                    "trace_id": run_event.get("trace_id"),
-                    "plugin_name": run_event.get("plugin_name"),
-                    "context": run_event.get("context", {}),
-                    "pipeline_version_id": run_event.get("pipeline_version_id"),
-                    "config_snapshot": run_event.get("config_snapshot"),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                }
-                client.rpush(queue_name, json.dumps(task_event))
-                RUN_SCHEDULED_TOTAL.inc()
+                plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
+                selected, skipped = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
+                _init_run_tasks(run_id=run_id, plan=plan, selected=selected, skipped=skipped)
+                scheduled = _schedule_ready_tasks(client=client, run_event=run_event)
+                if scheduled > 0:
+                    RUN_SCHEDULED_TOTAL.inc()
                 PROJECT_RUNNING_TASKS.labels(tenant_id=tenant_id, project_id=project_id).set(
                     _project_running_tasks(tenant_id=tenant_id, project_id=project_id)
                 )
-                print(f"scheduled run {run_id} -> task {task_id} ({queue_name})")
+                print(f"scheduled run {run_id} with {len(selected)} task(s), first wave={scheduled}")
 
         done_msg = client.blpop("mlair:tasks:done", timeout=1)
         if done_msg:
@@ -228,7 +366,25 @@ def main() -> None:
                 err,
             )
             if done_event["status"] == "SUCCESS":
-                _transition_run_status(done_event["run_id"], "SUCCESS")
+                max_parallel_tasks, replay_from_task_id = _load_run_limits(done_event["run_id"])
+                run_event = {
+                    "run_id": done_event["run_id"],
+                    "tenant_id": done_event.get("tenant_id", "default"),
+                    "project_id": done_event.get("project_id", "default_project"),
+                    "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
+                    "priority": done_event.get("priority", "normal"),
+                    "trace_id": done_event.get("trace_id"),
+                    "plugin_name": done_event.get("plugin_name"),
+                    "context": done_event.get("context", {}),
+                    "pipeline_version_id": done_event.get("pipeline_version_id"),
+                    "config_snapshot": done_event.get("config_snapshot"),
+                    "replay_from_task_id": replay_from_task_id,
+                    "max_parallel_tasks": max_parallel_tasks,
+                }
+                _schedule_ready_tasks(client=client, run_event=run_event)
+                plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
+                selected, _ = _apply_replay_filter(plan, replay_from_task_id, done_event["run_id"])
+                _sync_run_status_after_task(done_event["run_id"], plan, selected)
             else:
                 max_attempts, backoff_ms = _load_task_retry_policy(done_event["task_id"])
                 current_attempt = int(done_event.get("attempt", 1))
@@ -238,12 +394,6 @@ def main() -> None:
                         task_id=done_event["task_id"],
                         run_id=done_event["run_id"],
                         next_status="RETRY",
-                        attempt=retry_attempt,
-                    )
-                    _upsert_or_transition_task(
-                        task_id=done_event["task_id"],
-                        run_id=done_event["run_id"],
-                        next_status="RUNNING",
                         attempt=retry_attempt,
                     )
                     delay_seconds = (backoff_ms * (2 ** (current_attempt - 1))) / 1000.0
@@ -262,19 +412,26 @@ def main() -> None:
                         "context": done_event.get("context", {}),
                         "pipeline_version_id": done_event.get("pipeline_version_id"),
                         "config_snapshot": done_event.get("config_snapshot"),
+                        "replay_from_task_id": done_event.get("replay_from_task_id"),
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     }
-                    retry_queue = _queue_name_for_priority(done_event.get("priority", "normal"))
-                    client.rpush(retry_queue, json.dumps(retry_event))
+                    _enqueue_task_event(
+                        client=client,
+                        run_event=retry_event,
+                        full_task_id=done_event["task_id"],
+                        attempt=retry_attempt,
+                    )
                     RETRY_ENQUEUED_TOTAL.inc()
                     print(
                         f'retry task {done_event["task_id"]} attempt {retry_attempt}/{max_attempts} '
                         f'after {delay_seconds:.2f}s'
                     )
                 else:
-                    _transition_run_status(done_event["run_id"], "FAILED")
                     client.rpush("mlair:tasks:dlq", raw_done)
                     DLQ_PUSHED_TOTAL.inc()
+                    plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
+                    selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
+                    _sync_run_status_after_task(done_event["run_id"], plan, selected)
                     print(f'task moved to dlq: {done_event["task_id"]}')
             TASK_COMPLETED_TOTAL.labels(status=done_event["status"]).inc()
             print(

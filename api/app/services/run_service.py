@@ -171,6 +171,8 @@ def create_run(
             "context": pctx,
             "pipeline_version_id": created[9],
             "config_snapshot": cfg_snapshot,
+            "replay_of_run_id": replay_of_run_id,
+            "replay_from_task_id": replay_from_task_id,
         }
     )
     return _row_to_run(created)

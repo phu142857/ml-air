@@ -115,7 +115,8 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 ### Debug UX
 
 - [x] **Timeline** on run detail, **error_message** on tasks (scheduler/executor), scroll to last failed; **partial replay** `POST .../runs/{id}/replay` + shortcut on run page.
-- [ ] **Multi-task DAG** partial replay (same API; scheduler extension later).
+- [x] **Multi-task DAG scheduler baseline** from `config_snapshot` (`tasks[]` with `depends_on` or sequential `steps[]`), including replay downstream from `replay_from_task_id`.
+- [ ] **Replay from true mid-DAG with artifact gating** (reuse-check + skip policy hardening) — follow-up.
 
 ### Search
 
