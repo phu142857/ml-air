@@ -36,6 +36,7 @@ ML-AIR is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestr
 ## Quickstart
 
 ```bash
+cp .env.example .env
 docker compose -f deploy/docker-compose.quickstart.yml up -d --build
 open http://localhost:38080
 curl http://localhost:8080/health
@@ -58,6 +59,12 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
   - Trigger by tag `v*.*.*` or manual dispatch
   - Deploy chart `charts/ml-air` to namespace `ml-air-staging`
   - Auto rollback on deploy failure
+
+## Environment Sync Policy
+
+- Every time a new environment variable is introduced in code/compose/scripts, update both `.env` and `.env.example` in the same change.
+- Keep `.env` for local runtime values and `.env.example` as the documented template.
+- Guard command: `make test-env-sync` (also enforced in CI).
 
 ### Required CI/CD secrets
 

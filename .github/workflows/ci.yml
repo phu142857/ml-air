@@ -6,6 +6,15 @@ on:
     branches: [main]
 
 jobs:
+  env-sync-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate env sync (.env.example vs compose refs)
+        run: python scripts/check_env_sync.py
+
   deploy-config-guard:
     runs-on: ubuntu-latest
     steps:

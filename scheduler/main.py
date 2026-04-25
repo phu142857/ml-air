@@ -3,6 +3,8 @@ import os
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
+import hashlib
+import hmac
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from psycopg import connect
@@ -305,10 +307,106 @@ def _has_parent_artifact_evidence(parent_run_id: str, task_key: str) -> bool:
             return bool(cur.fetchone())
 
 
+def _has_parent_checksum_evidence(parent_run_id: str, task_key: str) -> bool:
+    """
+    Strict check: parent task must have at least one lineage output with a non-empty checksum.
+    This acts as a lightweight manifest integrity signal before allowing replay skip.
+    """
+    full_task_id = f"{parent_run_id}:{task_key}"
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM lineage_edges e
+                JOIN dataset_versions dv ON dv.version_id = e.output_dataset_version_id
+                WHERE e.run_id = %s
+                  AND e.task_id = %s
+                  AND dv.checksum IS NOT NULL
+                  AND dv.checksum <> ''
+                LIMIT 1
+                """,
+                (parent_run_id, full_task_id),
+            )
+            return bool(cur.fetchone())
+
+
+def _load_parent_task_manifest(parent_run_id: str, task_key: str) -> tuple[str, str, dict] | None:
+    full_task_id = f"{parent_run_id}:{task_key}"
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT algorithm, signature, payload
+                FROM task_artifact_manifests
+                WHERE run_id = %s AND task_id = %s
+                LIMIT 1
+                """,
+                (parent_run_id, full_task_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            payload = row[2]
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if not isinstance(payload, dict):
+                return None
+            return row[0], row[1], payload
+
+
+def _canonical_json(payload: dict) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _verify_manifest_signature(algorithm: str, signature: str, payload: dict) -> bool:
+    if algorithm != "hmac-sha256":
+        return False
+    key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    expected = hmac.new(key.encode("utf-8"), _canonical_json(payload).encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def _required_artifacts_for_task(plan: dict[str, list[str]], config_snapshot: dict | None, task_key: str) -> list[str]:
+    if not isinstance(config_snapshot, dict):
+        return []
+    tasks_cfg = config_snapshot.get("tasks")
+    if isinstance(tasks_cfg, list):
+        for item in tasks_cfg:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("id", "")).strip() != task_key:
+                continue
+            req = item.get("required_artifacts") or []
+            return [str(x).strip() for x in req if str(x).strip()]
+    return []
+
+
+def _manifest_satisfies_required_artifacts(payload: dict, required: list[str]) -> bool:
+    if not required:
+        return True
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        return False
+    blobs: list[str] = []
+    for item in artifacts:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", ""))
+        uri = str(item.get("uri", ""))
+        blobs.append(path)
+        blobs.append(uri)
+    for marker in required:
+        if not any(marker in blob for blob in blobs):
+            return False
+    return True
+
+
 def _init_replay_tasks_with_gating(
     run_id: str,
     parent_run_id: str,
     plan: dict[str, list[str]],
+    config_snapshot: dict | None,
     selected: set[str],
     skipped: set[str],
 ) -> bool:
@@ -317,19 +415,37 @@ def _init_replay_tasks_with_gating(
     Returns True when gating passes, False when at least one required upstream task is missing.
     """
     require_evidence = os.getenv("ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE", "1") != "0"
+    require_checksum = os.getenv("ML_AIR_REPLAY_REQUIRE_CHECKSUM", "0") == "1"
+    require_signed_manifest = os.getenv("ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST", "0") == "1"
     parent_success = _load_parent_success_tasks(parent_run_id)
     gating_ok = True
     for key in sorted(plan.keys()):
         full = f"{run_id}:{key}"
         if key in skipped:
-            if key in parent_success and (not require_evidence or _has_parent_artifact_evidence(parent_run_id, key)):
+            success_ok = key in parent_success
+            artifact_ok = (not require_evidence) or _has_parent_artifact_evidence(parent_run_id, key)
+            checksum_ok = (not require_checksum) or _has_parent_checksum_evidence(parent_run_id, key)
+            manifest_ok = True
+            if require_signed_manifest:
+                m = _load_parent_task_manifest(parent_run_id, key)
+                required_artifacts = _required_artifacts_for_task(plan, config_snapshot, key)
+                manifest_ok = bool(
+                    m
+                    and _verify_manifest_signature(m[0], m[1], m[2])
+                    and _manifest_satisfies_required_artifacts(m[2], required_artifacts)
+                )
+            if success_ok and artifact_ok and checksum_ok and manifest_ok:
                 _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="SUCCESS", attempt=1)
             else:
                 # Do not fake-success this upstream node if parent did not produce it successfully.
                 _upsert_or_transition_task(task_id=full, run_id=run_id, next_status="FAILED", attempt=1)
                 reason = "missing_parent_success"
-                if key in parent_success and require_evidence:
+                if success_ok and require_evidence and not artifact_ok:
                     reason = "missing_parent_artifact_evidence"
+                elif success_ok and artifact_ok and require_checksum and not checksum_ok:
+                    reason = "missing_parent_checksum_evidence"
+                elif success_ok and artifact_ok and checksum_ok and require_signed_manifest and not manifest_ok:
+                    reason = "missing_or_invalid_signed_manifest"
                 _update_task_telemetry(
                     task_id=full,
                     started_at=None,
@@ -442,6 +558,7 @@ def main() -> None:
                         run_id=run_id,
                         parent_run_id=replay_parent,
                         plan=plan,
+                        config_snapshot=run_event.get("config_snapshot"),
                         selected=selected,
                         skipped=skipped,
                     )

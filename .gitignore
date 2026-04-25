@@ -22,3 +22,6 @@ venv/
 dist/
 build/
 .DS_Store
+
+# Local environment
+.env

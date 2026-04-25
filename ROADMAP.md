@@ -118,7 +118,9 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Multi-task DAG scheduler baseline** from `config_snapshot` (`tasks[]` with `depends_on` or sequential `steps[]`), including replay downstream from `replay_from_task_id`.
 - [x] **Replay from true mid-DAG with baseline gating**: scheduler skips upstream only if parent run task already `SUCCESS`; otherwise replay is blocked/fails fast.
 - [x] **Artifact-level gating baseline**: replay skip requires parent task `SUCCESS` **and** artifact evidence (`lineage_edges` or `run_artifacts` match). Configurable via `ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE` (default on).
-- [ ] **Artifact-level checksum hardening**: strict checksum/manifest verification before skip.
+- [x] **Artifact-level checksum hardening (toggle)**: replay skip can require lineage-output checksum evidence via `ML_AIR_REPLAY_REQUIRE_CHECKSUM=1`.
+- [x] **Manifest policy baseline**: signed task manifest (`hmac-sha256`) stored server-side; replay skip can require valid signature (`ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST=1`) and match `required_artifacts` policy from task config.
+- [ ] **Manifest policy hardening**: key rotation / key id support, asymmetric signatures, stricter per-task schema enforcement.
 
 ### Search
 
@@ -127,6 +129,8 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 ### Optional (nice to have in v0.3.x)
 
 - [ ] **Cost / resource** per task: CPU/RAM if available from runtime, wall duration (already partially observable — unify in API + UI table).
+- [x] **Env hygiene rule**: any new environment variable must be added to both `.env` and `.env.example` in the same change.
+- [x] **Env sync guard automation**: `scripts/check_env_sync.py` + `make test-env-sync` + CI gate (`env-sync-guard` job).
 
 ### Explicitly out of scope for v0.3.0
 

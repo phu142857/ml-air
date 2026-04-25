@@ -2,6 +2,12 @@
 
 ## Start all services
 
+First-time setup:
+
+```bash
+cp .env.example .env
+```
+
 ```bash
 docker compose -f deploy/docker-compose.quickstart.yml up -d --build
 ```

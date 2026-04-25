@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: ml-air-frontend
     ports:
-      - "38080:3000"
+      - "${ML_AIR_FRONTEND_PORT:-38080}:3000"
     depends_on:
       - api
     restart: unless-stopped
@@ -16,11 +16,13 @@ services:
       dockerfile: Dockerfile
     container_name: ml-air-api
     environment:
-      ML_AIR_REDIS_URL: redis://redis:6379/0
-      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
-      ML_AIR_JWT_HS256_SECRET: mlair-dev-jwt-secret-32bytes-minimum-key
+      ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
+      ML_AIR_DATABASE_URL: ${ML_AIR_DATABASE_URL:-postgresql://mlair:mlair@postgres:5432/mlair}
+      ML_AIR_JWT_HS256_SECRET: ${ML_AIR_JWT_HS256_SECRET:-mlair-dev-jwt-secret-32bytes-minimum-key}
+      ML_AIR_TRACKING_TOKEN: ${ML_AIR_TRACKING_TOKEN:-maintainer-token}
+      ML_AIR_MANIFEST_SIGNING_KEY: ${ML_AIR_MANIFEST_SIGNING_KEY:-mlair-dev-manifest-signing-key}
     ports:
-      - "8080:8080"
+      - "${ML_AIR_API_PORT:-8080}:8080"
     depends_on:
       - redis
       - postgres
@@ -32,11 +34,15 @@ services:
       dockerfile: Dockerfile
     container_name: ml-air-scheduler
     environment:
-      ML_AIR_REDIS_URL: redis://redis:6379/0
-      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
-      ML_AIR_SCHEDULER_METRICS_PORT: 9102
+      ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
+      ML_AIR_DATABASE_URL: ${ML_AIR_DATABASE_URL:-postgresql://mlair:mlair@postgres:5432/mlair}
+      ML_AIR_SCHEDULER_METRICS_PORT: ${ML_AIR_SCHEDULER_METRICS_PORT:-9102}
+      ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE: ${ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE:-1}
+      ML_AIR_REPLAY_REQUIRE_CHECKSUM: ${ML_AIR_REPLAY_REQUIRE_CHECKSUM:-0}
+      ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST: ${ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST:-0}
+      ML_AIR_MANIFEST_SIGNING_KEY: ${ML_AIR_MANIFEST_SIGNING_KEY:-mlair-dev-manifest-signing-key}
     ports:
-      - "9102:9102"
+      - "${ML_AIR_SCHEDULER_METRICS_PORT:-9102}:9102"
     depends_on:
       - redis
       - postgres
@@ -48,11 +54,14 @@ services:
       dockerfile: Dockerfile
     container_name: ml-air-executor
     environment:
-      ML_AIR_REDIS_URL: redis://redis:6379/0
-      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@postgres:5432/mlair
-      ML_AIR_EXECUTOR_METRICS_PORT: 9103
+      ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
+      ML_AIR_DATABASE_URL: ${ML_AIR_DATABASE_URL:-postgresql://mlair:mlair@postgres:5432/mlair}
+      ML_AIR_EXECUTOR_METRICS_PORT: ${ML_AIR_EXECUTOR_METRICS_PORT:-9103}
+      ML_AIR_API_BASE_URL: ${ML_AIR_API_BASE_URL:-http://api:8080}
+      ML_AIR_TRACKING_TOKEN: ${ML_AIR_TRACKING_TOKEN:-maintainer-token}
+      ML_AIR_MANIFEST_SIGNING_KEY: ${ML_AIR_MANIFEST_SIGNING_KEY:-mlair-dev-manifest-signing-key}
     ports:
-      - "9103:9103"
+      - "${ML_AIR_EXECUTOR_METRICS_PORT:-9103}:9103"
     depends_on:
       - redis
       - postgres
@@ -62,18 +71,18 @@ services:
     image: redis:7-alpine
     container_name: ml-air-redis
     ports:
-      - "6379:6379"
+      - "${ML_AIR_REDIS_PORT:-6379}:6379"
     restart: unless-stopped
 
   postgres:
     image: postgres:16
     container_name: ml-air-postgres
     environment:
-      POSTGRES_USER: mlair
-      POSTGRES_PASSWORD: mlair
-      POSTGRES_DB: mlair
+      POSTGRES_USER: ${POSTGRES_USER:-mlair}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlair}
+      POSTGRES_DB: ${POSTGRES_DB:-mlair}
     ports:
-      - "5432:5432"
+      - "${ML_AIR_POSTGRES_PORT:-5432}:5432"
     volumes:
       - ml_air_pgdata:/var/lib/postgresql/data
     restart: unless-stopped
@@ -83,11 +92,11 @@ services:
     container_name: ml-air-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: miniopassword
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniopassword}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${ML_AIR_MINIO_API_PORT:-9000}:9000"
+      - "${ML_AIR_MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - ml_air_minio:/data
     restart: unless-stopped
@@ -101,7 +110,7 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alerts:/etc/prometheus/alerts:ro
     ports:
-      - "39090:9090"
+      - "${ML_AIR_PROMETHEUS_PORT:-39090}:9090"
     depends_on:
       - api
       - scheduler
@@ -112,15 +121,15 @@ services:
     image: grafana/grafana:11.2.0
     container_name: ml-air-grafana
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "${GF_USERS_ALLOW_SIGN_UP:-false}"
     volumes:
       - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "33000:3000"
+      - "${ML_AIR_GRAFANA_PORT:-33000}:3000"
     depends_on:
       - prometheus
     restart: unless-stopped

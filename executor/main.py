@@ -5,6 +5,8 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import hashlib
+import hmac
 from datetime import datetime, timezone
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
@@ -74,6 +76,66 @@ def _tracking_post(path: str, payload: dict) -> None:
             return
     except urllib.error.URLError as exc:
         print(f"tracking post failed path={path} err={exc}")
+
+
+def _api_post(path: str, payload: dict, timeout: int = 10) -> None:
+    base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
+    token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    req = urllib.request.Request(
+        url=f"{base}{path}",
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        data=json.dumps(payload).encode("utf-8"),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout):
+            return
+    except urllib.error.URLError as exc:
+        print(f"api post failed path={path} err={exc}")
+
+
+def _canonical_json(payload: dict) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _build_manifest_payload(task: dict, plugin_result: dict | None, status: str) -> dict:
+    result = plugin_result.get("result") if isinstance(plugin_result, dict) else {}
+    artifacts = result.get("artifacts") if isinstance(result, dict) else []
+    lineage = result.get("lineage") if isinstance(result, dict) else {}
+    return {
+        "run_id": task.get("run_id"),
+        "task_id": task.get("task_id"),
+        "status": status,
+        "pipeline_id": task.get("pipeline_id"),
+        "attempt": int(task.get("attempt", 1)),
+        "artifacts": artifacts if isinstance(artifacts, list) else [],
+        "lineage": lineage if isinstance(lineage, dict) else {},
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _sign_manifest(payload: dict) -> tuple[str, str]:
+    algo = "hmac-sha256"
+    key = os.getenv("ML_AIR_MANIFEST_SIGNING_KEY", "mlair-dev-manifest-signing-key")
+    msg = _canonical_json(payload).encode("utf-8")
+    sig = hmac.new(key.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+    return algo, sig
+
+
+def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
+    run_id = task.get("run_id")
+    task_id = task.get("task_id")
+    if not run_id or not task_id:
+        return
+    tenant_id = task.get("tenant_id", "default")
+    project_id = task.get("project_id", "default_project")
+    payload = _build_manifest_payload(task=task, plugin_result=plugin_result, status=status)
+    algorithm, signature = _sign_manifest(payload)
+    _api_post(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest",
+        {"algorithm": algorithm, "signature": signature, "payload": payload},
+        timeout=10,
+    )
 
 
 def _lineage_ingest(task: dict, plugin_result: dict) -> None:
@@ -180,6 +242,7 @@ def main() -> None:
             else:
                 _log_plugin_tracking(task=task, plugin_result=plugin_exec)
                 _lineage_ingest(task=task, plugin_result=plugin_exec)
+        _post_manifest(task=task, plugin_result=plugin_exec, status=status)
         TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
         TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(time.perf_counter() - task_start)
         print(

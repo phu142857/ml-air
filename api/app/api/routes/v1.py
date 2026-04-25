@@ -38,6 +38,7 @@ from app.services.tracking_service import (
     log_param,
 )
 from app.services.trace_service import get_trace_id
+from app.services.manifest_service import upsert_task_manifest
 
 router = APIRouter()
 
@@ -118,6 +119,12 @@ class CreateModelVersionIn(BaseModel):
 class PromoteModelVersionIn(BaseModel):
     version: int = Field(ge=1)
     stage: str = "production"
+
+
+class TaskManifestIn(BaseModel):
+    algorithm: str = Field(default="hmac-sha256", min_length=1)
+    signature: str = Field(min_length=1)
+    payload: dict = Field(default_factory=dict)
 
 
 @router.get("/tenants/{tenant_id}/projects")
@@ -371,6 +378,29 @@ def log_artifact_v1(
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
     return log_artifact(run_id=run_id, path=payload.path, uri=payload.uri)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest")
+def upsert_task_manifest_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    task_id: str,
+    payload: TaskManifestIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return upsert_task_manifest(
+        run_id=run_id,
+        task_id=task_id,
+        algorithm=payload.algorithm,
+        signature=payload.signature,
+        payload=payload.payload,
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tracking")
