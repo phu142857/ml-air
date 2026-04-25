@@ -30,6 +30,12 @@ jobs:
       - name: Verify quickstart health
         run: make health
 
+      - name: Seed demo data
+        run: make seed-demo
+
+      - name: Quickstart smoke
+        run: make smoke-quickstart
+
       - name: Teardown stack
         if: always()
         run: make down

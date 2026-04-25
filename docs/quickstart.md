@@ -126,6 +126,15 @@ docker compose -f deploy/docker-compose.quickstart.yml logs -f scheduler executo
 make test-observability
 ```
 
+## Seed demo + smoke quickstart
+
+```bash
+make seed-demo
+make smoke-quickstart
+```
+
+`make seed-demo` provisions a 3-task demo pipeline version and creates a successful demo run using plugin `echo_tracking` with metrics + lineage.
+
 ## Plugin runtime quick check
 
 ```bash

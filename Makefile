@@ -120,6 +120,20 @@ test-smoke-v03:
 	ML_AIR_TOKEN=$${ML_AIR_TOKEN:-maintainer-token} \
 	python scripts/test_smoke_v03.py
 
+.PHONY: seed-demo
+seed-demo:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/seed_demo.py
+
+.PHONY: smoke-quickstart
+smoke-quickstart:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/smoke_quickstart.py
+
 .PHONY: backfill-lineage
 backfill-lineage:
 	docker compose -f $(COMPOSE_FILE) up -d --build api
