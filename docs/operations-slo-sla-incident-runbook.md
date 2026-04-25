@@ -62,6 +62,14 @@ make incident-drill
 - Inspect executor logs and resource pressure
 - Restart executor pods/containers if no progress
 
+### Manifest security failures
+
+- Check:
+  - `increase(mlair_scheduler_manifest_verify_failure_total[10m])`
+  - `increase(mlair_executor_manifest_post_total{result=~"sign_failed|post_failed"}[10m])`
+- Follow detailed runbook:
+  - `docs/operations-manifest-security-runbook.md`
+
 ## Postmortem Minimum Template
 
 - Incident ID, timeline, impact, root cause

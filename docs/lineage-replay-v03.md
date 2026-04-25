@@ -51,9 +51,12 @@
 
 - Scheduler metric: `mlair_scheduler_manifest_verify_failure_total{reason=...}` tracks replay gating/manifest verify failures.
 - Executor metric: `mlair_executor_manifest_post_total{result=posted|post_failed|sign_failed,algorithm=...}` tracks manifest sign/post health.
+- Grafana dashboard `deploy/monitoring/grafana/dashboards/mlair-overview.json` includes panels for both metrics (10m view).
 - Alerts:
   - `MlAirManifestVerifyFailures`
   - `MlAirManifestPostFailures`
+- Incident response guide:
+  - `docs/operations-manifest-security-runbook.md`
 
 ## Dev utility
 

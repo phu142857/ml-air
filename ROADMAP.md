@@ -126,6 +126,8 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Ed25519 DX utility**: keypair env snippet generator (`scripts/generate_ed25519_env.py`, `make gen-ed25519-env`) + escaped-newline key support.
 - [x] **One-command local enable**: `make enable-ed25519-dev` auto-updates `.env` with generated Ed25519 keyset.
 - [x] **Security observability baseline**: manifest sign/post and verify failure metrics + alert rules.
+- [x] **Security dashboard visibility**: Grafana panels for manifest verify/post outcomes.
+- [x] **Security incident runbook (manifest/replay)**: reason-based triage/mitigation playbook for verify/post failures (`docs/operations-manifest-security-runbook.md`).
 - [ ] **Manifest policy hardening**: managed key integration (KMS/Vault) + strict key lifecycle/rotation policy.
 
 ### Search
