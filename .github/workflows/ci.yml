@@ -6,6 +6,34 @@ on:
     branches: [main]
 
 jobs:
+  quickstart-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare env
+        run: cp .env.example .env
+
+      - name: Preflight doctor
+        run: make doctor
+
+      - name: Boot quickstart stack
+        run: make up
+
+      - name: Verify quickstart health
+        run: make health
+
+      - name: Teardown stack
+        if: always()
+        run: make down
+
   env-sync-guard:
     runs-on: ubuntu-latest
     steps:

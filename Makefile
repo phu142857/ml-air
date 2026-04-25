@@ -30,11 +30,23 @@ build:
 
 .PHONY: up
 up:
-	docker compose -f $(COMPOSE_FILE) up -d
+	docker compose -f $(COMPOSE_FILE) up -d --build
 
 .PHONY: down
 down:
 	docker compose -f $(COMPOSE_FILE) down
+
+.PHONY: health
+health:
+	python scripts/check_quickstart_health.py --compose-file $(COMPOSE_FILE)
+
+.PHONY: doctor
+doctor:
+	python scripts/doctor.py --compose-file $(COMPOSE_FILE)
+
+.PHONY: fresh-machine-test
+fresh-machine-test:
+	python scripts/fresh_machine_test.py --compose-file $(COMPOSE_FILE)
 
 .PHONY: rebuild
 rebuild:

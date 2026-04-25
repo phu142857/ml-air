@@ -1,5 +1,19 @@
 # ML-AIR Quickstart
 
+## Quickstart v1 (Day 1 baseline)
+
+Target flow:
+
+```bash
+git clone <repo>
+cd ml-air
+cp .env.example .env
+make up
+make health
+```
+
+This should bring up the full stack and verify service health without manual `docker exec`.
+
 ## Start all services
 
 First-time setup:
@@ -9,7 +23,7 @@ cp .env.example .env
 ```
 
 ```bash
-docker compose -f deploy/docker-compose.quickstart.yml up -d --build
+make up
 ```
 
 `api` service runs `alembic upgrade head` on startup before serving requests.
@@ -27,7 +41,19 @@ ML_AIR_MANIFEST_KEY_PROVIDER=file
 ML_AIR_MANIFEST_MANAGED_KEYS_FILE=deploy/security/manifest-keys.local.json
 ```
 
-## Check API health
+## Preflight checks (recommended)
+
+```bash
+make doctor
+```
+
+## Check full stack health
+
+```bash
+make health
+```
+
+## Check API health only
 
 ```bash
 curl http://localhost:8080/health
@@ -209,5 +235,5 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 ## Stop services
 
 ```bash
-docker compose -f deploy/docker-compose.quickstart.yml down
+make down
 ```
