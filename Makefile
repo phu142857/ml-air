@@ -6,6 +6,19 @@ ML_AIR_PROJECT_ID ?= default_project
 COMPOSE_FILE ?= deploy/docker-compose.quickstart.yml
 BACKUP_DIR ?= backups/postgres
 BACKUP_FILE ?=
+BACKFILL_LIMIT ?= 1000
+BACKFILL_OFFSET ?= 0
+BACKFILL_TENANT_ID ?=
+BACKFILL_PROJECT_ID ?=
+BACKFILL_REPORT_PATH ?=
+
+BACKFILL_ARGS = --limit $(BACKFILL_LIMIT) --offset $(BACKFILL_OFFSET)
+ifneq ($(strip $(BACKFILL_TENANT_ID)),)
+BACKFILL_ARGS += --tenant-id $(BACKFILL_TENANT_ID)
+endif
+ifneq ($(strip $(BACKFILL_PROJECT_ID)),)
+BACKFILL_ARGS += --project-id $(BACKFILL_PROJECT_ID)
+endif
 
 .PHONY: build
 build:
@@ -73,7 +86,120 @@ test-smoke-v03:
 .PHONY: backfill-lineage
 backfill-lineage:
 	docker compose -f $(COMPOSE_FILE) up -d --build api
-	docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py --limit 1000
+	docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py $(BACKFILL_ARGS)
+
+.PHONY: backfill-lineage-dry-run
+backfill-lineage-dry-run:
+	docker compose -f $(COMPOSE_FILE) up -d --build api
+	docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py $(BACKFILL_ARGS) --dry-run
+
+.PHONY: backfill-lineage-all
+backfill-lineage-all:
+	docker compose -f $(COMPOSE_FILE) up -d --build api
+	@offset=$(BACKFILL_OFFSET); \
+	while true; do \
+		echo "==> backfill batch offset=$$offset limit=$(BACKFILL_LIMIT)"; \
+		out="$$(docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py --limit $(BACKFILL_LIMIT) --offset $$offset $$( [ -n "$(BACKFILL_TENANT_ID)" ] && printf '%s %s' '--tenant-id' '$(BACKFILL_TENANT_ID)' ) $$( [ -n "$(BACKFILL_PROJECT_ID)" ] && printf '%s %s' '--project-id' '$(BACKFILL_PROJECT_ID)' ))"; \
+		printf '%s\n' "$$out"; \
+		scanned="$$(printf '%s\n' "$$out" | python -c 'import json,re,sys; t=sys.stdin.read(); m=re.findall(r"\{[^{}]*\}", t); print(int(json.loads(m[-1]).get("scanned", 0)) if m else 0)')"; \
+		if [ "$$scanned" -lt "$(BACKFILL_LIMIT)" ]; then \
+			echo "==> done (last batch scanned=$$scanned)"; \
+			break; \
+		fi; \
+		offset=$$((offset + $(BACKFILL_LIMIT))); \
+	done
+
+.PHONY: backfill-lineage-all-dry-run
+backfill-lineage-all-dry-run:
+	docker compose -f $(COMPOSE_FILE) up -d --build api
+	@offset=$(BACKFILL_OFFSET); \
+	while true; do \
+		echo "==> dry-run batch offset=$$offset limit=$(BACKFILL_LIMIT)"; \
+		out="$$(docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py --limit $(BACKFILL_LIMIT) --offset $$offset --dry-run $$( [ -n "$(BACKFILL_TENANT_ID)" ] && printf '%s %s' '--tenant-id' '$(BACKFILL_TENANT_ID)' ) $$( [ -n "$(BACKFILL_PROJECT_ID)" ] && printf '%s %s' '--project-id' '$(BACKFILL_PROJECT_ID)' ))"; \
+		printf '%s\n' "$$out"; \
+		scanned="$$(printf '%s\n' "$$out" | python -c 'import json,re,sys; t=sys.stdin.read(); m=re.findall(r"\{[^{}]*\}", t); print(int(json.loads(m[-1]).get("scanned", 0)) if m else 0)')"; \
+		if [ "$$scanned" -lt "$(BACKFILL_LIMIT)" ]; then \
+			echo "==> done (last batch scanned=$$scanned)"; \
+			break; \
+		fi; \
+		offset=$$((offset + $(BACKFILL_LIMIT))); \
+	done
+
+.PHONY: backfill-lineage-report
+backfill-lineage-report:
+	docker compose -f $(COMPOSE_FILE) up -d --build api
+	@offset=$(BACKFILL_OFFSET); \
+	total_scanned=0; total_with_lineage=0; total_inserted=0; total_failures=0; total_skipped_empty=0; total_skipped_invalid=0; batches=0; \
+	while true; do \
+		echo "==> report batch offset=$$offset limit=$(BACKFILL_LIMIT)"; \
+		out="$$(docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py --limit $(BACKFILL_LIMIT) --offset $$offset $$( [ -n "$(BACKFILL_TENANT_ID)" ] && printf '%s %s' '--tenant-id' '$(BACKFILL_TENANT_ID)' ) $$( [ -n "$(BACKFILL_PROJECT_ID)" ] && printf '%s %s' '--project-id' '$(BACKFILL_PROJECT_ID)' ))"; \
+		printf '%s\n' "$$out"; \
+		json_line="$$(printf '%s\n' "$$out" | python -c 'import re,sys; t=sys.stdin.read(); m=re.findall(r"\{[^{}]*\}", t); print(m[-1] if m else "{}")')"; \
+		scanned="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("scanned",0)))')"; \
+		with_lineage="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("with_lineage",0)))')"; \
+		inserted="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("inserted_edges",0)))')"; \
+		failures="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("failures",0)))')"; \
+		skipped_empty="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("skipped_empty_lineage",0)))')"; \
+		skipped_invalid="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("skipped_invalid_payload",0)))')"; \
+		total_scanned=$$((total_scanned + scanned)); \
+		total_with_lineage=$$((total_with_lineage + with_lineage)); \
+		total_inserted=$$((total_inserted + inserted)); \
+		total_failures=$$((total_failures + failures)); \
+		total_skipped_empty=$$((total_skipped_empty + skipped_empty)); \
+		total_skipped_invalid=$$((total_skipped_invalid + skipped_invalid)); \
+		batches=$$((batches + 1)); \
+		if [ "$$scanned" -lt "$(BACKFILL_LIMIT)" ]; then \
+			echo "==> report done (last batch scanned=$$scanned)"; \
+			break; \
+		fi; \
+		offset=$$((offset + $(BACKFILL_LIMIT))); \
+	done; \
+	summary="$$(printf '{"mode":"write","batches":%s,"total_scanned":%s,"total_with_lineage":%s,"total_inserted_edges":%s,"total_skipped_empty_lineage":%s,"total_skipped_invalid_payload":%s,"total_failures":%s}\n' \
+		"$$batches" "$$total_scanned" "$$total_with_lineage" "$$total_inserted" "$$total_skipped_empty" "$$total_skipped_invalid" "$$total_failures")"; \
+	printf '%s\n' "$$summary"; \
+	if [ -n "$(BACKFILL_REPORT_PATH)" ]; then \
+		mkdir -p "$$(dirname "$(BACKFILL_REPORT_PATH)")"; \
+		printf '%s\n' "$$summary" > "$(BACKFILL_REPORT_PATH)"; \
+		echo "==> report written to $(BACKFILL_REPORT_PATH)"; \
+	fi
+
+.PHONY: backfill-lineage-report-dry-run
+backfill-lineage-report-dry-run:
+	docker compose -f $(COMPOSE_FILE) up -d --build api
+	@offset=$(BACKFILL_OFFSET); \
+	total_scanned=0; total_with_lineage=0; total_inserted=0; total_failures=0; total_skipped_empty=0; total_skipped_invalid=0; batches=0; \
+	while true; do \
+		echo "==> report dry-run batch offset=$$offset limit=$(BACKFILL_LIMIT)"; \
+		out="$$(docker compose -f $(COMPOSE_FILE) exec -T api python scripts/backfill_lineage_from_manifests.py --limit $(BACKFILL_LIMIT) --offset $$offset --dry-run $$( [ -n "$(BACKFILL_TENANT_ID)" ] && printf '%s %s' '--tenant-id' '$(BACKFILL_TENANT_ID)' ) $$( [ -n "$(BACKFILL_PROJECT_ID)" ] && printf '%s %s' '--project-id' '$(BACKFILL_PROJECT_ID)' ))"; \
+		printf '%s\n' "$$out"; \
+		json_line="$$(printf '%s\n' "$$out" | python -c 'import re,sys; t=sys.stdin.read(); m=re.findall(r"\{[^{}]*\}", t); print(m[-1] if m else "{}")')"; \
+		scanned="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("scanned",0)))')"; \
+		with_lineage="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("with_lineage",0)))')"; \
+		inserted="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("inserted_edges",0)))')"; \
+		failures="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("failures",0)))')"; \
+		skipped_empty="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("skipped_empty_lineage",0)))')"; \
+		skipped_invalid="$$(printf '%s\n' "$$json_line" | python -c 'import json,sys; print(int(json.loads(sys.stdin.read()).get("skipped_invalid_payload",0)))')"; \
+		total_scanned=$$((total_scanned + scanned)); \
+		total_with_lineage=$$((total_with_lineage + with_lineage)); \
+		total_inserted=$$((total_inserted + inserted)); \
+		total_failures=$$((total_failures + failures)); \
+		total_skipped_empty=$$((total_skipped_empty + skipped_empty)); \
+		total_skipped_invalid=$$((total_skipped_invalid + skipped_invalid)); \
+		batches=$$((batches + 1)); \
+		if [ "$$scanned" -lt "$(BACKFILL_LIMIT)" ]; then \
+			echo "==> report dry-run done (last batch scanned=$$scanned)"; \
+			break; \
+		fi; \
+		offset=$$((offset + $(BACKFILL_LIMIT))); \
+	done; \
+	summary="$$(printf '{"mode":"dry-run","batches":%s,"total_scanned":%s,"total_with_lineage":%s,"total_inserted_edges":%s,"total_skipped_empty_lineage":%s,"total_skipped_invalid_payload":%s,"total_failures":%s}\n' \
+		"$$batches" "$$total_scanned" "$$total_with_lineage" "$$total_inserted" "$$total_skipped_empty" "$$total_skipped_invalid" "$$total_failures")"; \
+	printf '%s\n' "$$summary"; \
+	if [ -n "$(BACKFILL_REPORT_PATH)" ]; then \
+		mkdir -p "$$(dirname "$(BACKFILL_REPORT_PATH)")"; \
+		printf '%s\n' "$$summary" > "$(BACKFILL_REPORT_PATH)"; \
+		echo "==> report written to $(BACKFILL_REPORT_PATH)"; \
+	fi
 
 .PHONY: test-observability
 test-observability:

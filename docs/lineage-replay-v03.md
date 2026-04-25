@@ -13,6 +13,16 @@
 - Per run: `GET .../lineage/runs/{run_id}`
 - Backfill historical lineage from manifests:
   - `make backfill-lineage`
+  - `make backfill-lineage-dry-run`
+  - auto-pagination:
+    - `make backfill-lineage-all`
+    - `make backfill-lineage-all-dry-run`
+  - aggregated summary report:
+    - `make backfill-lineage-report`
+    - `make backfill-lineage-report-dry-run`
+  - optional save summary to file:
+    - `make backfill-lineage-report BACKFILL_REPORT_PATH=artifacts/backfill-report.json`
+  - scoped example: `make backfill-lineage BACKFILL_TENANT_ID=default BACKFILL_PROJECT_ID=default_project BACKFILL_LIMIT=1000`
   - or container command: `docker compose -f deploy/docker-compose.quickstart.yml exec -T api python scripts/backfill_lineage_from_manifests.py --tenant-id default --project-id default_project --limit 1000`
 
 ## Pipeline versions

@@ -102,6 +102,10 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Plugin / runtime**: `PluginMeta.lineage` (optional) + result `lineage: { inputs, outputs }` → `POST .../lineage/ingest` (executor after success).
 - [x] **Loader** strict validation of lineage slot names (`PluginMeta.lineage` shape + slot naming constraints in plugin loader).
 - [x] **Backfill job** for historical lineage from manifest payload (`scripts/backfill_lineage_from_manifests.py`, `make backfill-lineage`).
+- [x] **Backfill DX utilities**: dry-run + tenant/project scoped make targets (`make backfill-lineage-dry-run`, `BACKFILL_TENANT_ID`, `BACKFILL_PROJECT_ID`).
+- [x] **Backfill pagination utilities**: auto-batch loop for full dataset (`make backfill-lineage-all`, `make backfill-lineage-all-dry-run`).
+- [x] **Backfill report utilities**: aggregated totals across all batches (`make backfill-lineage-report`, `make backfill-lineage-report-dry-run`).
+- [x] **Backfill report export utility**: optional JSON summary output file (`BACKFILL_REPORT_PATH=...`).
 
 ### UI — lineage
 
