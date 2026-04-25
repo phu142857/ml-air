@@ -27,7 +27,7 @@ def _set_env_value(text: str, key: str, value: str) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate Ed25519 keypair env snippets for ML-AIR manifest signing.")
+    parser = argparse.ArgumentParser(description="Generate Ed25519 keypair env snippets for MLAir manifest signing.")
     parser.add_argument("--kid", default="v1", help="Key id to generate (default: v1)")
     parser.add_argument(
         "--algorithm",

@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: ML-AIR API
+  title: MLAir API
   version: 0.1.0-draft
   description: |
-    Draft API contract for ML-AIR v1.
+    Draft API contract for MLAir v1.
     All resources are tenant/project scoped by design.
 
 servers:

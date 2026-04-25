@@ -1,6 +1,6 @@
 # Helm Charts
 
-Baseline Helm chart for ML-AIR lives at `charts/ml-air`.
+Baseline Helm chart for MLAir lives at `charts/ml-air`.
 
 ## Validate chart
 

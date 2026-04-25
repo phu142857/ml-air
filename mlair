@@ -141,7 +141,7 @@ def cmd_logs(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mlair",
-        description="ML-AIR developer CLI (minimal alpha).",
+        description="MLAir developer CLI (minimal alpha).",
         epilog=(
             "Examples:\n"
             "  mlair dev up\n"

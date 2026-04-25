@@ -3,7 +3,7 @@ apiVersion: 1
 providers:
   - name: mlair-dashboards
     orgId: 1
-    folder: ML-AIR
+    folder: MLAir
     type: file
     disableDeletion: true
     editable: true

@@ -1,4 +1,4 @@
-# ML-AIR CLI (Alpha)
+# MLAir CLI (Alpha)
 
 Minimal developer CLI for Day 4 Gate 2 prep.
 

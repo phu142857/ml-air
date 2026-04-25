@@ -46,7 +46,7 @@ def _run(cmd: list[str]) -> tuple[int, str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Preflight checks for ML-AIR quickstart.")
+    parser = argparse.ArgumentParser(description="Preflight checks for MLAir quickstart.")
     parser.add_argument("--compose-file", default="deploy/docker-compose.quickstart.yml")
     args = parser.parse_args()
 

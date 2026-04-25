@@ -1,8 +1,8 @@
-# ML-AIR Architecture (Production Baseline)
+# MLAir Architecture (Production Baseline)
 
 ## 1) Production-Ready Scope
 
-ML-AIR is a multi-tenant MLOps platform service, not an app-specific business service.  
+MLAir is a multi-tenant MLOps platform service, not an app-specific business service.  
 It is considered production-ready only when all requirements below are satisfied:
 
 - Reliability: restart-safe execution, retry, and state consistency.

@@ -1,4 +1,4 @@
-# ML-AIR v0.3.0 Release Notes
+# MLAir v0.3.0 Release Notes
 
 ## What
 

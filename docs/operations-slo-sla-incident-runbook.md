@@ -1,4 +1,4 @@
-# ML-AIR SLO/SLA and Incident Runbook
+# MLAir SLO/SLA and Incident Runbook
 
 ## Service Objectives (Baseline v1)
 

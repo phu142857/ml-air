@@ -1,6 +1,6 @@
 # frontend
 
-Next.js frontend for ML-AIR control plane.
+Next.js frontend for MLAir control plane.
 
 Stack:
 

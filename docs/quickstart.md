@@ -1,4 +1,4 @@
-# ML-AIR Quickstart
+# MLAir Quickstart
 
 ## Quickstart v1 (Day 1 baseline)
 
@@ -8,7 +8,7 @@ Target flow:
 git clone <repo>
 cd ml-air
 cp .env.example .env
-make build 
+make build
 make up
 make health
 ```
@@ -23,13 +23,20 @@ First-time setup:
 cp .env.example .env
 ```
 
-First-time (build + start):
+First-time (separate build + start):
+
+```bash
+make build
+make up
+```
+
+Alternative one-command first-time flow:
 
 ```bash
 make rebuild
 ```
 
-Next runs (start only, no build):
+Next runs (start only):
 
 ```bash
 make up
@@ -162,6 +169,12 @@ chmod +x ./mlair
 ./mlair run examples/pipeline.demo.yaml
 ./mlair logs <run_id> --limit 50
 ```
+
+## Plugin + Debug docs (Day 5)
+
+- `docs/plugins/create-plugin.md`
+- `docs/debug/task-failure-guide.md`
+- `docs/debug/replay-guide.md`
 
 ## Plugin runtime quick check
 

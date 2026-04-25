@@ -1,4 +1,4 @@
-# ML-AIR Plugin Development Guide
+# MLAir Plugin Development Guide
 
 ## 1) Plugin contract
 

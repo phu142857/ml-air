@@ -1,6 +1,6 @@
-# ML-AIR
+# MLAir
 
-ML-AIR is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestrating pipelines, model lifecycle, approval gates, and serving routes.
+MLAir is a multi-tenant MLOps control plane (MLflow + ML-UI style) for orchestrating pipelines, model lifecycle, approval gates, and serving routes.
 
 ## Documents
 
