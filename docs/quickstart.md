@@ -154,6 +154,15 @@ Constraints for Gate 1:
 - No `docker exec`
 - No config edits outside `.env`
 
+## CLI alpha (Day 4)
+
+```bash
+chmod +x ./mlair
+./mlair dev up
+./mlair run examples/pipeline.demo.yaml
+./mlair logs <run_id> --limit 50
+```
+
 ## Plugin runtime quick check
 
 ```bash

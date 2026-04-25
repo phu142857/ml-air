@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+
+def _base_url() -> str:
+    return os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
+
+
+def _tenant() -> str:
+    return os.getenv("ML_AIR_TENANT_ID", "default")
+
+
+def _project() -> str:
+    return os.getenv("ML_AIR_PROJECT_ID", "default_project")
+
+
+def _token() -> str:
+    return os.getenv("ML_AIR_TOKEN", "maintainer-token")
+
+
+def _req(method: str, path: str, token: str | None = None, body: dict | None = None) -> tuple[int, dict]:
+    headers: dict[str, str] = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(url=f"{_base_url()}{path}", method=method, headers=headers, data=data)
+    try:
+        with urllib.request.urlopen(request, timeout=10) as resp:
+            payload = resp.read().decode("utf-8")
+            return resp.getcode(), json.loads(payload or "{}")
+    except urllib.error.HTTPError as exc:
+        payload = exc.read().decode("utf-8")
+        try:
+            return exc.code, json.loads(payload)
+        except Exception:
+            return exc.code, {"raw": payload}
+    except urllib.error.URLError as exc:
+        return 0, {"error": str(exc)}
+
+
+def _load_pipeline_file(path: str) -> dict:
+    p = Path(path)
+    if not p.exists():
+        raise ValueError(f"pipeline file not found: {path}")
+    text = p.read_text(encoding="utf-8")
+    # JSON is always supported (valid YAML superset for many simple cases).
+    try:
+        data = json.loads(text)
+        if not isinstance(data, dict):
+            raise ValueError("pipeline file must contain an object")
+        return data
+    except json.JSONDecodeError:
+        pass
+    try:
+        import yaml  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(
+            "cannot parse YAML without PyYAML. Install: pip install pyyaml "
+            "or provide JSON content in the file."
+        ) from exc
+    data = yaml.safe_load(text)
+    if not isinstance(data, dict):
+        raise ValueError("pipeline file must contain an object")
+    return data
+
+
+def cmd_dev_up(_: argparse.Namespace) -> int:
+    compose_file = os.getenv("COMPOSE_FILE", "deploy/docker-compose.quickstart.yml")
+    proc = subprocess.run(
+        ["docker", "compose", "-f", compose_file, "up", "-d"],
+        check=False,
+    )
+    return proc.returncode
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    try:
+        conf = _load_pipeline_file(args.pipeline_file)
+    except ValueError as exc:
+        print(f"[FAIL] {exc}")
+        return 1
+    pipeline_id = str(conf.get("pipeline_id", "")).strip()
+    if not pipeline_id:
+        print("[FAIL] pipeline_id is required in pipeline file")
+        return 1
+
+    payload = {
+        "pipeline_id": pipeline_id,
+        "idempotency_key": conf.get("idempotency_key"),
+        "priority": conf.get("priority", "normal"),
+        "max_parallel_tasks": int(conf.get("max_parallel_tasks", 1)),
+        "plugin_name": conf.get("plugin_name"),
+        "context": conf.get("context", {}),
+        "pipeline_version_id": conf.get("pipeline_version_id"),
+        "use_latest_pipeline_version": bool(conf.get("use_latest_pipeline_version", False)),
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    path = f"/v1/tenants/{_tenant()}/projects/{_project()}/runs"
+    code, body = _req("POST", path, _token(), payload)
+    if code != 200 or "run_id" not in body:
+        print(f"[FAIL] run trigger failed: {code} {body}")
+        return 1
+    print(json.dumps({"run_id": body["run_id"], "status": body.get("status"), "pipeline_id": pipeline_id}))
+    return 0
+
+
+def cmd_logs(args: argparse.Namespace) -> int:
+    path = f"/v1/tenants/{_tenant()}/projects/{_project()}/runs/{args.run_id}/logs?offset=0&limit={args.limit}"
+    code, body = _req("GET", path, _token())
+    if code != 200:
+        print(f"[FAIL] logs fetch failed: {code} {body}")
+        return 1
+    items = body.get("items", [])
+    if not isinstance(items, list):
+        print("[FAIL] invalid logs response")
+        return 1
+    if not items:
+        print("[INFO] no logs yet")
+        return 0
+    for item in items:
+        if isinstance(item, dict):
+            ts = item.get("ts", "-")
+            level = item.get("level", "INFO")
+            message = item.get("message", "")
+            print(f"{ts} [{level}] {message}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="mlair",
+        description="ML-AIR developer CLI (minimal alpha).",
+        epilog=(
+            "Examples:\n"
+            "  mlair dev up\n"
+            "  mlair run examples/pipeline.demo.yaml\n"
+            "  mlair logs <run_id> --limit 50"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    dev = sub.add_parser("dev", help="Local development commands")
+    dev_sub = dev.add_subparsers(dest="dev_command", required=True)
+    dev_up = dev_sub.add_parser("up", help="Start quickstart stack (no build)")
+    dev_up.set_defaults(func=cmd_dev_up)
+
+    run = sub.add_parser("run", help="Trigger a pipeline run from config file")
+    run.add_argument("pipeline_file", help="Pipeline config (.yaml/.json)")
+    run.set_defaults(func=cmd_run)
+
+    logs = sub.add_parser("logs", help="Read logs for a run")
+    logs.add_argument("run_id", help="Run ID")
+    logs.add_argument("--limit", type=int, default=200, help="Maximum log lines")
+    logs.set_defaults(func=cmd_logs)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

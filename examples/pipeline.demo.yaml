@@ -1,0 +1,24 @@
+pipeline_id: fail_once_demo_pipeline
+priority: normal
+max_parallel_tasks: 1
+plugin_name: echo_tracking
+use_latest_pipeline_version: true
+context:
+  params:
+    source: cli_demo
+  metrics:
+    cli_metric:
+      step: 1
+      value: 0.87
+  artifacts:
+    - path: cli/demo/output.json
+      uri: s3://mlair/cli/demo/output.json
+  lineage:
+    inputs:
+      - name: cli_input
+        version: v1
+        uri: s3://mlair/cli/demo/input.parquet
+    outputs:
+      - name: cli_output
+        version: v1
+        uri: s3://mlair/cli/demo/output.parquet
