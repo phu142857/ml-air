@@ -27,3 +27,21 @@ groups:
         annotations:
           summary: "Executor inflight tasks appear stuck"
           description: "Executor inflight queue has remained above zero for 10+ minutes."
+
+      - alert: MlAirManifestVerifyFailures
+        expr: increase(mlair_scheduler_manifest_verify_failure_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Manifest verification failures detected"
+          description: "Replay gating/manifest verification recorded failures in the last 10 minutes."
+
+      - alert: MlAirManifestPostFailures
+        expr: increase(mlair_executor_manifest_post_total{result=~"sign_failed|post_failed"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Manifest sign/post failures detected"
+          description: "Executor failed to sign or post task manifests in the last 10 minutes."

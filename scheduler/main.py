@@ -58,6 +58,11 @@ LOOP_DURATION_SECONDS = Histogram(
     "mlair_scheduler_loop_duration_seconds",
     "Scheduler loop duration in seconds",
 )
+MANIFEST_VERIFY_FAILURE_TOTAL = Counter(
+    "mlair_scheduler_manifest_verify_failure_total",
+    "Manifest/replay gating verification failures by reason",
+    ["reason"],
+)
 
 
 def _redis() -> Redis:
@@ -536,6 +541,7 @@ def _init_replay_tasks_with_gating(
                     reason = "missing_parent_checksum_evidence"
                 elif success_ok and artifact_ok and checksum_ok and require_signed_manifest and not manifest_ok:
                     reason = "missing_or_invalid_signed_manifest"
+                MANIFEST_VERIFY_FAILURE_TOTAL.labels(reason=reason).inc()
                 _update_task_telemetry(
                     task_id=full,
                     started_at=None,

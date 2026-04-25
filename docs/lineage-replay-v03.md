@@ -47,6 +47,14 @@
 
 - `GET .../search?q=...&type=run|task|dataset|all` (rate-limited per tenant, dev implementation).
 
+## Security observability
+
+- Scheduler metric: `mlair_scheduler_manifest_verify_failure_total{reason=...}` tracks replay gating/manifest verify failures.
+- Executor metric: `mlair_executor_manifest_post_total{result=posted|post_failed|sign_failed,algorithm=...}` tracks manifest sign/post health.
+- Alerts:
+  - `MlAirManifestVerifyFailures`
+  - `MlAirManifestPostFailures`
+
 ## Dev utility
 
 - Generate Ed25519 env snippet:

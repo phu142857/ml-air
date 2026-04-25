@@ -28,6 +28,11 @@ QUEUE_INFLIGHT = Gauge(
     "Current executor inflight tasks by queue",
     ["queue"],
 )
+MANIFEST_POST_TOTAL = Counter(
+    "mlair_executor_manifest_post_total",
+    "Manifest post attempts by result",
+    ["result", "algorithm"],
+)
 
 
 def _redis() -> Redis:
@@ -79,7 +84,7 @@ def _tracking_post(path: str, payload: dict) -> None:
         print(f"tracking post failed path={path} err={exc}")
 
 
-def _api_post(path: str, payload: dict, timeout: int = 10) -> None:
+def _api_post(path: str, payload: dict, timeout: int = 10) -> bool:
     base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
     token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
     req = urllib.request.Request(
@@ -90,9 +95,10 @@ def _api_post(path: str, payload: dict, timeout: int = 10) -> None:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout):
-            return
+            return True
     except urllib.error.URLError as exc:
         print(f"api post failed path={path} err={exc}")
+        return False
 
 
 def _canonical_json(payload: dict) -> str:
@@ -199,12 +205,15 @@ def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
         algorithm, key_id, signature = _sign_manifest(payload)
     except Exception as exc:  # noqa: BLE001
         print(f"manifest sign failed: {exc}")
+        alg = _manifest_algorithm()
+        MANIFEST_POST_TOTAL.labels(result="sign_failed", algorithm=alg).inc()
         return
-    _api_post(
+    ok = _api_post(
         f"/v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest",
         {"algorithm": algorithm, "key_id": key_id, "signature": signature, "payload": payload},
         timeout=10,
     )
+    MANIFEST_POST_TOTAL.labels(result="posted" if ok else "post_failed", algorithm=algorithm).inc()
 
 
 def _lineage_ingest(task: dict, plugin_result: dict) -> None:

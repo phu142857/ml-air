@@ -125,6 +125,7 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **Asymmetric signature baseline**: manifest signing/verifying supports `ed25519` (alongside HMAC) with `kid` keyset envs.
 - [x] **Ed25519 DX utility**: keypair env snippet generator (`scripts/generate_ed25519_env.py`, `make gen-ed25519-env`) + escaped-newline key support.
 - [x] **One-command local enable**: `make enable-ed25519-dev` auto-updates `.env` with generated Ed25519 keyset.
+- [x] **Security observability baseline**: manifest sign/post and verify failure metrics + alert rules.
 - [ ] **Manifest policy hardening**: managed key integration (KMS/Vault) + strict key lifecycle/rotation policy.
 
 ### Search
