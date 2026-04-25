@@ -8,6 +8,7 @@ Target flow:
 git clone <repo>
 cd ml-air
 cp .env.example .env
+make build 
 make up
 make health
 ```
@@ -21,6 +22,14 @@ First-time setup:
 ```bash
 cp .env.example .env
 ```
+
+First-time (build + start):
+
+```bash
+make rebuild
+```
+
+Next runs (start only, no build):
 
 ```bash
 make up

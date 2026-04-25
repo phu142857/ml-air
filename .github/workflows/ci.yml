@@ -25,7 +25,7 @@ jobs:
         run: make doctor
 
       - name: Boot quickstart stack
-        run: make up
+        run: make rebuild
 
       - name: Verify quickstart health
         run: make health

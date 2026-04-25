@@ -21,7 +21,7 @@ def main() -> int:
     started = time.time()
     try:
         _run(["python", "scripts/doctor.py", "--compose-file", args.compose_file])
-        _run(["docker", "compose", "-f", args.compose_file, "up", "-d", "--build"])
+        _run(["make", "rebuild"])
         _run(["python", "scripts/check_quickstart_health.py", "--compose-file", args.compose_file, "--wait-seconds", "120"])
     except RuntimeError as exc:
         print(f"[FAIL] fresh machine test failed: {exc}")
