@@ -500,6 +500,37 @@ def list_dataset_versions_v1(
     return {"items": lineage_service.list_dataset_versions(tenant_id, project_id, dataset_id)}
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/runs")
+def list_dataset_runs_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {"items": lineage_service.list_dataset_runs(tenant_id, project_id, dataset_id, limit, offset)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}")
+def get_dataset_version_v1(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = lineage_service.get_dataset_version(tenant_id, project_id, version_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return row
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/lineage/runs/{run_id}")
 def lineage_for_run_v1(
     tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)

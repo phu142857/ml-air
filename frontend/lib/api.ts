@@ -334,6 +334,16 @@ export type SearchResultItem = {
   updated_at?: string | null;
 };
 
+export type DatasetVersionItem = {
+  version_id: string;
+  version: string;
+  uri?: string | null;
+  checksum?: string | null;
+  created_at: string;
+  dataset_id: string;
+  dataset_name: string;
+};
+
 export async function searchApi(
   tenantId: string,
   projectId: string,
@@ -365,6 +375,10 @@ export async function fetchLineageForRun(tenantId: string, projectId: string, ru
       task_id: string;
       input_version_id: string | null;
       output_version_id: string | null;
+      input_dataset_name?: string | null;
+      output_dataset_name?: string | null;
+      input_version?: string | null;
+      output_version?: string | null;
     }>;
   };
 }
@@ -398,7 +412,40 @@ export async function fetchLineageNeighborhood(
       output_dataset_version_id: string | null;
     }>;
     dataset_version_ids: string[];
+    dataset_versions?: DatasetVersionItem[];
   };
+}
+
+export async function fetchDatasetVersion(
+  tenantId: string,
+  projectId: string,
+  versionId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${versionId}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetVersionItem;
+}
+
+export async function fetchDatasetRuns(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  limit: number = 20
+) {
+  const sp = new URLSearchParams({ limit: String(limit), offset: "0" });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/runs?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: RunItem[] };
 }
 
 export async function listPipelineVersionsApi(

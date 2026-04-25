@@ -83,5 +83,6 @@
 
 ## UI
 
-- **Lineage** (`/lineage`, optional `?runId=` or set dataset version id for neighborhood), **Search** (`/search?q=`), run **timeline** and **partial replay** on run detail, global search in the top bar.
+- **Lineage** (`/lineage`, optional `?runId=` or set dataset version id for neighborhood), node-click **dataset detail panel** (dataset/version/uri), run history per dataset, and one-hop upstream/downstream highlight.
+- **Search** (`/search?q=`), run **timeline** and **partial replay** on run detail, global search in the top bar.
 - **Pipeline config**: `/pipelines/{id}/versions` (immutable versions + JSON editor), `/pipelines/{id}/diff?left={version_id}&right={version_id}` (top-level key diff). From **Pipelines** list use column “Versions”, or open a pipeline and use **Versions** / **Config diff**.

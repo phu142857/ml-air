@@ -110,7 +110,7 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 ### UI — lineage
 
 - [x] **Lineage** route `/lineage` (React Flow; `?runId=` or dataset version for neighborhood). Sidebar link **Lineage**.
-- [ ] **Dataset detail** card + full upstream/downstream UX polish; **run history** per dataset.
+- [x] **Dataset detail** card + upstream/downstream highlight (1-hop) + **run history** per dataset.
 
 ### Versioning — pipelines
 

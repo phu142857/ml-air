@@ -224,6 +224,67 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
     ]
 
 
+def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s AND d.project_id = %s AND dv.version_id = %s
+                """,
+                (tenant_id, project_id, version_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "version_id": row[0],
+        "version": row[1],
+        "uri": row[2],
+        "checksum": row[3],
+        "created_at": row[4].isoformat(),
+        "dataset_id": row[5],
+        "dataset_name": row[6],
+    }
+
+
+def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+    lim = max(1, min(limit, 200))
+    off = max(0, offset)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT r.run_id, r.pipeline_id, r.status, r.created_at, r.updated_at
+                FROM lineage_edges e
+                JOIN runs r ON r.run_id = e.run_id
+                LEFT JOIN dataset_versions dvi ON dvi.version_id = e.input_dataset_version_id
+                LEFT JOIN dataset_versions dvo ON dvo.version_id = e.output_dataset_version_id
+                WHERE e.tenant_id = %s
+                  AND e.project_id = %s
+                  AND r.tenant_id = %s
+                  AND r.project_id = %s
+                  AND (dvi.dataset_id = %s OR dvo.dataset_id = %s)
+                ORDER BY r.updated_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (tenant_id, project_id, tenant_id, project_id, dataset_id, dataset_id, lim, off),
+            )
+            rows = cur.fetchall()
+    return [
+        {
+            "run_id": r[0],
+            "pipeline_id": r[1],
+            "status": r[2],
+            "created_at": r[3].isoformat(),
+            "updated_at": r[4].isoformat(),
+        }
+        for r in rows
+    ]
+
+
 def get_lineage_for_run(tenant_id: str, project_id: str, run_id: str) -> dict:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -231,7 +292,8 @@ def get_lineage_for_run(tenant_id: str, project_id: str, run_id: str) -> dict:
                 """
                 SELECT e.edge_id, e.task_id, e.input_dataset_version_id, e.output_dataset_version_id,
                        dv_in.dataset_id, dd_in.name,
-                       dv_out.dataset_id, dd_out.name
+                       dv_out.dataset_id, dd_out.name,
+                       dv_in.version, dv_out.version
                 FROM lineage_edges e
                 LEFT JOIN dataset_versions dv_in ON dv_in.version_id = e.input_dataset_version_id
                 LEFT JOIN datasets dd_in ON dd_in.dataset_id = dv_in.dataset_id
@@ -254,6 +316,8 @@ def get_lineage_for_run(tenant_id: str, project_id: str, run_id: str) -> dict:
                 "input_dataset_name": r[5],
                 "output_dataset_id": r[6],
                 "output_dataset_name": r[7],
+                "input_version": r[8],
+                "output_version": r[9],
             }
         )
     return {"run_id": run_id, "edges": edges}
@@ -302,11 +366,13 @@ def get_lineage_neighborhood(
                 "output_dataset_version_id": out_id,
             }
         )
+    version_nodes = _load_version_nodes(tenant_id, project_id, all_version_ids)
     return {
         "center": dataset_version_id,
         "depth": d,
         "direction": direction,
         "dataset_version_ids": sorted(all_version_ids),
+        "dataset_versions": version_nodes,
         "edges": out_edges,
     }
 
@@ -359,3 +425,34 @@ def _expand_downstream(tenant_id: str, project_id: str, version_ids: set[str]) -
         if out_id:
             nxt.add(out_id)
     return nxt, edges
+
+
+def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) -> list[dict]:
+    if not version_ids:
+        return []
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND dv.version_id = ANY(%s::text[])
+                """,
+                (tenant_id, project_id, list(version_ids)),
+            )
+            rows = cur.fetchall()
+    return [
+        {
+            "version_id": r[0],
+            "version": r[1],
+            "uri": r[2],
+            "checksum": r[3],
+            "created_at": r[4].isoformat(),
+            "dataset_id": r[5],
+            "dataset_name": r[6],
+        }
+        for r in rows
+    ]
