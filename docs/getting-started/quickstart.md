@@ -26,6 +26,13 @@ make smoke-quickstart
 
 You should get a successful smoke run and be able to open UI at `http://localhost:38080`.
 
+## Success Checklist
+
+- Pipeline run is created successfully.
+- At least one task reaches `SUCCESS`.
+- Plugin execution logs are visible from CLI and UI.
+- Lineage edges are visible in the lineage view.
+
 ## Done
 
 You can now follow [Run Pipeline Guide](../guides/run-pipeline.md).

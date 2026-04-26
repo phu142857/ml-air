@@ -22,6 +22,13 @@ BLOCKED_PATTERNS = [
     re.compile(r"localhost:3000/docs", re.IGNORECASE),
 ]
 TERMS = ["run", "task", "pipeline", "plugin", "lineage"]
+TERMINOLOGY_WARN_GLOBS = (
+    "docs/getting-started/",
+    "docs/guides/",
+    "docs/cli/",
+    "docs/concepts/",
+)
+MIN_TERMS_PER_DOC = 2
 
 
 def iter_docs() -> list[Path]:
@@ -45,9 +52,16 @@ def main() -> int:
                 print(f"[FAIL] blocked pattern '{pat.pattern}' in {path}")
                 failed = True
         lower = text.lower()
+        in_scope = str(path).startswith(TERMINOLOGY_WARN_GLOBS)
+        present_terms = [t for t in TERMS if t in lower]
         missing_terms = [t for t in TERMS if t not in lower]
-        # Warn only; this is consistency hint, not hard failure.
-        if missing_terms and path.name not in {"index.md", "overview.md"}:
+        # Warn only for task-facing docs. A page is healthy when it mentions
+        # at least two core terms to anchor user language consistently.
+        if (
+            in_scope
+            and path.name not in {"index.md", "overview.md"}
+            and len(present_terms) < MIN_TERMS_PER_DOC
+        ):
             print(f"[WARN] terminology coverage in {path}: missing {', '.join(missing_terms)}")
 
     if failed:

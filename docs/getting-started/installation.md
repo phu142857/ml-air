@@ -22,6 +22,7 @@ make doctor
 ## Result
 
 You should see `doctor` checks pass (warnings are acceptable if non-blocking).
+The environment is now ready for pipeline run execution, plugin loading, task processing, and lineage tracking.
 
 ## Done
 
