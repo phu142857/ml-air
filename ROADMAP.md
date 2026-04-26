@@ -62,7 +62,7 @@
 - [x] Phase 8 - model registry smoke automation (`make test-smoke-model-registry`) + quickstart flow docs
 - [x] Phase 8 - full phase2 smoke automation (`make test-smoke-phase2`) wired into `make test-all`
 - [x] Phase 8 - plugin->tracking auto hook baseline (executor plugin result auto logs params/metrics/artifacts)
-- [x] v0.3 / Product Phase 3 - baseline: lineage schema + API + executor ingest, pipeline versions + run bind + diff API, search API + topbar, timeline + partial replay + lineage UI (see `docs/lineage-replay-v03.md` + `make test-smoke-v03`)
+- [x] v0.3 / Product Phase 3 - baseline: lineage schema + API + executor ingest, pipeline versions + run bind + diff API, search API + topbar, timeline + partial replay + lineage UI (see `docs/troubleshooting/lineage-replay-v03-reference.md` + `make test-smoke-v03`)
 
 ## Milestone: v0.2.0 — ML tracking + model registry (MLflow-like layer) — **COMPLETE**
 
@@ -132,7 +132,7 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - [x] **One-command local enable**: `make enable-ed25519-dev` auto-updates `.env` with generated Ed25519 keyset.
 - [x] **Security observability baseline**: manifest sign/post and verify failure metrics + alert rules.
 - [x] **Security dashboard visibility**: Grafana panels for manifest verify/post outcomes.
-- [x] **Security incident runbook (manifest/replay)**: reason-based triage/mitigation playbook for verify/post failures (`docs/operations-manifest-security-runbook.md`).
+- [x] **Security incident runbook (manifest/replay)**: reason-based triage/mitigation playbook for verify/post failures (`docs/troubleshooting/manifest-security.md`).
 - [x] **Manifest policy hardening (baseline)**: managed key provider integration (`env|file` compatible with KMS/Vault sidecar sync) + strict key lifecycle/allowlist policy (`kid` allowlist + strict active key checks).
 - [x] **Manifest key rotation ops DX**: sample managed key file + rotation guard script/target (`deploy/security/manifest-keys.sample.json`, `scripts/check_manifest_key_rotation.py`, `make test-manifest-key-rotation`).
 - [x] **Rotation policy CI gate**: manifest key rotation guard enforced in CI and `make test-all`.

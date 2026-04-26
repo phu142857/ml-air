@@ -6,6 +6,25 @@ on:
     branches: [main]
 
 jobs:
+  docs-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run docs quality gate
+        run: make docs-quality
+
   quickstart-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

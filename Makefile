@@ -153,6 +153,31 @@ day6-check:
 day7-check:
 	python scripts/day7_gate_check.py
 
+.PHONY: docs-quality
+docs-quality:
+	npx --yes markdown-link-check \
+		--config .markdown-link-check.json \
+		docs/index.md \
+		docs/getting-started/*.md \
+		docs/guides/*.md \
+		docs/concepts/*.md \
+		docs/cli/*.md \
+		docs/api/*.md \
+		docs/troubleshooting/*.md
+	npx --yes markdownlint-cli \
+		docs/index.md \
+		docs/getting-started/*.md \
+		docs/guides/*.md \
+		docs/concepts/*.md \
+		docs/cli/*.md \
+		docs/api/*.md \
+		docs/troubleshooting/*.md
+	python scripts/check_docs_quality.py
+
+.PHONY: docs-smoke
+docs-smoke:
+	python scripts/docs_smoke.py
+
 .PHONY: backfill-lineage
 backfill-lineage:
 	docker compose -f $(COMPOSE_FILE) up -d --build api

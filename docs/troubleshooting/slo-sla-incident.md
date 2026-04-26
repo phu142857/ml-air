@@ -68,7 +68,7 @@ make incident-drill
   - `increase(mlair_scheduler_manifest_verify_failure_total[10m])`
   - `increase(mlair_executor_manifest_post_total{result=~"sign_failed|post_failed"}[10m])`
 - Follow detailed runbook:
-  - `docs/operations-manifest-security-runbook.md`
+  - `docs/troubleshooting/manifest-security.md`
 
 ## Postmortem Minimum Template
 

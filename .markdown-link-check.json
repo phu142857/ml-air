@@ -1,0 +1,16 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^http://localhost"
+    },
+    {
+      "pattern": "^https?://127\\.0\\.0\\.1"
+    },
+    {
+      "pattern": "^ws://localhost"
+    },
+    {
+      "pattern": "^<repo-url>$"
+    }
+  ]
+}

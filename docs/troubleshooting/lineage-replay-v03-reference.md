@@ -82,7 +82,7 @@
   - `MlAirManifestVerifyFailures`
   - `MlAirManifestPostFailures`
 - Incident response guide:
-  - `docs/operations-manifest-security-runbook.md`
+  - `docs/troubleshooting/manifest-security.md`
 
 ## Dev utility
 
