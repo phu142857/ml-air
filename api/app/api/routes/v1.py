@@ -12,7 +12,7 @@ from app.services.model_registry_service import (
 )
 from app.plugins.registry import plugin_registry
 from app.services.auth_service import authenticate_bearer, authorize_scope
-from app.services.log_service import read_run_logs
+from app.services.log_service import append_run_log, read_run_logs
 from app.services.project_service import list_projects
 from app.services.queue_service import replay_dlq_for_run
 from app.services import pipeline_version_service
@@ -26,6 +26,7 @@ from app.services.run_service import (
     list_pipelines,
     list_runs,
     mark_run_running,
+    set_run_status,
 )
 from app.services.task_service import get_task_by_id, list_tasks_by_run
 from app.services.tracking_service import (
@@ -94,6 +95,11 @@ class LogMetricIn(BaseModel):
     key: str = Field(min_length=1)
     value: float
     step: int = 0
+
+
+class UpdateRunStatusIn(BaseModel):
+    status: str = Field(min_length=1)
+    reason: str | None = None
 
 
 class LogArtifactIn(BaseModel):
@@ -239,6 +245,28 @@ def get_run_v1(tenant_id: str, project_id: str, run_id: str, authorization: str 
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
     return run
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/status")
+def update_run_status_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    payload: UpdateRunStatusIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    ok = set_run_status(run_id, payload.status)
+    if not ok:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    if payload.reason:
+        append_run_log(run_id=run_id, level="INFO", message="run status updated externally", payload={"reason": payload.reason, "status": payload.status})
+    latest = get_run(run_id)
+    return latest or {"run_id": run_id, "status": payload.status}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks")

@@ -272,6 +272,24 @@ def mark_run_running(run_id: str) -> None:
             )
 
 
+def set_run_status(run_id: str, status: str) -> bool:
+    normalized = str(status or "").strip().upper()
+    if normalized not in {"PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELED"}:
+        raise ValueError("invalid_run_status")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE runs
+                SET status = %s, updated_at = NOW()
+                WHERE run_id = %s
+                """,
+                (normalized, run_id),
+            )
+            updated = cur.rowcount
+    return bool(updated)
+
+
 def list_runs(tenant_id: str, project_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
     safe_limit = max(1, min(limit, 200))
     safe_offset = max(0, offset)

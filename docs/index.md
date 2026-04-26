@@ -47,6 +47,7 @@ Each guide follows:
 - [Compare Runs](./guides/compare-runs.md)
 - [Register a Model](./guides/register-model.md)
 - [Promote a Model](./guides/promote-model.md)
+- [Sync External Model Registry](./guides/sync-external-model-registry.md)
 
 ### Plugin System
 
@@ -85,6 +86,14 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md)
+- [POST /models](./api/post-models.md)
+- [POST /models/{id}/versions](./api/post-model-versions.md)
+- [GET /models/{id}/versions](./api/get-model-versions.md)
+
+## External MLOps Integration
+
+- [Integrate App with Plugin](./guides/integrate-app-with-plugin.md)
+- [Sync External Model Registry](./guides/sync-external-model-registry.md)
 
 ## Troubleshooting
 
