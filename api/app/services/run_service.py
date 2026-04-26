@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -7,7 +8,10 @@ from psycopg.types.json import Json
 
 from app.services import pipeline_version_service as pvs
 from app.services.db_service import db_conn
+from app.services.log_service import append_run_log
 from app.services.queue_service import publish_run_event
+
+logger = logging.getLogger("mlair.api.run_service")
 
 
 def _row_to_run(row: tuple) -> dict:
@@ -125,6 +129,13 @@ def create_run(
                 )
                 existing = cur.fetchone()
                 if existing:
+                    logger.info(
+                        "run_idempotency_hit tenant_id=%s project_id=%s idempotency_key=%s run_id=%s",
+                        tenant_id,
+                        project_id,
+                        idempotency_key,
+                        existing[0],
+                    )
                     return _row_to_run(existing)
 
             run_id = str(uuid4())
@@ -174,6 +185,28 @@ def create_run(
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
         }
+    )
+    logger.info(
+        "run_created run_id=%s tenant_id=%s project_id=%s pipeline_id=%s priority=%s replay_of_run_id=%s",
+        created[0],
+        tenant_id,
+        project_id,
+        pipeline_id,
+        normalized_priority,
+        replay_of_run_id,
+    )
+    append_run_log(
+        run_id=created[0],
+        level="INFO",
+        message="run created and queued",
+        payload={
+            "pipeline_id": pipeline_id,
+            "priority": normalized_priority,
+            "max_parallel_tasks": max_parallel_tasks,
+            "trace_id": trace_id,
+            "replay_of_run_id": replay_of_run_id,
+            "replay_from_task_id": replay_from_task_id,
+        },
     )
     return _row_to_run(created)
 

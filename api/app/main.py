@@ -1,3 +1,5 @@
+import logging
+import os
 import time
 
 from fastapi import FastAPI, Request
@@ -9,6 +11,12 @@ from app.api.routes.v1 import router as v1_router
 from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
 from app.services.trace_service import normalize_trace_id, set_trace_id
+
+logging.basicConfig(
+    level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("mlair.api")
 
 app = FastAPI(title="ml-air-api", version="0.1.0")
 app.add_middleware(
@@ -40,6 +48,7 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 def on_startup() -> None:
     assert_db_connection()
     plugin_registry.reload()
+    logger.info("api_startup_completed")
 
 
 @app.middleware("http")
@@ -47,11 +56,30 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
     trace_id = normalize_trace_id(request.headers.get("x-trace-id"))
     set_trace_id(trace_id)
     started = time.perf_counter()
-    response = await call_next(request)
-    elapsed = time.perf_counter() - started
     route_path = request.url.path
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed = time.perf_counter() - started
+        logger.exception(
+            "http_request_failed method=%s path=%s trace_id=%s elapsed_ms=%d",
+            request.method,
+            route_path,
+            trace_id,
+            int(elapsed * 1000),
+        )
+        raise
+    elapsed = time.perf_counter() - started
     HTTP_REQUESTS_TOTAL.labels(method=request.method, path=route_path, status=str(response.status_code)).inc()
     HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, path=route_path).observe(elapsed)
+    logger.info(
+        "http_request method=%s path=%s status=%s trace_id=%s elapsed_ms=%d",
+        request.method,
+        route_path,
+        response.status_code,
+        trace_id,
+        int(elapsed * 1000),
+    )
     response.headers["X-Trace-Id"] = trace_id
     return response
 

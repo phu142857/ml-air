@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import time
 from collections import defaultdict, deque
@@ -11,6 +12,12 @@ from functools import lru_cache
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from psycopg import connect
 from redis import Redis
+
+logging.basicConfig(
+    level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("mlair.scheduler")
 
 RUN_ALLOWED_TRANSITIONS = {
     "PENDING": {"RUNNING", "FAILED", "CANCELLED"},
@@ -110,7 +117,7 @@ def _transition_run_status(run_id: str, next_status: str) -> None:
                 return
             current_status = row[0]
             if next_status not in RUN_ALLOWED_TRANSITIONS.get(current_status, set()):
-                print(f"invalid run transition blocked: {run_id} {current_status} -> {next_status}")
+                logger.warning("invalid_run_transition run_id=%s from=%s to=%s", run_id, current_status, next_status)
                 return
             cur.execute(
                 "UPDATE runs SET status = %s, updated_at = NOW() WHERE run_id = %s",
@@ -126,7 +133,7 @@ def _upsert_or_transition_task(task_id: str, run_id: str, next_status: str, atte
             if row:
                 current_status = row[0]
                 if next_status not in TASK_ALLOWED_TRANSITIONS.get(current_status, set()):
-                    print(f"invalid task transition blocked: {task_id} {current_status} -> {next_status}")
+                    logger.warning("invalid_task_transition task_id=%s from=%s to=%s", task_id, current_status, next_status)
                     return
             cur.execute(
                 """
@@ -703,7 +710,7 @@ def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
     start_http_server(metrics_port)
     client = _redis()
-    print(f"scheduler started (metrics on :{metrics_port})")
+    logger.info("scheduler_started metrics_port=%s", metrics_port)
     while True:
         loop_started = time.perf_counter()
         run_msg = client.blpop("mlair:runs:new", timeout=1)
@@ -734,7 +741,7 @@ def main() -> None:
                     )
                     if not gating_ok:
                         _transition_run_status(run_id, "FAILED")
-                        print(f"replay gating failed for run {run_id} from parent {replay_parent}")
+                        logger.error("replay_gating_failed run_id=%s parent_run_id=%s", run_id, replay_parent)
                         continue
                 else:
                     _init_run_tasks(run_id=run_id, plan=plan, selected=selected, skipped=skipped)
@@ -744,7 +751,7 @@ def main() -> None:
                 PROJECT_RUNNING_TASKS.labels(tenant_id=tenant_id, project_id=project_id).set(
                     _project_running_tasks(tenant_id=tenant_id, project_id=project_id)
                 )
-                print(f"scheduled run {run_id} with {len(selected)} task(s), first wave={scheduled}")
+                logger.info("run_scheduled run_id=%s selected_tasks=%s first_wave=%s", run_id, len(selected), scheduled)
 
         done_msg = client.blpop("mlair:tasks:done", timeout=1)
         if done_msg:
@@ -829,9 +836,12 @@ def main() -> None:
                         attempt=retry_attempt,
                     )
                     RETRY_ENQUEUED_TOTAL.inc()
-                    print(
-                        f'retry task {done_event["task_id"]} attempt {retry_attempt}/{max_attempts} '
-                        f'after {delay_seconds:.2f}s'
+                    logger.warning(
+                        "retry_scheduled task_id=%s attempt=%s max_attempts=%s delay_seconds=%.2f",
+                        done_event["task_id"],
+                        retry_attempt,
+                        max_attempts,
+                        delay_seconds,
                     )
                 else:
                     client.rpush("mlair:tasks:dlq", raw_done)
@@ -839,11 +849,13 @@ def main() -> None:
                     plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
                     selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
                     _sync_run_status_after_task(done_event["run_id"], plan, selected)
-                    print(f'task moved to dlq: {done_event["task_id"]}')
+                    logger.error("task_moved_to_dlq task_id=%s run_id=%s", done_event["task_id"], done_event["run_id"])
             TASK_COMPLETED_TOTAL.labels(status=done_event["status"]).inc()
-            print(
-                f'completed task {done_event["task_id"]} with {done_event["status"]} '
-                f'for run {done_event["run_id"]}'
+            logger.info(
+                "task_completed task_id=%s status=%s run_id=%s",
+                done_event["task_id"],
+                done_event["status"],
+                done_event["run_id"],
             )
 
         time.sleep(0.05)

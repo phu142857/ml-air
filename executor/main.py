@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import subprocess
@@ -14,6 +15,12 @@ from datetime import datetime, timezone
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from redis import Redis
+
+logging.basicConfig(
+    level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("mlair.executor")
 
 TASK_EXECUTED_TOTAL = Counter(
     "mlair_executor_task_executed_total",
@@ -83,7 +90,7 @@ def _tracking_post(path: str, payload: dict) -> None:
         with urllib.request.urlopen(req, timeout=5):
             return
     except urllib.error.URLError as exc:
-        print(f"tracking post failed path={path} err={exc}")
+        logger.warning("tracking_post_failed path=%s err=%s", path, exc)
 
 
 def _api_post(path: str, payload: dict, timeout: int = 10) -> bool:
@@ -99,7 +106,7 @@ def _api_post(path: str, payload: dict, timeout: int = 10) -> bool:
         with urllib.request.urlopen(req, timeout=timeout):
             return True
     except urllib.error.URLError as exc:
-        print(f"api post failed path={path} err={exc}")
+        logger.warning("api_post_failed path=%s err=%s", path, exc)
         return False
 
 
@@ -274,7 +281,7 @@ def _post_manifest(task: dict, plugin_result: dict | None, status: str) -> None:
     try:
         algorithm, key_id, signature = _sign_manifest(payload)
     except Exception as exc:  # noqa: BLE001
-        print(f"manifest sign failed: {exc}")
+        logger.error("manifest_sign_failed err=%s", exc)
         alg = _manifest_algorithm()
         MANIFEST_POST_TOTAL.labels(result="sign_failed", algorithm=alg).inc()
         return
@@ -314,7 +321,7 @@ def _lineage_ingest(task: dict, plugin_result: dict) -> None:
         with urllib.request.urlopen(req, timeout=10):
             return
     except urllib.error.URLError as exc:
-        print(f"lineage ingest failed: {exc}")
+        logger.warning("lineage_ingest_failed err=%s", exc)
 
 
 def _log_plugin_tracking(task: dict, plugin_result: dict) -> None:
@@ -355,7 +362,7 @@ def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_EXECUTOR_METRICS_PORT", "9103"))
     start_http_server(metrics_port)
     client = _redis()
-    print(f"executor started (metrics on :{metrics_port})")
+    logger.info("executor_started metrics_port=%s", metrics_port)
     while True:
         message = client.blpop(["mlair:tasks:high", "mlair:tasks:default", "mlair:tasks:low"], timeout=2)
         if not message:
@@ -399,31 +406,16 @@ def main() -> None:
         _post_manifest(task=task, plugin_result=plugin_exec, status=status)
         TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
         TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(wall_seconds)
-        print(
-            json.dumps(
-                {
-                    "event_type": "task_finished",
-                    "run_id": task["run_id"],
-                    "task_id": task["task_id"],
-                    "status": status,
-                    "attempt": task["attempt"],
-                    "pipeline_id": pipeline_id,
-                    "priority": task.get("priority", "normal"),
-                    "tenant_id": tenant_id,
-                    "project_id": project_id,
-                    "trace_id": trace_id,
-                    "plugin_name": plugin_name,
-                    "plugin_exec": plugin_exec,
-                    "queue": queue_name,
-                    "started_at": started_at,
-                    "finished_at": finished_at,
-                    "resource_usage": {
-                        "duration_ms": int(wall_seconds * 1000),
-                        "cpu_time_seconds": cpu_seconds,
-                        "memory_rss_kb": rss_kb,
-                    },
-                }
-            )
+        logger.info(
+            "task_finished run_id=%s task_id=%s status=%s attempt=%s pipeline_id=%s queue=%s trace_id=%s duration_ms=%s",
+            task["run_id"],
+            task["task_id"],
+            status,
+            task["attempt"],
+            pipeline_id,
+            queue_name,
+            trace_id,
+            int(wall_seconds * 1000),
         )
         client.rpush(
             f'mlair:logs:{task["run_id"]}',
