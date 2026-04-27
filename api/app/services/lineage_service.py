@@ -8,7 +8,14 @@ from app.services.db_service import db_conn
 Direction = Literal["up", "down", "both"]
 
 
-def _upsert_dataset(tenant_id: str, project_id: str, name: str) -> str:
+def _upsert_dataset(
+    tenant_id: str,
+    project_id: str,
+    name: str,
+    source_uri: str | None = None,
+    checksum: str | None = None,
+    current_size: int | None = None,
+) -> str:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -20,14 +27,26 @@ def _upsert_dataset(tenant_id: str, project_id: str, name: str) -> str:
             )
             row = cur.fetchone()
             if row:
+                if source_uri is not None or checksum is not None or current_size is not None:
+                    cur.execute(
+                        """
+                        UPDATE datasets
+                        SET source_uri = COALESCE(%s, source_uri),
+                            checksum = COALESCE(%s, checksum),
+                            current_size = COALESCE(%s, current_size),
+                            updated_at = NOW()
+                        WHERE dataset_id = %s
+                        """,
+                        (source_uri, checksum, current_size, row[0]),
+                    )
                 return row[0]
             dataset_id = str(uuid4())
             cur.execute(
                 """
-                INSERT INTO datasets (dataset_id, tenant_id, project_id, name)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO datasets (dataset_id, tenant_id, project_id, name, source_uri, checksum, current_size, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 """,
-                (dataset_id, tenant_id, project_id, name),
+                (dataset_id, tenant_id, project_id, name, source_uri, checksum, int(current_size or 0)),
             )
             return dataset_id
 
@@ -125,7 +144,19 @@ def ingest_lineage_from_task(
         ver = str(item.get("version", "default")).strip() or "default"
         uri = item.get("uri")
         chk = item.get("checksum")
-        ds = _upsert_dataset(tenant_id, project_id, name)
+        size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
+        try:
+            size = int(size_raw) if size_raw is not None else None
+        except Exception:
+            size = None
+        ds = _upsert_dataset(
+            tenant_id,
+            project_id,
+            name,
+            source_uri=str(uri) if uri else None,
+            checksum=str(chk) if chk else None,
+            current_size=size,
+        )
         input_vids.append(_upsert_dataset_version(ds, ver, str(uri) if uri else None, str(chk) if chk else None))
 
     if not input_vids and not outs:
@@ -141,7 +172,19 @@ def ingest_lineage_from_task(
         ver = str(item.get("version", "default")).strip() or "default"
         uri = item.get("uri")
         chk = item.get("checksum")
-        ds = _upsert_dataset(tenant_id, project_id, name)
+        size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
+        try:
+            size = int(size_raw) if size_raw is not None else None
+        except Exception:
+            size = None
+        ds = _upsert_dataset(
+            tenant_id,
+            project_id,
+            name,
+            source_uri=str(uri) if uri else None,
+            checksum=str(chk) if chk else None,
+            current_size=size,
+        )
         output_vids.append(_upsert_dataset_version(ds, ver, str(uri) if uri else None, str(chk) if chk else None))
 
     if not output_vids:
@@ -167,6 +210,7 @@ def list_datasets(tenant_id: str, project_id: str, limit: int = 100, offset: int
             cur.execute(
                 """
                 SELECT dataset_id, name, created_at
+                     , source_uri, current_size, checksum, updated_at
                 FROM datasets
                 WHERE tenant_id = %s AND project_id = %s
                 ORDER BY name ASC
@@ -176,7 +220,15 @@ def list_datasets(tenant_id: str, project_id: str, limit: int = 100, offset: int
             )
             rows = cur.fetchall()
     return [
-        {"dataset_id": r[0], "name": r[1], "created_at": r[2].isoformat()}
+        {
+            "dataset_id": r[0],
+            "name": r[1],
+            "created_at": r[2].isoformat(),
+            "source_uri": r[3],
+            "current_size": int(r[4] or 0),
+            "checksum": r[5],
+            "updated_at": r[6].isoformat(),
+        }
         for r in rows
     ]
 
@@ -186,7 +238,7 @@ def get_dataset(tenant_id: str, project_id: str, dataset_id: str) -> dict | None
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT dataset_id, name, created_at
+                SELECT dataset_id, name, created_at, source_uri, current_size, checksum, updated_at
                 FROM datasets
                 WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
                 """,
@@ -195,7 +247,15 @@ def get_dataset(tenant_id: str, project_id: str, dataset_id: str) -> dict | None
             row = cur.fetchone()
     if not row:
         return None
-    return {"dataset_id": row[0], "name": row[1], "created_at": row[2].isoformat()}
+    return {
+        "dataset_id": row[0],
+        "name": row[1],
+        "created_at": row[2].isoformat(),
+        "source_uri": row[3],
+        "current_size": int(row[4] or 0),
+        "checksum": row[5],
+        "updated_at": row[6].isoformat(),
+    }
 
 
 def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> list[dict]:

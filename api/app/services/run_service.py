@@ -29,6 +29,13 @@ def _row_to_run(row: tuple) -> dict:
             pctx = json.loads(pctx)
         except Exception:
             pctx = None
+    ovrd = row[17]
+    if isinstance(ovrd, str):
+        import json
+        try:
+            ovrd = json.loads(ovrd)
+        except Exception:
+            ovrd = None
     return {
         "run_id": row[0],
         "tenant_id": row[1],
@@ -47,6 +54,8 @@ def _row_to_run(row: tuple) -> dict:
         "plugin_context": pctx if isinstance(pctx, dict) else (pctx or {}),
         "created_at": row[15].isoformat(),
         "updated_at": row[16].isoformat(),
+        "training_mode": row[18] or "full",
+        "override_config": ovrd if isinstance(ovrd, dict) else (ovrd or {}),
     }
 
 
@@ -54,7 +63,7 @@ def _select_run_columns() -> str:
     return """
         run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id,
         pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context,
-        created_at, updated_at
+        created_at, updated_at, override_config, training_mode
     """
 
 
@@ -73,6 +82,8 @@ def create_run(
     use_latest_pipeline_version: bool = False,
     replay_of_run_id: str | None = None,
     replay_from_task_id: str | None = None,
+    training_mode: str = "full",
+    override_config: dict | None = None,
 ) -> dict:
     normalized_priority = priority.lower()
     if normalized_priority not in {"high", "normal", "low"}:
@@ -115,6 +126,10 @@ def create_run(
     pctx: dict = dict(plugin_context_f)
     if replay_of_run_id:
         pctx = {**pctx, "replay": {"from_run_id": replay_of_run_id, "from_task_id": replay_from_task_id}}
+    ovrd_cfg: dict = dict(override_config or {})
+    mode = str(training_mode or "full").strip().lower()
+    if mode not in {"quick", "standard", "full"}:
+        mode = "full"
 
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -143,9 +158,10 @@ def create_run(
                 f"""
                 INSERT INTO runs(
                     run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id,
-                    pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context
+                    pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context,
+                    override_config, training_mode
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING {_select_run_columns()}
                 """,
                 (
@@ -164,6 +180,8 @@ def create_run(
                     replay_from_task_id,
                     plugin_name_f,
                     Json(pctx) if pctx else None,
+                    Json(ovrd_cfg) if ovrd_cfg else None,
+                    mode,
                 ),
             )
             created = cur.fetchone()
@@ -184,6 +202,8 @@ def create_run(
             "config_snapshot": cfg_snapshot,
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
+            "training_mode": mode,
+            "override_config": ovrd_cfg,
         }
     )
     logger.info(
@@ -206,6 +226,7 @@ def create_run(
             "trace_id": trace_id,
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
+            "training_mode": mode,
         },
     )
     return _row_to_run(created)
@@ -388,3 +409,22 @@ def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
         edges.append({"source": task_rows[idx - 1][0], "target": task_rows[idx][0]})
 
     return {"pipeline_id": pipeline_id, "run_id": run_id, "nodes": nodes, "edges": edges}
+
+
+def get_latest_run_for_pipeline(tenant_id: str, project_id: str, pipeline_id: str) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {_select_run_columns()}
+                FROM runs
+                WHERE tenant_id = %s AND project_id = %s AND pipeline_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, pipeline_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return _row_to_run(row)

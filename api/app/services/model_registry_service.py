@@ -59,6 +59,31 @@ def list_models(tenant_id: str, project_id: str, limit: int = 100, offset: int =
     ]
 
 
+def get_model(tenant_id: str, project_id: str, model_id: str) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT model_id, tenant_id, project_id, name, description, created_at, updated_at
+                FROM models
+                WHERE tenant_id = %s AND project_id = %s AND model_id = %s
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "model_id": row[0],
+        "tenant_id": row[1],
+        "project_id": row[2],
+        "name": row[3],
+        "description": row[4],
+        "created_at": row[5].isoformat(),
+        "updated_at": row[6].isoformat(),
+    }
+
+
 def _next_model_version(model_id: str) -> int:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -143,4 +168,58 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
         "artifact_uri": row[4],
         "stage": row[5],
         "created_at": row[6].isoformat(),
+    }
+
+
+def get_model_status(tenant_id: str, project_id: str, model_id: str) -> dict:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mv.version_id, mv.version, mv.run_id, mv.stage, mv.created_at
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s
+                ORDER BY mv.version DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"model_id": model_id, "status": "UNKNOWN", "blocking_datasets": []}
+            run_id = row[2]
+            if not run_id:
+                return {
+                    "model_id": model_id,
+                    "status": "UNKNOWN",
+                    "latest_version": row[1],
+                    "blocking_datasets": [],
+                }
+            cur.execute(
+                """
+                SELECT dataset_name, actual_size, required_size, status
+                FROM run_dataset_lineage
+                WHERE run_id = %s AND role = 'input'
+                ORDER BY dataset_name ASC
+                """,
+                (run_id,),
+            )
+            ds_rows = cur.fetchall()
+    blocking = [
+        {
+            "dataset": r[0],
+            "actual_size": int(r[1] or 0),
+            "required_size": int(r[2] or 0),
+            "status": r[3],
+        }
+        for r in ds_rows
+        if str(r[3]) != "READY"
+    ]
+    return {
+        "model_id": model_id,
+        "latest_version": row[1],
+        "run_id": run_id,
+        "status": "READY" if not blocking else "NOT_READY",
+        "blocking_datasets": blocking,
     }

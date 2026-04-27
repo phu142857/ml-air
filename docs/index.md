@@ -29,6 +29,7 @@ Each guide follows:
 ### Run and Orchestration
 
 - [Run a Pipeline](./guides/run-pipeline.md)
+- [Configure Data Readiness and Gating](./guides/configure-data-readiness-gating.md)
 - [Monitor a Run](./guides/monitor-run.md)
 - [Retry a Failed Task](./guides/retry-failed-task.md)
 - [Replay from DLQ](./guides/replay-dlq.md)
@@ -86,6 +87,7 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md)
+- [Readiness and Gating API](./api/readiness-and-gating.md)
 - [POST /models](./api/post-models.md)
 - [POST /models/{id}/versions](./api/post-model-versions.md)
 - [GET /models/{id}/versions](./api/get-model-versions.md)

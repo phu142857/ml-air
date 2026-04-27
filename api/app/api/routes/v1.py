@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from app.services.model_registry_service import (
     create_model,
     create_model_version,
+    get_model,
+    get_model_status,
     list_model_versions,
     list_models,
     promote_model_version,
@@ -18,9 +20,11 @@ from app.services.queue_service import replay_dlq_for_run
 from app.services import pipeline_version_service
 from app.services import search_service
 from app.services import lineage_service
+from app.services import readiness_service
 from app.services.run_service import (
     create_replay_run,
     create_run,
+    get_latest_run_for_pipeline,
     get_pipeline_dag,
     get_run,
     list_pipelines,
@@ -54,6 +58,13 @@ class TriggerRunIn(BaseModel):
     max_parallel_tasks: int = Field(default=1, ge=1, le=20)
     pipeline_version_id: str | None = None
     use_latest_pipeline_version: bool = False
+    training_mode: str = "full"
+    override_config: dict = Field(default_factory=dict)
+
+
+class CheckReadinessIn(BaseModel):
+    training_mode: str = "full"
+    override_config: dict = Field(default_factory=dict)
 
 
 class LineageIngestIn(BaseModel):
@@ -183,6 +194,8 @@ def trigger_run_v1(
         plugin_context=payload.context,
         pipeline_version_id=payload.pipeline_version_id,
         use_latest_pipeline_version=payload.use_latest_pipeline_version,
+        training_mode=payload.training_mode,
+        override_config=payload.override_config,
     )
     return run
 
@@ -237,6 +250,82 @@ def get_pipeline_dag_v1(
     return get_pipeline_dag(tenant_id=tenant_id, project_id=project_id, pipeline_id=pipeline_id)
 
 
+@router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness")
+def check_pipeline_readiness_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    payload: CheckReadinessIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    latest = get_latest_run_for_pipeline(tenant_id, project_id, pipeline_id)
+    if not latest:
+        raise HTTPException(status_code=404, detail="pipeline_has_no_runs")
+    run = create_run(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_id=pipeline_id,
+        idempotency_key=None,
+        priority="normal",
+        max_parallel_tasks=1,
+        trace_id=get_trace_id(),
+        training_mode=payload.training_mode,
+        override_config=payload.override_config,
+        pipeline_version_id=latest.get("pipeline_version_id"),
+    )
+    result = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
+    return {"pipeline_id": pipeline_id, "run_id": run["run_id"], **result}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run")
+def run_pipeline_with_gating_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    payload: TriggerRunIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = create_run(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_id=pipeline_id,
+        idempotency_key=payload.idempotency_key,
+        priority=payload.priority,
+        max_parallel_tasks=payload.max_parallel_tasks,
+        trace_id=get_trace_id(),
+        experiment_id=payload.experiment_id,
+        plugin_name=payload.plugin_name,
+        plugin_context=payload.context,
+        pipeline_version_id=payload.pipeline_version_id,
+        use_latest_pipeline_version=payload.use_latest_pipeline_version,
+        training_mode=payload.training_mode,
+        override_config=payload.override_config,
+    )
+    check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
+    if not check.get("ready"):
+        set_run_status(run["run_id"], "FAILED")
+        append_run_log(
+            run_id=run["run_id"],
+            level="WARN",
+            message="run blocked by data readiness gate",
+            payload={"blocking_datasets": check.get("blocking_datasets", [])},
+        )
+        return {
+            **(get_run(run["run_id"]) or run),
+            "blocked_by_gate": True,
+            "readiness": check,
+        }
+    return {
+        **run,
+        "blocked_by_gate": False,
+        "readiness": check,
+    }
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}")
 def get_run_v1(tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
@@ -245,6 +334,32 @@ def get_run_v1(tenant_id: str, project_id: str, run_id: str, authorization: str 
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
     return run
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/readiness")
+def get_run_readiness_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    rows = readiness_service.list_run_readiness(tenant_id, project_id, run_id)
+    if not rows:
+        return readiness_service.check_run_readiness(tenant_id, project_id, run_id)
+    return {
+        "run_id": run_id,
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "training_mode": run.get("training_mode") or "full",
+        "ready": all(str(r.get("status")) == "READY" for r in rows),
+        "details": rows,
+        "blocking_datasets": [r for r in rows if str(r.get("status")) != "READY"],
+    }
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/status")
@@ -517,6 +632,30 @@ def get_dataset_v1(
     return row
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness")
+def get_dataset_readiness_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    required_size: int = 1000,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = lineage_service.get_dataset(tenant_id, project_id, dataset_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    req = max(1, int(required_size))
+    cur = int(row.get("current_size") or 0)
+    return {
+        "dataset_id": dataset_id,
+        "dataset_name": row.get("name"),
+        "current_size": cur,
+        "required_size": req,
+        "ready": cur >= req,
+    }
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions")
 def list_dataset_versions_v1(
     tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
@@ -718,6 +857,30 @@ def list_models_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     return {"items": list_models(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")
+def get_model_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return row
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/status")
+def get_model_status_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return get_model_status(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")
