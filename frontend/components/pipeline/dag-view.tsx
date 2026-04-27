@@ -3,6 +3,7 @@
 import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
 import "reactflow/dist/style.css";
 import { TaskItem } from "@/lib/api";
+import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
 
 type Props = {
   tasks: TaskItem[];
@@ -19,24 +20,18 @@ export function DagView({ tasks, onClickTask }: Props) {
       ];
 
   const nodes: Node[] = sourceTasks.map((task, index) => {
-    const status = String(task.status).toUpperCase();
-    const isFailed = status === "FAILED";
+    const status = normalizeStatus(task.status);
     const style =
       status === "SUCCESS"
-        ? { background: "#052e16", border: "1px solid #22C55E", color: "#bbf7d0" }
+        ? { background: "#DCFCE7", border: "1px solid #16A34A", color: "#166534" }
         : status === "FAILED"
-          ? {
-              background: "#450a0a",
-              border: "2px solid #EF4444",
-              color: "#fecaca",
-              boxShadow: "0 0 0 2px rgba(239,68,68,0.2), 0 10px 30px rgba(239,68,68,0.25)"
-            }
+          ? { background: "#FEE2E2", border: "2px solid #DC2626", color: "#7F1D1D", boxShadow: "0 0 0 1px rgba(220,38,38,0.18)" }
           : status === "RUNNING"
-            ? { background: "#78350f", border: "1px solid #F59E0B", color: "#fde68a" }
-            : { background: "#1f2937", border: "1px solid #64748b", color: "#cbd5e1" };
+            ? { background: "#DBEAFE", border: "1px solid #2563EB", color: "#1E3A8A" }
+            : { background: "#FEF3C7", border: "1px solid #D97706", color: "#78350F" };
     return {
       id: task.task_id,
-      data: { label: `${isFailed ? "!" : ""} ${task.task_id} (${status})`.trim() },
+      data: { label: `${task.task_id} (${status})` },
       position: { x: index * 240 + 10, y: index % 2 === 0 ? 70 : 190 },
       style
     };
@@ -49,16 +44,11 @@ export function DagView({ tasks, onClickTask }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 text-xs">
-        <span className="rounded-full border border-emerald-500/60 bg-emerald-950/70 px-2 py-1 text-emerald-200">
-          SUCCESS
-        </span>
-        <span className="rounded-full border border-red-500/70 bg-red-950/70 px-2 py-1 text-red-200">
-          FAILED (highlighted)
-        </span>
-        <span className="rounded-full border border-amber-500/60 bg-amber-950/70 px-2 py-1 text-amber-200">
-          RUNNING
-        </span>
-        <span className="rounded-full border border-slate-500/60 bg-slate-800 px-2 py-1 text-slate-200">PENDING</span>
+        {(["SUCCESS", "FAILED", "RUNNING", "PENDING"] as const).map((label) => (
+          <span key={label} className={`rounded-full border px-2 py-1 font-medium ${statusBadgeClass(label)}`}>
+            {label}
+          </span>
+        ))}
       </div>
       <div className="h-[420px] w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
         <ReactFlow

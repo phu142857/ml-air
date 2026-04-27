@@ -52,6 +52,10 @@ body {
   background-color: var(--color-bg-muted) !important;
 }
 
+.bg-slate-950 {
+  background-color: var(--color-bg-card) !important;
+}
+
 .bg-slate-800,
 .bg-slate-700 {
   background-color: var(--color-bg-card) !important;
@@ -68,6 +72,15 @@ body {
 
 .text-slate-400 {
   color: var(--color-text-muted) !important;
+}
+
+.placeholder\:text-slate-400::placeholder {
+  color: var(--color-text-muted) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
 }
 
 .bg-blue-600 {

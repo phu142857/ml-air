@@ -1,6 +1,7 @@
 "use client";
 
 import { RunItem } from "@/lib/api";
+import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
 
 type Props = {
   rows: RunItem[];
@@ -40,7 +41,11 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
                   />
                 </td>
                 <td className="px-3 py-2">{row.run_id}</td>
-                <td className="px-3 py-2">{row.status}</td>
+                <td className="px-3 py-2">
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(row.status)}`}>
+                    {normalizeStatus(row.status)}
+                  </span>
+                </td>
                 <td className="px-3 py-2">-</td>
                 <td className="px-3 py-2">manual</td>
                 <td className="px-3 py-2">{String(row.updated_at || "-")}</td>

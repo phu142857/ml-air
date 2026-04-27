@@ -7,6 +7,7 @@ import { DagView } from "@/components/pipeline/dag-view";
 import { RouteShell } from "@/components/layout/route-shell";
 import { fetchPipelineDag, fetchPipelines } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
 
 export default function PipelinesPage() {
   const router = useRouter();
@@ -53,7 +54,11 @@ export default function PipelinesPage() {
                     }}
                   >
                     <td className="px-3 py-2">{item.pipeline_id}</td>
-                    <td className="px-3 py-2">{item.latest_status}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(item.latest_status)}`}>
+                        {normalizeStatus(item.latest_status)}
+                      </span>
+                    </td>
                     <td className="px-3 py-2">{item.total_runs}</td>
                     <td
                       className="px-3 py-2 text-blue-400"
