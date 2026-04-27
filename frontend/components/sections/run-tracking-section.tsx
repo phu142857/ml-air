@@ -80,11 +80,7 @@ export function RunTrackingSection({ tracking }: Props) {
                   {tracking.artifacts.map((artifact, i) => (
                     <tr
                       key={artifact.artifact_id}
-                      className={`
-                        border-t border-default
-                        ${i % 2 === 0 ? "bg-surface" : "bg-muted"}
-                        hover:bg-info transition
-                      `}
+                      className={`border-t border-default ${i % 2 === 0 ? "bg-surface" : "bg-muted"} hover:border-l-4 hover:border-l-blue-500 transition`}
                     >
                       <td className="px-2 py-2">{artifact.path}</td>
                       <td className="px-2 py-2">

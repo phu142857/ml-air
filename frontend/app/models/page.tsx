@@ -108,7 +108,7 @@ export default function ModelsPage() {
                 {(modelsQuery.data?.items ?? []).map((model) => (
                   <tr
                     key={model.model_id}
-                    className={`cursor-pointer border-t border-slate-800 ${selectedModelId === model.model_id ? "bg-slate-800/80" : "hover:bg-blue-900/20"}`}
+                    className={`cursor-pointer border-t border-slate-800 ${selectedModelId === model.model_id ? "bg-blue-900/20" : "hover:border-l-4 hover:border-l-blue-500"}`}
                     onClick={() => setSelectedModelId(model.model_id)}
                   >
                     <td className="px-3 py-2">{model.name}</td>
@@ -173,7 +173,7 @@ export default function ModelsPage() {
                   </thead>
                   <tbody>
                     {(versionsQuery.data?.items ?? []).map((v) => (
-                      <tr key={v.version_id} className="border-t border-slate-800 hover:bg-blue-900/20 transition-colors">
+                      <tr key={v.version_id} className="border-t border-slate-800 hover:border-l-4 hover:border-l-blue-500 transition-colors">
                         <td className="px-3 py-2">v{v.version}</td>
                         <td className="px-3 py-2">{v.stage}</td>
                         <td className="px-3 py-2">

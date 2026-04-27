@@ -80,7 +80,7 @@ export default function ModelDetailPage() {
             </thead>
             <tbody>
               {versions.map((v) => (
-                <tr key={v.version_id} className="border-t border-slate-800 hover:bg-blue-900/20 transition-colors">
+                <tr key={v.version_id} className="border-t border-slate-800 hover:border-l-4 hover:border-l-blue-500 transition-colors">
                   <td className="px-3 py-2">v{v.version}</td>
                   <td className="px-3 py-2">{v.stage}</td>
                   <td className="px-3 py-2">{v.run_id || "-"}</td>
