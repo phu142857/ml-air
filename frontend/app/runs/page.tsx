@@ -24,6 +24,7 @@ export default function RunsPage() {
   const [compareChartData, setCompareChartData] = useState<Array<Record<string, number | string>>>([]);
   const [selectedMetricKey, setSelectedMetricKey] = useState("accuracy");
   const [compareSummary, setCompareSummary] = useState("");
+  const [trainingModeFilter, setTrainingModeFilter] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
@@ -101,8 +102,12 @@ export default function RunsPage() {
   }
 
   const allRuns = data?.items ?? [];
-  const totalPages = Math.max(1, Math.ceil(allRuns.length / pageSize));
-  const paginatedRuns = allRuns.slice(
+  const filteredRuns =
+    trainingModeFilter === "all"
+      ? allRuns
+      : allRuns.filter((r) => String(r.training_mode || "full").toLowerCase() === trainingModeFilter);
+  const totalPages = Math.max(1, Math.ceil(filteredRuns.length / pageSize));
+  const paginatedRuns = filteredRuns.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
@@ -183,11 +188,24 @@ export default function RunsPage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="text-sm text-secondary">
             Showing {(currentPage - 1) * pageSize + 1}-
-            {Math.min(currentPage * pageSize, allRuns.length)} of{" "}
-            {allRuns.length} runs
+            {Math.min(currentPage * pageSize, filteredRuns.length)} of{" "}
+            {filteredRuns.length} runs
           </div>
 
           <div className="flex items-center gap-2">
+            <select
+              className="rounded-lg border border-default bg-surface px-2 py-1 text-xs text-primary"
+              value={trainingModeFilter}
+              onChange={(e) => {
+                setTrainingModeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">mode: all</option>
+              <option value="quick">mode: quick</option>
+              <option value="standard">mode: standard</option>
+              <option value="full">mode: full</option>
+            </select>
             <button
               className="button-secondary"
               onClick={() =>

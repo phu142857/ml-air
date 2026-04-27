@@ -25,7 +25,7 @@ export function RunTrackingSection({ tracking }: Props) {
       <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3 text-secondary">
         <Search size={20} />
       </div>
-      <p className="text-sm text-secondary font-medium">{message}</p>
+      <p className="text-sm text-secondary font-semibold">{message}</p>
     </div>
   );
 

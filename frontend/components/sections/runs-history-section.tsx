@@ -21,7 +21,7 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
               <th className="px-3 py-2 text-left">Run ID</th>
               <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-left">Duration</th>
-              <th className="px-3 py-2 text-left">Trigger</th>
+              <th className="px-3 py-2 text-left">Training Mode</th>
               <th className="px-3 py-2 text-left">Updated At</th>
             </tr>
           </thead>
@@ -41,12 +41,12 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
                 </td>
                 <td className="px-3 py-2">{row.run_id}</td>
                 <td className="px-3 py-2">
-                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(row.status)}`}>
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(row.status)}`}>
                     {normalizeStatus(row.status)}
                   </span>
                 </td>
                 <td className="px-3 py-2">-</td>
-                <td className="px-3 py-2">manual</td>
+                <td className="px-3 py-2">{String(row.training_mode || "full")}</td>
                 <td className="px-3 py-2">{String(row.updated_at || "-")}</td>
               </tr>
             ))}

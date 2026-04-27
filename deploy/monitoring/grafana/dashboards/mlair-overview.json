@@ -275,6 +275,145 @@
       ],
       "title": "Manifest Sign/Post Outcomes (10m)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mlair-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "increase(mlair_scheduler_trigger_policy_evaluated_total[10m])",
+          "legendFormat": "evaluated {{mode}}",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(mlair_scheduler_trigger_policy_triggered_total[10m])",
+          "legendFormat": "triggered {{mode}}/{{reason}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Trigger Policy Evaluated vs Triggered (10m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mlair-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "increase(mlair_scheduler_trigger_policy_skipped_total[10m])",
+          "legendFormat": "skipped {{mode}}/{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trigger Policy Skipped Reasons (10m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mlair-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(mlair_scheduler_trigger_policy_skipped_total{reason=~\"api_error|not_ready_or_api_error\"}[10m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Trigger Policy API/Readiness Errors (10m)",
+      "type": "stat"
     }
   ],
   "refresh": "5s",
@@ -295,6 +434,6 @@
   "timezone": "browser",
   "title": "MLAir Runtime Overview",
   "uid": "mlair-runtime-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

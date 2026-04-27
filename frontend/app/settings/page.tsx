@@ -139,7 +139,7 @@ export default function SettingsPage() {
               </div>
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-3">
                 <div className="mb-1 text-xs text-slate-400">UI Schema</div>
-                <pre className="overflow-auto text-xs text-slate-300">
+                <pre className="overflow-auto text-xs text-slate-200">
                   {JSON.stringify(selected.ui_schema ?? { note: "plugin does not expose ui_schema" }, null, 2)}
                 </pre>
               </div>
@@ -160,7 +160,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 {validateResult && (
-                  <pre className="mt-2 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-300">
+                  <pre className="mt-2 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200">
                     {validateResult}
                   </pre>
                 )}

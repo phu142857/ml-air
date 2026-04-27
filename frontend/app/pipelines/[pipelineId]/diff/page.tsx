@@ -10,7 +10,7 @@ import { useAppContext } from "@/lib/app-context";
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-300">
+    <pre className="max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-200">
       {value === undefined || value === null ? "—" : JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -102,7 +102,7 @@ function DiffPageInner() {
           {diffQuery.isLoading ? "Loading diff…" : diffQuery.isError ? "Failed to load diff" : summary}
         </p>
       )}
-      {!canDiff && <p className="text-sm text-slate-500">Select two different versions to compare.</p>}
+      {!canDiff && <p className="text-sm text-slate-400">Select two different versions to compare.</p>}
       {canDiff && !diffQuery.isLoading && details.length > 0 && (
         <div className="overflow-auto rounded-2xl border border-slate-700">
           <table className="w-full text-left text-sm">

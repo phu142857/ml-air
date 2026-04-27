@@ -45,3 +45,21 @@ groups:
         annotations:
           summary: "Manifest sign/post failures detected"
           description: "Executor failed to sign or post task manifests in the last 10 minutes."
+
+      - alert: MlAirTriggerPolicyApiErrors
+        expr: increase(mlair_scheduler_trigger_policy_skipped_total{reason=~"api_error|not_ready_or_api_error"}[10m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trigger policy API errors detected"
+          description: "Scheduler skipped trigger policies multiple times due to API/check-readiness failures."
+
+      - alert: MlAirTriggerPolicyNoFiresDespiteEvaluation
+        expr: increase(mlair_scheduler_trigger_policy_evaluated_total[30m]) > 20 and increase(mlair_scheduler_trigger_policy_triggered_total[30m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trigger policies evaluated but no runs fired"
+          description: "Scheduler evaluated many trigger policies but did not create any auto-triggered runs in 30 minutes."

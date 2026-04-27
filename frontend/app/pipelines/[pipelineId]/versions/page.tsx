@@ -80,7 +80,7 @@ export default function PipelineVersionsPage() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
           <h2 className="mb-2 text-sm font-semibold text-slate-200">Create version</h2>
-          <p className="mb-2 text-xs text-slate-500">POST creates the next monotonic version; previous rows are not modified.</p>
+          <p className="mb-2 text-xs text-slate-400">POST creates the next monotonic version; previous rows are not modified.</p>
           <textarea
             className="mb-2 h-40 w-full rounded-xl border border-slate-600 bg-slate-950 p-2 font-mono text-xs"
             value={jsonText}
@@ -135,7 +135,7 @@ export default function PipelineVersionsPage() {
 
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-200">All versions</h2>
-        {listQuery.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+        {listQuery.isLoading && <p className="text-sm text-slate-400">Loading…</p>}
         <div className="overflow-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-700 text-slate-400">
@@ -151,9 +151,9 @@ export default function PipelineVersionsPage() {
                 <tr key={v.version_id} className="border-t border-slate-800">
                   <td className="py-2 pr-2 align-top font-mono">{v.version}</td>
                   <td className="py-2 pr-2 align-top font-mono text-xs text-slate-400">{v.version_id}</td>
-                  <td className="py-2 pr-2 align-top text-xs text-slate-500">{v.created_at}</td>
+                  <td className="py-2 pr-2 align-top text-xs text-slate-400">{v.created_at}</td>
                   <td className="py-2 align-top">
-                    <pre className="max-h-32 max-w-xl overflow-auto rounded bg-slate-950 p-2 text-xs text-slate-300">
+                    <pre className="max-h-32 max-w-xl overflow-auto rounded bg-slate-950 p-2 text-xs text-slate-200">
                       {JSON.stringify(v.config, null, 2)}
                     </pre>
                   </td>
@@ -162,7 +162,7 @@ export default function PipelineVersionsPage() {
             </tbody>
           </table>
           {items.length === 0 && !listQuery.isLoading && (
-            <p className="py-4 text-sm text-slate-500">No versions yet. Create one on the left.</p>
+            <p className="py-4 text-sm text-slate-400">No versions yet. Create one on the left.</p>
           )}
         </div>
       </section>

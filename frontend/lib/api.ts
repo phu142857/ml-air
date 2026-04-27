@@ -12,6 +12,8 @@ export type RunItem = {
   updated_at?: string;
   created_at?: string;
   config_snapshot?: Record<string, unknown> | null;
+  training_mode?: string;
+  override_config?: Record<string, unknown> | null;
 };
 
 export type TaskItem = {
@@ -69,6 +71,16 @@ export type ModelItem = {
   updated_at: string;
 };
 
+export type DatasetItem = {
+  dataset_id: string;
+  name: string;
+  created_at: string;
+  updated_at?: string;
+  source_uri?: string | null;
+  current_size?: number;
+  checksum?: string | null;
+};
+
 export type ModelVersionItem = {
   version_id: string;
   model_id: string;
@@ -77,6 +89,26 @@ export type ModelVersionItem = {
   artifact_uri?: string | null;
   stage: string;
   created_at: string;
+};
+
+export type ReadinessItem = {
+  dataset_id?: string | null;
+  dataset: string;
+  role: string;
+  actual_size: number;
+  required_size: number;
+  status: string;
+};
+
+export type RunReadiness = {
+  run_id: string;
+  tenant_id: string;
+  project_id: string;
+  training_mode: string;
+  ready: boolean;
+  details: ReadinessItem[];
+  blocking_datasets: ReadinessItem[];
+  override_applied?: boolean;
 };
 
 function authHeaders(token: string) {
@@ -120,6 +152,16 @@ export async function fetchRun(tenantId: string, projectId: string, runId: strin
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as RunItem;
+}
+
+export async function fetchRunReadiness(tenantId: string, projectId: string, runId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/runs/${runId}/readiness`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunReadiness;
 }
 
 export async function fetchRunTasks(tenantId: string, projectId: string, runId: string, token: string) {
@@ -170,6 +212,53 @@ export async function fetchPipelineDag(tenantId: string, projectId: string, pipe
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { pipeline_id: string; run_id?: string; nodes: Array<{ id: string; label: string; status: string }>; edges: Array<{ source: string; target: string }> };
+}
+
+export async function checkPipelineReadiness(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string,
+  payload: { training_mode: string; override_config?: Record<string, unknown> }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${encodeURIComponent(pipelineId)}/check-readiness`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunReadiness & { pipeline_id: string };
+}
+
+export async function triggerPipelineRunWithGating(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string,
+  payload: {
+    pipeline_id: string;
+    idempotency_key?: string | null;
+    priority: string;
+    max_parallel_tasks: number;
+    training_mode: string;
+    override_config?: Record<string, unknown>;
+  }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${encodeURIComponent(pipelineId)}/run`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunItem & { blocked_by_gate?: boolean; readiness?: RunReadiness };
 }
 
 export async function fetchTask(tenantId: string, projectId: string, taskId: string, token: string) {
@@ -263,6 +352,67 @@ export async function fetchModels(tenantId: string, projectId: string, token: st
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { items: ModelItem[] };
+}
+
+export async function fetchDataset(tenantId: string, projectId: string, datasetId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetItem;
+}
+
+export async function fetchModelStatus(tenantId: string, projectId: string, modelId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/status`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    model_id: string;
+    status: string;
+    latest_version?: number;
+    run_id?: string | null;
+    blocking_datasets?: Array<{ dataset: string; actual_size: number; required_size: number; status: string }>;
+  };
+}
+
+export async function fetchModelTriggerPolicy(tenantId: string, projectId: string, modelId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/trigger-policy`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    trigger_mode: "manual" | "auto_ready" | "schedule";
+    debounce_minutes: number;
+    schedule_cron: string;
+  };
+}
+
+export async function updateModelTriggerPolicy(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  payload: { trigger_mode: "manual" | "auto_ready" | "schedule"; debounce_minutes: number; schedule_cron?: string | null }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/trigger-policy`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    trigger_mode: "manual" | "auto_ready" | "schedule";
+    debounce_minutes: number;
+    schedule_cron: string;
+  };
 }
 
 export async function createModel(

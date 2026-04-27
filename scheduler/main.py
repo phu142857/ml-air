@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import base64
+import urllib.error
+import urllib.request
 from functools import lru_cache
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
@@ -71,6 +73,21 @@ MANIFEST_VERIFY_FAILURE_TOTAL = Counter(
     "Manifest/replay gating verification failures by reason",
     ["reason"],
 )
+TRIGGER_POLICY_EVALUATED_TOTAL = Counter(
+    "mlair_scheduler_trigger_policy_evaluated_total",
+    "Number of trigger policies evaluated by scheduler",
+    ["mode"],
+)
+TRIGGER_POLICY_TRIGGERED_TOTAL = Counter(
+    "mlair_scheduler_trigger_policy_triggered_total",
+    "Number of runs triggered by trigger policy",
+    ["mode", "reason"],
+)
+TRIGGER_POLICY_SKIPPED_TOTAL = Counter(
+    "mlair_scheduler_trigger_policy_skipped_total",
+    "Number of skipped trigger policy evaluations",
+    ["mode", "reason"],
+)
 
 
 def _redis() -> Redis:
@@ -80,6 +97,259 @@ def _redis() -> Redis:
 
 def _db_url() -> str:
     return os.getenv("ML_AIR_DATABASE_URL", "postgresql://mlair:mlair@postgres:5432/mlair")
+
+
+def _api_base_url() -> str:
+    return os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
+
+
+def _api_token() -> str:
+    return os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+
+
+def _api_post(path: str, payload: dict, timeout: int = 10) -> dict | None:
+    req = urllib.request.Request(
+        url=f"{_api_base_url()}{path}",
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {_api_token()}"},
+        data=json.dumps(payload).encode("utf-8"),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        logger.warning("api_post_http_error path=%s status=%s body=%s", path, exc.code, body[:300])
+    except urllib.error.URLError as exc:
+        logger.warning("api_post_url_error path=%s err=%s", path, exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("api_post_error path=%s err=%s", path, exc)
+    return None
+
+
+def _parse_cron_int(raw: str, lower: int, upper: int) -> set[int]:
+    val = int(raw)
+    if val < lower or val > upper:
+        raise ValueError("cron_value_out_of_range")
+    return {val}
+
+
+def _parse_cron_segment(segment: str, lower: int, upper: int) -> set[int]:
+    # Supports: *, */n, a, a-b, a-b/n
+    seg = segment.strip()
+    if not seg:
+        raise ValueError("empty_cron_segment")
+    if seg == "*":
+        return set(range(lower, upper + 1))
+    step = 1
+    base = seg
+    if "/" in seg:
+        base, step_raw = seg.split("/", 1)
+        step = int(step_raw)
+        if step <= 0:
+            raise ValueError("cron_step_must_be_positive")
+    if base == "*" or base == "":
+        vals = list(range(lower, upper + 1))
+    elif "-" in base:
+        start_raw, end_raw = base.split("-", 1)
+        start = int(start_raw)
+        end = int(end_raw)
+        if start < lower or end > upper or start > end:
+            raise ValueError("cron_range_invalid")
+        vals = list(range(start, end + 1))
+    else:
+        vals = sorted(_parse_cron_int(base, lower, upper))
+    return {v for idx, v in enumerate(vals) if idx % step == 0}
+
+
+def _parse_cron_field(field: str, lower: int, upper: int) -> set[int]:
+    # Supports comma unions of valid segments.
+    out: set[int] = set()
+    for seg in str(field or "").split(","):
+        out |= _parse_cron_segment(seg, lower, upper)
+    if not out:
+        raise ValueError("cron_field_empty")
+    return out
+
+
+def _cron_weekday(now_utc: datetime) -> int:
+    # Python weekday: Mon=0..Sun=6, cron accepts Sun as 0 or 7.
+    return (now_utc.weekday() + 1) % 7
+
+
+def _cron_due(expr: str, now_utc: datetime) -> bool:
+    raw = str(expr or "").strip()
+    if not raw:
+        return False
+    parts = raw.split()
+    if len(parts) != 5:
+        return False
+    try:
+        minutes = _parse_cron_field(parts[0], 0, 59)
+        hours = _parse_cron_field(parts[1], 0, 23)
+        dom = _parse_cron_field(parts[2], 1, 31)
+        months = _parse_cron_field(parts[3], 1, 12)
+        wd_raw = _parse_cron_field(parts[4], 0, 7)
+        weekdays = {0 if x == 7 else x for x in wd_raw}
+    except ValueError:
+        return False
+    return (
+        now_utc.minute in minutes
+        and now_utc.hour in hours
+        and now_utc.day in dom
+        and now_utc.month in months
+        and _cron_weekday(now_utc) in weekdays
+    )
+
+
+def _load_trigger_policies() -> list[dict]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    p.tenant_id,
+                    p.project_id,
+                    p.model_id,
+                    p.trigger_mode,
+                    p.debounce_minutes,
+                    COALESCE(p.schedule_cron, '0 */6 * * *') AS schedule_cron,
+                    r.pipeline_id,
+                    COALESCE(r.training_mode, 'standard') AS training_mode,
+                    COALESCE(r.override_config, '{}'::jsonb) AS override_config
+                FROM model_trigger_policies p
+                JOIN LATERAL (
+                    SELECT r.pipeline_id, r.training_mode, r.override_config
+                    FROM model_versions mv
+                    JOIN runs r ON r.run_id = mv.run_id
+                    WHERE mv.model_id = p.model_id
+                    ORDER BY mv.version DESC
+                    LIMIT 1
+                ) r ON TRUE
+                WHERE p.trigger_mode IN ('auto_ready', 'schedule')
+                """
+            )
+            rows = cur.fetchall()
+    items: list[dict] = []
+    for row in rows:
+        override = row[8]
+        if isinstance(override, str):
+            try:
+                override = json.loads(override)
+            except Exception:
+                override = {}
+        items.append(
+            {
+                "tenant_id": row[0],
+                "project_id": row[1],
+                "model_id": row[2],
+                "trigger_mode": row[3],
+                "debounce_minutes": max(1, int(row[4] or 10)),
+                "schedule_cron": row[5] or "0 */6 * * *",
+                "pipeline_id": row[6],
+                "training_mode": (row[7] or "standard"),
+                "override_config": override if isinstance(override, dict) else {},
+            }
+        )
+    return items
+
+
+def _debounce_open(tenant_id: str, project_id: str, model_id: str, debounce_minutes: int) -> bool:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT created_at
+                FROM runs
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND plugin_context->'auto_trigger'->>'model_id' = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return True
+    last_at = row[0]
+    if not isinstance(last_at, datetime):
+        return True
+    elapsed = (datetime.now(timezone.utc) - last_at).total_seconds()
+    return elapsed >= (max(1, debounce_minutes) * 60)
+
+
+def _trigger_policy_run(policy: dict, reason: str) -> bool:
+    tenant_id = policy["tenant_id"]
+    project_id = policy["project_id"]
+    pipeline_id = policy["pipeline_id"]
+    model_id = policy["model_id"]
+    mode = str(policy.get("training_mode") or "standard").strip().lower()
+    if mode not in {"quick", "standard", "full"}:
+        mode = "standard"
+    override_config = policy.get("override_config") or {}
+    context = {"auto_trigger": {"model_id": model_id, "reason": reason}}
+    if reason == "auto_ready":
+        check = _api_post(
+            f"/v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness",
+            {"training_mode": mode, "override_config": override_config},
+            timeout=15,
+        )
+        if not check or not bool(check.get("ready")):
+            return False
+    idem = f"auto:{model_id}:{reason}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
+    payload = {
+        "pipeline_id": pipeline_id,
+        "idempotency_key": idem,
+        "priority": "normal",
+        "max_parallel_tasks": 1,
+        "training_mode": mode,
+        "override_config": override_config,
+        "context": context,
+    }
+    out = _api_post(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run",
+        payload,
+        timeout=20,
+    )
+    if out and out.get("run_id"):
+        TRIGGER_POLICY_TRIGGERED_TOTAL.labels(mode=policy.get("trigger_mode", "unknown"), reason=reason).inc()
+        logger.info(
+            "auto_trigger_run_created run_id=%s tenant_id=%s project_id=%s model_id=%s reason=%s",
+            out["run_id"],
+            tenant_id,
+            project_id,
+            model_id,
+            reason,
+        )
+        return True
+    return False
+
+
+def _process_trigger_policies() -> None:
+    now_utc = datetime.now(timezone.utc)
+    for policy in _load_trigger_policies():
+        mode = str(policy.get("trigger_mode") or "unknown")
+        TRIGGER_POLICY_EVALUATED_TOTAL.labels(mode=mode).inc()
+        if not _debounce_open(
+            tenant_id=policy["tenant_id"],
+            project_id=policy["project_id"],
+            model_id=policy["model_id"],
+            debounce_minutes=policy["debounce_minutes"],
+        ):
+            TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="debounce").inc()
+            continue
+        if mode == "auto_ready":
+            if not _trigger_policy_run(policy, reason="auto_ready"):
+                TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="not_ready_or_api_error").inc()
+            continue
+        if mode == "schedule":
+            if _cron_due(policy["schedule_cron"], now_utc):
+                if not _trigger_policy_run(policy, reason="schedule"):
+                    TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="api_error").inc()
+            else:
+                TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="cron_not_due").inc()
 
 
 def _queue_name_for_priority(priority: str) -> str:
@@ -708,11 +978,19 @@ def _sync_run_status_after_task(run_id: str, plan: dict[str, list[str]], selecte
 
 def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
+    policy_interval_seconds = max(10, int(os.getenv("ML_AIR_TRIGGER_POLICY_TICK_SECONDS", "30")))
+    next_policy_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
     logger.info("scheduler_started metrics_port=%s", metrics_port)
     while True:
         loop_started = time.perf_counter()
+        if loop_started >= next_policy_tick:
+            try:
+                _process_trigger_policies()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("process_trigger_policies_failed err=%s", exc)
+            next_policy_tick = loop_started + policy_interval_seconds
         run_msg = client.blpop("mlair:runs:new", timeout=1)
         if run_msg:
             _, raw_payload = run_msg

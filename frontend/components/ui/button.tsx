@@ -16,7 +16,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          "inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+          "inline-flex items-center rounded-xl px-3 py-2 text-sm font-semibold transition-colors",
           variant === "default"
             ? "bg-blue-600 text-white hover:bg-blue-500"
             : "bg-slate-700 text-slate-100 hover:bg-slate-600",

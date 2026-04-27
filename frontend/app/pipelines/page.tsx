@@ -31,49 +31,47 @@ export default function PipelinesPage() {
   return (
     <RouteShell activeNav="Pipelines" title="Pipelines" subtitle="Pipeline list and DAG view">
       <div className="grid grid-cols-2 gap-4">
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <div className="overflow-auto rounded-xl border border-slate-700">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-900 text-slate-400">
-                <tr>
-                  <th className="px-3 py-2 text-left">Pipeline</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Runs</th>
-                  <th className="px-3 py-2 text-left">Versions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.items ?? []).map((item) => (
-                  <tr
-                    key={item.pipeline_id}
-                    className="cursor-pointer border-t border-slate-800 hover:border-l-4 hover:border-l-blue-500"
-                    onClick={() => {
-                      setSelectedPipeline(item.pipeline_id);
-                      router.push(`/pipelines/${item.pipeline_id}`);
+        <div className="overflow-auto rounded-xl border border-slate-700">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-900 text-slate-400">
+              <tr>
+                <th className="px-3 py-2 text-left">Pipeline</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Runs</th>
+                <th className="px-3 py-2 text-left">Versions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.items ?? []).map((item) => (
+                <tr
+                  key={item.pipeline_id}
+                  className="cursor-pointer border-t border-slate-800 hover:border-l-4 hover:border-l-blue-500"
+                  onClick={() => {
+                    setSelectedPipeline(item.pipeline_id);
+                    router.push(`/pipelines/${item.pipeline_id}`);
+                  }}
+                >
+                  <td className="px-3 py-2">{item.pipeline_id}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(item.latest_status)}`}>
+                      {normalizeStatus(item.latest_status)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">{item.total_runs}</td>
+                  <td
+                    className="px-3 py-2 text-blue-400"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/pipelines/${encodeURIComponent(item.pipeline_id)}/versions`);
                     }}
                   >
-                    <td className="px-3 py-2">{item.pipeline_id}</td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClass(item.latest_status)}`}>
-                        {normalizeStatus(item.latest_status)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">{item.total_runs}</td>
-                    <td
-                      className="px-3 py-2 text-blue-400"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/pipelines/${encodeURIComponent(item.pipeline_id)}/versions`);
-                      }}
-                    >
-                      open
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                    open
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
           <h2 className="mb-3 text-sm font-semibold text-slate-200">DAG: {selectedPipeline}</h2>
           <DagView tasks={tasks} />

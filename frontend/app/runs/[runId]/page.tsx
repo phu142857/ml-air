@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { 
   fetchRun, 
+  fetchRunReadiness,
   fetchRunLogs, 
   fetchRunTasks, 
   fetchRunTracking, 
@@ -43,6 +44,10 @@ export default function RunDetailPage() {
     queryKey: ["run-tracking", runId],
     queryFn: () => fetchRunTracking(tenantId, projectId, runId, token)
   });
+  const readinessQuery = useQuery({
+    queryKey: ["run-readiness", runId],
+    queryFn: () => fetchRunReadiness(tenantId, projectId, runId, token)
+  });
 
   const tasks = tasksQuery.data?.items ?? [];
   const taskId = tasks[0]?.task_id || "";
@@ -65,7 +70,7 @@ export default function RunDetailPage() {
       {/* 1. Header Actions */}
       <div className="flex items-center justify-between mb-8">
         <button
-          className="group flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-white transition-all"
+          className="group flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all"
           onClick={() => router.push("/runs")}
         >
           <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 
@@ -119,6 +124,7 @@ export default function RunDetailPage() {
               <div className="space-y-3">
                 <DetailRow label="Current Status" value={runQuery.data?.status} highlight />
                 <DetailRow label="Project ID" value={runQuery.data?.project_id} />
+                <DetailRow label="Training Mode" value={runQuery.data?.training_mode || "full"} />
                 <DetailRow label="Priority Level" value={runQuery.data?.priority} />
                 <DetailRow label="Max Parallel" value={runQuery.data?.max_parallel_tasks} />
               </div>
@@ -163,6 +169,42 @@ export default function RunDetailPage() {
               </div>
             </section>
           </div>
+          <div className="col-span-12 lg:col-span-6">
+            <section className="card p-5 shadow-md h-full">
+              <h2 className="mb-3 text-sm font-semibold text-primary">Readiness Snapshot</h2>
+              {!readinessQuery.data ? (
+                <div className="p-6 text-center text-secondary text-sm">No readiness snapshot.</div>
+              ) : (
+                <>
+                  <div className="mb-2 text-xs text-slate-200">
+                    ready={String(readinessQuery.data.ready)} · mode={readinessQuery.data.training_mode}
+                  </div>
+                  <div className="overflow-auto rounded-xl border border-default max-h-[260px]">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted text-secondary">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Dataset</th>
+                          <th className="px-2 py-1 text-left">Actual</th>
+                          <th className="px-2 py-1 text-left">Required</th>
+                          <th className="px-2 py-1 text-left">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(readinessQuery.data.details || []).map((d) => (
+                          <tr key={`${d.dataset}-${d.role}`} className="border-t border-default">
+                            <td className="px-2 py-1">{d.dataset}</td>
+                            <td className="px-2 py-1">{d.actual_size}</td>
+                            <td className="px-2 py-1">{d.required_size}</td>
+                            <td className="px-2 py-1">{d.status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
         </div>
 
         {/* ==========================================
@@ -199,9 +241,9 @@ function DetailRow({ label, value, highlight = false }: { label: string, value: 
 
   return (
     <div className="flex justify-between items-center py-1">
-      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
       <span className={`text-xs font-mono px-3 py-1 rounded-lg border shadow-sm ${
-        highlight ? getStatusStyles(String(value)) : 'text-slate-300 bg-slate-800/50 border-slate-700'
+        highlight ? getStatusStyles(String(value)) : 'text-slate-200 bg-slate-800/50 border-slate-700'
       }`}>
         {value?.toString() || "N/A"}
       </span>

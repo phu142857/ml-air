@@ -70,6 +70,43 @@ You should see:
 - Do not mutate dataset `current_size` manually.
 - Keep overrides in `override_config` to preserve reproducibility.
 
+## Auto Trigger Policy (Persisted)
+
+You can persist trigger automation per `tenant/project/model` and let scheduler evaluate it periodically.
+
+```bash
+# 1) Read current trigger policy for model
+curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
+  -H "Authorization: Bearer admin-token"
+
+# 2) Enable auto trigger when READY
+curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
+  -H "Authorization: Bearer admin-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trigger_mode": "auto_ready",
+    "debounce_minutes": 10,
+    "schedule_cron": "0 */6 * * *"
+  }'
+
+# 3) Enable scheduled trigger
+curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
+  -H "Authorization: Bearer admin-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trigger_mode": "schedule",
+    "debounce_minutes": 30,
+    "schedule_cron": "*/15 * * * *"
+  }'
+```
+
+Scheduler behavior:
+
+- `auto_ready`: triggers only when readiness check returns `ready: true`.
+- `schedule`: triggers when cron is due and debounce window is open.
+- Debounce is enforced by scanning latest auto-triggered run for the same model.
+- Scheduler tick interval defaults to `30s` (`ML_AIR_TRIGGER_POLICY_TICK_SECONDS`).
+
 ## Done
 
 Your project now enforces data-readiness gating with auditable per-run conditions.

@@ -44,6 +44,7 @@ from app.services.tracking_service import (
 )
 from app.services.trace_service import get_trace_id
 from app.services.manifest_service import upsert_task_manifest
+from app.services import trigger_policy_service
 
 router = APIRouter()
 
@@ -136,6 +137,12 @@ class CreateModelVersionIn(BaseModel):
 class PromoteModelVersionIn(BaseModel):
     version: int = Field(ge=1)
     stage: str = "production"
+
+
+class TriggerPolicyIn(BaseModel):
+    trigger_mode: str = "manual"
+    debounce_minutes: int = 10
+    schedule_cron: str | None = None
 
 
 class ManifestArtifactIn(BaseModel):
@@ -881,6 +888,41 @@ def get_model_status_v1(
     if not row:
         raise HTTPException(status_code=404, detail="model_not_found")
     return get_model_status(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy")
+def get_model_trigger_policy_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return trigger_policy_service.get_trigger_policy(tenant_id, project_id, model_id)
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy")
+def upsert_model_trigger_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: TriggerPolicyIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return trigger_policy_service.upsert_trigger_policy(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        trigger_mode=payload.trigger_mode,
+        debounce_minutes=payload.debounce_minutes,
+        schedule_cron=payload.schedule_cron,
+    )
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")

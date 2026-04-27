@@ -145,18 +145,18 @@ function LineagePageInner() {
             <Controls />
           </ReactFlow>
         </div>
-        {runId && <p className="text-xs text-slate-500">Run-scoped: {runId}</p>}
+        {runId && <p className="text-xs text-slate-400">Run-scoped: {runId}</p>}
         </div>
         <aside className="flex h-[480px] flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900 p-3">
           <h3 className="text-sm font-semibold text-slate-100">Dataset detail</h3>
           {!selectedVersionId && <p className="text-xs text-slate-400">Click a node to view detail.</p>}
           {selectedVersionId && (
             <>
-              <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
-                <p><span className="text-slate-500">version_id:</span> {selectedVersionId}</p>
-                <p><span className="text-slate-500">dataset:</span> {selectedVersion.data?.dataset_name || "-"}</p>
-                <p><span className="text-slate-500">version:</span> {selectedVersion.data?.version || "-"}</p>
-                <p className="truncate"><span className="text-slate-500">uri:</span> {selectedVersion.data?.uri || "-"}</p>
+              <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs text-slate-200">
+                <p><span className="text-slate-400">version_id:</span> {selectedVersionId}</p>
+                <p><span className="text-slate-400">dataset:</span> {selectedVersion.data?.dataset_name || "-"}</p>
+                <p><span className="text-slate-400">version:</span> {selectedVersion.data?.version || "-"}</p>
+                <p className="truncate"><span className="text-slate-400">uri:</span> {selectedVersion.data?.uri || "-"}</p>
               </div>
               <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-3">
                 <p className="mb-2 text-xs font-semibold text-slate-200">Run history</p>
@@ -165,14 +165,14 @@ function LineagePageInner() {
                     <a
                       key={r.run_id}
                       href={`/runs/${r.run_id}`}
-                      className="block rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-slate-500"
+                      className="block rounded border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:border-slate-500"
                     >
                       <p className="font-mono">{r.run_id.slice(0, 12)}...</p>
-                      <p className="text-slate-500">{r.pipeline_id} • {r.status}</p>
+                      <p className="text-slate-400">{r.pipeline_id} • {r.status}</p>
                     </a>
                   ))}
                   {!datasetRuns.data?.items?.length && (
-                    <p className="text-xs text-slate-500">No run history for this dataset.</p>
+                    <p className="text-xs text-slate-400">No run history for this dataset.</p>
                   )}
                 </div>
               </div>

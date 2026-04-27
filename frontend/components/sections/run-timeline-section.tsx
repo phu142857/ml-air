@@ -77,7 +77,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                   {t.task_id} · attempt {t.attempt}
                 </button>
                 <span
-                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                     taskStatus === "error" && "bg-bg-error text-color-error"
                   }${
                     taskStatus === "success" && " bg-bg-success text-color-success"
@@ -110,7 +110,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
 
               {/* Error Message */}
               {t.error_message && (
-                <div className="mt-2 rounded-md bg-bg-error border border-color-error px-2 py-1 text-xs font-medium text-color-error">
+                <div className="mt-2 rounded-md bg-bg-error border border-color-error px-2 py-1 text-xs font-semibold text-color-error">
                   {t.error_message}
                 </div>
               )}

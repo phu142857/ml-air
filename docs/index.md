@@ -100,6 +100,7 @@ Each guide follows:
 ## Troubleshooting
 
 - [Common Errors](./troubleshooting/common-errors.md)
+- [Readiness Gate Blocked](./troubleshooting/readiness-gate-blocked.md)
 - [Manifest Security Runbook](./troubleshooting/manifest-security.md)
 - [SLO/SLA Incident Runbook](./troubleshooting/slo-sla-incident.md)
 - [Disaster Recovery](./troubleshooting/disaster-recovery.md)

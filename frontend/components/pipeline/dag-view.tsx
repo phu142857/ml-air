@@ -45,7 +45,7 @@ export function DagView({ tasks, onClickTask }: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 text-xs">
         {(["SUCCESS", "FAILED", "RUNNING", "PENDING"] as const).map((label) => (
-          <span key={label} className={`rounded-full border px-2 py-1 font-medium ${statusBadgeClass(label)}`}>
+          <span key={label} className={`rounded-full border px-2 py-1 font-semibold ${statusBadgeClass(label)}`}>
             {label}
           </span>
         ))}
