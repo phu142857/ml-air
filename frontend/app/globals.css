@@ -2,12 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* MLflow-inspired light palette */
+  --color-bg-main: #f7f9fc;
+  --color-bg-card: #ffffff;
+  --color-bg-muted: #eef3fa;
+  --color-border: #d6deea;
+  --color-text-main: #1b2431;
+  --color-text-muted: #5f6f85;
+  --color-primary: #0194e2;
+}
+
+[data-theme="dark"] {
+  /* MLflow-inspired dark palette */
+  --color-bg-main: #0f1724;
+  --color-bg-card: #182133;
+  --color-bg-muted: #111a2b;
+  --color-border: #2a364d;
+  --color-text-main: #e8edf7;
+  --color-text-muted: #9ca9bd;
+  --color-primary: #0194e2;
+}
+
 html,
 body {
-  background: #0f172a;
-  color: #f1f5f9;
+  background: var(--color-bg-main);
+  color: var(--color-text-main);
 }
 
 * {
-  border-color: #374151;
+  border-color: var(--color-border);
+}
+
+/* Semantic surface aliases */
+.bg-bg-main {
+  background-color: var(--color-bg-main) !important;
+}
+
+.bg-bg-card {
+  background-color: var(--color-bg-card) !important;
+}
+
+.bg-bg-muted {
+  background-color: var(--color-bg-muted) !important;
+}
+
+/* Override common hardcoded utility classes so existing pages follow theme. */
+.bg-slate-900 {
+  background-color: var(--color-bg-muted) !important;
+}
+
+.bg-slate-800,
+.bg-slate-700 {
+  background-color: var(--color-bg-card) !important;
+}
+
+.border-slate-700 {
+  border-color: var(--color-border) !important;
+}
+
+.text-slate-100,
+.text-slate-200 {
+  color: var(--color-text-main) !important;
+}
+
+.text-slate-400 {
+  color: var(--color-text-muted) !important;
+}
+
+.bg-blue-600 {
+  background-color: var(--color-primary) !important;
+}
+
+.hover\:bg-slate-700:hover,
+.hover\:bg-slate-800:hover,
+.hover\:bg-blue-500:hover {
+  filter: brightness(0.96);
 }

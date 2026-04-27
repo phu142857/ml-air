@@ -3,10 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAppContext } from "@/lib/app-context";
+import { useTheme } from "@/lib/theme-context";
 
 export function Topbar() {
   const router = useRouter();
   const { tenantId, projectId, token, setTenantId, setProjectId, setToken } = useAppContext();
+  const { theme, toggleTheme } = useTheme();
   const [q, setQ] = useState("");
 
   return (
@@ -30,6 +32,14 @@ export function Topbar() {
         </form>
       </div>
       <div className="flex items-center gap-2 text-xs text-slate-400">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800"
+          title="Switch light/dark theme"
+        >
+          {theme === "dark" ? "Light" : "Dark"}
+        </button>
         <input
           value={tenantId}
           onChange={(e) => setTenantId(e.target.value)}
