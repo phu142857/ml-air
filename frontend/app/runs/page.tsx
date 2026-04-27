@@ -2,116 +2,159 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 import { RouteShell } from "@/components/layout/route-shell";
-import { LogsSection } from "@/components/sections/logs-section";
-import { compareRunMetrics, fetchRun, fetchRunLogs, fetchRuns, fetchRunTasks, replayDlq } from "@/lib/api";
+import { compareRunMetrics, fetchRuns } from "@/lib/api";
 import { RunsHistorySection } from "@/components/sections/runs-history-section";
 import { useAppContext } from "@/lib/app-context";
 
 export default function RunsPage() {
-  const router = useRouter();
   const { tenantId, projectId, token } = useAppContext();
-  const [runId, setRunId] = useState("");
-  const [taskId, setTaskId] = useState("");
-  const [logs, setLogs] = useState<string[]>([]);
-  const [logKeyword, setLogKeyword] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [runDetail, setRunDetail] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
+
   const [compareRunIds, setCompareRunIds] = useState<string[]>([]);
   const [compareChartData, setCompareChartData] = useState<Array<Record<string, number | string>>>([]);
   const [selectedMetricKey, setSelectedMetricKey] = useState("accuracy");
-  const [compareSummary, setCompareSummary] = useState<string>("");
+  const [compareSummary, setCompareSummary] = useState("");
 
-  const { data } = useQuery({
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  const { data, isLoading } = useQuery({
     queryKey: ["runs", tenantId, projectId],
     queryFn: () => fetchRuns(tenantId, projectId, token)
   });
 
-  async function loadRunContext(nextRunId: string) {
-    router.push(`/runs/${nextRunId}`);
-    setRunId(nextRunId);
-    const [run, runTasks, runLogs] = await Promise.all([
-      fetchRun(tenantId, projectId, nextRunId, token),
-      fetchRunTasks(tenantId, projectId, nextRunId, token),
-      fetchRunLogs(tenantId, projectId, nextRunId, token)
-    ]);
-    setRunDetail(run);
-    setTasks(runTasks.items);
-    setTaskId(runTasks.items[0]?.task_id || "");
-    setLogs(runLogs.items.map((x) => `[${x.ts}] ${x.level} ${x.message}`));
+  function onSelectRun(runId: string) {
+    window.location.href = `/runs/${runId}`;
   }
 
   function toggleCompare(runId: string) {
-    setCompareRunIds((prev) => (prev.includes(runId) ? prev.filter((x) => x !== runId) : [...prev, runId].slice(-4)));
+    setCompareRunIds((prev) =>
+      prev.includes(runId)
+        ? prev.filter((x) => x !== runId)
+        : [...prev, runId].slice(-4)
+    );
   }
 
   async function runCompare() {
     if (compareRunIds.length < 2) {
       setCompareChartData([]);
+      setCompareSummary("Select at least 2 runs.");
       return;
     }
-    const result = await compareRunMetrics(tenantId, projectId, compareRunIds, token);
+
+    const result = await compareRunMetrics(
+      tenantId,
+      projectId,
+      compareRunIds,
+      token
+    );
+
     const grouped = new Map<number, Record<string, number | string>>();
     const stats = new Map<string, { last: number; best: number }>();
+
     result.items.forEach((row) => {
       if (row.key !== selectedMetricKey) return;
+
       const stepKey = row.step ?? 0;
       const existing = grouped.get(stepKey) ?? { step: stepKey };
+
       existing[row.run_id] = row.value;
       grouped.set(stepKey, existing);
 
       const current = stats.get(row.run_id);
-      if (!current) stats.set(row.run_id, { last: row.value, best: row.value });
-      else stats.set(row.run_id, { last: row.value, best: Math.max(current.best, row.value) });
+      if (!current) {
+        stats.set(row.run_id, { last: row.value, best: row.value });
+      } else {
+        stats.set(row.run_id, {
+          last: row.value,
+          best: Math.max(current.best, row.value)
+        });
+      }
     });
-    setCompareChartData(Array.from(grouped.values()).sort((a, b) => Number(a.step) - Number(b.step)));
+
+    const chart = Array.from(grouped.values()).sort(
+      (a, b) => Number(a.step) - Number(b.step)
+    );
+
+    setCompareChartData(chart);
+
     const summary = Array.from(stats.entries())
-      .map(([run, v]) => `${run}: last=${v.last.toFixed(4)} best=${v.best.toFixed(4)}`)
+      .map(
+        ([run, v]) =>
+          `${run}: last=${v.last.toFixed(4)} best=${v.best.toFixed(4)}`
+      )
       .join(" | ");
-    setCompareSummary(summary || `No metric '${selectedMetricKey}' found on selected runs.`);
+
+    setCompareSummary(
+      summary || `No metric '${selectedMetricKey}' found on selected runs.`
+    );
   }
 
+  const allRuns = data?.items ?? [];
+  const totalPages = Math.max(1, Math.ceil(allRuns.length / pageSize));
+  const paginatedRuns = allRuns.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const COLORS = ["#3B82F6", "#16A34A", "#F59E0B", "#EC4899", "#06B6D4"];
+
   return (
-    <RouteShell activeNav="Runs" title="Runs" subtitle="Run history and drill-down detail">
-      <RunsHistorySection
-        rows={data?.items ?? []}
-        onSelectRun={loadRunContext}
-        selectedForCompare={compareRunIds}
-        onToggleCompare={toggleCompare}
-      />
-      <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
+    <RouteShell
+      activeNav="Runs"
+      title="Runs"
+      subtitle="Run history and metrics comparison"
+    >
+      {/* Compare Section */}
+      <section className="card p-5 mb-4 shadow-md">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-200">Compare Runs (metrics)</h2>
+          <h2 className="text-sm font-semibold text-primary">
+            Compare Runs (metrics)
+          </h2>
+
           <div className="flex items-center gap-2">
             <input
               value={selectedMetricKey}
               onChange={(e) => setSelectedMetricKey(e.target.value)}
               placeholder="metric key (e.g. accuracy)"
-              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
+              className="rounded-lg border border-default bg-surface px-6 py-2 text-sm text-primary placeholder:!text-secondary"
+              style={{
+                backgroundColor: 'var(--bg-surface)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--text-primary)'
+              }}
             />
-            <button
-              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20"
-              onClick={runCompare}
-            >
-              Compare Selected
+
+            <button className="rounded-lg bg-color-primary px-4 py-2 text-sm text-white hover:opacity-80" onClick={runCompare}>
+              Compare
             </button>
           </div>
         </div>
-        <div className="mb-2 rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-300">
+
+        <div className="mb-3 rounded-lg border border-default bg-muted p-2 text-xs text-primary">
           {compareSummary || "Summary will appear after compare."}
         </div>
+
         {compareChartData.length ? (
-          <div className="h-72 rounded-xl border border-slate-700 bg-slate-900 p-2">
+          <div className="h-72 rounded-xl border border-default bg-surface p-2">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={compareChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="step" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="step" stroke="#6B7280" />
+                <YAxis stroke="#6B7280" />
                 <Tooltip />
                 <Legend />
+
                 {Object.keys(compareChartData[0] || {})
                   .filter((k) => k !== "step")
                   .map((key, idx) => (
@@ -120,39 +163,66 @@ export default function RunsPage() {
                       type="monotone"
                       dataKey={key}
                       dot={false}
-                      stroke={["#60a5fa", "#34d399", "#f59e0b", "#f472b6", "#22d3ee"][idx % 5]}
+                      stroke={COLORS[idx % COLORS.length]}
+                      strokeWidth={2}
                     />
                   ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <pre className="min-h-16 rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
-            Select 2-4 runs and click Compare Selected.
-          </pre>
+          <div className="min-h-16 flex items-center justify-center rounded-xl border border-default bg-muted p-3 text-xs text-disabled">
+            Select 2–4 runs and click Compare Selected.
+          </div>
         )}
       </section>
-      <LogsSection
-        runId={runId}
-        taskId={taskId}
-        runDetail={runDetail}
-        tasks={tasks}
-        logs={logKeyword ? logs.filter((line) => line.toLowerCase().includes(logKeyword.toLowerCase())) : logs}
-        logKeyword={logKeyword}
-        streaming={streaming}
-        onChangeLogKeyword={setLogKeyword}
-        onToggleStreaming={() => setStreaming((prev) => !prev)}
-        onRefreshRun={() => {
-          if (runId) {
-            void loadRunContext(runId);
-          }
-        }}
-        onReplayDlq={async () => {
-          if (!runId) return;
-          await replayDlq(tenantId, projectId, runId, token);
-          await loadRunContext(runId);
-        }}
-      />
+
+      {/* Runs History */}
+      <section className="card p-5">
+        {/* Pagination */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-sm text-secondary">
+            Showing {(currentPage - 1) * pageSize + 1}-
+            {Math.min(currentPage * pageSize, allRuns.length)} of{" "}
+            {allRuns.length} runs
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setCurrentPage((prev) => Math.max(1, prev - 1))
+              }
+              disabled={currentPage === 1 || isLoading}
+            >
+              Previous
+            </button>
+
+            <span className="px-3 text-sm text-primary">
+              Page {currentPage} / {totalPages}
+            </span>
+
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setCurrentPage((prev) =>
+                  Math.min(totalPages, prev + 1)
+                )
+              }
+              disabled={currentPage === totalPages || isLoading}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
+        <RunsHistorySection
+          rows={paginatedRuns}
+          onSelectRun={onSelectRun}
+          selectedForCompare={compareRunIds}
+          onToggleCompare={toggleCompare}
+        />
+      </section>
     </RouteShell>
   );
 }

@@ -32,7 +32,6 @@ export default function PipelinesPage() {
     <RouteShell activeNav="Pipelines" title="Pipelines" subtitle="Pipeline list and DAG view">
       <div className="grid grid-cols-2 gap-4">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">Pipelines</h2>
           <div className="overflow-auto rounded-xl border border-slate-700">
             <table className="w-full text-sm">
               <thead className="bg-slate-900 text-slate-400">

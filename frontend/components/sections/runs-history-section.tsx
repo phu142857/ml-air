@@ -13,24 +13,23 @@ type Props = {
 export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [], onToggleCompare }: Props) {
   return (
     <section className="card p-5 shadow-md">
-      <h2 className="mb-3 text-sm font-semibold text-primary">Runs History</h2>
       <div className="overflow-auto rounded-xl border border-default">
         <table className="w-full text-sm">
           <thead className="bg-muted text-secondary">
             <tr>
-              <th className="border-b border-default px-3 py-2 text-left font-medium">Compare</th>
-              <th className="border-b border-default px-3 py-2 text-left font-medium">Run ID</th>
-              <th className="border-b border-default px-3 py-2 text-left font-medium">Status</th>
-              <th className="border-b border-default px-3 py-2 text-left font-medium">Duration</th>
-              <th className="border-b border-default px-3 py-2 text-left font-medium">Trigger</th>
-              <th className="border-b border-default px-3 py-2 text-left font-medium">Updated At</th>
+              <th className="px-3 py-2 text-left">Compare</th>
+              <th className="px-3 py-2 text-left">Run ID</th>
+              <th className="px-3 py-2 text-left">Status</th>
+              <th className="px-3 py-2 text-left">Duration</th>
+              <th className="px-3 py-2 text-left">Trigger</th>
+              <th className="px-3 py-2 text-left">Updated At</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr
                 key={row.run_id}
-                className="cursor-pointer border-b border-default hover:border-l-4 hover:border-l-blue-500 transition-colors"
+                className="cursor-pointer border-t border-default hover:border-l-4 hover:border-l-color-primary"
                 onClick={() => onSelectRun(row.run_id)}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>

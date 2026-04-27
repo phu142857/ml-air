@@ -21,17 +21,17 @@ export default function TaskDetailPage() {
     <RouteShell activeNav="Tasks" title={`Task ${taskId}`} subtitle="Deep-link task detail">
       <div className="mb-2">
         <button
-          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
+          className="button-secondary"
           onClick={() => router.push("/tasks")}
         >
           Back to Tasks
         </button>
       </div>
-      <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Task Detail</h2>
-        <pre className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
+      <section className="card p-5">
+        <h2 className="mb-3 text-sm font-semibold text-primary">Task Detail</h2>
+        <div className="bg-muted rounded-lg p-4 font-mono text-xs text-success h-96 overflow-y-auto whitespace-pre-wrap break-all">
           {isLoading ? "Loading..." : JSON.stringify(data, null, 2)}
-        </pre>
+        </div>
       </section>
     </RouteShell>
   );

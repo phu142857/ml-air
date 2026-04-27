@@ -31,7 +31,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
 
   if (!tasks.length) {
     return (
-      <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-500">
+      <div className="rounded-2xl border border-default bg-muted p-4 text-sm text-secondary">
         No tasks yet
       </div>
     );
@@ -42,12 +42,11 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
   const span = Math.max(1, t1 - t0);
 
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4">
-      <div className="mb-3 text-sm font-medium text-slate-200">Task timeline</div>
+    <div className="card p-5 shadow-md">
       <div className="space-y-3">
         {tasks.map((t, i) => {
           const a = parseTs(t.started_at || t.created_at);
-          const b = parseTs(t.finished_at || t.updated_at || t.started_at);
+          const b = parseTs(t.finished_at || t.updated_at || t.started_at || t.created_at);
           const left = ((a - t0) / span) * 100;
           const width = Math.max(2, Math.max(0, ((b - a) / span) * 100));
           const taskStatus = getStatus(t);
@@ -61,39 +60,60 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
             <div
               key={t.task_id + t.attempt}
               ref={isLastFailed ? failRef : undefined}
-              className={`rounded-lg border p-2 ${
-                taskStatus === "success" ? "task-card task-success" :
-                taskStatus === "error" ? "task-card task-error" :
-                taskStatus === "running" ? "task-card task-running" :
-                "task-card task-pending"
+              className={`rounded-xl border border-default p-3 transition ${
+                taskStatus === "error" ? "border-color-error bg-bg-error" :
+                taskStatus === "success" ? "border-color-success bg-bg-success" :
+                taskStatus === "running" ? "border-color-info bg-bg-info" :
+                "border-default bg-muted"
               }`}
             >
-              <div className="mb-1 flex items-center justify-between text-xs text-secondary">
+              {/* Task Header */}
+              <div className="flex items-center justify-between mb-1">
                 <button
                   type="button"
                   onClick={() => onOpenTask(t.task_id)}
-                  className="font-mono text-left text-primary hover:underline"
+                  className="font-mono text-xs text-primary hover:text-color-primary hover:underline"
                 >
-                  {t.task_id} · attempt {t.attempt} · {taskStatus.toUpperCase()}
+                  {t.task_id} · attempt {t.attempt}
                 </button>
-                {t.error_message && <span className="text-error font-medium">error</span>}
-              </div>
-              <div className="progress-bar">
-                <div
-                  className={`absolute top-0 h-3 ${
-                    taskStatus === "success" ? "progress-fill-success" :
-                    taskStatus === "error" ? "progress-fill-error" :
-                    "progress-fill-info"
+                <span
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                    taskStatus === "error" && "bg-bg-error text-color-error"
+                  }${
+                    taskStatus === "success" && " bg-bg-success text-color-success"
+                  }${
+                    taskStatus === "running" && " bg-bg-info text-color-info"
                   }`}
-                  style={{ left: `${left}%`, width: `${width}%` }}
+                >
+                  {taskStatus}
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mb-2">
+                <div
+                  className={`h-full ${
+                    taskStatus === "error" ? "bg-color-error" :
+                    taskStatus === "success" ? "bg-color-success" :
+                    "bg-color-info"
+                  }`}
+                  style={{ width: `${width}%` }}
                 />
               </div>
-              <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-disabled">
-                <span>wall: {t.duration_ms != null ? `${t.duration_ms}ms` : "-"}</span>
-                <span>cpu: {t.cpu_time_seconds != null ? `${t.cpu_time_seconds.toFixed(4)}s` : "-"}</span>
-                <span>rss: {t.memory_rss_kb != null ? `${t.memory_rss_kb}KB` : "-"}</span>
+
+              {/* Meta Info */}
+              <div className="flex gap-4 text-[11px] text-secondary">
+                <span>wall: {t.duration_ms ?? "-"}ms</span>
+                <span>cpu: {t.cpu_time_seconds?.toFixed(4) ?? "-"}s</span>
+                <span>rss: {t.memory_rss_kb ?? "-"}KB</span>
               </div>
-              {t.error_message && <p className="mt-1 break-all text-xs text-error">{t.error_message}</p>}
+
+              {/* Error Message */}
+              {t.error_message && (
+                <div className="mt-2 rounded-md bg-bg-error border border-color-error px-2 py-1 text-xs font-medium text-color-error">
+                  {t.error_message}
+                </div>
+              )}
             </div>
           );
         })}

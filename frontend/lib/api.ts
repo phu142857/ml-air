@@ -8,8 +8,10 @@ export type RunItem = {
   status: string;
   idempotency_key?: string | null;
   priority?: string;
+  max_parallel_tasks?: number;
   updated_at?: string;
   created_at?: string;
+  config_snapshot?: Record<string, unknown> | null;
 };
 
 export type TaskItem = {
