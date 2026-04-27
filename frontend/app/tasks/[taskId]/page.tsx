@@ -21,7 +21,7 @@ export default function TaskDetailPage() {
     <RouteShell activeNav="Tasks" title={`Task ${taskId}`} subtitle="Deep-link task detail">
       <div className="mb-2">
         <button
-          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600"
+          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
           onClick={() => router.push("/tasks")}
         >
           Back to Tasks

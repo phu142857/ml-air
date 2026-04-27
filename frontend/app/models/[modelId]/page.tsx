@@ -44,7 +44,7 @@ export default function ModelDetailPage() {
     <RouteShell activeNav="Models" title={`Model ${model?.name ?? modelId}`} subtitle="Deep-link model versions and stages">
       <div className="mb-2">
         <button
-          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600"
+          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
           onClick={() => router.push("/models")}
         >
           Back to Models
@@ -80,7 +80,7 @@ export default function ModelDetailPage() {
             </thead>
             <tbody>
               {versions.map((v) => (
-                <tr key={v.version_id} className="border-t border-slate-800">
+                <tr key={v.version_id} className="border-t border-slate-800 hover:bg-blue-900/20 transition-colors">
                   <td className="px-3 py-2">v{v.version}</td>
                   <td className="px-3 py-2">{v.stage}</td>
                   <td className="px-3 py-2">{v.run_id || "-"}</td>
@@ -88,14 +88,14 @@ export default function ModelDetailPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
-                        className="rounded-lg bg-violet-600 px-2 py-1 text-xs text-white hover:bg-violet-500 disabled:opacity-60"
+                        className="rounded-lg bg-violet-600 px-2 py-1 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
                         disabled={promoteMutation.isPending}
                       >
                         Promote
                       </button>
                       <button
                         onClick={() => promoteMutation.mutate({ version: v.version, stage: "staging" })}
-                        className="rounded-lg bg-amber-600 px-2 py-1 text-xs text-white hover:bg-amber-500 disabled:opacity-60"
+                        className="rounded-lg bg-amber-600 px-2 py-1 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
                         disabled={promoteMutation.isPending}
                       >
                         Rollback to staging

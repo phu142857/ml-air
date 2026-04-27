@@ -90,7 +90,7 @@ export default function ModelsPage() {
             />
             <button
               onClick={() => createModelMutation.mutate()}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500 disabled:opacity-60"
+              className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
               disabled={createModelMutation.isPending || !newModelName.trim()}
             >
               Create Model
@@ -108,7 +108,7 @@ export default function ModelsPage() {
                 {(modelsQuery.data?.items ?? []).map((model) => (
                   <tr
                     key={model.model_id}
-                    className={`cursor-pointer border-t border-slate-800 ${selectedModelId === model.model_id ? "bg-slate-800/80" : "hover:bg-slate-800/60"}`}
+                    className={`cursor-pointer border-t border-slate-800 ${selectedModelId === model.model_id ? "bg-slate-800/80" : "hover:bg-blue-900/20"}`}
                     onClick={() => setSelectedModelId(model.model_id)}
                   >
                     <td className="px-3 py-2">{model.name}</td>
@@ -116,7 +116,7 @@ export default function ModelsPage() {
                       <div className="flex items-center justify-between gap-2">
                         <span>{model.updated_at}</span>
                         <button
-                          className="rounded-md bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                          className="rounded-md bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-blue-900/20"
                           onClick={(e) => {
                             e.stopPropagation();
                             router.push(`/models/${model.model_id}`);
@@ -156,7 +156,7 @@ export default function ModelsPage() {
                 />
                 <button
                   onClick={() => createVersionMutation.mutate()}
-                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white hover:bg-emerald-500 disabled:opacity-60"
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
                   disabled={createVersionMutation.isPending}
                 >
                   Create Version (staging)
@@ -173,13 +173,13 @@ export default function ModelsPage() {
                   </thead>
                   <tbody>
                     {(versionsQuery.data?.items ?? []).map((v) => (
-                      <tr key={v.version_id} className="border-t border-slate-800">
+                      <tr key={v.version_id} className="border-t border-slate-800 hover:bg-blue-900/20 transition-colors">
                         <td className="px-3 py-2">v{v.version}</td>
                         <td className="px-3 py-2">{v.stage}</td>
                         <td className="px-3 py-2">
                           <button
                             onClick={() => promoteMutation.mutate(v.version)}
-                            className="rounded-lg bg-violet-600 px-2 py-1 text-xs text-white hover:bg-violet-500 disabled:opacity-60"
+                            className="rounded-lg bg-violet-600 px-2 py-1 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
                             disabled={promoteMutation.isPending}
                           >
                             Promote to production

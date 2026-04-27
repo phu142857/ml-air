@@ -47,7 +47,7 @@ export default function PipelinesPage() {
                 {(data?.items ?? []).map((item) => (
                   <tr
                     key={item.pipeline_id}
-                    className="cursor-pointer border-t border-slate-800 hover:bg-slate-800/70"
+                    className="cursor-pointer border-t border-slate-800 hover:bg-blue-900/20"
                     onClick={() => {
                       setSelectedPipeline(item.pipeline_id);
                       router.push(`/pipelines/${item.pipeline_id}`);

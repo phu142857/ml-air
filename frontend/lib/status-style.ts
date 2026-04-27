@@ -23,8 +23,8 @@ export function normalizeStatus(raw: string | null | undefined): StatusTone {
 
 export function statusBadgeClass(status: string | null | undefined): string {
   const s = normalizeStatus(status);
-  if (s === "SUCCESS") return "border-[#16A34A] bg-[#DCFCE7] text-[#166534]";
-  if (s === "FAILED") return "border-[#DC2626] bg-[#FEE2E2] text-[#7F1D1D]";
-  if (s === "RUNNING") return "border-[#2563EB] bg-[#DBEAFE] text-[#1E3A8A]";
-  return "border-[#D97706] bg-[#FEF3C7] text-[#78350F]";
+  if (s === "SUCCESS") return "status-badge success";
+  if (s === "FAILED") return "status-badge error";
+  if (s === "RUNNING") return "status-badge info";
+  return "status-badge warning";
 }

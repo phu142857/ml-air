@@ -47,7 +47,7 @@ export default function RunDetailPage() {
     <RouteShell activeNav="Runs" title={`Run ${runId}`} subtitle="Deep-link run detail">
       <div className="mb-2">
         <button
-          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600"
+          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
           onClick={() => router.push("/runs")}
         >
           Back to Runs
@@ -61,7 +61,7 @@ export default function RunDetailPage() {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className="rounded-lg border border-amber-600/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-100"
+          className="button-secondary"
           onClick={async () => {
             const t = tasks[0]?.task_id;
             if (!t) return;
@@ -73,7 +73,7 @@ export default function RunDetailPage() {
           Partial replay (from first task)
         </button>
         <a
-          className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300"
+          className="button-secondary"
           href={`/lineage?runId=${encodeURIComponent(runId)}`}
         >
           View lineage

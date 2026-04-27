@@ -1,6 +1,7 @@
 "use client";
 
 import { RunsChart } from "@/components/dashboard/runs-chart";
+import { StatusColumns } from "@/components/dashboard/status-columns";
 
 type Props = {
   tenantId: string;
@@ -10,6 +11,7 @@ type Props = {
   success: number;
   failed: number;
   running: number;
+  pending: number;
 };
 
 export function OverviewSection({
@@ -19,13 +21,14 @@ export function OverviewSection({
   isFetching,
   success,
   failed,
-  running
+  running,
+  pending
 }: Props) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
         <h2 className="mb-3 text-sm font-semibold text-slate-200">Run Status Distribution</h2>
-        <RunsChart success={success} failed={failed} running={running} />
+        <StatusColumns success={success} failed={failed} pending={pending} />
       </section>
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
         <h2 className="mb-3 text-sm font-semibold text-slate-200">Pipeline Info</h2>

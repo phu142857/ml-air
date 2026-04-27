@@ -20,6 +20,15 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
     }
   }, [tasks]);
 
+  // Helper function outside map to avoid re-creation
+  const getStatus = (task: any): "success" | "error" | "running" | "pending" => {
+    if (task.error_message && task.error_message.length > 0) return "error";
+    if (task.status === "FAILED") return "error";
+    if (task.status === "SUCCESS") return "success";
+    if (task.status === "RUNNING") return "running";
+    return "pending";
+  };
+
   if (!tasks.length) {
     return (
       <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-500">
@@ -40,41 +49,51 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
           const a = parseTs(t.started_at || t.created_at);
           const b = parseTs(t.finished_at || t.updated_at || t.started_at);
           const left = ((a - t0) / span) * 100;
-          const width = Math.max(2, ((b - a) / span) * 100);
-          const isFail = t.status === "FAILED" || (t.error_message && t.error_message.length > 0);
+          const width = Math.max(2, Math.max(0, ((b - a) / span) * 100));
+          const taskStatus = getStatus(t);
+          const isFail = taskStatus === "error";
           const isLastFailed =
             isFail &&
             !tasks
               .slice(i + 1)
-              .some((u) => u.status === "FAILED" || (u.error_message && u.error_message.length > 0));
+              .some((u) => getStatus(u) === "error");
           return (
             <div
               key={t.task_id + t.attempt}
               ref={isLastFailed ? failRef : undefined}
-              className={`rounded-lg border p-2 ${isFail ? "border-red-500/60 bg-red-950/20" : "border-slate-600"}`}
+              className={`rounded-lg border p-2 ${
+                taskStatus === "success" ? "task-card task-success" :
+                taskStatus === "error" ? "task-card task-error" :
+                taskStatus === "running" ? "task-card task-running" :
+                "task-card task-pending"
+              }`}
             >
-              <div className="mb-1 flex items-center justify-between text-xs text-slate-300">
+              <div className="mb-1 flex items-center justify-between text-xs text-secondary">
                 <button
                   type="button"
                   onClick={() => onOpenTask(t.task_id)}
                   className="font-mono text-left text-primary hover:underline"
                 >
-                  {t.task_id} · attempt {t.attempt} · {t.status}
+                  {t.task_id} · attempt {t.attempt} · {taskStatus.toUpperCase()}
                 </button>
-                {t.error_message && <span className="text-red-400">error</span>}
+                {t.error_message && <span className="text-error font-medium">error</span>}
               </div>
-              <div className="relative h-3 w-full overflow-hidden rounded bg-slate-800">
+              <div className="progress-bar">
                 <div
-                  className={`absolute top-0 h-3 ${isFail ? "bg-red-500/70" : "bg-emerald-500/50"}`}
+                  className={`absolute top-0 h-3 ${
+                    taskStatus === "success" ? "progress-fill-success" :
+                    taskStatus === "error" ? "progress-fill-error" :
+                    "progress-fill-info"
+                  }`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                 />
               </div>
-              <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-400">
+              <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-disabled">
                 <span>wall: {t.duration_ms != null ? `${t.duration_ms}ms` : "-"}</span>
                 <span>cpu: {t.cpu_time_seconds != null ? `${t.cpu_time_seconds.toFixed(4)}s` : "-"}</span>
                 <span>rss: {t.memory_rss_kb != null ? `${t.memory_rss_kb}KB` : "-"}</span>
               </div>
-              {t.error_message && <p className="mt-1 break-all text-xs text-red-300">{t.error_message}</p>}
+              {t.error_message && <p className="mt-1 break-all text-xs text-error">{t.error_message}</p>}
             </div>
           );
         })}

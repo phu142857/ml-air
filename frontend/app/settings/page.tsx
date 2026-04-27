@@ -65,7 +65,7 @@ export default function SettingsPage() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-200">Plugin Registry</h2>
             <button
-              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500 disabled:opacity-60"
+              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
               onClick={() => reloadMutation.mutate()}
               disabled={reloadMutation.isPending}
             >
@@ -86,7 +86,7 @@ export default function SettingsPage() {
                 {items.map((plugin) => (
                   <tr
                     key={plugin.name}
-                    className={`border-t border-slate-800 ${selectedPlugin === plugin.name ? "bg-slate-800/80" : "hover:bg-slate-800/60"}`}
+                    className={`cursor-pointer border-t border-slate-800 ${selectedPlugin === plugin.name ? "bg-slate-800/80" : "hover:bg-blue-900/20"}`}
                     onClick={() => setSelectedPlugin(plugin.name)}
                   >
                     <td className="px-3 py-2">{plugin.name}</td>
@@ -94,7 +94,7 @@ export default function SettingsPage() {
                     <td className="px-3 py-2">{plugin.enabled ? "on" : "off"}</td>
                     <td className="px-3 py-2">
                       <button
-                        className="rounded-lg bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                        className="rounded-lg bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-blue-900/20"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleMutation.mutate({ name: plugin.name, enabled: !plugin.enabled });
@@ -152,7 +152,7 @@ export default function SettingsPage() {
                 />
                 <div className="mt-2 flex gap-2">
                   <button
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-60"
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
                     onClick={onValidate}
                     disabled={validateMutation.isPending}
                   >

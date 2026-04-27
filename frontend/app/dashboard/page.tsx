@@ -19,7 +19,8 @@ export default function DashboardPage() {
     const success = rows.filter((r) => String(r.status).toUpperCase() === "SUCCESS").length;
     const failed = rows.filter((r) => String(r.status).toUpperCase() === "FAILED").length;
     const running = rows.filter((r) => String(r.status).toUpperCase() === "RUNNING").length;
-    return { success, failed, running };
+    const pending = rows.filter((r) => String(r.status).toUpperCase() === "PENDING").length;
+    return { success, failed, running, pending };
   }, [rows]);
 
   return (
@@ -32,6 +33,7 @@ export default function DashboardPage() {
         success={stats.success}
         failed={stats.failed}
         running={stats.running}
+        pending={stats.pending}
       />
     </RouteShell>
   );

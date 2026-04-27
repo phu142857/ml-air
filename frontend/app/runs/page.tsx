@@ -93,7 +93,7 @@ export default function RunsPage() {
               className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
             />
             <button
-              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500"
+              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20"
               onClick={runCompare}
             >
               Compare Selected

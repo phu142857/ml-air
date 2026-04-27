@@ -29,14 +29,14 @@ export default function PipelineDetailPage() {
     <RouteShell activeNav="Pipelines" title={`Pipeline ${pipelineId}`} subtitle="Deep-link pipeline detail">
       <div className="mb-2 flex flex-wrap gap-2">
         <button
-          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600"
+          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
           onClick={() => router.push("/pipelines")}
         >
           Back to Pipelines
         </button>
         <Link
           href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}
-          className="rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+          className="rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-blue-900/20"
         >
           Versions
         </Link>

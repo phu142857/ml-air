@@ -9,20 +9,47 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Semantic colors using CSS variables
+        'bg-page': 'var(--bg-page)',
+        'bg-surface': 'var(--bg-surface)',
+        'bg-muted': 'var(--bg-muted)',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-disabled': 'var(--text-disabled)',
+        'border-default': 'var(--border-default)',
+        'border-strong': 'var(--border-strong)',
+        'color-primary': 'var(--color-primary)',
+        'color-success': 'var(--color-success)',
+        'color-error': 'var(--color-error)',
+        'color-warning': 'var(--color-warning)',
+        'color-info': 'var(--color-info)',
+        'bg-success': 'var(--bg-success)',
+        'bg-error': 'var(--bg-error)',
+        'bg-warning': 'var(--bg-warning)',
+        'bg-info': 'var(--bg-info)',
+        
+        // Legacy aliases for backward compatibility
         bg: {
-          main: "#0F172A",
-          card: "#1E293B",
-          muted: "#111827"
+          main: 'var(--bg-page)',
+          card: 'var(--bg-surface)',
+          muted: 'var(--bg-muted)'
         },
         status: {
-          success: "#16A34A",
-          failed: "#DC2626",
-          running: "#F59E0B",
-          pending: "#6B7280"
+          success: 'var(--color-success)',
+          failed: 'var(--color-error)',
+          running: 'var(--color-info)',
+          pending: 'var(--color-warning)'
         }
       },
       borderRadius: {
-        xl: "12px"
+        'sm': 'var(--radius-sm)',
+        'md': 'var(--radius-md)',
+        'lg': 'var(--radius-lg)',
+        'xl': 'var(--radius-xl)'
+      },
+      boxShadow: {
+        'sm': 'var(--shadow-sm)',
+        'md': 'var(--shadow-md)'
       }
     }
   },

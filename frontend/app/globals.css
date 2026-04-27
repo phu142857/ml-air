@@ -3,84 +3,200 @@
 @tailwind utilities;
 
 :root {
-  /* MLflow-inspired light palette */
-  --color-bg-main: #f7f9fc;
-  --color-bg-card: #ffffff;
-  --color-bg-muted: #eef3fa;
-  --color-border: #d6deea;
-  --color-text-main: #1b2431;
-  --color-text-muted: #5f6f85;
-  --color-primary: #0194e2;
+  /* Base Color Palette */
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  
+  --blue-500: #3B82F6;
+  --blue-600: #2563EB;
+  
+  --green-500: #22C55E;
+  --green-600: #16A34A;
+  
+  --red-500: #EF4444;
+  --red-600: #DC2626;
+  
+  --yellow-500: #F59E0B;
+
+  /* Light Theme Semantic Tokens */
+  /* Background */
+  --bg-page: #F5F7FA;
+  --bg-surface: #FFFFFF;
+  --bg-muted: #F9FAFB;
+
+  /* Text */
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --text-disabled: #9CA3AF;
+
+  /* Border */
+  --border-default: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  /* Brand */
+  --color-primary: #2563EB;
+
+  /* Status */
+  --color-success: #16A34A;
+  --color-error: #DC2626;
+  --color-warning: #F59E0B;
+  --color-info: #3B82F6;
+
+  /* State backgrounds */
+  --bg-success: #ECFDF5;
+  --bg-error: #FEF2F2;
+  --bg-warning: #FFFBEB;
+  --bg-info: #EFF6FF;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+
+  /* Radius scale */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }
 
-[data-theme="dark"] {
-  /* MLflow-inspired dark palette */
-  --color-bg-main: #0f1724;
-  --color-bg-card: #182133;
-  --color-bg-muted: #111a2b;
-  --color-border: #2a364d;
-  --color-text-main: #e8edf7;
-  --color-text-muted: #9ca9bd;
-  --color-primary: #0194e2;
+.dark {
+  /* Dark Theme Semantic Tokens */
+  /* Background */
+  --bg-page: #0B1220;
+  --bg-surface: #111827;
+  --bg-muted: #1F2937;
+
+  /* Text */
+  --text-primary: #F9FAFB;
+  --text-secondary: #9CA3AF;
+  --text-disabled: #6B7280;
+
+  /* Border */
+  --border-default: #374151;
+  --border-strong: #4B5563;
+
+  /* Brand */
+  --color-primary: #3B82F6;
+
+  /* Status */
+  --color-success: #22C55E;
+  --color-error: #EF4444;
+  --color-warning: #F59E0B;
+  --color-info: #60A5FA;
+
+  /* State backgrounds */
+  --bg-success: rgba(34,197,94,0.1);
+  --bg-error: rgba(239,68,68,0.1);
+  --bg-warning: rgba(245,158,11,0.1);
+  --bg-info: rgba(59,130,246,0.1);
 }
 
 html,
 body {
-  background: var(--color-bg-main);
-  color: var(--color-text-main);
+  background: var(--bg-page);
+  color: var(--text-primary);
 }
 
 * {
-  border-color: var(--color-border);
+  border-color: var(--border-default);
 }
 
-/* Semantic surface aliases */
-.bg-bg-main {
-  background-color: var(--color-bg-main) !important;
+/* Component Rules */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
-.bg-bg-card {
-  background-color: var(--color-bg-card) !important;
+.button-primary {
+  background: var(--color-primary);
+  color: white;
 }
 
-.bg-bg-muted {
-  background-color: var(--color-bg-muted) !important;
+.button-secondary {
+  background: var(--bg-muted);
+  color: var(--text-primary);
 }
 
-/* Override common hardcoded utility classes so existing pages follow theme. */
+.status-badge.success {
+  color: var(--color-success);
+  background: var(--bg-success);
+  border: 1px solid var(--color-success);
+}
+
+.status-badge.error {
+  color: var(--color-error);
+  background: var(--bg-error);
+  border: 1px solid var(--color-error);
+}
+
+.status-badge.warning {
+  color: var(--color-warning);
+  background: var(--bg-warning);
+  border: 1px solid var(--color-warning);
+}
+
+.status-badge.info {
+  color: var(--color-info);
+  background: var(--bg-info);
+  border: 1px solid var(--color-info);
+}
+
+.progress-bar .track {
+  background: var(--bg-muted);
+}
+
+.progress-bar .fill-success {
+  background: var(--color-success);
+}
+
+.progress-bar .fill-error {
+  background: var(--color-error);
+}
+
+/* Override legacy utility classes */
+.bg-bg-main,
 .bg-slate-900 {
-  background-color: var(--color-bg-muted) !important;
+  background-color: var(--bg-page) !important;
 }
 
-.bg-slate-950 {
-  background-color: var(--color-bg-card) !important;
-}
-
+.bg-bg-card,
+.bg-slate-950,
 .bg-slate-800,
 .bg-slate-700 {
-  background-color: var(--color-bg-card) !important;
+  background-color: var(--bg-surface) !important;
+}
+
+.bg-bg-muted,
+.bg-slate-800 {
+  background-color: var(--bg-muted) !important;
 }
 
 .border-slate-700 {
-  border-color: var(--color-border) !important;
+  border-color: var(--border-default) !important;
 }
 
 .text-slate-100,
 .text-slate-200 {
-  color: var(--color-text-main) !important;
+  color: var(--text-primary) !important;
 }
 
 .text-slate-400 {
-  color: var(--color-text-muted) !important;
+  color: var(--text-secondary) !important;
 }
 
-.placeholder\:text-slate-400::placeholder {
-  color: var(--color-text-muted) !important;
-}
-
+.placeholder\:text-slate-400::placeholder,
 input::placeholder,
 textarea::placeholder {
-  color: var(--color-text-muted);
+  color: var(--text-secondary) !important;
 }
 
 .bg-blue-600 {
@@ -90,5 +206,5 @@ textarea::placeholder {
 .hover\:bg-slate-700:hover,
 .hover\:bg-slate-800:hover,
 .hover\:bg-blue-500:hover {
-  filter: brightness(0.96);
+  filter: brightness(0.9);
 }
