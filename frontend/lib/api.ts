@@ -201,32 +201,48 @@ export async function fetchTenantProjects(tenantId: string, token: string): Prom
   return fetchProjectsForTenant(tenantId, token);
 }
 
+async function resolveTenantIds(tenantId: string, token: string): Promise<string[]> {
+  return tenantId === "all" ? fetchTenants(token) : [tenantId];
+}
+
 export async function fetchRuns(tenantId: string, projectId: string, token: string) {
+  const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {
-    const projectIds = await fetchProjectsForTenant(tenantId, token);
     const responses = await Promise.all(
-      projectIds.map(async (pid) => {
-        const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${pid}/runs?limit=50`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          cache: "no-store"
-        });
-        if (!res.ok) return { items: [] as RunItem[] };
-        return (await res.json()) as { items: RunItem[] };
-      })
-    );
+      tenantIds.flatMap((tid) =>
+        [fetchProjectsForTenant(tid, token)].flatMap(async (projectsPromise) => {
+          const projectIds = await projectsPromise;
+          return Promise.all(
+            projectIds.map(async (pid) => {
+              const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects/${pid}/runs?limit=50`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                cache: "no-store"
+              });
+              if (!res.ok) return { items: [] as RunItem[] };
+              return (await res.json()) as { items: RunItem[] };
+            })
+          );
+        })
+      )
+    ).then((x) => x.flat());
     const merged = responses.flatMap((x) => x.items || []);
     merged.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
     return { items: merged };
   }
   const scopedProjectId = normalizeProjectId(projectId);
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs?limit=50`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    cache: "no-store"
-  });
-  if (!res.ok) {
-    throw new Error(`fetch_runs_failed:${res.status}`);
-  }
-  return (await res.json()) as { items: RunItem[] };
+  const responses = await Promise.all(
+    tenantIds.map(async (tid) => {
+      const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects/${scopedProjectId}/runs?limit=50`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: "no-store"
+      });
+      if (!res.ok) return { items: [] as RunItem[] };
+      return (await res.json()) as { items: RunItem[] };
+    })
+  );
+  const merged = responses.flatMap((x) => x.items || []);
+  merged.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  return { items: merged };
 }
 
 export async function triggerRun(
@@ -301,30 +317,43 @@ export async function replayDlq(tenantId: string, projectId: string, runId: stri
 }
 
 export async function fetchPipelines(tenantId: string, projectId: string, token: string) {
+  const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {
-    const projectIds = await fetchProjectsForTenant(tenantId, token);
     const responses = await Promise.all(
-      projectIds.map(async (pid) => {
-        const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${pid}/pipelines?limit=100`, {
-          headers: authHeaders(token),
-          cache: "no-store"
-        });
-        if (!res.ok) return { items: [] as PipelineItem[] };
-        return (await res.json()) as { items: PipelineItem[] };
-      })
-    );
+      tenantIds.flatMap((tid) =>
+        [fetchProjectsForTenant(tid, token)].flatMap(async (projectsPromise) => {
+          const projectIds = await projectsPromise;
+          return Promise.all(
+            projectIds.map(async (pid) => {
+              const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects/${pid}/pipelines?limit=100`, {
+                headers: authHeaders(token),
+                cache: "no-store"
+              });
+              if (!res.ok) return { items: [] as PipelineItem[] };
+              return (await res.json()) as { items: PipelineItem[] };
+            })
+          );
+        })
+      )
+    ).then((x) => x.flat());
     const merged = responses.flatMap((x) => x.items || []);
     merged.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
     return { items: merged };
   }
   const scopedProjectId = normalizeProjectId(projectId);
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/pipelines?limit=100`, {
-    headers: authHeaders(token),
-    cache: "no-store"
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: PipelineItem[] };
+  const responses = await Promise.all(
+    tenantIds.map(async (tid) => {
+      const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects/${scopedProjectId}/pipelines?limit=100`, {
+        headers: authHeaders(token),
+        cache: "no-store"
+      });
+      if (!res.ok) return { items: [] as PipelineItem[] };
+      return (await res.json()) as { items: PipelineItem[] };
+    })
+  );
+  const merged = responses.flatMap((x) => x.items || []);
+  merged.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+  return { items: merged };
 }
 
 export async function fetchPipelineDag(tenantId: string, projectId: string, pipelineId: string, token: string) {
@@ -472,30 +501,43 @@ export async function togglePlugin(pluginName: string, enabled: boolean, token: 
 }
 
 export async function fetchModels(tenantId: string, projectId: string, token: string) {
+  const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {
-    const projectIds = await fetchProjectsForTenant(tenantId, token);
     const responses = await Promise.all(
-      projectIds.map(async (pid) => {
-        const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${pid}/models`, {
-          headers: authHeaders(token),
-          cache: "no-store"
-        });
-        if (!res.ok) return { items: [] as ModelItem[] };
-        return (await res.json()) as { items: ModelItem[] };
-      })
-    );
+      tenantIds.flatMap((tid) =>
+        [fetchProjectsForTenant(tid, token)].flatMap(async (projectsPromise) => {
+          const projectIds = await projectsPromise;
+          return Promise.all(
+            projectIds.map(async (pid) => {
+              const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects/${pid}/models`, {
+                headers: authHeaders(token),
+                cache: "no-store"
+              });
+              if (!res.ok) return { items: [] as ModelItem[] };
+              return (await res.json()) as { items: ModelItem[] };
+            })
+          );
+        })
+      )
+    ).then((x) => x.flat());
     const merged = responses.flatMap((x) => x.items || []);
     merged.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
     return { items: merged };
   }
   const scopedProjectId = normalizeProjectId(projectId);
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models`, {
-    headers: authHeaders(token),
-    cache: "no-store"
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: ModelItem[] };
+  const responses = await Promise.all(
+    tenantIds.map(async (tid) => {
+      const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects/${scopedProjectId}/models`, {
+        headers: authHeaders(token),
+        cache: "no-store"
+      });
+      if (!res.ok) return { items: [] as ModelItem[] };
+      return (await res.json()) as { items: ModelItem[] };
+    })
+  );
+  const merged = responses.flatMap((x) => x.items || []);
+  merged.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+  return { items: merged };
 }
 
 export async function fetchDataset(tenantId: string, projectId: string, datasetId: string, token: string) {

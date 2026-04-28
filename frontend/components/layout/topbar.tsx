@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/lib/app-context";
 import { useTheme } from "@/lib/theme-context";
 import { fetchTenantProjects, fetchTenants, fetchWhoAmI } from "@/lib/api";
@@ -13,11 +13,10 @@ export function Topbar() {
   const [q, setQ] = useState("");
   const [tenantOptions, setTenantOptions] = useState<string[]>(tenantId ? [tenantId] : ["all"]);
   const [projectOptions, setProjectOptions] = useState<string[]>([]);
-  const [scopeMsg, setScopeMsg] = useState("");
   const [isLoadingScope, setIsLoadingScope] = useState(false);
+  const autoLoadedKeyRef = useRef<string>("");
   const loadScope = useCallback(
     async (preferredTenant?: string) => {
-      setScopeMsg("");
       setIsLoadingScope(true);
       try {
         let resolvedTenant = String(preferredTenant || tenantId || "default").trim() || "default";
@@ -43,9 +42,9 @@ export function Topbar() {
         if (projectId !== "all" && !projects.includes(projectId)) {
           setProjectId("all");
         }
-        setScopeMsg(`Loaded ${projects.length} projects from database${whoamiSkipped ? " (whoami skipped)" : ""}`);
       } catch (e: any) {
-        setScopeMsg(`Load scope failed: ${String(e?.message || e)}`);
+        // Keep UI clean: fail silently here, fallback options remain usable.
+        void e;
       } finally {
         setIsLoadingScope(false);
       }
@@ -55,9 +54,11 @@ export function Topbar() {
 
   useEffect(() => {
     if (!token || isLoadingScope) return;
-    if (projectOptions.length > 1) return;
-    void loadScope();
-  }, [token, isLoadingScope, projectOptions.length, loadScope]);
+    const key = `${tenantId}::${token}`;
+    if (autoLoadedKeyRef.current === key) return;
+    autoLoadedKeyRef.current = key;
+    void loadScope(tenantId);
+  }, [tenantId, token, isLoadingScope, loadScope]);
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-700 bg-bg-muted px-6">
@@ -92,6 +93,7 @@ export function Topbar() {
           value={tenantId}
           onChange={(e) => {
             const t = e.target.value;
+            autoLoadedKeyRef.current = "";
             setTenantId(t);
             setProjectId("all");
             void loadScope(t);
@@ -133,7 +135,6 @@ export function Topbar() {
         >
           {isLoadingScope ? "Loading..." : "Load Scope"}
         </button>
-        {scopeMsg ? <span className="max-w-56 truncate text-sm text-slate-400">{scopeMsg}</span> : null}
       </div>
     </header>
   );
