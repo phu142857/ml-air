@@ -10,6 +10,7 @@ _PROJECT_SOURCES = [
     "run_dataset_lineage",
     "model_trigger_policies",
 ]
+_RESERVED_PROJECT_IDS = {"all", "global"}
 
 
 def list_projects(tenant_id: str, limit: int) -> list[dict[str, str]]:
@@ -31,7 +32,7 @@ def list_projects(tenant_id: str, limit: int) -> list[dict[str, str]]:
                 rows = cur.fetchall() or []
                 for row in rows:
                     pid = str(row[0] or "").strip()
-                    if pid:
+                    if pid and pid.lower() not in _RESERVED_PROJECT_IDS:
                         discovered.add(pid)
 
     # Always include global/default scope for UX consistency.

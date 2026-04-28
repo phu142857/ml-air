@@ -142,9 +142,12 @@ async function fetchProjectsForTenant(tenantId: string, token: string): Promise<
   if (!res.ok) throw new Error(JSON.stringify(data));
   const ids = (data.items || [])
     .map((x) => normalizeProjectId(String(x.project_id || "").trim()))
-    .filter(Boolean);
+    .filter((x) => {
+      const key = String(x || "").trim().toLowerCase();
+      return Boolean(key) && key !== "all" && key !== "global";
+    });
   // "all" must include global scope even when project listing is sparse.
-  return Array.from(new Set(["default_project", ...ids]));
+  return Array.from(new Set(["default_project", ...ids.map((x) => String(x).trim())]));
 }
 
 export async function fetchWhoAmI(token: string): Promise<WhoAmIResponse> {
