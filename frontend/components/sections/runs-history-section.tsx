@@ -2,6 +2,7 @@
 
 import { RunItem } from "@/lib/api";
 import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
+import { formatDateTimeCompact } from "@/lib/utils";
 
 type Props = {
   rows: RunItem[];
@@ -47,7 +48,7 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
                 </td>
                 <td className="px-3 py-2">-</td>
                 <td className="px-3 py-2">{String(row.training_mode || "full")}</td>
-                <td className="px-3 py-2">{String(row.updated_at || "-")}</td>
+                <td className="px-3 py-2">{formatDateTimeCompact(row.updated_at)}</td>
               </tr>
             ))}
           </tbody>

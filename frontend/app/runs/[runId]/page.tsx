@@ -17,6 +17,7 @@ import { LogsSection } from "@/components/sections/logs-section";
 import { RunTimelineSection } from "@/components/sections/run-timeline-section";
 import { RunTrackingSection } from "@/components/sections/run-tracking-section";
 import { useAppContext } from "@/lib/app-context";
+import { formatDateTimeCompact } from "@/lib/utils";
 import { ChevronLeft, RotateCcw, GitBranch, Terminal, Activity, Info, Database } from "lucide-react";
 
 export default function RunDetailPage() {
@@ -53,7 +54,7 @@ export default function RunDetailPage() {
   const taskId = tasks[0]?.task_id || "";
 
   const logs = useMemo(() => {
-    const all = (logsQuery.data?.items ?? []).map((x) => `[${x.ts}] ${x.level} ${x.message}`);
+    const all = (logsQuery.data?.items ?? []).map((x) => `[${formatDateTimeCompact(x.ts)}] ${x.level} ${x.message}`);
     if (!logKeyword.trim()) return all;
     return all.filter((line) => line.toLowerCase().includes(logKeyword.toLowerCase()));
   }, [logsQuery.data, logKeyword]);

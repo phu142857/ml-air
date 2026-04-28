@@ -488,6 +488,35 @@ export async function fetchDatasetVersions(tenantId: string, projectId: string, 
   return data as { items: DatasetVersionItem[] };
 }
 
+export async function deleteDataset(tenantId: string, projectId: string, datasetId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { dataset_id: string; deleted: boolean };
+}
+
+export async function deleteDatasetVersion(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  versionId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/versions/${versionId}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(token)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { dataset_id: string; version_id: string; deleted: boolean };
+}
+
 export async function fetchModelStatus(tenantId: string, projectId: string, modelId: string, token: string) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/status`, {
     headers: authHeaders(token),
@@ -542,11 +571,14 @@ export async function uploadDatasetCsv(
   tenantId: string,
   projectId: string,
   token: string,
-  payload: { dataset_name: string; file: File }
+  payload: { dataset_name: string; file: File; required_cols?: string[] }
 ) {
   const form = new FormData();
   form.append("dataset_name", payload.dataset_name);
   form.append("file", payload.file);
+  if (payload.required_cols && payload.required_cols.length > 0) {
+    form.append("required_cols", JSON.stringify(payload.required_cols));
+  }
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/upload`, {
     method: "POST",
     headers: authHeaders(token),
@@ -561,6 +593,10 @@ export async function uploadDatasetCsv(
     version: string;
     uri: string;
     checksum: string;
+    status: "ready" | "warning" | "failed";
+    quality_score: number;
+    summary: string[];
+    details: Array<Record<string, unknown>>;
     columns: string[];
     row_count: number;
     null_ratio: Record<string, number>;
@@ -775,6 +811,10 @@ export type DatasetVersionItem = {
   created_at: string;
   dataset_id: string;
   dataset_name: string;
+  status?: "ready" | "warning" | "failed";
+  quality_score?: number;
+  summary?: string[];
+  details?: Array<Record<string, unknown>>;
 };
 
 export async function searchApi(

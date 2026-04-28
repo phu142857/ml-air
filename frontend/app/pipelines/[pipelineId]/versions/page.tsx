@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { createPipelineVersionApi, listPipelineVersionsApi } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { formatDateTimeCompact } from "@/lib/utils";
 
 const defaultConfigJson = `{
   "steps": ["fetch", "train", "evaluate"],
@@ -151,7 +152,7 @@ export default function PipelineVersionsPage() {
                 <tr key={v.version_id} className="border-t border-slate-800">
                   <td className="py-2 pr-2 align-top font-mono">{v.version}</td>
                   <td className="py-2 pr-2 align-top font-mono text-xs text-slate-400">{v.version_id}</td>
-                  <td className="py-2 pr-2 align-top text-xs text-slate-400">{v.created_at}</td>
+                  <td className="py-2 pr-2 align-top text-xs text-slate-400">{formatDateTimeCompact(v.created_at)}</td>
                   <td className="py-2 align-top">
                     <pre className="max-h-32 max-w-xl overflow-auto rounded bg-slate-950 p-2 text-xs text-slate-200">
                       {JSON.stringify(v.config, null, 2)}

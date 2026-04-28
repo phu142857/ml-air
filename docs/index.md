@@ -74,6 +74,7 @@ Each guide follows:
 - [Use Dashboard](./guides/use-dashboard.md)
 - [Explore Lineage in UI](./guides/explore-lineage.md)
 - [Debug Run in UI](./guides/debug-run-ui.md)
+- [Manage Datasets and Train from Model](./guides/manage-datasets-and-train-from-model.md)
 
 ## Concepts
 

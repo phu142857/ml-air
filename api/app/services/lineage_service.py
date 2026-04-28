@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import json
 import os
 import re
 from typing import Any, Literal
@@ -62,6 +63,10 @@ def _upsert_dataset_version(
     version: str,
     uri: str | None,
     checksum: str | None,
+    status: str = "ready",
+    quality_score: int = 100,
+    summary: list[str] | None = None,
+    details: list[dict[str, Any]] | None = None,
 ) -> str:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -78,10 +83,21 @@ def _upsert_dataset_version(
             version_id = str(uuid4())
             cur.execute(
                 """
-                INSERT INTO dataset_versions (version_id, dataset_id, version, uri, checksum)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO dataset_versions
+                    (version_id, dataset_id, version, uri, checksum, status, quality_score, summary, details)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 """,
-                (version_id, dataset_id, version, uri, checksum),
+                (
+                    version_id,
+                    dataset_id,
+                    version,
+                    uri,
+                    checksum,
+                    status,
+                    int(quality_score),
+                    summary or [],
+                    json.dumps(details or []),
+                ),
             )
             return version_id
 
@@ -155,17 +171,76 @@ def preview_dataset_csv(csv_bytes: bytes) -> dict[str, Any]:
     return _analyze_csv(csv_bytes)
 
 
+def _business_validate_from_analysis(
+    analysis: dict[str, Any],
+    required_cols: list[str] | None = None,
+) -> dict[str, Any]:
+    columns = [str(c) for c in (analysis.get("columns") or [])]
+    row_count = int(analysis.get("row_count") or 0)
+    null_ratio = analysis.get("null_ratio") or {}
+    required = [str(c).strip() for c in (required_cols or []) if str(c).strip()]
+
+    if row_count <= 0:
+        return {
+            "status": "failed",
+            "quality_score": 0,
+            "summary": ["empty dataset"],
+            "details": [],
+        }
+
+    missing = sorted(set(required) - set(columns))
+    if missing:
+        return {
+            "status": "failed",
+            "quality_score": 0,
+            "summary": [f"missing required columns: {', '.join(missing)}"],
+            "details": [{"issue": "missing_columns", "columns": missing, "severity": "failed"}],
+        }
+
+    status = "ready"
+    score = 100
+    summary: list[str] = []
+    details: list[dict[str, Any]] = []
+
+    for col, value in null_ratio.items():
+        try:
+            ratio = float(value or 0.0)
+        except Exception:
+            ratio = 0.0
+        if ratio > 0.6:
+            status = "failed"
+            score = 0
+            summary.append("critical missing values")
+            details.append({"column": str(col), "issue": "missing", "value": ratio, "severity": "failed"})
+            continue
+        if ratio > 0.3:
+            if status != "failed":
+                status = "warning"
+                score = max(0, score - 20)
+            summary.append("high missing values")
+            details.append({"column": str(col), "issue": "missing", "value": ratio, "severity": "warning"})
+
+    return {
+        "status": status,
+        "quality_score": max(0, min(100, int(score))),
+        "summary": sorted(set(summary)),
+        "details": details,
+    }
+
+
 def create_dataset_version_from_csv_upload(
     tenant_id: str,
     project_id: str,
     dataset_name: str,
     csv_bytes: bytes,
     source_filename: str,
+    required_cols: list[str] | None = None,
 ) -> dict[str, Any]:
     safe_dataset_name = str(dataset_name or "").strip()
     if not safe_dataset_name:
         raise ValueError("dataset_name_required")
     analysis = _analyze_csv(csv_bytes)
+    business_validation = _business_validate_from_analysis(analysis, required_cols=required_cols)
     checksum = hashlib.sha256(csv_bytes).hexdigest()
     dataset_id = _upsert_dataset(
         tenant_id=tenant_id,
@@ -203,6 +278,10 @@ def create_dataset_version_from_csv_upload(
         version=version,
         uri=artifact_uri,
         checksum=checksum,
+        status=str(business_validation.get("status") or "ready"),
+        quality_score=int(business_validation.get("quality_score") or 0),
+        summary=[str(x) for x in (business_validation.get("summary") or [])],
+        details=[d for d in (business_validation.get("details") or []) if isinstance(d, dict)],
     )
     return {
         "dataset_id": dataset_id,
@@ -211,6 +290,10 @@ def create_dataset_version_from_csv_upload(
         "version": version,
         "uri": artifact_uri,
         "checksum": checksum,
+        "status": business_validation.get("status", "ready"),
+        "quality_score": int(business_validation.get("quality_score") or 0),
+        "summary": business_validation.get("summary") or [],
+        "details": business_validation.get("details") or [],
         **analysis,
     }
 
@@ -399,6 +482,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
+                     , dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
@@ -414,6 +498,10 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             "uri": r[2],
             "checksum": r[3],
             "created_at": r[4].isoformat(),
+            "status": r[5] or "ready",
+            "quality_score": int(r[6] or 0),
+            "summary": r[7] or [],
+            "details": r[8] or [],
         }
         for r in rows
     ]
@@ -424,7 +512,8 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name
+                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
+                       dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND dv.version_id = %s
@@ -442,7 +531,150 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "created_at": row[4].isoformat(),
         "dataset_id": row[5],
         "dataset_name": row[6],
+        "status": row[7] or "ready",
+        "quality_score": int(row[8] or 0),
+        "summary": row[9] or [],
+        "details": row[10] or [],
     }
+
+
+def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, version_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM lineage_edges
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND (input_dataset_version_id = %s OR output_dataset_version_id = %s)
+                """,
+                (tenant_id, project_id, version_id, version_id),
+            )
+            cur.execute(
+                """
+                DELETE FROM dataset_versions dv
+                USING datasets d
+                WHERE dv.dataset_id = d.dataset_id
+                  AND d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND d.dataset_id = %s
+                  AND dv.version_id = %s
+                """,
+                (tenant_id, project_id, dataset_id, version_id),
+            )
+            deleted = cur.rowcount
+    return bool(deleted)
+
+
+def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            version_ids = [str(r[0]) for r in (cur.fetchall() or [])]
+            if version_ids:
+                cur.execute(
+                    """
+                    DELETE FROM lineage_edges
+                    WHERE tenant_id = %s
+                      AND project_id = %s
+                      AND (
+                        input_dataset_version_id = ANY(%s::text[])
+                        OR output_dataset_version_id = ANY(%s::text[])
+                      )
+                    """,
+                    (tenant_id, project_id, version_ids, version_ids),
+                )
+                cur.execute("DELETE FROM dataset_versions WHERE dataset_id = %s", (dataset_id,))
+            cur.execute(
+                """
+                DELETE FROM datasets
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            deleted = cur.rowcount
+    return bool(deleted)
+
+
+def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, version_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            # Remove lineage links tied to this dataset version first.
+            cur.execute(
+                """
+                DELETE FROM lineage_edges
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND (input_dataset_version_id = %s OR output_dataset_version_id = %s)
+                """,
+                (tenant_id, project_id, version_id, version_id),
+            )
+            cur.execute(
+                """
+                DELETE FROM dataset_versions dv
+                USING datasets d
+                WHERE dv.dataset_id = d.dataset_id
+                  AND d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND d.dataset_id = %s
+                  AND dv.version_id = %s
+                """,
+                (tenant_id, project_id, dataset_id, version_id),
+            )
+            deleted = cur.rowcount
+    return bool(deleted)
+
+
+def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            version_ids = [str(r[0]) for r in (cur.fetchall() or [])]
+            if version_ids:
+                cur.execute(
+                    """
+                    DELETE FROM lineage_edges
+                    WHERE tenant_id = %s
+                      AND project_id = %s
+                      AND (
+                        input_dataset_version_id = ANY(%s::text[])
+                        OR output_dataset_version_id = ANY(%s::text[])
+                      )
+                    """,
+                    (tenant_id, project_id, version_ids, version_ids),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM dataset_versions
+                    WHERE dataset_id = %s
+                    """,
+                    (dataset_id,),
+                )
+            cur.execute(
+                """
+                DELETE FROM datasets
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            deleted = cur.rowcount
+    return bool(deleted)
 
 
 def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
@@ -629,7 +861,8 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name
+                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
+                       dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s
@@ -648,6 +881,10 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
             "created_at": r[4].isoformat(),
             "dataset_id": r[5],
             "dataset_name": r[6],
+            "status": r[7] or "ready",
+            "quality_score": int(r[8] or 0),
+            "summary": r[9] or [],
+            "details": r[10] or [],
         }
         for r in rows
     ]

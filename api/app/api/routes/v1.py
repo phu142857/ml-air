@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -651,6 +652,7 @@ async def upload_dataset_v1(
     tenant_id: str,
     project_id: str,
     dataset_name: str = Form(...),
+    required_cols: str | None = Form(default=None),
     file: UploadFile = File(...),
     authorization: str | None = Header(default=None),
 ) -> dict:
@@ -658,15 +660,23 @@ async def upload_dataset_v1(
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     try:
         csv_bytes = await file.read()
+        required_columns: list[str] | None = None
+        if required_cols:
+            parsed = json.loads(required_cols)
+            if isinstance(parsed, list):
+                required_columns = [str(col) for col in parsed]
         return lineage_service.create_dataset_version_from_csv_upload(
             tenant_id=tenant_id,
             project_id=project_id,
             dataset_name=dataset_name,
             csv_bytes=csv_bytes,
             source_filename=file.filename or "data.csv",
+            required_cols=required_columns,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="required_cols_must_be_json_array") from exc
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
@@ -714,6 +724,70 @@ def list_dataset_versions_v1(
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
     return {"items": lineage_service.list_dataset_versions(tenant_id, project_id, dataset_id)}
+
+
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
+def delete_dataset_v1(
+    tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    ok = lineage_service.delete_dataset(tenant_id, project_id, dataset_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {"dataset_id": dataset_id, "deleted": True}
+
+
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}")
+def delete_dataset_version_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    ok = lineage_service.delete_dataset_version(tenant_id, project_id, dataset_id, version_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return {"dataset_id": dataset_id, "version_id": version_id, "deleted": True}
+
+
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
+def delete_dataset_v1(
+    tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    ok = lineage_service.delete_dataset(tenant_id, project_id, dataset_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {"dataset_id": dataset_id, "deleted": True}
+
+
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}")
+def delete_dataset_version_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    ok = lineage_service.delete_dataset_version(tenant_id, project_id, dataset_id, version_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return {"dataset_id": dataset_id, "version_id": version_id, "deleted": True}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/runs")

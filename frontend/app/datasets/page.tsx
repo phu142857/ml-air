@@ -5,6 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import {
+  type DatasetVersionItem,
+  deleteDataset,
+  deleteDatasetVersion,
   fetchDatasets,
   fetchDatasetVersions,
   fetchModelResolvedPipeline,
@@ -16,6 +19,8 @@ import {
   uploadDatasetCsv
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
+import { formatDateTimeCompact } from "@/lib/utils";
 
 export default function DatasetsPage() {
   const router = useRouter();
@@ -29,6 +34,12 @@ export default function DatasetsPage() {
   const [advancedMode, setAdvancedMode] = useState(false);
   const [trainingMode, setTrainingMode] = useState("standard");
   const [datasetMsg, setDatasetMsg] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmBody, setConfirmBody] = useState("");
+  const [confirmAction, setConfirmAction] = useState<null | (() => Promise<void>)>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailVersion, setDetailVersion] = useState<DatasetVersionItem | null>(null);
 
   const datasetsQuery = useQuery({
     queryKey: ["datasets", tenantId, projectId],
@@ -101,9 +112,44 @@ export default function DatasetsPage() {
     },
     onError: (e: any) => setDatasetMsg(`Upload failed: ${String(e?.message || e)}`)
   });
+  const deleteDatasetMutation = useMutation({
+    mutationFn: () => deleteDataset(tenantId, projectId, selectedDatasetId, token),
+    onSuccess: async () => {
+      setDatasetMsg("Dataset deleted");
+      setSelectedDatasetId("");
+      await queryClient.invalidateQueries({ queryKey: ["datasets", tenantId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["dataset-versions", tenantId, projectId, selectedDatasetId] });
+    },
+    onError: (e: any) => setDatasetMsg(`Delete dataset failed: ${String(e?.message || e)}`)
+  });
+  const deleteDatasetVersionMutation = useMutation({
+    mutationFn: (versionId: string) => deleteDatasetVersion(tenantId, projectId, selectedDatasetId, versionId, token),
+    onSuccess: async () => {
+      setDatasetMsg("Dataset version deleted");
+      await queryClient.invalidateQueries({ queryKey: ["dataset-versions", tenantId, projectId, selectedDatasetId] });
+      await queryClient.invalidateQueries({ queryKey: ["datasets", tenantId, projectId] });
+    },
+    onError: (e: any) => setDatasetMsg(`Delete version failed: ${String(e?.message || e)}`)
+  });
+  const openConfirm = (title: string, body: string, action: () => Promise<void>) => {
+    setConfirmTitle(title);
+    setConfirmBody(body);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
 
   return (
     <RouteShell activeNav="Datasets" title="Datasets" subtitle="Upload CSV, manage versions, and train from dataset">
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        body={confirmBody}
+        onCancel={() => setConfirmOpen(false)}
+        onDelete={() => {
+          if (confirmAction) void confirmAction();
+        }}
+        isLoading={deleteDatasetMutation.isPending || deleteDatasetVersionMutation.isPending}
+      />
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
           <h2 className="mb-3 text-sm font-semibold text-slate-200">Upload CSV</h2>
@@ -156,7 +202,7 @@ export default function DatasetsPage() {
                   >
                     <td className="px-3 py-2">{d.name}</td>
                     <td className="px-3 py-2">{d.current_size || 0}</td>
-                    <td className="px-3 py-2">{d.updated_at || d.created_at}</td>
+                    <td className="px-3 py-2">{formatDateTimeCompact(d.updated_at || d.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -165,9 +211,29 @@ export default function DatasetsPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">
-            Dataset Versions {selectedDataset ? `- ${selectedDataset.name}` : ""}
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-200">
+              Dataset Versions {selectedDataset ? `- ${selectedDataset.name}` : ""}
+            </h2>
+            {selectedDatasetId ? (
+              <button
+                className="btn-action-delete rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+                disabled={!selectedDatasetId || deleteDatasetMutation.isPending}
+                onClick={() =>
+                  openConfirm(
+                    "Delete dataset",
+                    `Delete dataset "${selectedDataset?.name || selectedDatasetId}" and all versions?`,
+                    async () => {
+                      await deleteDatasetMutation.mutateAsync();
+                      setConfirmOpen(false);
+                    }
+                  )
+                }
+              >
+                Delete Dataset
+              </button>
+            ) : null}
+          </div>
           {!selectedDatasetId ? (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-400">
               Select a dataset to view versions.
@@ -234,6 +300,8 @@ export default function DatasetsPage() {
                   <thead className="bg-slate-900 text-slate-400">
                     <tr>
                       <th className="px-3 py-2 text-left">Version</th>
+                      <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-left">Score</th>
                       <th className="px-3 py-2 text-left">Created</th>
                       <th className="px-3 py-2 text-left">Action</th>
                     </tr>
@@ -242,10 +310,31 @@ export default function DatasetsPage() {
                     {(versionsQuery.data?.items || []).map((v) => (
                       <tr key={v.version_id} className="interactive-row border-t border-slate-800">
                         <td className="px-3 py-2">{v.version}</td>
-                        <td className="px-3 py-2">{v.created_at}</td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
+                          >
+                            {normalizeDatasetStatus(v.status)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{Number(v.quality_score ?? 0)}</td>
+                        <td className="px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
                         <td className="px-3 py-2">
                           <button
-                            className="btn-action-primary rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+                            className="btn-action-cancel rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+                            title="View details"
+                            aria-label="View details"
+                            onClick={() => {
+                              setDetailVersion(v);
+                              setDetailOpen(true);
+                            }}
+                          >
+                            <IconInfo />
+                          </button>
+                          <button
+                            className="btn-action-primary ml-2 rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+                            title="Train"
+                            aria-label="Train"
                             onClick={async () => {
                               const effectivePipeline = pipelineId || resolvedPipelineId;
                               const res = await triggerPipelineRunWithGating(tenantId, projectId, effectivePipeline, token, {
@@ -261,9 +350,27 @@ export default function DatasetsPage() {
                               });
                               if (res.run_id) router.push(`/runs/${res.run_id}`);
                             }}
-                            disabled={!resolvedPipelineId && !pipelineId}
+                            disabled={normalizeDatasetStatus(v.status) === "FAILED" || (!resolvedPipelineId && !pipelineId)}
                           >
-                            Train with this version
+                            <IconStart />
+                          </button>
+                          <button
+                            className="btn-action-delete ml-2 rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+                            title="Delete version"
+                            aria-label="Delete version"
+                            disabled={deleteDatasetVersionMutation.isPending}
+                            onClick={() =>
+                              openConfirm(
+                                "Delete dataset version",
+                                `Delete version "${v.version}" of dataset "${selectedDataset?.name || selectedDatasetId}"?`,
+                                async () => {
+                                  await deleteDatasetVersionMutation.mutateAsync(v.version_id);
+                                  setConfirmOpen(false);
+                                }
+                              )
+                            }
+                          >
+                            <IconDelete />
                           </button>
                         </td>
                       </tr>
@@ -275,6 +382,168 @@ export default function DatasetsPage() {
           )}
         </section>
       </div>
+      <VersionDetailDialog
+        open={detailOpen}
+        version={detailVersion}
+        onClose={() => setDetailOpen(false)}
+      />
     </RouteShell>
+  );
+}
+
+function VersionDetailDialog({
+  open,
+  version,
+  onClose
+}: {
+  open: boolean;
+  version: DatasetVersionItem | null;
+  onClose: () => void;
+}) {
+  if (!open || !version) return null;
+  const summary = Array.isArray(version.summary) ? version.summary : [];
+  const details = Array.isArray(version.details) ? version.details : [];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+        <h3 className="mb-3 text-sm font-semibold text-slate-200">Dataset Version Detail</h3>
+        <div className="space-y-1 text-sm">
+          <div className="text-slate-200">
+            Status: <span className="font-semibold">{String(version.status || "ready")}</span>
+          </div>
+          <div className="text-slate-200">
+            Score: <span className="font-semibold">{Number(version.quality_score ?? 0)}</span>
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="text-xs font-semibold text-slate-300">Summary</div>
+          {summary.length ? (
+            <ul className="mt-1 list-inside list-disc text-sm text-slate-200">
+              {summary.map((item: string, idx: number) => (
+                <li key={`${item}-${idx}`}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-sm text-slate-400">No summary</div>
+          )}
+        </div>
+        <div className="mt-3">
+          <div className="text-xs font-semibold text-slate-300">Details</div>
+          {details.length ? (
+            <ul className="mt-1 max-h-52 space-y-1 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-300">
+              {details.map((item: Record<string, unknown>, idx: number) => (
+                <li key={idx} className="rounded border border-slate-800 bg-slate-900/70 px-2 py-1">
+                  <span className={detailSeverityClass(item)}>{formatDetailItem(item)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-1 text-sm text-slate-400">No details</div>
+          )}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button onClick={onClose} className="btn-action-cancel rounded-lg px-3 py-2 text-xs">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatDetailItem(item: Record<string, unknown>): string {
+  const column = String(item.column || item.field || "unknown");
+  const issue = String(item.issue || "issue");
+  const severity = String(item.severity || "info");
+  const rawValue = item.value;
+  const valueNum =
+    typeof rawValue === "number"
+      ? rawValue
+      : typeof rawValue === "string"
+        ? Number.parseFloat(rawValue)
+        : Number.NaN;
+  const valueText =
+    Number.isFinite(valueNum) && valueNum >= 0 && valueNum <= 1
+      ? `${Math.round(valueNum * 100)}%`
+      : rawValue !== undefined && rawValue !== null
+        ? String(rawValue)
+        : "-";
+  return `${column}: ${valueText} ${issue} (${severity})`;
+}
+
+function detailSeverityClass(item: Record<string, unknown>): string {
+  const severity = String(item.severity || "").toLowerCase();
+  if (severity === "failed" || severity === "error" || severity === "critical") return "text-red-300";
+  if (severity === "warning" || severity === "warn") return "text-amber-300";
+  return "text-blue-300";
+}
+
+function IconInfo() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="8" r="1.2" fill="currentColor" />
+      <path d="M12 11v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconStart() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
+      <rect x="3.5" y="5.5" width="17" height="13" rx="6.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M10 9.5l5 2.5-5 2.5v-5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconDelete() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
+      <path d="M8 7h8M10 7V5h4v2M7 7l1 12h8l1-12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M10 10v6M14 10v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  onDelete,
+  onCancel,
+  isLoading
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  onDelete: () => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+        <h3 className="mb-2 text-sm font-semibold text-slate-200">{title}</h3>
+        <p className="mb-4 text-sm text-slate-400">{body}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="btn-action-cancel rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDelete}
+            className="btn-action-delete rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+            disabled={isLoading}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

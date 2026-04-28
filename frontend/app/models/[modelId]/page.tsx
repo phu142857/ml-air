@@ -21,6 +21,7 @@ import {
   updateModelTriggerPolicy
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { formatDateTimeCompact } from "@/lib/utils";
 
 export default function ModelDetailPage() {
   const params = useParams<{ modelId: string }>();
@@ -535,7 +536,7 @@ export default function ModelDetailPage() {
                 <div key={r.run_id} className="flex items-center justify-between rounded border border-slate-700 px-2 py-1">
                   <span>{r.run_id}</span>
                   <span>
-                    {r.status} | {r.training_mode || "full"} | {r.updated_at || "-"}
+                    {r.status} | {r.training_mode || "full"} | {formatDateTimeCompact(r.updated_at)}
                   </span>
                 </div>
               ))}
