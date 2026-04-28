@@ -22,7 +22,7 @@ from app.services.model_registry_service import (
 from app.plugins.registry import plugin_registry
 from app.services.auth_service import authenticate_bearer, authorize_scope
 from app.services.log_service import append_run_log, read_run_logs
-from app.services.project_service import list_projects
+from app.services.project_service import list_projects, list_tenants
 from app.services.queue_service import replay_dlq_for_run
 from app.services import pipeline_version_service
 from app.services import search_service
@@ -184,6 +184,17 @@ def list_projects_v1(tenant_id: str, limit: int = 50, authorization: str | None 
         "limit": limit,
         "items": list_projects(tenant_id=tenant_id, limit=limit),
     }
+
+
+@router.get("/tenants")
+def list_tenants_v1(limit: int = 50, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    if principal.tenant_id:
+        return {
+            "limit": limit,
+            "items": [{"tenant_id": principal.tenant_id, "name": principal.tenant_id}],
+        }
+    return {"limit": limit, "items": list_tenants(limit=limit)}
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs")

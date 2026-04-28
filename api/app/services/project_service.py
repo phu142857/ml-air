@@ -35,7 +35,30 @@ def list_projects(tenant_id: str, limit: int) -> list[dict[str, str]]:
                     if pid and pid.lower() not in _RESERVED_PROJECT_IDS:
                         discovered.add(pid)
 
-    # Always include global/default scope for UX consistency.
-    discovered.add("default_project")
-    ordered = ["default_project"] + sorted([p for p in discovered if p != "default_project"])
+    ordered = sorted(discovered)
     return [{"project_id": pid, "name": pid} for pid in ordered[:lim]]
+
+
+def list_tenants(limit: int) -> list[dict[str, str]]:
+    lim = max(1, min(int(limit or 50), 500))
+    discovered: set[str] = set()
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            for table_name in _PROJECT_SOURCES:
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT tenant_id
+                    FROM {table_name}
+                    WHERE tenant_id IS NOT NULL AND tenant_id <> ''
+                    ORDER BY tenant_id ASC
+                    LIMIT %s
+                    """,
+                    (lim,),
+                )
+                rows = cur.fetchall() or []
+                for row in rows:
+                    tid = str(row[0] or "").strip()
+                    if tid:
+                        discovered.add(tid)
+    ordered = sorted(discovered)
+    return [{"tenant_id": tid, "name": tid} for tid in ordered[:lim]]

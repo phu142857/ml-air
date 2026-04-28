@@ -15,8 +15,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 const STORAGE_KEY = "ml-air:ui-context";
 
 export function AppContextProvider({ children }: PropsWithChildren) {
-  const [tenantId, setTenantId] = useState("default");
-  const [projectId, setProjectId] = useState("default_project");
+  const [tenantId, setTenantId] = useState("all");
+  const [projectId, setProjectId] = useState("all");
   const [token, setToken] = useState("maintainer-token");
 
   useEffect(() => {
@@ -25,7 +25,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<Pick<AppContextValue, "tenantId" | "projectId" | "token">>;
       if (typeof parsed.tenantId === "string" && parsed.tenantId.trim()) setTenantId(parsed.tenantId);
-      if (typeof parsed.projectId === "string" && parsed.projectId.trim()) setProjectId(parsed.projectId);
+      if (typeof parsed.projectId === "string" && parsed.projectId.trim()) {
+        const value = parsed.projectId.trim();
+        setProjectId(value === "global" ? "all" : value);
+      }
       if (typeof parsed.token === "string" && parsed.token.trim()) setToken(parsed.token);
     } catch {
       // ignore invalid localStorage payload

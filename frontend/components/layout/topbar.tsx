@@ -1,21 +1,63 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "@/lib/app-context";
 import { useTheme } from "@/lib/theme-context";
-import { fetchTenantProjects, fetchWhoAmI } from "@/lib/api";
+import { fetchTenantProjects, fetchTenants, fetchWhoAmI } from "@/lib/api";
 
 export function Topbar() {
   const router = useRouter();
   const { tenantId, projectId, token, setTenantId, setProjectId, setToken } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const [q, setQ] = useState("");
-  const [tenantOptions, setTenantOptions] = useState<string[]>(tenantId ? [tenantId] : ["default"]);
-  const [projectOptions, setProjectOptions] = useState<string[]>(["default_project"]);
+  const [tenantOptions, setTenantOptions] = useState<string[]>(tenantId ? [tenantId] : ["all"]);
+  const [projectOptions, setProjectOptions] = useState<string[]>([]);
   const [scopeMsg, setScopeMsg] = useState("");
   const [isLoadingScope, setIsLoadingScope] = useState(false);
-  const globalProjectLabel = useMemo(() => (projectId === "default_project" ? "global" : projectId), [projectId]);
+  const loadScope = useCallback(
+    async (preferredTenant?: string) => {
+      setScopeMsg("");
+      setIsLoadingScope(true);
+      try {
+        let resolvedTenant = String(preferredTenant || tenantId || "default").trim() || "default";
+        let whoamiSkipped = false;
+        const tenants = await fetchTenants(token);
+        const mergedTenants = Array.from(new Set(["all", ...tenants]));
+        setTenantOptions(mergedTenants);
+        if (token) {
+          try {
+            const me = await fetchWhoAmI(token);
+            const candidate = String(me.tenant_id || "").trim();
+            if (candidate && mergedTenants.includes(candidate)) {
+              resolvedTenant = candidate;
+            }
+          } catch {
+            // Fallback: still load tenant projects even if whoami fails.
+            whoamiSkipped = true;
+          }
+        }
+        const projects = await fetchTenantProjects(resolvedTenant, token);
+        setProjectOptions(projects);
+        setTenantId(resolvedTenant);
+        if (projectId !== "all" && !projects.includes(projectId)) {
+          setProjectId("all");
+        }
+        setScopeMsg(`Loaded ${projects.length} projects from database${whoamiSkipped ? " (whoami skipped)" : ""}`);
+      } catch (e: any) {
+        setScopeMsg(`Load scope failed: ${String(e?.message || e)}`);
+      } finally {
+        setIsLoadingScope(false);
+      }
+    },
+    [tenantId, token, projectId, setProjectId, setTenantId]
+  );
+
+  useEffect(() => {
+    if (!token || isLoadingScope) return;
+    if (projectOptions.length > 1) return;
+    void loadScope();
+  }, [token, isLoadingScope, projectOptions.length, loadScope]);
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-700 bg-bg-muted px-6">
@@ -48,7 +90,12 @@ export function Topbar() {
         </button>
         <select
           value={tenantId}
-          onChange={(e) => setTenantId(e.target.value)}
+          onChange={(e) => {
+            const t = e.target.value;
+            setTenantId(t);
+            setProjectId("all");
+            void loadScope(t);
+          }}
           className="min-w-40 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
         >
           {tenantOptions.map((x) => (
@@ -58,22 +105,19 @@ export function Topbar() {
           ))}
         </select>
         <select
-          value={globalProjectLabel}
+          value={projectId}
           onChange={(e) => {
             const raw = e.target.value;
-            setProjectId(raw === "global" ? "default_project" : raw);
+            setProjectId(raw);
           }}
           className="min-w-44 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
         >
-          <option value="global">global</option>
           <option value="all">all</option>
-          {projectOptions
-            .filter((p) => p !== "default_project")
-            .map((x) => (
-              <option key={x} value={x}>
-                {x}
-              </option>
-            ))}
+          {projectOptions.map((x) => (
+            <option key={x} value={x}>
+              {x}
+            </option>
+          ))}
         </select>
         <input
           value={token}
@@ -83,26 +127,7 @@ export function Topbar() {
         />
         <button
           type="button"
-          onClick={async () => {
-            setScopeMsg("");
-            setIsLoadingScope(true);
-            try {
-              const me = await fetchWhoAmI(token);
-              const t = String(me.tenant_id || tenantId || "default").trim() || "default";
-              const projects = await fetchTenantProjects(t, token);
-              setTenantOptions([t]);
-              setProjectOptions(projects);
-              setTenantId(t);
-              if (!projects.includes(projectId)) {
-                setProjectId("default_project");
-              }
-              setScopeMsg(`Loaded ${projects.length} projects`);
-            } catch (e: any) {
-              setScopeMsg(`Load scope failed: ${String(e?.message || e)}`);
-            } finally {
-              setIsLoadingScope(false);
-            }
-          }}
+          onClick={() => void loadScope()}
           disabled={isLoadingScope}
           className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
         >

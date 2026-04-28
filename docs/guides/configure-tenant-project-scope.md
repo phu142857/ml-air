@@ -6,34 +6,40 @@ Configure scope behavior so MLAir correctly lists and filters `tenant/project` i
 
 ## Steps
 
-1. Ensure project discovery in MLAir is DB-driven.
-2. Ensure external app sync creates scoped resources per clinic/project.
-3. Load scope in MLAir UI and verify tenant/project dropdown values.
-4. Confirm `global` and `all` behaviors match expected filtering.
+1. Ensure tenant discovery in MLAir is DB-driven.
+2. Ensure project discovery in MLAir is DB-driven.
+3. Ensure external app sync creates scoped resources per clinic/project.
+4. Load scope in MLAir UI and verify tenant/project dropdown values.
+5. Confirm `all` behavior matches expected filtering for both tenant and project.
 
 ## Command
 
 ```bash
-# 1) Verify tenant projects from MLAir API
+# 1) Verify tenants from MLAir API (DB-driven)
+curl -H "Authorization: Bearer admin-token" \
+  "http://localhost:8080/v1/tenants?limit=200"
+
+# 2) Verify tenant projects from MLAir API
 curl -H "Authorization: Bearer admin-token" \
   "http://localhost:8080/v1/tenants/default/projects?limit=200"
 
-# 2) Trigger sync from vet-ai to ensure clinic scopes exist
+# 3) Trigger sync from vet-ai to ensure clinic scopes exist
 curl -X POST -H "Authorization: Bearer admin-secret" \
   "http://localhost:8000/mlair/models/sync"
 
-# 3) Verify tenant projects again (should include clinic_* scopes)
+# 4) Verify tenant projects again (should include clinic_* scopes)
 curl -H "Authorization: Bearer admin-token" \
   "http://localhost:8080/v1/tenants/default/projects?limit=200"
 ```
 
 ## Result
 
+- `GET /v1/tenants` returns real tenants discovered from DB (or restricted by token scope).
 - `GET /v1/tenants/{tenant}/projects` returns real projects discovered from DB, not static hard-coded values.
-- MLAir UI tenant/project dropdown can show clinic/project scopes beyond `global` and `all`.
+- MLAir UI tenant/project dropdown can show dynamic tenant/project scopes from database data.
 - Scope filtering works consistently:
-  - `global` -> `default_project`
-  - `all` -> aggregate across all tenant projects
+  - `tenant=all` -> aggregate across all visible tenants
+  - `project=all` -> aggregate across all visible projects in the selected tenant
   - specific project -> scoped view for that project only
 
 ## Notes
@@ -50,8 +56,9 @@ curl -H "Authorization: Bearer admin-token" \
 
 ## Troubleshooting
 
-- **Only `global/all` visible in dropdown**
-  - Verify project discovery API output first.
+- **Only `all` visible in dropdown**
+  - Verify tenant discovery API output first (`GET /v1/tenants`).
+  - Verify project discovery API output next (`GET /v1/tenants/{tenant}/projects`).
   - Ensure sync has run and created tenant/project-scoped data.
   - Check token scope (`tenant_id`, `project_ids`) in `whoami`.
 - **Clinic data merged into a non-clinic project (for example `risk_project`)**

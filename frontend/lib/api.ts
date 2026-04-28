@@ -84,6 +84,9 @@ export type DatasetItem = {
 type ProjectsResponse = {
   items: Array<{ project_id: string }>;
 };
+type TenantsResponse = {
+  items: Array<{ tenant_id: string }>;
+};
 
 export type WhoAmIResponse = {
   role: string;
@@ -134,6 +137,27 @@ function authHeaders(token: string) {
 }
 
 async function fetchProjectsForTenant(tenantId: string, token: string): Promise<string[]> {
+  if (tenantId === "all") {
+    const tenants = await fetchTenants(token);
+    const responses = await Promise.all(
+      tenants.map(async (tid) => {
+        const res = await fetch(`${API_BASE}/v1/tenants/${tid}/projects?limit=500`, {
+          headers: authHeaders(token),
+          cache: "no-store"
+        });
+        if (!res.ok) return { items: [] as Array<{ project_id: string }> };
+        return (await res.json()) as ProjectsResponse;
+      })
+    );
+    const ids = responses
+      .flatMap((x) => x.items || [])
+      .map((x) => normalizeProjectId(String(x.project_id || "").trim()))
+      .filter((x) => {
+        const key = String(x || "").trim().toLowerCase();
+        return Boolean(key) && key !== "all" && key !== "global";
+      });
+    return Array.from(new Set(ids.map((x) => String(x).trim())));
+  }
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects?limit=500`, {
     headers: authHeaders(token),
     cache: "no-store"
@@ -146,8 +170,7 @@ async function fetchProjectsForTenant(tenantId: string, token: string): Promise<
       const key = String(x || "").trim().toLowerCase();
       return Boolean(key) && key !== "all" && key !== "global";
     });
-  // "all" must include global scope even when project listing is sparse.
-  return Array.from(new Set(["default_project", ...ids.map((x) => String(x).trim())]));
+  return Array.from(new Set(ids.map((x) => String(x).trim())));
 }
 
 export async function fetchWhoAmI(token: string): Promise<WhoAmIResponse> {
@@ -158,6 +181,20 @@ export async function fetchWhoAmI(token: string): Promise<WhoAmIResponse> {
   const data = (await res.json()) as WhoAmIResponse;
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data;
+}
+
+export async function fetchTenants(token: string): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/v1/tenants?limit=500`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = (await res.json()) as TenantsResponse;
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  const ids = (data.items || [])
+    .map((x) => String(x.tenant_id || "").trim())
+    .filter(Boolean)
+    .filter((x) => String(x).toLowerCase() !== "all");
+  return Array.from(new Set(ids));
 }
 
 export async function fetchTenantProjects(tenantId: string, token: string): Promise<string[]> {
