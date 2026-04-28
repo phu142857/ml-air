@@ -70,22 +70,22 @@ export default function RunDetailPage() {
       {/* 1. Header Actions */}
       <div className="flex items-center justify-between mb-8">
         <button
-          className="group flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all"
+          className="group flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors"
           onClick={() => router.push("/runs")}
         >
-          <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 
+          <ChevronLeft size={18} /> 
           Back to list
         </button>
 
         <div className="flex items-center gap-3">
           <a
             href={`/lineage?runId=${encodeURIComponent(runId)}`}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all text-sm font-semibold"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-colors text-sm font-semibold"
           >
             <GitBranch size={16} /> Lineage
           </a>
           <button
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-xl hover:border-slate-500 transition-all text-sm font-semibold"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-xl hover:border-slate-500 transition-colors text-sm font-semibold"
             onClick={async () => {
               const t = tasks[0]?.task_id;
               if (!t) return;
@@ -152,7 +152,7 @@ export default function RunDetailPage() {
                     </thead>
                     <tbody>
                       {Object.entries(runQuery.data.config_snapshot as Record<string, any>).map(([key, value]) => (
-                        <tr key={key} className="border-t border-default hover:border-l-4 hover:border-l-color-primary">
+                        <tr key={key} className="interactive-row border-t border-default">
                           <td className="px-3 py-2 text-primary font-mono text-xs">{key}</td>
                           <td className="px-3 py-2">
                             <code className="text-xs font-mono text-warning bg-warning/20 px-2 py-1 rounded border border-warning/40 whitespace-pre-wrap break-all block max-w-[300px] overflow-x-auto">
@@ -240,13 +240,15 @@ function DetailRow({ label, value, highlight = false }: { label: string, value: 
   };
 
   return (
-    <div className="flex justify-between items-center py-1">
-      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
-      <span className={`text-xs font-mono px-3 py-1 rounded-lg border shadow-sm ${
-        highlight ? getStatusStyles(String(value)) : 'text-slate-200 bg-slate-800/50 border-slate-700'
-      }`}>
-        {value?.toString() || "N/A"}
-      </span>
+    <div className="flex items-center justify-between border-b border-default py-2 last:border-b-0">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      {highlight ? (
+        <span className={`text-xs font-mono px-3 py-1 rounded-lg border shadow-sm ${getStatusStyles(String(value))}`}>
+          {value?.toString() || "N/A"}
+        </span>
+      ) : (
+        <span className="text-sm font-medium text-slate-200">{value?.toString() || "N/A"}</span>
+      )}
     </div>
   );
 }

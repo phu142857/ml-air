@@ -30,7 +30,7 @@ export function RunTrackingSection({ tracking }: Props) {
   );
 
   return (
-    <section className="card p-5 shadow-md transition-all">
+    <section className="card p-5 shadow-md transition-colors">
       <h2 className="mb-3 text-sm font-semibold text-primary">Tracking & Metadata</h2>
       
       {/* Tabs Navigation */}
@@ -43,8 +43,8 @@ export function RunTrackingSection({ tracking }: Props) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-all relative ${
-                  isActive ? "text-color-primary border-b-2 border-color-primary" : "text-secondary hover:text-primary"
+                className={`tab-stable flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors relative ${
+                  isActive ? "text-color-primary border-color-primary" : "text-secondary hover:text-primary"
                 }`}
               >
                 <Icon size={14} />

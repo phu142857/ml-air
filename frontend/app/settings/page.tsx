@@ -65,7 +65,7 @@ export default function SettingsPage() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-200">Plugin Registry</h2>
             <button
-              className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
+              className="btn-action-primary rounded-xl px-3 py-2 text-xs disabled:opacity-60"
               onClick={() => reloadMutation.mutate()}
               disabled={reloadMutation.isPending}
             >
@@ -86,22 +86,35 @@ export default function SettingsPage() {
                 {items.map((plugin) => (
                   <tr
                     key={plugin.name}
-                    className={`cursor-pointer border-t border-slate-800 ${selectedPlugin === plugin.name ? "bg-blue-900/20" : "hover:border-l-4 hover:border-l-blue-500"}`}
+                    className={`interactive-row cursor-pointer border-t border-slate-800 ${selectedPlugin === plugin.name ? "bg-blue-900/20" : ""}`}
                     onClick={() => setSelectedPlugin(plugin.name)}
                   >
                     <td className="px-3 py-2">{plugin.name}</td>
                     <td className="px-3 py-2">{plugin.version}</td>
                     <td className="px-3 py-2">{plugin.enabled ? "on" : "off"}</td>
                     <td className="px-3 py-2">
-                      <button
-                        className="rounded-lg bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-blue-900/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleMutation.mutate({ name: plugin.name, enabled: !plugin.enabled });
-                        }}
-                      >
-                        {plugin.enabled ? "Disable" : "Enable"}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          className="action-btn-xs btn-action-enable rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleMutation.mutate({ name: plugin.name, enabled: true });
+                          }}
+                          disabled={toggleMutation.isPending || plugin.enabled}
+                        >
+                          Enable
+                        </button>
+                        <button
+                          className="action-btn-xs btn-action-delete rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleMutation.mutate({ name: plugin.name, enabled: false });
+                          }}
+                          disabled={toggleMutation.isPending || !plugin.enabled}
+                        >
+                          Disable
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -152,7 +165,7 @@ export default function SettingsPage() {
                 />
                 <div className="mt-2 flex gap-2">
                   <button
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
+                    className="btn-action-enable rounded-lg px-3 py-1.5 text-xs disabled:opacity-60"
                     onClick={onValidate}
                     disabled={validateMutation.isPending}
                   >

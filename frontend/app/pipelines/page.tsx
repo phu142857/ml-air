@@ -33,7 +33,7 @@ export default function PipelinesPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="overflow-auto rounded-xl border border-slate-700">
           <table className="w-full text-sm">
-            <thead className="bg-slate-900 text-slate-400">
+            <thead className="bg-bg-card text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left">Pipeline</th>
                 <th className="px-3 py-2 text-left">Status</th>
@@ -45,7 +45,7 @@ export default function PipelinesPage() {
               {(data?.items ?? []).map((item) => (
                 <tr
                   key={item.pipeline_id}
-                  className="cursor-pointer border-t border-slate-800 hover:border-l-4 hover:border-l-blue-500"
+                  className="interactive-row cursor-pointer border-t border-slate-800"
                   onClick={() => {
                     setSelectedPipeline(item.pipeline_id);
                     router.push(`/pipelines/${item.pipeline_id}`);

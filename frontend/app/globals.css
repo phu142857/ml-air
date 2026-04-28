@@ -36,6 +36,8 @@
   --text-primary: #111827;
   --text-secondary: #6B7280;
   --text-disabled: #9CA3AF;
+  --text-warning-strong: #92400E;
+  --text-error-strong: #991B1B;
 
   /* Border */
   --border-default: #E5E7EB;
@@ -78,6 +80,8 @@
   --text-primary: #F9FAFB;
   --text-secondary: #9CA3AF;
   --text-disabled: #6B7280;
+  --text-warning-strong: #FCD34D;
+  --text-error-strong: #FCA5A5;
 
   /* Border */
   --border-default: #374151;
@@ -124,6 +128,95 @@ body {
 .button-secondary {
   background: var(--bg-muted);
   color: var(--text-primary);
+}
+
+/* Stable action-button widths to prevent layout jumping */
+.action-btn-xs {
+  min-width: 72px;
+}
+
+.action-btn-sm {
+  min-width: 92px;
+}
+
+.action-btn-md {
+  min-width: 132px;
+}
+
+/* Semantic action button colors */
+.btn-action-primary {
+  background-color: var(--color-primary) !important;
+  color: #fff !important;
+}
+
+.btn-action-primary:hover {
+  filter: brightness(0.92);
+}
+
+.btn-action-promote {
+  background-color: #7c3aed !important;
+  color: #fff !important;
+}
+
+.btn-action-promote:hover {
+  filter: brightness(0.92);
+}
+
+.btn-action-rollback {
+  background-color: #d97706 !important;
+  color: #fff !important;
+}
+
+.btn-action-rollback:hover {
+  filter: brightness(0.92);
+}
+
+.btn-action-delete {
+  background-color: var(--color-error) !important;
+  color: #fff !important;
+}
+
+.btn-action-delete:hover {
+  filter: brightness(0.92);
+}
+
+.btn-action-enable {
+  background-color: var(--color-success) !important;
+  color: #fff !important;
+}
+
+.btn-action-enable:hover {
+  filter: brightness(0.92);
+}
+
+.btn-action-cancel {
+  background-color: var(--color-primary) !important;
+  color: #fff !important;
+}
+
+.btn-action-cancel:hover {
+  filter: brightness(0.92);
+}
+
+/* Stable hover highlight without layout reflow */
+.interactive-row {
+  border-left: 4px solid transparent;
+}
+
+.interactive-row:hover {
+  border-left-color: var(--color-primary);
+}
+
+.interactive-item {
+  border-left: 4px solid transparent;
+}
+
+.interactive-item:hover {
+  border-left-color: var(--color-primary);
+}
+
+.tab-stable {
+  border-bottom: 2px solid transparent;
 }
 
 .status-badge.success {
@@ -193,6 +286,22 @@ body {
 .text-slate-400,
 .text-slate-500 {
   color: var(--text-secondary) !important;
+}
+
+.text-amber-100,
+.text-amber-200,
+.text-amber-300,
+.text-amber-400,
+.text-yellow-100,
+.text-yellow-200,
+.text-yellow-300,
+.text-yellow-400 {
+  color: var(--text-warning-strong) !important;
+}
+
+.text-red-300,
+.text-red-400 {
+  color: var(--text-error-strong) !important;
 }
 
 .placeholder\:text-slate-400::placeholder,

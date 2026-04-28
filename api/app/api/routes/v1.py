@@ -1,15 +1,21 @@
 import asyncio
 
-from fastapi import APIRouter, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.services.model_registry_service import (
     create_model,
     create_model_version,
+    create_model_version_from_upload,
+    create_model_version_from_uploads,
+    delete_model,
+    delete_model_version,
     get_model,
+    resolve_model_pipeline,
     get_model_status,
     list_model_versions,
     list_models,
+    preview_next_model_artifact_uri,
     promote_model_version,
 )
 from app.plugins.registry import plugin_registry
@@ -627,6 +633,42 @@ def list_datasets_v1(
     return {"items": lineage_service.list_datasets(tenant_id, project_id, limit, offset)}
 
 
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/upload-preview")
+async def preview_dataset_upload_v1(
+    tenant_id: str,
+    project_id: str,
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    csv_bytes = await file.read()
+    return lineage_service.preview_dataset_csv(csv_bytes)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/upload")
+async def upload_dataset_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_name: str = Form(...),
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    try:
+        csv_bytes = await file.read()
+        return lineage_service.create_dataset_version_from_csv_upload(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_name=dataset_name,
+            csv_bytes=csv_bytes,
+            source_filename=file.filename or "data.csv",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
 def get_dataset_v1(
     tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
@@ -890,6 +932,18 @@ def get_model_status_v1(
     return get_model_status(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/resolved-pipeline")
+def get_model_resolved_pipeline_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return resolve_model_pipeline(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy")
 def get_model_trigger_policy_v1(
     tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
@@ -940,6 +994,67 @@ def create_model_version_v1(
     )
 
 
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/import")
+async def import_model_version_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    model_file: UploadFile = File(...),
+    metadata_file: UploadFile | None = File(default=None),
+    run_id: str | None = Form(default=None),
+    stage: str = Form(default="staging"),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        model_bytes = await model_file.read()
+        metadata_bytes = await metadata_file.read() if metadata_file else None
+        return create_model_version_from_upload(
+            model_id=model_id,
+            model_filename=model_file.filename or "model.bin",
+            model_content=model_bytes,
+            metadata_filename=(metadata_file.filename if metadata_file else None),
+            metadata_content=metadata_bytes,
+            run_id=run_id,
+            stage=stage,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/import-many")
+async def import_model_version_many_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    files: list[UploadFile] = File(...),
+    run_id: str | None = Form(default=None),
+    stage: str = Form(default="staging"),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        uploaded: list[tuple[str, bytes]] = []
+        for file in files:
+            uploaded.append((file.filename or "artifact.bin", await file.read()))
+        return create_model_version_from_uploads(
+            model_id=model_id,
+            files=uploaded,
+            run_id=run_id,
+            stage=stage,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")
 def list_model_versions_v1(
     tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
@@ -947,6 +1062,18 @@ def list_model_versions_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     return {"items": list_model_versions(model_id)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/next-artifact-uri")
+def preview_model_artifact_uri_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return preview_next_model_artifact_uri(model_id)
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/promote")
@@ -963,6 +1090,43 @@ def promote_model_v1(
         return promote_model_version(model_id=model_id, version=payload.version, stage=payload.stage)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")
+def delete_model_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    ok = delete_model(model_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return {"model_id": model_id, "deleted": True}
+
+
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}")
+def delete_model_version_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    ok = delete_model_version(model_id, version)
+    if not ok:
+        raise HTTPException(status_code=404, detail="model_version_not_found")
+    return {"model_id": model_id, "version": version, "deleted": True}
 
 
 @router.get("/plugins")

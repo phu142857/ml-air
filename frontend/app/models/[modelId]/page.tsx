@@ -6,7 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import {
   checkPipelineReadiness,
+  deleteModel,
+  deleteModelVersion,
   fetchDataset,
+  previewDatasetUpload,
   fetchModelStatus,
   fetchModelTriggerPolicy,
   fetchModels,
@@ -14,6 +17,7 @@ import {
   fetchRun,
   promoteModelVersion,
   triggerPipelineRunWithGating,
+  uploadDatasetCsv,
   updateModelTriggerPolicy
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
@@ -36,6 +40,16 @@ export default function ModelDetailPage() {
   const [debounceMinutes, setDebounceMinutes] = useState("10");
   const [scheduleCron, setScheduleCron] = useState("0 */6 * * *");
   const [policyMsg, setPolicyMsg] = useState("");
+  const [datasetName, setDatasetName] = useState("user_events");
+  const [datasetFile, setDatasetFile] = useState<File | null>(null);
+  const [datasetPreview, setDatasetPreview] = useState<any>(null);
+  const [datasetMsg, setDatasetMsg] = useState("");
+  const [uploadedDatasetVersionId, setUploadedDatasetVersionId] = useState("");
+  const [isTrainingWithDataset, setIsTrainingWithDataset] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmBody, setConfirmBody] = useState("");
+  const [confirmAction, setConfirmAction] = useState<null | (() => Promise<void>)>(null);
 
   const modelsQuery = useQuery({
     queryKey: ["models", tenantId, projectId],
@@ -133,6 +147,48 @@ export default function ModelDetailPage() {
       setPolicyMsg(`Save failed: ${String(e?.message || e)}`);
     }
   });
+  const deleteModelMutation = useMutation({
+    mutationFn: () => deleteModel(tenantId, projectId, modelId, token),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["models", tenantId, projectId] });
+      router.push("/models");
+    }
+  });
+  const deleteVersionMutation = useMutation({
+    mutationFn: (version: number) => deleteModelVersion(tenantId, projectId, modelId, version, token),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, modelId] });
+    }
+  });
+  const previewDatasetMutation = useMutation({
+    mutationFn: async () => previewDatasetUpload(tenantId, projectId, token, datasetFile as File),
+    onSuccess: (data) => {
+      setDatasetPreview(data);
+      setDatasetMsg("");
+    },
+    onError: (e: any) => setDatasetMsg(`Preview failed: ${String(e?.message || e)}`)
+  });
+  const uploadDatasetMutation = useMutation({
+    mutationFn: async () =>
+      uploadDatasetCsv(tenantId, projectId, token, {
+        dataset_name: datasetName.trim(),
+        file: datasetFile as File
+      }),
+    onSuccess: (data) => {
+      setDatasetPreview(data);
+      setDatasetName(String(data.dataset_name || datasetName));
+      setUploadedDatasetVersionId(String(data.version_id || ""));
+      setDatasetMsg(`Uploaded ${data.dataset_name} ${data.version}`);
+    },
+    onError: (e: any) => setDatasetMsg(`Upload failed: ${String(e?.message || e)}`)
+  });
+
+  const openConfirm = (title: string, body: string, action: () => Promise<void>) => {
+    setConfirmTitle(title);
+    setConfirmBody(body);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
 
   const inferredPipelineId = String(latestRunQuery.data?.pipeline_id || "").trim();
   const pipelineId = String(pipelineIdInput || inferredPipelineId || "vet_ai_training_pipeline").trim();
@@ -148,13 +204,41 @@ export default function ModelDetailPage() {
 
   return (
     <RouteShell activeNav="Models" title={`Model ${model?.name ?? modelId}`} subtitle="Deep-link model versions and stages">
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        body={confirmBody}
+        onCancel={() => setConfirmOpen(false)}
+        onDelete={() => {
+          if (confirmAction) void confirmAction();
+        }}
+        isLoading={deleteModelMutation.isPending || deleteVersionMutation.isPending}
+      />
       <div className="mb-2">
-        <button
-          className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
-          onClick={() => router.push("/models")}
-        >
-          Back to Models
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
+            onClick={() => router.push("/models")}
+          >
+            Back to Models
+          </button>
+          <button
+            className="btn-action-delete rounded-xl px-3 py-2 text-sm disabled:opacity-60"
+            onClick={() =>
+              openConfirm(
+                "Delete model",
+                `Delete model "${model?.name || modelId}" and all of its versions?`,
+                async () => {
+                  await deleteModelMutation.mutateAsync();
+                  setConfirmOpen(false);
+                }
+              )
+            }
+            disabled={deleteModelMutation.isPending}
+          >
+            Delete model
+          </button>
+        </div>
       </div>
 
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
@@ -223,7 +307,7 @@ export default function ModelDetailPage() {
             </button>
             <button
               disabled={isRunning}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
+              className="btn-action-primary rounded-lg px-3 py-2 text-xs disabled:opacity-60"
               onClick={async () => {
                 setGateError("");
                 setIsRunning(true);
@@ -247,9 +331,6 @@ export default function ModelDetailPage() {
             >
               Run with override
             </button>
-          </div>
-          <div className="md:col-span-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            ⚠ Training with insufficient data may reduce accuracy
           </div>
         </div>
         {gateError ? <div className="mb-3 text-xs text-red-300">{gateError}</div> : null}
@@ -290,6 +371,91 @@ export default function ModelDetailPage() {
             </div>
           </div>
         ) : null}
+
+        <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
+          <h3 className="mb-2 text-xs font-semibold text-slate-200">Add Dataset (CSV)</h3>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-xs text-slate-400 md:col-span-1">
+              Dataset name
+              <input
+                value={datasetName}
+                onChange={(e) => setDatasetName(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-100"
+                placeholder="user_events"
+              />
+            </label>
+            <label className="text-xs text-slate-400 md:col-span-2">
+              CSV file
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => setDatasetFile(e.target.files?.[0] || null)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-100"
+              />
+            </label>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              className="btn-action-cancel rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+              onClick={() => previewDatasetMutation.mutate()}
+              disabled={!datasetFile || previewDatasetMutation.isPending}
+            >
+              Preview CSV
+            </button>
+            <button
+              className="btn-action-enable rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+              onClick={() => uploadDatasetMutation.mutate()}
+              disabled={!datasetFile || !datasetName.trim() || uploadDatasetMutation.isPending}
+            >
+              Create Dataset Version
+            </button>
+            <button
+              className="btn-action-primary rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+              onClick={async () => {
+                setDatasetMsg("");
+                setIsTrainingWithDataset(true);
+                try {
+                  const req = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
+                  const res = await triggerPipelineRunWithGating(tenantId, projectId, pipelineId, token, {
+                    pipeline_id: pipelineId,
+                    idempotency_key: `dataset-train-${Date.now()}`,
+                    priority: "normal",
+                    max_parallel_tasks: 1,
+                    training_mode: trainingMode,
+                    override_config: {
+                      dataset_version_id: uploadedDatasetVersionId || undefined,
+                      inputs: [{ dataset: datasetName.trim(), required_size: req }]
+                    }
+                  });
+                  if (res.run_id) {
+                    router.push(`/runs/${res.run_id}`);
+                    return;
+                  }
+                  setDatasetMsg("Training triggered but run_id was empty.");
+                } catch (e: any) {
+                  setDatasetMsg(`Train failed: ${String(e?.message || e)}`);
+                } finally {
+                  setIsTrainingWithDataset(false);
+                }
+              }}
+              disabled={!datasetName.trim() || isTrainingWithDataset}
+            >
+              Train with this dataset
+            </button>
+            {datasetMsg ? <span className="text-xs text-slate-200">{datasetMsg}</span> : null}
+          </div>
+          {datasetPreview ? (
+            <div className="mt-2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+              Columns: {datasetPreview.columns?.join(", ") || "-"} · Rows: {datasetPreview.row_count ?? 0}
+              {uploadedDatasetVersionId ? (
+                <span>
+                  {" "}
+                  · Dataset version: <span className="text-slate-200">{uploadedDatasetVersionId}</span>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
           <h3 className="mb-2 text-xs font-semibold text-slate-200">Auto Trigger Config</h3>
@@ -351,7 +517,7 @@ export default function ModelDetailPage() {
           </div>
           <div className="mt-2 flex items-center gap-2">
             <button
-              className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
+              className="btn-action-primary rounded-lg px-3 py-1 text-xs disabled:opacity-60"
               onClick={() => triggerPolicyMutation.mutate()}
               disabled={triggerPolicyMutation.isPending}
             >
@@ -397,36 +563,56 @@ export default function ModelDetailPage() {
           </div>
         </div>
         <div className="overflow-auto rounded-xl border border-slate-700">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
             <thead className="bg-slate-900 text-slate-400">
               <tr>
-                <th className="px-3 py-2 text-left">Version</th>
-                <th className="px-3 py-2 text-left">Stage</th>
+                <th className="w-[110px] px-3 py-2 text-left">Version</th>
+                <th className="w-[140px] px-3 py-2 text-left">Stage</th>
                 <th className="px-3 py-2 text-left">Run</th>
-                <th className="px-3 py-2 text-left">Action</th>
+                <th className="w-[420px] px-3 py-2 text-left">Action</th>
               </tr>
             </thead>
             <tbody>
               {versions.map((v) => (
-                <tr key={v.version_id} className="border-t border-slate-800 hover:border-l-4 hover:border-l-blue-500 transition-colors">
+                <tr key={v.version_id} className="interactive-row border-t border-slate-800 transition-colors">
                   <td className="px-3 py-2">v{v.version}</td>
-                  <td className="px-3 py-2">{v.stage}</td>
-                  <td className="px-3 py-2">{v.run_id || "-"}</td>
                   <td className="px-3 py-2">
-                    <div className="flex gap-2">
+                    <span className="inline-block w-full truncate">{v.stage}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="inline-block w-full truncate">{v.run_id || "-"}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-nowrap gap-2">
                       <button
                         onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
-                        className="rounded-lg bg-violet-600 px-2 py-1 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
-                        disabled={promoteMutation.isPending}
+                        className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+                        disabled={promoteMutation.isPending || v.stage === "production"}
                       >
                         Promote
                       </button>
                       <button
                         onClick={() => promoteMutation.mutate({ version: v.version, stage: "staging" })}
-                        className="rounded-lg bg-amber-600 px-2 py-1 text-xs text-white hover:bg-blue-900/20 disabled:opacity-60"
-                        disabled={promoteMutation.isPending}
+                        className="action-btn-md btn-action-rollback rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+                        disabled={promoteMutation.isPending || v.stage === "staging"}
                       >
                         Rollback to staging
+                      </button>
+                      <button
+                        onClick={() =>
+                          openConfirm(
+                            "Delete version",
+                            `Delete version v${v.version} of model "${model?.name || modelId}"?`,
+                            async () => {
+                              await deleteVersionMutation.mutateAsync(v.version);
+                              setConfirmOpen(false);
+                            }
+                          )
+                        }
+                        className="action-btn-xs btn-action-delete rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+                        disabled={deleteVersionMutation.isPending}
+                      >
+                        Delete
                       </button>
                     </div>
                   </td>
@@ -444,5 +630,47 @@ export default function ModelDetailPage() {
         </div>
       </section>
     </RouteShell>
+  );
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  onDelete,
+  onCancel,
+  isLoading
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  onDelete: () => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+        <h3 className="mb-2 text-sm font-semibold text-slate-200">{title}</h3>
+        <p className="mb-4 text-sm text-slate-400">{body}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="btn-action-cancel rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onDelete}
+            className="btn-action-delete rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+            disabled={isLoading}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

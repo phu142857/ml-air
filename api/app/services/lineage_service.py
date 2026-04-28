@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
+import os
+import re
 from typing import Any, Literal
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from app.services.db_service import db_conn
@@ -78,6 +84,135 @@ def _upsert_dataset_version(
                 (version_id, dataset_id, version, uri, checksum),
             )
             return version_id
+
+
+def _safe_token(value: str) -> str:
+    token = re.sub(r"[^a-zA-Z0-9_.-]+", "-", str(value or "").strip().lower())
+    return token.strip("-") or "unknown"
+
+
+def _dataset_artifact_root() -> str:
+    return str(os.getenv("ML_AIR_DATASET_ARTIFACT_ROOT", "file:///mlair/artifacts/datasets")).rstrip("/")
+
+
+def _file_uri_to_path(uri: str) -> str:
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        raise ValueError("dataset_upload_only_supports_file_uri")
+    return parsed.path
+
+
+def _next_dataset_version(dataset_id: str) -> str:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT version
+                FROM dataset_versions
+                WHERE dataset_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (dataset_id,),
+            )
+            row = cur.fetchone()
+    if not row or not row[0]:
+        return "v1"
+    text = str(row[0]).strip().lower()
+    m = re.match(r"^v(\d+)$", text)
+    if not m:
+        return "v1"
+    return f"v{int(m.group(1)) + 1}"
+
+
+def _analyze_csv(csv_bytes: bytes) -> dict[str, Any]:
+    text = csv_bytes.decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    rows = list(reader)
+    columns = list(reader.fieldnames or [])
+    row_count = len(rows)
+    null_ratio: dict[str, float] = {}
+    for col in columns:
+        if row_count == 0:
+            null_ratio[col] = 0.0
+            continue
+        miss = 0
+        for row in rows:
+            val = row.get(col)
+            if val is None or str(val).strip() == "":
+                miss += 1
+        null_ratio[col] = round(miss / row_count, 6)
+    preview = rows[:10]
+    return {
+        "columns": columns,
+        "row_count": row_count,
+        "null_ratio": null_ratio,
+        "preview": preview,
+    }
+
+
+def preview_dataset_csv(csv_bytes: bytes) -> dict[str, Any]:
+    return _analyze_csv(csv_bytes)
+
+
+def create_dataset_version_from_csv_upload(
+    tenant_id: str,
+    project_id: str,
+    dataset_name: str,
+    csv_bytes: bytes,
+    source_filename: str,
+) -> dict[str, Any]:
+    safe_dataset_name = str(dataset_name or "").strip()
+    if not safe_dataset_name:
+        raise ValueError("dataset_name_required")
+    analysis = _analyze_csv(csv_bytes)
+    checksum = hashlib.sha256(csv_bytes).hexdigest()
+    dataset_id = _upsert_dataset(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        name=safe_dataset_name,
+        checksum=checksum,
+        current_size=int(analysis["row_count"]),
+    )
+    version = _next_dataset_version(dataset_id)
+
+    root = _dataset_artifact_root()
+    artifact_uri = (
+        f"{root}/"
+        f"{_safe_token(tenant_id)}/"
+        f"{_safe_token(project_id)}/"
+        f"{_safe_token(safe_dataset_name)}/"
+        f"{version}/"
+        f"{_safe_token(source_filename) or 'data.csv'}"
+    )
+    out_path = _file_uri_to_path(artifact_uri)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "wb") as f:
+        f.write(csv_bytes)
+
+    _upsert_dataset(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        name=safe_dataset_name,
+        source_uri=artifact_uri,
+        checksum=checksum,
+        current_size=int(analysis["row_count"]),
+    )
+    version_id = _upsert_dataset_version(
+        dataset_id=dataset_id,
+        version=version,
+        uri=artifact_uri,
+        checksum=checksum,
+    )
+    return {
+        "dataset_id": dataset_id,
+        "dataset_name": safe_dataset_name,
+        "version_id": version_id,
+        "version": version,
+        "uri": artifact_uri,
+        "checksum": checksum,
+        **analysis,
+    }
 
 
 def _insert_edge(

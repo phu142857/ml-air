@@ -29,7 +29,7 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
             {rows.map((row) => (
               <tr
                 key={row.run_id}
-                className="cursor-pointer border-t border-default hover:border-l-4 hover:border-l-color-primary"
+                className="interactive-row cursor-pointer border-t border-default"
                 onClick={() => onSelectRun(row.run_id)}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>

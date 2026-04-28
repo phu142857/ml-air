@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
+import os
+import re
 from uuid import uuid4
+from urllib.parse import urlparse
 
 from app.services.db_service import db_conn
 
@@ -92,9 +97,149 @@ def _next_model_version(model_id: str) -> int:
             return int(row[0])
 
 
+def _slug_token(value: str) -> str:
+    token = re.sub(r"[^a-zA-Z0-9_.-]+", "-", str(value or "").strip().lower())
+    return token.strip("-") or "unknown"
+
+
+def _default_model_artifact_root() -> str:
+    # User-configurable root path for model artifact placement.
+    # Example:
+    # - file:///mlair/artifacts/models
+    # - s3://mlair-artifacts/models
+    # - minio://mlair/models
+    return str(
+        os.getenv("ML_AIR_DEFAULT_MODEL_ARTIFACT_ROOT", "file:///mlair/artifacts/models")
+    ).rstrip("/")
+
+
+def _model_scope_for_id(model_id: str) -> tuple[str, str, str] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT tenant_id, project_id, name
+                FROM models
+                WHERE model_id = %s
+                """,
+                (model_id,),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return str(row[0]), str(row[1]), str(row[2])
+
+
+def _default_artifact_uri(model_id: str, version_num: int) -> str | None:
+    scope = _model_scope_for_id(model_id)
+    if not scope:
+        return None
+    root = _default_model_artifact_root()
+    if not root:
+        return None
+    tenant_id, project_id, model_name = scope
+    return (
+        f"{root}/"
+        f"{_slug_token(tenant_id)}/"
+        f"{_slug_token(project_id)}/"
+        f"{_slug_token(model_name)}/"
+        f"v{int(version_num)}"
+    )
+
+
+def preview_next_model_artifact_uri(model_id: str) -> dict:
+    version_num = _next_model_version(model_id)
+    uri = _default_artifact_uri(model_id, version_num)
+    return {"model_id": model_id, "next_version": version_num, "artifact_uri": uri}
+
+
 def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | None, stage: str = "staging") -> dict:
     version_id = str(uuid4())
     version_num = _next_model_version(model_id)
+    resolved_artifact_uri = str(artifact_uri or "").strip() or _default_artifact_uri(model_id, version_num)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO model_versions(version_id, model_id, version, run_id, artifact_uri, stage)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                """,
+                (version_id, model_id, version_num, run_id, resolved_artifact_uri, stage),
+            )
+            row = cur.fetchone()
+    return {
+        "version_id": row[0],
+        "model_id": row[1],
+        "version": row[2],
+        "run_id": row[3],
+        "artifact_uri": row[4],
+        "stage": row[5],
+        "created_at": row[6].isoformat(),
+    }
+
+
+def _safe_filename(name: str) -> str:
+    base = os.path.basename(str(name or "").strip())
+    return re.sub(r"[^a-zA-Z0-9._-]+", "_", base) or "model.bin"
+
+
+def _file_uri_to_path(uri: str) -> str:
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        raise ValueError("artifact_upload_only_supports_file_uri")
+    return parsed.path
+
+
+def _default_metadata_payload(model_id: str, version_num: int, model_filename: str, artifact_files: list[str] | None = None) -> dict:
+    scope = _model_scope_for_id(model_id) or ("unknown", "unknown", "unknown")
+    files = artifact_files or [model_filename]
+    return {
+        "model_id": model_id,
+        "model_name": scope[2],
+        "tenant_id": scope[0],
+        "project_id": scope[1],
+        "version": f"v{version_num}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "metadata_source": "generated",
+        "artifacts": {"model": model_filename, "files": files},
+    }
+
+
+def create_model_version_from_upload(
+    model_id: str,
+    model_filename: str,
+    model_content: bytes,
+    metadata_filename: str | None = None,
+    metadata_content: bytes | None = None,
+    run_id: str | None = None,
+    stage: str = "staging",
+) -> dict:
+    version_id = str(uuid4())
+    version_num = _next_model_version(model_id)
+    artifact_uri = _default_artifact_uri(model_id, version_num)
+    if not artifact_uri:
+        raise ValueError("model_not_found")
+
+    artifact_dir = _file_uri_to_path(artifact_uri)
+    os.makedirs(artifact_dir, exist_ok=True)
+
+    safe_model_filename = _safe_filename(model_filename)
+    model_path = os.path.join(artifact_dir, safe_model_filename)
+    with open(model_path, "wb") as f:
+        f.write(model_content)
+
+    safe_metadata_filename = _safe_filename(metadata_filename or "metadata.json")
+    metadata_path = os.path.join(artifact_dir, safe_metadata_filename)
+    metadata_generated = metadata_content is None
+    if metadata_content is None:
+        payload = _default_metadata_payload(model_id, version_num, safe_model_filename)
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True, indent=2)
+    else:
+        with open(metadata_path, "wb") as f:
+            f.write(metadata_content)
+
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -114,6 +259,83 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
         "artifact_uri": row[4],
         "stage": row[5],
         "created_at": row[6].isoformat(),
+        "metadata_generated": metadata_generated,
+    }
+
+
+def create_model_version_from_uploads(
+    model_id: str,
+    files: list[tuple[str, bytes]],
+    run_id: str | None = None,
+    stage: str = "staging",
+) -> dict:
+    if not files:
+        raise ValueError("no_files_uploaded")
+    version_id = str(uuid4())
+    version_num = _next_model_version(model_id)
+    artifact_uri = _default_artifact_uri(model_id, version_num)
+    if not artifact_uri:
+        raise ValueError("model_not_found")
+
+    artifact_dir = _file_uri_to_path(artifact_uri)
+    os.makedirs(artifact_dir, exist_ok=True)
+
+    safe_saved_names: list[str] = []
+    metadata_content: bytes | None = None
+    model_file_name: str | None = None
+    model_exts = {".pkl", ".onnx", ".pt", ".bin", ".joblib"}
+
+    for raw_name, content in files:
+        safe_name = _safe_filename(raw_name)
+        out_path = os.path.join(artifact_dir, safe_name)
+        with open(out_path, "wb") as f:
+            f.write(content)
+        safe_saved_names.append(safe_name)
+        lower_name = safe_name.lower()
+        ext = os.path.splitext(lower_name)[1]
+        if lower_name == "metadata.json":
+            metadata_content = content
+        if model_file_name is None and ext in model_exts:
+            model_file_name = safe_name
+
+    if model_file_name is None:
+        raise ValueError("model_file_required")
+
+    metadata_path = os.path.join(artifact_dir, "metadata.json")
+    metadata_generated = metadata_content is None
+    if metadata_generated:
+        payload = _default_metadata_payload(model_id, version_num, model_file_name, safe_saved_names)
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True, indent=2)
+        if "metadata.json" not in safe_saved_names:
+            safe_saved_names.append("metadata.json")
+    else:
+        if "metadata.json" not in [n.lower() for n in safe_saved_names]:
+            with open(metadata_path, "wb") as f:
+                f.write(metadata_content)
+            safe_saved_names.append("metadata.json")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO model_versions(version_id, model_id, version, run_id, artifact_uri, stage)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                """,
+                (version_id, model_id, version_num, run_id, artifact_uri, stage),
+            )
+            row = cur.fetchone()
+    return {
+        "version_id": row[0],
+        "model_id": row[1],
+        "version": row[2],
+        "run_id": row[3],
+        "artifact_uri": row[4],
+        "stage": row[5],
+        "created_at": row[6].isoformat(),
+        "metadata_generated": metadata_generated,
+        "uploaded_files": safe_saved_names,
     }
 
 
@@ -142,6 +364,25 @@ def list_model_versions(model_id: str) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def delete_model(model_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM models WHERE model_id = %s", (model_id,))
+            deleted = cur.rowcount
+    return bool(deleted)
+
+
+def delete_model_version(model_id: str, version: int) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM model_versions WHERE model_id = %s AND version = %s",
+                (model_id, int(version)),
+            )
+            deleted = cur.rowcount
+    return bool(deleted)
 
 
 def promote_model_version(model_id: str, version: int, stage: str = "production") -> dict:
@@ -222,4 +463,40 @@ def get_model_status(tenant_id: str, project_id: str, model_id: str) -> dict:
         "run_id": run_id,
         "status": "READY" if not blocking else "NOT_READY",
         "blocking_datasets": blocking,
+    }
+
+
+def resolve_model_pipeline(tenant_id: str, project_id: str, model_id: str) -> dict:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT r.pipeline_id, mv.version, r.run_id
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                LEFT JOIN runs r ON r.run_id = mv.run_id
+                WHERE m.tenant_id = %s
+                  AND m.project_id = %s
+                  AND m.model_id = %s
+                  AND r.pipeline_id IS NOT NULL
+                ORDER BY mv.version DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return {
+            "model_id": model_id,
+            "pipeline_id": None,
+            "model_version": None,
+            "run_id": None,
+            "source": "unresolved",
+        }
+    return {
+        "model_id": model_id,
+        "pipeline_id": row[0],
+        "model_version": int(row[1]) if row[1] is not None else None,
+        "run_id": row[2],
+        "source": "latest_model_run",
     }

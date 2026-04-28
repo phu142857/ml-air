@@ -185,14 +185,14 @@ export default function RunsPage() {
       {/* Runs History */}
       <section className="card p-5">
         {/* Pagination */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="text-sm text-secondary">
-            Showing {(currentPage - 1) * pageSize + 1}-
-            {Math.min(currentPage * pageSize, filteredRuns.length)} of{" "}
-            {filteredRuns.length} runs
-          </div>
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm text-secondary">
+              Showing {(currentPage - 1) * pageSize + 1}-
+              {Math.min(currentPage * pageSize, filteredRuns.length)} of{" "}
+              {filteredRuns.length} runs
+            </span>
 
-          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
             <select
               className="rounded-lg border border-default bg-surface px-2 py-1 text-xs text-primary"
               value={trainingModeFilter}
@@ -231,8 +231,8 @@ export default function RunsPage() {
             >
               Next
             </button>
+            </div>
           </div>
-        </div>
 
         <RunsHistorySection
           rows={paginatedRuns}

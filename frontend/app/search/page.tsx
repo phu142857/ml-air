@@ -29,7 +29,7 @@ function SearchPageInner() {
             <Link
               key={`${it.type}-${i}`}
               href={it.href}
-              className="block rounded-xl border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm hover:border-l-4 hover:border-l-blue-500 transition-colors"
+              className="interactive-item block rounded-xl border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm transition-colors"
             >
               <span className="text-slate-400">[{it.type}]</span> {it.run_id || it.task_id || it.name || "—"}{" "}
               {it.status && <span className="text-slate-400">· {it.status}</span>}

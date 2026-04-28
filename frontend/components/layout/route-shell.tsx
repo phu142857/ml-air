@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PropsWithChildren } from "react";
 import { Topbar } from "./topbar";
 
-type NavItem = "Dashboard" | "Pipelines" | "Runs" | "Lineage" | "Models" | "Tasks" | "Settings";
+type NavItem = "Dashboard" | "Pipelines" | "Runs" | "Lineage" | "Models" | "Datasets" | "Tasks" | "Settings";
 
 type Props = PropsWithChildren<{
   activeNav: NavItem;
@@ -18,6 +18,7 @@ const navItems: Array<{ key: NavItem; href: string }> = [
   { key: "Runs", href: "/runs" },
   { key: "Lineage", href: "/lineage" },
   { key: "Models", href: "/models" },
+  { key: "Datasets", href: "/datasets" },
   { key: "Tasks", href: "/tasks" },
   { key: "Settings", href: "/settings" }
 ];
