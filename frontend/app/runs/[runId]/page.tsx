@@ -109,13 +109,11 @@ export default function RunDetailPage() {
         <div className="grid grid-cols-12 gap-6">
           {/* Timeline - Quan trọng nhất trong phần Detail */}
           <div className="col-span-12 lg:col-span-8">
-            <section className="card p-5 shadow-md h-full">
-              <RunTimelineSection
-                runId={runId}
-                tasks={tasks}
-                onOpenTask={(tid) => router.push(`/tasks/${tid}`)}
-              />
-            </section>
+            <RunTimelineSection
+              runId={runId}
+              tasks={tasks}
+              onOpenTask={(tid) => router.push(`/tasks/${tid}`)}
+            />
           </div>
 
           {/* Properties - Thông tin định danh */}
@@ -141,33 +139,30 @@ export default function RunDetailPage() {
 
           <div className="col-span-12 lg:col-span-6">
             <section className="card p-5 shadow-md h-full">
-              <h2 className="mb-3 text-sm font-semibold text-primary">Config Parameters</h2>
-              <div className="overflow-auto rounded-xl border border-default max-h-[300px]">
-                {runQuery.data?.config_snapshot ? (
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted text-secondary">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Parameter</th>
-                        <th className="px-3 py-2 text-left">Value</th>
+              {runQuery.data?.config_snapshot ? (
+                <table className="w-full text-sm">
+                  <thead className="bg-muted text-secondary">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Parameter</th>
+                      <th className="px-3 py-2 text-left">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(runQuery.data.config_snapshot as Record<string, any>).map(([key, value]) => (
+                      <tr key={key} className="interactive-row border-t border-default">
+                        <td className="px-3 py-2 text-primary font-mono text-xs">{key}</td>
+                        <td className="px-3 py-2">
+                          <code className="text-xs font-mono text-warning bg-warning/20 px-2 py-1 rounded border border-warning/40 whitespace-pre-wrap break-all block max-w-[300px] overflow-x-auto">
+                            {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                          </code>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(runQuery.data.config_snapshot as Record<string, any>).map(([key, value]) => (
-                        <tr key={key} className="interactive-row border-t border-default">
-                          <td className="px-3 py-2 text-primary font-mono text-xs">{key}</td>
-                          <td className="px-3 py-2">
-                            <code className="text-xs font-mono text-warning bg-warning/20 px-2 py-1 rounded border border-warning/40 whitespace-pre-wrap break-all block max-w-[300px] overflow-x-auto">
-                              {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                            </code>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="p-10 text-center text-secondary text-sm">No configuration snapshot available.</div>
-                )}
-              </div>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-10 text-center text-secondary text-sm">No configuration snapshot available.</div>
+              )}
             </section>
           </div>
           <div className="col-span-12 lg:col-span-6">

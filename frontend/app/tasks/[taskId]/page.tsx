@@ -29,7 +29,7 @@ export default function TaskDetailPage() {
       </div>
       <section className="card p-5">
         <h2 className="mb-3 text-sm font-semibold text-primary">Task Detail</h2>
-        <div className="bg-muted rounded-lg p-4 font-mono text-xs text-success h-96 overflow-y-auto whitespace-pre-wrap break-all">
+        <div className="font-mono text-xs text-success h-96 overflow-y-auto whitespace-pre-wrap break-all">
           {isLoading ? "Loading..." : JSON.stringify(data, null, 2)}
         </div>
       </section>
