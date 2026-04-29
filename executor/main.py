@@ -375,7 +375,11 @@ def main() -> None:
         project_id = task.get("project_id", "default_project")
         trace_id = task.get("trace_id")
         started_at = datetime.now(timezone.utc).isoformat()
-        duration = random.uniform(0.2, 0.7)
+        ref_sleep_ms = (os.getenv("ML_AIR_REFERENCE_TASK_SLEEP_MS") or "").strip()
+        if ref_sleep_ms.isdigit():
+            duration = max(0.0, int(ref_sleep_ms) / 1000.0)
+        else:
+            duration = random.uniform(0.2, 0.7)
         pipeline_id = task.get("pipeline_id", "demo_pipeline")
         if pipeline_id.startswith("slow"):
             duration = 3.0
@@ -399,6 +403,14 @@ def main() -> None:
             else:
                 _log_plugin_tracking(task=task, plugin_result=plugin_exec)
                 _lineage_ingest(task=task, plugin_result=plugin_exec)
+        else:
+            logger.info(
+                "reference_executor_stub_no_plugin run_id=%s task_id=%s pipeline_id=%s "
+                "(sleep only; no ML/ETL. Pass plugin_name on the run or plug in a real worker.)",
+                task.get("run_id"),
+                task.get("task_id"),
+                pipeline_id,
+            )
         wall_seconds = time.perf_counter() - task_start
         cpu_seconds = max(0.0, time.process_time() - cpu_start)
         rss_end = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
