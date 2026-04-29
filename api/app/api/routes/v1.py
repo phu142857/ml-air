@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -85,6 +86,10 @@ class CreatePipelineVersionIn(BaseModel):
     config: dict = Field(default_factory=dict)
 
 
+class ValidatePipelineIn(BaseModel):
+    config: dict = Field(default_factory=dict)
+
+
 class ReplayRunIn(BaseModel):
     from_task_id: str = Field(min_length=1)
     idempotency_key: str | None = None
@@ -119,6 +124,32 @@ class LogMetricIn(BaseModel):
 class UpdateRunStatusIn(BaseModel):
     status: str = Field(min_length=1)
     reason: str | None = None
+
+
+def _blocked(detail_reason: str, details: str, *, status_code: int = 422) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={"status": "BLOCKED", "reason": detail_reason, "details": details},
+    )
+
+
+def _validate_pipeline_plugin_contract(
+    config: dict,
+    *,
+    require_plugin_exists: bool,
+) -> None:
+    tasks = config.get("tasks") if isinstance(config, dict) else None
+    if not isinstance(tasks, list) or not tasks:
+        return
+    for item in tasks:
+        if not isinstance(item, dict):
+            raise _blocked("INVALID_TASK", "Task definition must be an object")
+        task_id = str(item.get("id") or "").strip() or "<unknown>"
+        plugin_name = str(item.get("plugin") or "").strip()
+        if not plugin_name:
+            raise _blocked("NO_PLUGIN", f"Task {task_id} has no plugin")
+        if require_plugin_exists and plugin_registry.get(plugin_name) is None:
+            raise _blocked("PLUGIN_NOT_FOUND", f"Task {task_id} uses unknown plugin '{plugin_name}'")
 
 
 class LogArtifactIn(BaseModel):
@@ -206,6 +237,30 @@ def trigger_run_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if payload.pipeline_version_id or payload.use_latest_pipeline_version:
+        selected_pv = payload.pipeline_version_id
+        pipeline_cfg: dict = {}
+        if selected_pv:
+            pv_row = pipeline_version_service.get_pipeline_version(selected_pv)
+            if not pv_row or pv_row.get("tenant_id") != tenant_id or pv_row.get("project_id") != project_id:
+                raise HTTPException(status_code=404, detail="pipeline_version_not_found")
+            if str(pv_row.get("pipeline_id") or "") != payload.pipeline_id:
+                raise HTTPException(status_code=422, detail="pipeline_version_pipeline_mismatch")
+            pipeline_cfg = pv_row.get("config") if isinstance(pv_row.get("config"), dict) else {}
+        else:
+            latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, payload.pipeline_id)
+            if latest_pv:
+                pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+                pipeline_cfg = pv_row.get("config") if pv_row and isinstance(pv_row.get("config"), dict) else {}
+        if pipeline_cfg:
+            _validate_pipeline_plugin_contract(pipeline_cfg, require_plugin_exists=True)
+    else:
+        plugin_name = str(payload.plugin_name or "").strip()
+        if not plugin_name:
+            raise _blocked("NO_PLUGIN", "No plugin configured for run payload")
+        if plugin_registry.get(plugin_name) is None:
+            raise _blocked("PLUGIN_NOT_FOUND", f"Plugin '{plugin_name}' is not available")
+
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -314,6 +369,35 @@ def run_pipeline_with_gating_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    pipeline_cfg: dict = {}
+    selected_pv = payload.pipeline_version_id
+    if selected_pv:
+        pv_row = pipeline_version_service.get_pipeline_version(selected_pv)
+        if not pv_row or pv_row.get("tenant_id") != tenant_id or pv_row.get("project_id") != project_id:
+            raise HTTPException(status_code=404, detail="pipeline_version_not_found")
+        if str(pv_row.get("pipeline_id") or "") != pipeline_id:
+            raise HTTPException(status_code=422, detail="pipeline_version_pipeline_mismatch")
+        pipeline_cfg = pv_row.get("config") if isinstance(pv_row.get("config"), dict) else {}
+    elif payload.use_latest_pipeline_version:
+        latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, pipeline_id)
+        if latest_pv:
+            pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+            pipeline_cfg = pv_row.get("config") if pv_row and isinstance(pv_row.get("config"), dict) else {}
+    else:
+        latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, pipeline_id)
+        if latest_pv:
+            pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+            pipeline_cfg = pv_row.get("config") if pv_row and isinstance(pv_row.get("config"), dict) else {}
+
+    if pipeline_cfg:
+        _validate_pipeline_plugin_contract(pipeline_cfg, require_plugin_exists=True)
+    else:
+        plugin_name = str(payload.plugin_name or "").strip()
+        if not plugin_name:
+            raise _blocked("NO_PLUGIN", "No plugin configured for run payload and pipeline has no task plugin map")
+        if plugin_registry.get(plugin_name) is None:
+            raise _blocked("PLUGIN_NOT_FOUND", f"Plugin '{plugin_name}' is not available")
+
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -349,6 +433,15 @@ def run_pipeline_with_gating_v1(
         "blocked_by_gate": False,
         "readiness": check,
     }
+
+
+@router.post("/pipelines/validate")
+def validate_pipeline_contract_v1(payload: ValidatePipelineIn, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    if principal.role not in {"maintainer", "admin"}:
+        raise HTTPException(status_code=403, detail="forbidden")
+    _validate_pipeline_plugin_contract(payload.config, require_plugin_exists=True)
+    return {"status": "VALID"}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}")
@@ -885,6 +978,8 @@ def create_pipeline_version_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    strict_exists = os.getenv("ML_AIR_VALIDATE_PLUGIN_EXISTS_ON_CREATE", "0") == "1"
+    _validate_pipeline_plugin_contract(payload.config, require_plugin_exists=strict_exists)
     return pipeline_version_service.create_pipeline_version(tenant_id, project_id, pipeline_id, payload.config)
 
 

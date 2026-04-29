@@ -14,6 +14,7 @@ import {
   fetchModels,
   fetchModelVersions,
   fetchPipelines,
+  fetchPipelineVersions,
   previewDatasetUpload,
   triggerPipelineRunWithGating,
   uploadDatasetCsv
@@ -21,6 +22,23 @@ import {
 import { useAppContext } from "@/lib/app-context";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
 import { formatDateTimeCompact } from "@/lib/utils";
+
+function describeRunBlockError(err: unknown): string {
+  const fallback = String((err as any)?.message || err || "Unknown error");
+  try {
+    const parsed = JSON.parse(fallback);
+    const detail = parsed?.detail;
+    if (detail?.status === "BLOCKED") {
+      const reason = String(detail?.reason || "BLOCKED");
+      const details = String(detail?.details || "");
+      return details ? `Train blocked (${reason}): ${details}` : `Train blocked (${reason})`;
+    }
+    if (typeof detail === "string" && detail.trim()) return `Train failed: ${detail}`;
+  } catch {
+    // Keep fallback message
+  }
+  return `Train failed: ${fallback}`;
+}
 
 export default function DatasetsPage() {
   const router = useRouter();
@@ -98,6 +116,30 @@ export default function DatasetsPage() {
     [resolvedPipelineQuery.data]
   );
   const pipelineMissing = !resolvedPipelineId;
+  const effectivePipeline = pipelineId || resolvedPipelineId;
+  const pipelineVersionsQuery = useQuery({
+    queryKey: ["pipeline-versions", tenantId, projectId, effectivePipeline],
+    queryFn: () => fetchPipelineVersions(tenantId, projectId, effectivePipeline, token),
+    enabled: !!effectivePipeline
+  });
+  const pluginPrecheck = useMemo(() => {
+    if (!effectivePipeline) return { ok: false, reason: "No pipeline selected" };
+    const items = pipelineVersionsQuery.data?.items || [];
+    if (!items.length) return { ok: false, reason: "Pipeline has no version" };
+    const latest = items[0];
+    const cfg = (latest?.config || {}) as Record<string, unknown>;
+    const tasks = cfg.tasks;
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return { ok: false, reason: "Pipeline tasks are not configured" };
+    }
+    const hasPlugin = tasks.every((t) => {
+      if (!t || typeof t !== "object") return false;
+      const plugin = String((t as Record<string, unknown>).plugin || "").trim();
+      return Boolean(plugin);
+    });
+    if (!hasPlugin) return { ok: false, reason: "Task plugin is missing in pipeline config" };
+    return { ok: true, reason: "" };
+  }, [effectivePipeline, pipelineVersionsQuery.data]);
   const previewMutation = useMutation({
     mutationFn: () => previewDatasetUpload(tenantId, projectId, token, datasetFile as File),
     onSuccess: (res) => setDatasetMsg(`Preview OK · rows=${res.row_count} · columns=${res.columns.length}`),
@@ -333,24 +375,31 @@ export default function DatasetsPage() {
                           </button>
                           <button
                             className="btn-action-primary ml-2 rounded-lg px-3 py-1 text-xs disabled:opacity-60"
-                            title="Train"
+                            title={pluginPrecheck.ok ? "Train" : pluginPrecheck.reason}
                             aria-label="Train"
                             onClick={async () => {
-                              const effectivePipeline = pipelineId || resolvedPipelineId;
-                              const res = await triggerPipelineRunWithGating(tenantId, projectId, effectivePipeline, token, {
-                                pipeline_id: effectivePipeline,
-                                idempotency_key: `dataset-page-train-${Date.now()}`,
-                                priority: "normal",
-                                max_parallel_tasks: 1,
-                                training_mode: trainingMode,
-                                override_config: {
-                                  dataset_version_id: v.version_id,
-                                  inputs: [{ dataset: selectedDataset?.name || "user_events", required_size: 1 }]
-                                }
-                              });
-                              if (res.run_id) router.push(`/runs/${res.run_id}`);
+                              try {
+                                const res = await triggerPipelineRunWithGating(tenantId, projectId, effectivePipeline, token, {
+                                  pipeline_id: effectivePipeline,
+                                  idempotency_key: `dataset-page-train-${Date.now()}`,
+                                  priority: "normal",
+                                  max_parallel_tasks: 1,
+                                  training_mode: trainingMode,
+                                  override_config: {
+                                    dataset_version_id: v.version_id,
+                                    inputs: [{ dataset: selectedDataset?.name || "user_events", required_size: 1 }]
+                                  }
+                                });
+                                if (res.run_id) router.push(`/runs/${res.run_id}`);
+                              } catch (err) {
+                                setDatasetMsg(describeRunBlockError(err));
+                              }
                             }}
-                            disabled={normalizeDatasetStatus(v.status) === "FAILED" || (!resolvedPipelineId && !pipelineId)}
+                            disabled={
+                              normalizeDatasetStatus(v.status) === "FAILED" ||
+                              !pluginPrecheck.ok ||
+                              pipelineVersionsQuery.isLoading
+                            }
                           >
                             <IconStart />
                           </button>

@@ -44,6 +44,16 @@ export type PipelineItem = {
   total_runs: number;
 };
 
+export type PipelineVersionItem = {
+  version_id: string;
+  tenant_id: string;
+  project_id: string;
+  pipeline_id: string;
+  version: number;
+  config: Record<string, unknown>;
+  created_at: string;
+};
+
 export type RunTracking = {
   run_id: string;
   params: Array<{ key: string; value: string; logged_at: string }>;
@@ -365,6 +375,24 @@ export async function fetchPipelineDag(tenantId: string, projectId: string, pipe
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { pipeline_id: string; run_id?: string; nodes: Array<{ id: string; label: string; status: string }>; edges: Array<{ source: string; target: string }> };
+}
+
+export async function fetchPipelineVersions(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${normalizeProjectId(projectId)}/pipelines/${encodeURIComponent(pipelineId)}/versions?limit=20`,
+    {
+      headers: authHeaders(token),
+      cache: "no-store"
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: PipelineVersionItem[] };
 }
 
 export async function checkPipelineReadiness(
