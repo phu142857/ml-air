@@ -10,6 +10,7 @@ Unblock a pipeline run that failed due to data-readiness gating, without losing 
 - Run status becomes `FAILED`
 - Run log contains message: `run blocked by data readiness gate`
 - `GET /runs/{run_id}/readiness` returns one or more `blocking_datasets`
+- Note: plugin contract validation failures are different (`status=BLOCKED`, reasons like `NO_PLUGIN` / `PLUGIN_NOT_FOUND`) and are resolved via plugin/pipeline config fixes, not dataset ingestion.
 
 ## Steps
 

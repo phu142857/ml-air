@@ -76,6 +76,29 @@ Returns readiness snapshot persisted for a run.
 
 If snapshot does not exist yet, MLAir computes it on-demand.
 
+### 5) `POST /v1/pipelines/validate` Plugin Contract Validation
+
+Validates that a pipeline definition is runnable by ensuring every task references a plugin and that the plugin exists in the plugin registry.
+
+If validation fails, the API returns:
+- `status: "BLOCKED"`
+- `reason` (e.g. `NO_PLUGIN`, `PLUGIN_NOT_FOUND`, `INVALID_TASK`)
+
+Request body:
+```json
+{
+  "config": {
+    "tasks": [
+      { "id": "train_model", "plugin": "local_train" }
+    ]
+  }
+}
+```
+
+Response:
+- `{"status":"VALID"}` on success
+- `BLOCKED` error payload on failure
+
 ## Command
 
 ```bash
