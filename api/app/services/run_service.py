@@ -331,8 +331,10 @@ def list_runs(tenant_id: str, project_id: str, limit: int = 50, offset: int = 0)
 
 
 def list_pipelines(tenant_id: str, project_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
+    """List pipelines: from runs (latest per pipeline_id) plus any pipeline_id that only exists in pipeline_versions."""
     safe_limit = max(1, min(limit, 200))
     safe_offset = max(0, offset)
+    merged: dict[str, dict[str, Any]] = {}
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -351,23 +353,65 @@ def list_pipelines(tenant_id: str, project_id: str, limit: int = 100, offset: in
                 SELECT pipeline_id, run_id, status, updated_at, total_runs
                 FROM ranked
                 WHERE rn = 1
-                ORDER BY updated_at DESC
-                LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, safe_limit, safe_offset),
+                (tenant_id, project_id),
             )
-            rows = cur.fetchall()
+            for row in cur.fetchall():
+                pid = str(row[0])
+                merged[pid] = {
+                    "pipeline_id": pid,
+                    "latest_run_id": str(row[1]) if row[1] is not None else "",
+                    "latest_status": str(row[2]),
+                    "updated_at": row[3].isoformat(),
+                    "total_runs": int(row[4]),
+                }
 
-    return [
-        {
-            "pipeline_id": row[0],
-            "latest_run_id": row[1],
-            "latest_status": row[2],
-            "updated_at": row[3].isoformat(),
-            "total_runs": row[4],
-        }
-        for row in rows
-    ]
+            cur.execute(
+                """
+                SELECT pipeline_id, MAX(created_at) AS last_ver_at
+                FROM pipeline_versions
+                WHERE tenant_id = %s AND project_id = %s
+                GROUP BY pipeline_id
+                """,
+                (tenant_id, project_id),
+            )
+            for row in cur.fetchall():
+                pid = str(row[0])
+                if pid in merged:
+                    continue
+                last_at = row[1]
+                merged[pid] = {
+                    "pipeline_id": pid,
+                    "latest_run_id": "",
+                    "latest_status": "NOT_STARTED",
+                    "updated_at": last_at.isoformat() if last_at else "",
+                    "total_runs": 0,
+                }
+
+    ordered = sorted(merged.values(), key=lambda x: str(x.get("updated_at") or ""), reverse=True)
+    return ordered[safe_offset : safe_offset + safe_limit]
+
+
+def _dag_from_pipeline_config(cfg: Any) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    if not isinstance(cfg, dict):
+        return [], []
+    tasks = cfg.get("tasks")
+    if not isinstance(tasks, list):
+        return [], []
+    nodes: list[dict[str, str]] = []
+    edges: list[dict[str, str]] = []
+    for t in tasks:
+        if not isinstance(t, dict):
+            continue
+        tid = str(t.get("id") or "").strip()
+        if not tid:
+            continue
+        nodes.append({"id": tid, "label": tid, "status": "PENDING"})
+        for dep in t.get("depends_on") or []:
+            d = str(dep).strip()
+            if d:
+                edges.append({"source": d, "target": tid})
+    return nodes, edges
 
 
 def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
@@ -386,7 +430,13 @@ def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
             latest = cur.fetchone()
 
             if not latest:
-                return {"pipeline_id": pipeline_id, "nodes": [], "edges": []}
+                vid = pvs.get_latest_version_id(tenant_id, project_id, pipeline_id)
+                if not vid:
+                    return {"pipeline_id": pipeline_id, "nodes": [], "edges": []}
+                ver = pvs.get_pipeline_version(vid)
+                cfg = (ver or {}).get("config")
+                nodes, edges = _dag_from_pipeline_config(cfg)
+                return {"pipeline_id": pipeline_id, "nodes": nodes, "edges": edges, "from_config": True}
 
             run_id = latest[0]
             cur.execute(
