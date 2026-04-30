@@ -951,7 +951,7 @@ def _list_run_task_states(run_id: str) -> dict[str, tuple[str, int]]:
     return {_task_key(run_id, r[0]): (r[1], int(r[2])) for r in rows}
 
 
-def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attempt: int) -> None:
+def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attempt: int) -> bool:
     rid = run_event["run_id"]
     task_key = full_task_id[len(rid) + 1 :] if full_task_id.startswith(f"{rid}:") else full_task_id.split(":", 1)[-1]
     plugin = _plugin_for_task_key(run_event.get("config_snapshot"), task_key)
@@ -965,13 +965,35 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
         plugin=plugin,
     )
     if external:
+        if not plugin:
+            # External mode requires per-task plugin mapping.
+            # Missing plugin used to leave task QUEUED forever (task:1 fallback).
+            _upsert_or_transition_task(
+                task_id=full_task_id,
+                run_id=rid,
+                next_status="FAILED",
+                attempt=attempt,
+                plugin=plugin,
+            )
+            _update_task_telemetry(
+                task_id=full_task_id,
+                started_at=None,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                error_message="missing_task_plugin_external_mode",
+            )
+            logger.error(
+                "task_blocked_missing_plugin run_id=%s task_id=%s (external mode requires config_snapshot.tasks[].plugin)",
+                rid,
+                full_task_id,
+            )
+            return False
         logger.info(
             "task_queued_for_external_worker run_id=%s task_id=%s plugin=%s",
             rid,
             full_task_id,
             plugin,
         )
-        return
+        return True
     queue_name = _queue_name_for_priority(run_event.get("priority", "normal"))
     task_event = {
         "event_type": "task_ready",
@@ -991,6 +1013,7 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     client.rpush(queue_name, json.dumps(task_event))
+    return True
 
 
 def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
@@ -1002,6 +1025,7 @@ def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
     tenant_id = run_event.get("tenant_id", "default")
     project_id = run_event.get("project_id", "default_project")
     scheduled = 0
+    enqueue_failed = False
     for key in sorted(selected):
         st, attempt = states.get(key, ("PENDING", 1))
         if st != "PENDING":
@@ -1011,8 +1035,13 @@ def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
             continue
         if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
             break
-        _enqueue_task_event(client=client, run_event=run_event, full_task_id=f"{run_id}:{key}", attempt=attempt)
-        scheduled += 1
+        ok = _enqueue_task_event(client=client, run_event=run_event, full_task_id=f"{run_id}:{key}", attempt=attempt)
+        if ok:
+            scheduled += 1
+        else:
+            enqueue_failed = True
+    if enqueue_failed:
+        _sync_run_status_after_task(run_id, plan, selected)
     return scheduled
 
 
@@ -1240,20 +1269,25 @@ def main() -> None:
                         "replay_from_task_id": done_event.get("replay_from_task_id"),
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     }
-                    _enqueue_task_event(
+                    retry_ok = _enqueue_task_event(
                         client=client,
                         run_event=retry_event,
                         full_task_id=done_event["task_id"],
                         attempt=retry_attempt,
                     )
-                    RETRY_ENQUEUED_TOTAL.inc()
-                    logger.warning(
-                        "retry_scheduled task_id=%s attempt=%s max_attempts=%s delay_seconds=%.2f",
-                        done_event["task_id"],
-                        retry_attempt,
-                        max_attempts,
-                        delay_seconds,
-                    )
+                    if retry_ok:
+                        RETRY_ENQUEUED_TOTAL.inc()
+                        logger.warning(
+                            "retry_scheduled task_id=%s attempt=%s max_attempts=%s delay_seconds=%.2f",
+                            done_event["task_id"],
+                            retry_attempt,
+                            max_attempts,
+                            delay_seconds,
+                        )
+                    else:
+                        plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
+                        selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
+                        _sync_run_status_after_task(done_event["run_id"], plan, selected)
                 else:
                     client.rpush("mlair:tasks:dlq", raw_done)
                     DLQ_PUSHED_TOTAL.inc()
