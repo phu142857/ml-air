@@ -167,6 +167,7 @@ Token model and roles are documented under **Security** in [`docs/index.md`](doc
 
 - Plugins are discovered via Python **`importlib.metadata` entry points** in group **`mlair.plugins`** (see [`docs/guides/create-plugin.md`](docs/guides/create-plugin.md)).
 - **Pipeline version `config.tasks[]`** should declare a **`plugin`** per task; the API validates this on run trigger (and related paths) so misconfigured pipelines fail fast with **`BLOCKED` / `PLUGIN_NOT_FOUND`** instead of silent bad runs.
+- The **API image** installs **`mlair-reference-plugins`** from `api/builtin_reference_plugins/`, which registers **`app_etl_adapter`**, **`app_train_adapter`**, and **`echo_tracking`** for the default Vet-AI training DAG and built-in examples. Replace or extend with your own installable plugin packages in production.
 - The **executor** runs optional subprocess plugins (`ML_AIR_PLUGIN_RUNNER_MODULE`, default `mlair_runner`). The shipped reference executor is suitable for **orchestration demos**; **real training** belongs in your service or a dedicated plugin package you install into the executor image.
 
 ---

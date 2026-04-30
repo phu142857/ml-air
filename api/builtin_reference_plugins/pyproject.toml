@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlair-reference-plugins"
+version = "0.1.0"
+description = "Reference MLAir plugins for contract validation and demo pipelines (used by vet-ai default DAG)."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.entry-points."mlair.plugins"]
+app_etl_adapter = "mlair_reference_plugins.plugins:AppEtlAdapterPlugin"
+app_train_adapter = "mlair_reference_plugins.plugins:AppTrainAdapterPlugin"
+echo_tracking = "mlair_reference_plugins.plugins:EchoTrackingPlugin"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mlair_reference_plugins*"]
