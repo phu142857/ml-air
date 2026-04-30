@@ -85,3 +85,5 @@ python scripts/external_worker_example.py
 - [Run a Pipeline](./run-pipeline.md)
 - [Retry a Failed Task](./retry-failed-task.md)
 - [Configure Tenant and Project Scope](./configure-tenant-project-scope.md)
+
+Reference worker (leases tasks, runs continuous training, completes with metrics): **Vet-AI** repo — enable `VETAI_MLAIR_WORKER_ENABLED` and see its README section *External MLAir worker*.
