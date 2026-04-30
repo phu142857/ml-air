@@ -379,11 +379,14 @@ export default function DatasetsPage() {
                             aria-label="Train"
                             onClick={async () => {
                               try {
+                                const latestPipelineVersionId = pipelineVersionsQuery.data?.items?.[0]?.version_id;
                                 const res = await triggerPipelineRunWithGating(tenantId, projectId, effectivePipeline, token, {
                                   pipeline_id: effectivePipeline,
                                   idempotency_key: `dataset-page-train-${Date.now()}`,
                                   priority: "normal",
                                   max_parallel_tasks: 1,
+                                  pipeline_version_id: latestPipelineVersionId,
+                                  use_latest_pipeline_version: true,
                                   training_mode: trainingMode,
                                   override_config: {
                                     dataset_version_id: v.version_id,

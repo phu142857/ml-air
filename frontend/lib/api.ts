@@ -426,6 +426,8 @@ export async function triggerPipelineRunWithGating(
     priority: string;
     max_parallel_tasks: number;
     training_mode: string;
+    pipeline_version_id?: string;
+    use_latest_pipeline_version?: boolean;
     override_config?: Record<string, unknown>;
   }
 ) {
