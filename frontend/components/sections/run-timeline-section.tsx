@@ -20,11 +20,12 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
     }
   }, [tasks]);
 
-  // Helper function outside map to avoid re-creation
-  const getStatus = (task: any): "success" | "error" | "running" | "pending" => {
+  // Keep QUEUED distinct from PENDING in external-execution mode.
+  const getStatus = (task: any): "success" | "error" | "running" | "queued" | "pending" => {
     if (task.error_message && task.error_message.length > 0) return "error";
     if (task.status === "FAILED") return "error";
     if (task.status === "SUCCESS") return "success";
+    if (task.status === "QUEUED") return "queued";
     if (task.status === "RUNNING") return "running";
     return "pending";
   };
@@ -64,6 +65,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                 taskStatus === "error" ? "border-color-error bg-bg-error" :
                 taskStatus === "success" ? "border-color-success bg-bg-success" :
                 taskStatus === "running" ? "border-color-info bg-bg-info" :
+                taskStatus === "queued" ? "border border-amber-500/30 bg-amber-500/10" :
                 "border-default bg-muted"
               }`}
             >
@@ -83,6 +85,8 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                     taskStatus === "success" && " bg-bg-success text-color-success"
                   }${
                     taskStatus === "running" && " bg-bg-info text-color-info"
+                  }${
+                    taskStatus === "queued" && " bg-amber-500/20 text-amber-300"
                   }`}
                 >
                   {taskStatus}
@@ -95,6 +99,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                   className={`h-full ${
                     taskStatus === "error" ? "bg-color-error" :
                     taskStatus === "success" ? "bg-color-success" :
+                    taskStatus === "queued" ? "bg-amber-400" :
                     "bg-color-info"
                   }`}
                   style={{ width: `${width}%` }}
