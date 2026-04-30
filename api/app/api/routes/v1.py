@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.services.model_registry_service import (
@@ -923,6 +923,29 @@ def get_dataset_version_v1(
     if not row:
         raise HTTPException(status_code=404, detail="dataset_version_not_found")
     return row
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/download")
+def download_dataset_version_v1(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    try:
+        data, filename = lineage_service.get_dataset_version_csv_bytes(tenant_id, project_id, version_id)
+    except FileNotFoundError as exc:
+        detail = str(exc) or "dataset_version_file_not_found"
+        status = 404 if detail in {"dataset_version_not_found", "dataset_version_file_not_found"} else 400
+        raise HTTPException(status_code=status, detail=detail)
+    safe_name = filename.replace('"', "")
+    return Response(
+        content=data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/lineage/runs/{run_id}")

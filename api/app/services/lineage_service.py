@@ -538,6 +538,27 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
     }
 
 
+def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: str) -> tuple[bytes, str]:
+    row = get_dataset_version(tenant_id, project_id, version_id)
+    if not row:
+        raise FileNotFoundError("dataset_version_not_found")
+    raw_uri = str(row.get("uri") or "").strip()
+    if not raw_uri:
+        raise FileNotFoundError("dataset_version_uri_missing")
+    parsed = urlparse(raw_uri)
+    if parsed.scheme in {"", "file"}:
+        path = parsed.path if parsed.scheme == "file" else raw_uri
+        if not path:
+            raise FileNotFoundError("dataset_version_uri_invalid")
+        if not os.path.isfile(path):
+            raise FileNotFoundError("dataset_version_file_not_found")
+        with open(path, "rb") as f:
+            data = f.read()
+        filename = os.path.basename(path) or f"{version_id}.csv"
+        return data, filename
+    raise FileNotFoundError("dataset_version_uri_unsupported")
+
+
 def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, version_id: str) -> bool:
     with db_conn() as conn:
         with conn.cursor() as cur:

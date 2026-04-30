@@ -125,6 +125,7 @@ def lease_tasks(
                     t.task_id, t.run_id, t.plugin, t.attempt,
                     r.tenant_id, r.project_id, r.pipeline_id, r.priority,
                     r.pipeline_version_id, r.config_snapshot, r.plugin_context, r.replay_from_task_id,
+                    r.training_mode, r.override_config,
                     r.plugin_name
                 FROM tasks t
                 INNER JOIN runs r ON r.run_id = t.run_id
@@ -159,7 +160,14 @@ def lease_tasks(
         if not isinstance(pctx, dict):
             pctx = {}
         replay_from_task_id = row[11]
-        run_plugin_name = row[12]
+        training_mode = str(row[12] or "full")
+        override_cfg = row[13]
+        if isinstance(override_cfg, str):
+            try:
+                override_cfg = json.loads(override_cfg)
+            except json.JSONDecodeError:
+                override_cfg = {}
+        run_plugin_name = row[14]
         task_key = full_task_id[len(run_id) + 1 :] if full_task_id.startswith(f"{run_id}:") else full_task_id
         base_payload = dict(pctx)
         base_payload.setdefault("run_id", run_id)
@@ -184,6 +192,8 @@ def lease_tasks(
                     "dataset": base_payload.get("dataset") if isinstance(base_payload.get("dataset"), dict) else {},
                     "config_snapshot": cfg if isinstance(cfg, dict) else {},
                     "pipeline_version_id": pipeline_version_id,
+                    "training_mode": training_mode,
+                    "override_config": override_cfg if isinstance(override_cfg, dict) else {},
                     "replay_from_task_id": replay_from_task_id,
                     "plugin_name": run_plugin_name,
                 },
