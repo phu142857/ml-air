@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import time
@@ -205,3 +206,23 @@ def authorize_scope(principal: Principal, tenant_id: str, project_id: str, min_r
         raise HTTPException(status_code=403, detail="tenant_forbidden")
     if principal.project_ids and "*" not in principal.project_ids and project_id not in principal.project_ids:
         raise HTTPException(status_code=403, detail="project_forbidden")
+
+
+def authenticate_worker_lease_principal(authorization: str | None) -> Principal | None:
+    """
+    External worker lease API:
+    - If ML_AIR_WORKER_TOKEN is set and Authorization matches, returns None (global lease; no tenant filter).
+    - Otherwise requires a maintainer-or-better static/JWT token (same bearer machinery as the rest of the API).
+    """
+    worker_tok = os.getenv("ML_AIR_WORKER_TOKEN", "").strip()
+    if worker_tok:
+        try:
+            tok = _extract_bearer_token(authorization)
+        except HTTPException:
+            tok = ""
+        if tok and len(tok) == len(worker_tok) and hmac.compare_digest(tok.encode("utf-8"), worker_tok.encode("utf-8")):
+            return None
+    principal = authenticate_bearer(authorization)
+    if ROLE_WEIGHT.get(principal.role, 0) < ROLE_WEIGHT["maintainer"]:
+        raise HTTPException(status_code=403, detail="insufficient_role")
+    return principal

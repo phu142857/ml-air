@@ -13,6 +13,7 @@ tags:
   - name: Pipelines
   - name: Runs
   - name: Tasks
+  - name: Worker
   - name: Models
   - name: Serving
   - name: Audit
@@ -209,7 +210,134 @@ paths:
         "200":
           description: OK
 
+  /v1/tasks/lease:
+    post:
+      tags: [Worker]
+      summary: Lease queued tasks (external execution)
+      description: |
+        When `ML_AIR_TASK_EXECUTION_MODE=external`, returns tasks in `QUEUED` matching `capabilities` (task `plugin` names).
+        Auth: `ML_AIR_WORKER_TOKEN` as Bearer (global lease), or maintainer+ token (tenant/project scoped).
+        Use `encodeURIComponent` for `task_id` on follow-up paths if it contains `:`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerLeaseRequest"
+      responses:
+        "200":
+          description: Leased tasks (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerLeaseResponse"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+
+  /v1/tasks/{task_id}/heartbeat:
+    post:
+      tags: [Worker]
+      summary: Extend task lease TTL
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Full task id, often `{run_uuid}:{dag_step_id}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerHeartbeatRequest"
+      responses:
+        "200":
+          description: Heartbeat result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerHeartbeatResponse"
+        "503":
+          description: External execution disabled
+
+  /v1/tasks/{task_id}/complete:
+    post:
+      tags: [Worker]
+      summary: Mark leased task successful
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerCompleteRequest"
+      responses:
+        "200":
+          description: Accepted; scheduler notified via task queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerCompleteResponse"
+        "404":
+          description: Task not found
+        "409":
+          description: Not leased by this worker or conflict
+        "503":
+          description: External execution disabled
+
+  /v1/tasks/{task_id}/fail:
+    post:
+      tags: [Worker]
+      summary: Mark leased task failed
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerFailRequest"
+      responses:
+        "200":
+          description: Recorded; scheduler may retry per policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkerOkResponse"
+        "404":
+          description: Task not found
+        "409":
+          description: Not leased by this worker
+        "503":
+          description: External execution disabled
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Static API token, JWT, or `ML_AIR_WORKER_TOKEN` value when configured.
+
   parameters:
     TenantId:
       in: path
@@ -293,3 +421,128 @@ components:
         metadata:
           type: object
           additionalProperties: true
+
+    WorkerLeaseRequest:
+      type: object
+      required: [worker_id]
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: Plugin names to accept (e.g. app_etl_adapter). Empty = any plugin.
+        max_tasks:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 1
+
+    WorkerLeasedTaskPayload:
+      type: object
+      description: Snapshot for the worker (context, config, ids).
+      additionalProperties: true
+
+    WorkerLeasedTask:
+      type: object
+      properties:
+        task_id:
+          type: string
+        run_id:
+          type: string
+        plugin:
+          type: string
+        attempt:
+          type: integer
+        tenant_id:
+          type: string
+        project_id:
+          type: string
+        pipeline_id:
+          type: string
+        priority:
+          type: string
+        task_key:
+          type: string
+        payload:
+          $ref: "#/components/schemas/WorkerLeasedTaskPayload"
+
+    WorkerLeaseResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkerLeasedTask"
+        execution_mode:
+          type: string
+          enum: [internal, external]
+
+    WorkerHeartbeatRequest:
+      type: object
+      required: [worker_id]
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+
+    WorkerHeartbeatResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+
+    WorkerCompleteRequest:
+      type: object
+      required: [worker_id]
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        metrics:
+          type: object
+          additionalProperties: true
+        artifact_uri:
+          type: string
+          nullable: true
+
+    WorkerCompleteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        task_id:
+          type: string
+        status:
+          type: string
+        idempotent:
+          type: boolean
+          description: Present when task was already SUCCESS.
+
+    WorkerFailRequest:
+      type: object
+      required: [worker_id, error]
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        error:
+          type: string
+          minLength: 1
+          maxLength: 8000
+
+    WorkerOkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        task_id:
+          type: string
+        status:
+          type: string

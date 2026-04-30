@@ -29,6 +29,7 @@ Each guide follows:
 ### Run and Orchestration
 
 - [Run a Pipeline](./guides/run-pipeline.md)
+- [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)
 - [Configure Data Readiness and Gating](./guides/configure-data-readiness-gating.md)
 - [Monitor a Run](./guides/monitor-run.md)
 - [Retry a Failed Task](./guides/retry-failed-task.md)

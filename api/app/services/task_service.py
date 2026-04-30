@@ -7,7 +7,8 @@ def list_tasks_by_run(run_id: str) -> list[dict]:
             cur.execute(
                 """
                 SELECT task_id, run_id, status, attempt, max_attempts, backoff_ms, created_at, updated_at,
-                       started_at, finished_at, error_message, duration_ms, cpu_time_seconds, memory_rss_kb
+                       started_at, finished_at, error_message, duration_ms, cpu_time_seconds, memory_rss_kb,
+                       plugin, leased_by, lease_expires_at
                 FROM tasks
                 WHERE run_id = %s
                 ORDER BY created_at ASC
@@ -34,6 +35,9 @@ def list_tasks_by_run(run_id: str) -> list[dict]:
                 "duration_ms": row[11],
                 "cpu_time_seconds": float(row[12]) if row[12] is not None else None,
                 "memory_rss_kb": row[13],
+                "plugin": row[14],
+                "leased_by": row[15],
+                "lease_expires_at": row[16].isoformat() if row[16] else None,
             }
         )
     return out
@@ -47,7 +51,8 @@ def get_task_by_id(tenant_id: str, project_id: str, task_id: str) -> dict | None
                 SELECT
                     t.task_id, t.run_id, t.status, t.attempt, t.max_attempts, t.backoff_ms, t.created_at, t.updated_at,
                     r.tenant_id, r.project_id, r.pipeline_id,
-                    t.started_at, t.finished_at, t.error_message, t.duration_ms, t.cpu_time_seconds, t.memory_rss_kb
+                    t.started_at, t.finished_at, t.error_message, t.duration_ms, t.cpu_time_seconds, t.memory_rss_kb,
+                    t.plugin, t.leased_by, t.lease_expires_at
                 FROM tasks t
                 JOIN runs r ON r.run_id = t.run_id
                 WHERE r.tenant_id = %s AND r.project_id = %s AND t.task_id = %s
@@ -79,4 +84,7 @@ def get_task_by_id(tenant_id: str, project_id: str, task_id: str) -> dict | None
         "duration_ms": row[14],
         "cpu_time_seconds": float(row[15]) if row[15] is not None else None,
         "memory_rss_kb": row[16],
+        "plugin": row[17],
+        "leased_by": row[18],
+        "lease_expires_at": row[19].isoformat() if row[19] else None,
     }

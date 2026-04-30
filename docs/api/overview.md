@@ -5,7 +5,7 @@ MLAir API is exposed under `/v1`.
 Core resources:
 
 - runs
-- tasks
+- tasks (including **external worker** lease/complete under `/v1/tasks/…`; see [External worker execution](../guides/external-worker-execution.md))
 - pipelines and pipeline versions
 - plugins
 - datasets and lineage

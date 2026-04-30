@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.api.routes.v1 import router as v1_router
+from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
 from app.services.trace_service import normalize_trace_id, set_trace_id
@@ -27,6 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(v1_router, prefix="/v1")
+app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
 HEALTH_REQUEST_DURATION_SECONDS = Histogram(
     "mlair_api_health_request_duration_seconds",

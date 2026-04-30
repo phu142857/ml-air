@@ -30,10 +30,11 @@ RUN_ALLOWED_TRANSITIONS = {
 }
 
 TASK_ALLOWED_TRANSITIONS = {
-    "PENDING": {"RUNNING", "FAILED", "SUCCESS"},
-    "RUNNING": {"SUCCESS", "FAILED"},
+    "PENDING": {"RUNNING", "QUEUED", "FAILED", "SUCCESS"},
+    "QUEUED": {"RUNNING", "FAILED"},
+    "RUNNING": {"SUCCESS", "FAILED", "PENDING"},
     "FAILED": {"RETRY"},
-    "RETRY": {"RUNNING"},
+    "RETRY": {"RUNNING", "QUEUED"},
     "SUCCESS": set(),
     "CANCELLED": set(),
 }
@@ -352,6 +353,24 @@ def _process_trigger_policies() -> None:
                 TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="cron_not_due").inc()
 
 
+def _task_execution_mode() -> str:
+    return os.getenv("ML_AIR_TASK_EXECUTION_MODE", "internal").strip().lower()
+
+
+def _plugin_for_task_key(config_snapshot: dict | None, task_key: str) -> str | None:
+    if not isinstance(config_snapshot, dict):
+        return None
+    tasks_cfg = config_snapshot.get("tasks")
+    if not isinstance(tasks_cfg, list):
+        return None
+    for item in tasks_cfg:
+        if isinstance(item, dict) and str(item.get("id", "")).strip() == task_key:
+            p = item.get("plugin")
+            if isinstance(p, str) and p.strip():
+                return p.strip()
+    return None
+
+
 def _queue_name_for_priority(priority: str) -> str:
     if priority == "high":
         return "mlair:tasks:high"
@@ -361,16 +380,21 @@ def _queue_name_for_priority(priority: str) -> str:
 
 
 def _project_running_tasks(tenant_id: str, project_id: str) -> int:
+    """Concurrency slots: internal = RUNNING only; external = QUEUED + RUNNING (waiting worker + executing)."""
+    if _task_execution_mode() == "external":
+        status_clause = "t.status IN ('QUEUED', 'RUNNING')"
+    else:
+        status_clause = "t.status = 'RUNNING'"
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM tasks t
                 JOIN runs r ON r.run_id = t.run_id
                 WHERE r.tenant_id = %s
                   AND r.project_id = %s
-                  AND t.status = 'RUNNING'
+                  AND {status_clause}
                 """,
                 (tenant_id, project_id),
             )
@@ -395,26 +419,33 @@ def _transition_run_status(run_id: str, next_status: str) -> None:
             )
 
 
-def _upsert_or_transition_task(task_id: str, run_id: str, next_status: str, attempt: int) -> None:
+def _upsert_or_transition_task(
+    task_id: str, run_id: str, next_status: str, attempt: int, plugin: str | None = None
+) -> None:
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT status FROM tasks WHERE task_id = %s", (task_id,))
             row = cur.fetchone()
             if row:
-                current_status = row[0]
+                current_status = str(row[0])
+                if current_status.upper() == str(next_status).upper():
+                    return
                 if next_status not in TASK_ALLOWED_TRANSITIONS.get(current_status, set()):
                     logger.warning("invalid_task_transition task_id=%s from=%s to=%s", task_id, current_status, next_status)
                     return
             cur.execute(
                 """
-                INSERT INTO tasks(task_id, run_id, status, attempt, max_attempts, backoff_ms)
-                VALUES (%s, %s, %s, %s, 3, 1000)
+                INSERT INTO tasks(task_id, run_id, status, attempt, max_attempts, backoff_ms, plugin)
+                VALUES (%s, %s, %s, %s, 3, 1000, %s)
                 ON CONFLICT (task_id) DO UPDATE
                 SET status = EXCLUDED.status,
                     attempt = EXCLUDED.attempt,
+                    plugin = COALESCE(EXCLUDED.plugin, tasks.plugin),
+                    leased_by = NULL,
+                    lease_expires_at = NULL,
                     updated_at = NOW()
                 """,
-                (task_id, run_id, next_status, attempt),
+                (task_id, run_id, next_status, attempt, plugin),
             )
 
 
@@ -921,10 +952,30 @@ def _list_run_task_states(run_id: str) -> dict[str, tuple[str, int]]:
 
 
 def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attempt: int) -> None:
+    rid = run_event["run_id"]
+    task_key = full_task_id[len(rid) + 1 :] if full_task_id.startswith(f"{rid}:") else full_task_id.split(":", 1)[-1]
+    plugin = _plugin_for_task_key(run_event.get("config_snapshot"), task_key)
+    external = _task_execution_mode() == "external"
+    next_status = "QUEUED" if external else "RUNNING"
+    _upsert_or_transition_task(
+        task_id=full_task_id,
+        run_id=rid,
+        next_status=next_status,
+        attempt=attempt,
+        plugin=plugin,
+    )
+    if external:
+        logger.info(
+            "task_queued_for_external_worker run_id=%s task_id=%s plugin=%s",
+            rid,
+            full_task_id,
+            plugin,
+        )
+        return
     queue_name = _queue_name_for_priority(run_event.get("priority", "normal"))
     task_event = {
         "event_type": "task_ready",
-        "run_id": run_event["run_id"],
+        "run_id": rid,
         "task_id": full_task_id,
         "attempt": attempt,
         "tenant_id": run_event.get("tenant_id", "default"),
@@ -932,14 +983,13 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
         "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
         "priority": run_event.get("priority", "normal"),
         "trace_id": run_event.get("trace_id"),
-        "plugin_name": run_event.get("plugin_name"),
+        "plugin_name": plugin or run_event.get("plugin_name"),
         "context": run_event.get("context", {}),
         "pipeline_version_id": run_event.get("pipeline_version_id"),
         "config_snapshot": run_event.get("config_snapshot"),
         "replay_from_task_id": run_event.get("replay_from_task_id"),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    _upsert_or_transition_task(task_id=full_task_id, run_id=run_event["run_id"], next_status="RUNNING", attempt=attempt)
     client.rpush(queue_name, json.dumps(task_event))
 
 
@@ -976,15 +1026,98 @@ def _sync_run_status_after_task(run_id: str, plan: dict[str, list[str]], selecte
         _transition_run_status(run_id, "FAILED")
 
 
+def _load_run_event_for_scheduler(run_id: str) -> dict | None:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT run_id, tenant_id, project_id, pipeline_id, priority,
+                       COALESCE(max_parallel_tasks, 1), pipeline_version_id, config_snapshot,
+                       replay_from_task_id, replay_of_run_id, plugin_context, plugin_name
+                FROM runs
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    cfg = row[7]
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except json.JSONDecodeError:
+            cfg = None
+    pctx = row[10]
+    if isinstance(pctx, str):
+        try:
+            pctx = json.loads(pctx)
+        except json.JSONDecodeError:
+            pctx = {}
+    if not isinstance(pctx, dict):
+        pctx = {}
+    return {
+        "run_id": str(row[0]),
+        "tenant_id": str(row[1]),
+        "project_id": str(row[2]),
+        "pipeline_id": str(row[3]),
+        "priority": str(row[4] or "normal"),
+        "max_parallel_tasks": int(row[5] or 1),
+        "pipeline_version_id": row[6],
+        "config_snapshot": cfg,
+        "replay_from_task_id": row[8],
+        "replay_of_run_id": row[9],
+        "context": pctx,
+        "plugin_name": row[11],
+        "trace_id": None,
+    }
+
+
+def _requeue_expired_leases(client: Redis) -> int:
+    if _task_execution_mode() != "external":
+        return 0
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET status = 'PENDING',
+                    leased_by = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = NOW()
+                WHERE status = 'RUNNING'
+                  AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at < NOW()
+                RETURNING run_id
+                """
+            )
+            run_ids = {str(r[0]) for r in cur.fetchall()}
+    for rid in run_ids:
+        evt = _load_run_event_for_scheduler(rid)
+        if evt:
+            _schedule_ready_tasks(client=client, run_event=evt)
+    return len(run_ids)
+
+
 def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
     policy_interval_seconds = max(10, int(os.getenv("ML_AIR_TRIGGER_POLICY_TICK_SECONDS", "30")))
+    lease_reap_interval_seconds = max(2, int(os.getenv("ML_AIR_LEASE_REAP_INTERVAL_SECONDS", "5")))
     next_policy_tick = 0.0
+    next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
     logger.info("scheduler_started metrics_port=%s", metrics_port)
     while True:
         loop_started = time.perf_counter()
+        if loop_started >= next_lease_reap_tick:
+            try:
+                n = _requeue_expired_leases(client)
+                if n:
+                    logger.warning("lease_reaper_runs_reset=%s", n)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("lease_reaper_failed err=%s", exc)
+            next_lease_reap_tick = loop_started + lease_reap_interval_seconds
         if loop_started >= next_policy_tick:
             try:
                 _process_trigger_policies()

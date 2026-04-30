@@ -1,0 +1,100 @@
+"""External worker pull: lease / heartbeat / complete / fail (ML_AIR_TASK_EXECUTION_MODE=external)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel, Field
+
+from app.services.auth_service import authenticate_worker_lease_principal
+from app.services.worker_task_service import (
+    complete_task,
+    external_execution_enabled,
+    fail_task,
+    heartbeat_task,
+    lease_tasks,
+)
+
+router = APIRouter(prefix="/tasks", tags=["worker-tasks"])
+
+
+class LeaseTasksIn(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=256)
+    capabilities: list[str] = Field(default_factory=list)
+    max_tasks: int = Field(default=1, ge=1, le=50)
+
+
+class HeartbeatIn(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=256)
+
+
+class CompleteTaskIn(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=256)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    artifact_uri: str | None = None
+
+
+class FailTaskIn(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=256)
+    error: str = Field(min_length=1, max_length=8000)
+
+
+@router.post("/lease")
+def post_lease_tasks(
+    body: LeaseTasksIn,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    principal = authenticate_worker_lease_principal(authorization)
+    if not external_execution_enabled():
+        return {"tasks": [], "execution_mode": "internal"}
+    tasks = lease_tasks(
+        worker_id=body.worker_id,
+        capabilities=body.capabilities,
+        max_tasks=body.max_tasks,
+        principal=principal,
+    )
+    return {"tasks": tasks, "execution_mode": "external"}
+
+
+@router.post("/{task_id}/heartbeat")
+def post_task_heartbeat(
+    task_id: str,
+    body: HeartbeatIn,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    principal = authenticate_worker_lease_principal(authorization)
+    if not external_execution_enabled():
+        raise HTTPException(status_code=503, detail="external_execution_disabled")
+    ok = heartbeat_task(task_id=task_id, worker_id=body.worker_id, principal=principal)
+    return {"ok": ok}
+
+
+@router.post("/{task_id}/complete")
+def post_task_complete(
+    task_id: str,
+    body: CompleteTaskIn,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    principal = authenticate_worker_lease_principal(authorization)
+    outcome, detail = complete_task(
+        task_id=task_id,
+        worker_id=body.worker_id,
+        metrics=body.metrics,
+        artifact_uri=body.artifact_uri,
+        principal=principal,
+    )
+    if outcome == "idempotent":
+        return {"ok": True, "idempotent": True, **detail}
+    return {"ok": True, **detail}
+
+
+@router.post("/{task_id}/fail")
+def post_task_fail(
+    task_id: str,
+    body: FailTaskIn,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    principal = authenticate_worker_lease_principal(authorization)
+    fail_task(task_id=task_id, worker_id=body.worker_id, error=body.error, principal=principal)
+    return {"ok": True, "task_id": task_id, "status": "FAILED"}

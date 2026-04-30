@@ -9,6 +9,11 @@ def _db_url() -> str:
     return os.getenv("ML_AIR_DATABASE_URL", "postgresql://mlair:mlair@postgres:5432/mlair")
 
 
+def database_url() -> str:
+    """Public URL accessor for services that need their own connection settings (e.g. transactions)."""
+    return _db_url()
+
+
 @contextmanager
 def db_conn() -> Iterator[Connection]:
     conn = connect(_db_url(), autocommit=True)

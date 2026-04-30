@@ -18,6 +18,11 @@ def publish_run_event(event: dict[str, Any]) -> None:
     redis_client().rpush("mlair:runs:new", payload)
 
 
+def publish_task_finished(event: dict[str, Any]) -> None:
+    """Notify scheduler that a task finished (internal executor or external worker)."""
+    redis_client().rpush("mlair:tasks:done", json.dumps(event))
+
+
 def replay_dlq_for_run(run_id: str) -> int:
     client = redis_client()
     items = client.lrange("mlair:tasks:dlq", 0, -1)
