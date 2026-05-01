@@ -466,7 +466,142 @@ def get_model_status(tenant_id: str, project_id: str, model_id: str) -> dict:
     }
 
 
+def _get_mapped_pipeline_id(tenant_id: str, project_id: str, model_id: str) -> str | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pipeline_id
+                FROM model_pipeline_mapping
+                WHERE tenant_id = %s AND project_id = %s AND model_id = %s
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+    if not row or not str(row[0] or "").strip():
+        return None
+    return str(row[0]).strip()
+
+
+def resolve_base_model_artifact(tenant_id: str, project_id: str, model_id: str) -> dict | None:
+    """Prefer production weights with non-empty artifact_uri; else latest version that has an artifact."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mv.version_id, mv.version, mv.artifact_uri
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s
+                  AND m.project_id = %s
+                  AND m.model_id = %s
+                  AND mv.stage = 'production'
+                  AND mv.artifact_uri IS NOT NULL
+                  AND TRIM(mv.artifact_uri) <> ''
+                ORDER BY mv.created_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "version_id": str(row[0]),
+                    "version": int(row[1]) if row[1] is not None else 0,
+                    "artifact_uri": str(row[2]),
+                    "source": "production",
+                }
+            cur.execute(
+                """
+                SELECT mv.version_id, mv.version, mv.artifact_uri
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s
+                  AND m.project_id = %s
+                  AND m.model_id = %s
+                  AND mv.artifact_uri IS NOT NULL
+                  AND TRIM(mv.artifact_uri) <> ''
+                ORDER BY mv.version DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            row2 = cur.fetchone()
+            if row2:
+                return {
+                    "version_id": str(row2[0]),
+                    "version": int(row2[1]) if row2[1] is not None else 0,
+                    "artifact_uri": str(row2[2]),
+                    "source": "latest_artifact",
+                }
+    return None
+
+
+def upsert_model_pipeline_mapping(tenant_id: str, project_id: str, model_id: str, pipeline_id: str) -> dict:
+    pid = str(pipeline_id or "").strip()
+    if not pid:
+        raise ValueError("pipeline_id_required")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT model_id FROM models
+                WHERE tenant_id = %s AND project_id = %s AND model_id = %s
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            if not cur.fetchone():
+                raise ValueError("model_not_found")
+            cur.execute(
+                """
+                SELECT 1 FROM pipeline_versions
+                WHERE tenant_id = %s AND project_id = %s AND pipeline_id = %s
+                LIMIT 1
+                """,
+                (tenant_id, project_id, pid),
+            )
+            if not cur.fetchone():
+                raise ValueError("pipeline_not_in_project")
+            cur.execute(
+                """
+                INSERT INTO model_pipeline_mapping(
+                    tenant_id, project_id, model_id, pipeline_id, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, NOW(), NOW())
+                ON CONFLICT (tenant_id, project_id, model_id) DO UPDATE
+                SET pipeline_id = EXCLUDED.pipeline_id, updated_at = NOW()
+                RETURNING tenant_id, project_id, model_id, pipeline_id, created_at, updated_at
+                """,
+                (tenant_id, project_id, model_id, pid),
+            )
+            row = cur.fetchone()
+    return {
+        "tenant_id": row[0],
+        "project_id": row[1],
+        "model_id": row[2],
+        "pipeline_id": row[3],
+        "created_at": row[4].isoformat(),
+        "updated_at": row[5].isoformat(),
+    }
+
+
 def resolve_model_pipeline(tenant_id: str, project_id: str, model_id: str) -> dict:
+    mapped = _get_mapped_pipeline_id(tenant_id, project_id, model_id)
+    base = resolve_base_model_artifact(tenant_id, project_id, model_id)
+    if mapped:
+        out: dict = {
+            "model_id": model_id,
+            "pipeline_id": mapped,
+            "model_version": base["version"] if base else None,
+            "run_id": None,
+            "source": "model_pipeline_mapping",
+        }
+        if base:
+            out["artifact_uri"] = base["artifact_uri"]
+            out["base_weights_source"] = base["source"]
+            out["base_version_id"] = base["version_id"]
+        return out
+
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -486,17 +621,27 @@ def resolve_model_pipeline(tenant_id: str, project_id: str, model_id: str) -> di
             )
             row = cur.fetchone()
     if not row:
-        return {
+        out2: dict = {
             "model_id": model_id,
             "pipeline_id": None,
             "model_version": None,
             "run_id": None,
             "source": "unresolved",
         }
-    return {
+        if base:
+            out2["artifact_uri"] = base["artifact_uri"]
+            out2["base_weights_source"] = base["source"]
+            out2["base_version_id"] = base["version_id"]
+        return out2
+    out3 = {
         "model_id": model_id,
         "pipeline_id": row[0],
         "model_version": int(row[1]) if row[1] is not None else None,
         "run_id": row[2],
         "source": "latest_model_run",
     }
+    if base:
+        out3["artifact_uri"] = base["artifact_uri"]
+        out3["base_weights_source"] = base["source"]
+        out3["base_version_id"] = base["version_id"]
+    return out3

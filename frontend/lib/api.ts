@@ -104,7 +104,7 @@ export type WhoAmIResponse = {
   project_ids?: string[];
 };
 
-function normalizeProjectId(projectId: string): string {
+export function normalizeProjectId(projectId: string): string {
   const raw = String(projectId || "").trim().toLowerCase();
   if (raw === "global") return "default_project";
   return String(projectId || "").trim();
@@ -429,6 +429,8 @@ export async function triggerPipelineRunWithGating(
     pipeline_version_id?: string;
     use_latest_pipeline_version?: boolean;
     override_config?: Record<string, unknown>;
+    /** Passed to MLAir as run plugin_context (e.g. mlair_model_id for post-train registry update). */
+    context?: Record<string, unknown>;
   }
 ) {
   const res = await fetch(
@@ -561,8 +563,12 @@ export async function fetchModels(tenantId: string, projectId: string, token: st
         headers: authHeaders(token),
         cache: "no-store"
       });
-      if (!res.ok) return { items: [] as ModelItem[] };
-      return (await res.json()) as { items: ModelItem[] };
+      const data = (await res.json().catch(() => ({}))) as { items?: ModelItem[] } | Record<string, unknown>;
+      if (!res.ok) {
+        // Do not swallow 403/401 as "no models" — that hides token/scope misconfiguration for clinic projects.
+        throw new Error(JSON.stringify(data));
+      }
+      return data as { items: ModelItem[] };
     })
   );
   const merged = responses.flatMap((x) => x.items || []);
@@ -658,6 +664,71 @@ export async function fetchModelResolvedPipeline(tenantId: string, projectId: st
     model_version: number | null;
     run_id: string | null;
     source: string;
+    artifact_uri?: string | null;
+    base_weights_source?: string | null;
+    base_version_id?: string | null;
+  };
+}
+
+export async function putModelPipelineMapping(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  body: { pipeline_id: string }
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/pipeline-mapping`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(body)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    tenant_id: string;
+    project_id: string;
+    model_id: string;
+    pipeline_id: string;
+    created_at: string;
+    updated_at: string;
+  };
+}
+
+/** Model + dataset only; MLAir resolves pipeline and production (or latest) base weights. */
+export async function triggerRunFromModelDataset(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  payload: {
+    model_id: string;
+    dataset_id: string;
+    dataset_version_id?: string;
+    pipeline_id_override?: string;
+    idempotency_key?: string | null;
+    priority?: string;
+    max_parallel_tasks?: number;
+    training_mode: string;
+    override_config?: Record<string, unknown>;
+    context?: Record<string, unknown>;
+  }
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/trigger`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunItem & {
+    blocked_by_gate?: boolean;
+    readiness?: RunReadiness;
+    resolved_pipeline_id?: string;
+    resolution?: { pipeline_source?: string; base_weights_source?: string | null };
   };
 }
 

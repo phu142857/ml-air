@@ -13,12 +13,13 @@ from app.services.model_registry_service import (
     delete_model,
     delete_model_version,
     get_model,
-    resolve_model_pipeline,
     get_model_status,
     list_model_versions,
     list_models,
     preview_next_model_artifact_uri,
     promote_model_version,
+    resolve_model_pipeline,
+    upsert_model_pipeline_mapping,
 )
 from app.plugins.registry import plugin_registry
 from app.services.auth_service import authenticate_bearer, authorize_scope
@@ -51,6 +52,7 @@ from app.services.tracking_service import (
     log_param,
 )
 from app.services.trace_service import get_trace_id
+from app.services.executor_promote_webhook_service import notify_model_promotion_webhook
 from app.services.manifest_service import upsert_task_manifest
 from app.services import trigger_policy_service
 
@@ -69,6 +71,29 @@ class TriggerRunIn(BaseModel):
     use_latest_pipeline_version: bool = False
     training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
+
+
+class TriggerRunByModelIn(BaseModel):
+    """Train from model + dataset only; MLAir resolves pipeline and production base weights."""
+
+    model_id: str = Field(min_length=1)
+    dataset_id: str = Field(min_length=1)
+    dataset_version_id: str | None = None
+    pipeline_id_override: str | None = Field(
+        default=None,
+        description="Advanced: force a pipeline_id while still using model_id for registry and base weights.",
+    )
+    experiment_id: str | None = None
+    context: dict = Field(default_factory=dict)
+    idempotency_key: str | None = None
+    priority: str = Field(default="normal")
+    max_parallel_tasks: int = Field(default=1, ge=1, le=20)
+    training_mode: str = "full"
+    override_config: dict = Field(default_factory=dict)
+
+
+class ModelPipelineMappingIn(BaseModel):
+    pipeline_id: str = Field(min_length=1)
 
 
 class CheckReadinessIn(BaseModel):
@@ -278,6 +303,110 @@ def trigger_run_v1(
         override_config=payload.override_config,
     )
     return run
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/trigger")
+def trigger_run_by_model_dataset_v1(
+    tenant_id: str,
+    project_id: str,
+    payload: TriggerRunByModelIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Create a gated run from model + dataset; resolves default pipeline and MLAir production (or latest) artifact."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not get_model(tenant_id=tenant_id, project_id=project_id, model_id=payload.model_id):
+        raise HTTPException(status_code=404, detail="model_not_found")
+    ds = lineage_service.get_dataset(tenant_id, project_id, payload.dataset_id)
+    if not ds:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    if payload.dataset_version_id:
+        dv = lineage_service.get_dataset_version(tenant_id, project_id, payload.dataset_version_id)
+        if not dv or str(dv.get("dataset_id") or "") != payload.dataset_id:
+            raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    else:
+        versions = lineage_service.list_dataset_versions(tenant_id, project_id, payload.dataset_id)
+        if not versions:
+            raise HTTPException(status_code=422, detail="dataset_has_no_versions")
+        dv = versions[0]
+
+    rp = resolve_model_pipeline(tenant_id=tenant_id, project_id=project_id, model_id=payload.model_id)
+    override_pid = str(payload.pipeline_id_override or "").strip() or None
+    if override_pid:
+        pipeline_id = override_pid
+    else:
+        pipeline_id = str(rp.get("pipeline_id") or "").strip() or None
+        if not pipeline_id:
+            raise _blocked(
+                "MODEL_PIPELINE_UNRESOLVED",
+                "Set a pipeline mapping for this model (PUT .../models/{model_id}/pipeline-mapping) or register a version from a pipeline run.",
+            )
+
+    latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, pipeline_id)
+    if not latest_pv:
+        raise HTTPException(status_code=422, detail="pipeline_has_no_version_in_project")
+    pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+    pipeline_cfg = pv_row.get("config") if pv_row and isinstance(pv_row.get("config"), dict) else {}
+    if pipeline_cfg:
+        _validate_pipeline_plugin_contract(pipeline_cfg, require_plugin_exists=True)
+    else:
+        raise _blocked("NO_PLUGIN", "Pipeline has no version config with task plugins")
+    plugin_ctx: dict = {
+        **dict(payload.context or {}),
+        "mlair_model_id": payload.model_id,
+        "model_id": payload.model_id,
+        "dataset_id": payload.dataset_id,
+        "dataset_version_id": str(dv.get("version_id") or ""),
+    }
+    if rp.get("artifact_uri"):
+        plugin_ctx["artifact_uri"] = rp["artifact_uri"]
+    if rp.get("base_weights_source"):
+        plugin_ctx["base_weights_source"] = rp["base_weights_source"]
+    if rp.get("base_version_id"):
+        plugin_ctx["base_version_id"] = rp["base_version_id"]
+
+    override_cfg = dict(payload.override_config or {})
+    override_cfg.setdefault("dataset_version_id", str(dv.get("version_id") or ""))
+    override_cfg.setdefault("inputs", [{"dataset": str(ds.get("name") or payload.dataset_id), "required_size": 1}])
+
+    run = create_run(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_id=pipeline_id,
+        idempotency_key=payload.idempotency_key,
+        priority=payload.priority,
+        max_parallel_tasks=payload.max_parallel_tasks,
+        trace_id=get_trace_id(),
+        experiment_id=payload.experiment_id,
+        plugin_context=plugin_ctx,
+        pipeline_version_id=latest_pv,
+        use_latest_pipeline_version=False,
+        training_mode=payload.training_mode,
+        override_config=override_cfg,
+    )
+    check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
+    if not check.get("ready"):
+        set_run_status(run["run_id"], "FAILED")
+        append_run_log(
+            run_id=run["run_id"],
+            level="WARN",
+            message="run blocked by data readiness gate",
+            payload={"blocking_datasets": check.get("blocking_datasets", [])},
+        )
+        return {
+            **(get_run(run["run_id"]) or run),
+            "blocked_by_gate": True,
+            "readiness": check,
+            "resolved_pipeline_id": pipeline_id,
+            "resolution": {"pipeline_source": rp.get("source"), "base_weights_source": rp.get("base_weights_source")},
+        }
+    return {
+        **run,
+        "blocked_by_gate": False,
+        "readiness": check,
+        "resolved_pipeline_id": pipeline_id,
+        "resolution": {"pipeline_source": rp.get("source"), "base_weights_source": rp.get("base_weights_source")},
+    }
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs")
@@ -1160,6 +1289,39 @@ def get_model_resolved_pipeline_v1(
     return resolve_model_pipeline(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
 
 
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/pipeline-mapping")
+def put_model_pipeline_mapping_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: ModelPipelineMappingIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id):
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        return upsert_model_pipeline_mapping(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            pipeline_id=payload.pipeline_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "pipeline_id_required":
+            raise HTTPException(status_code=422, detail="pipeline_id_required") from exc
+        if code == "model_not_found":
+            raise HTTPException(status_code=404, detail="model_not_found") from exc
+        if code == "pipeline_not_in_project":
+            raise HTTPException(
+                status_code=422,
+                detail="pipeline_not_in_project",
+            ) from exc
+        raise HTTPException(status_code=400, detail=code) from exc
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy")
 def get_model_trigger_policy_v1(
     tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
@@ -1303,9 +1465,18 @@ def promote_model_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     try:
-        return promote_model_version(model_id=model_id, version=payload.version, stage=payload.stage)
+        out = promote_model_version(model_id=model_id, version=payload.version, stage=payload.stage)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    notify_model_promotion_webhook(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        version=int(payload.version),
+        artifact_uri=str(out.get("artifact_uri") or "") or None,
+        idempotency_key=f"mlair-promote-{model_id}-v{int(payload.version)}-{str(payload.stage or '').strip()}",
+    )
+    return out
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")

@@ -9,12 +9,14 @@ import {
   deleteModel,
   deleteModelVersion,
   fetchDataset,
-  previewDatasetUpload,
+  fetchModelResolvedPipeline,
+  fetchModels,
   fetchModelStatus,
   fetchModelTriggerPolicy,
-  fetchModels,
   fetchModelVersions,
+  fetchPipelines,
   fetchRun,
+  previewDatasetUpload,
   promoteModelVersion,
   triggerPipelineRunWithGating,
   uploadDatasetCsv,
@@ -36,12 +38,12 @@ export default function ModelDetailPage() {
   const [gateError, setGateError] = useState("");
   const [isCheckingGate, setIsCheckingGate] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [pipelineIdInput, setPipelineIdInput] = useState("vet_ai_training_pipeline");
+  const [pipelineIdInput, setPipelineIdInput] = useState("");
   const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule">("manual");
   const [debounceMinutes, setDebounceMinutes] = useState("10");
   const [scheduleCron, setScheduleCron] = useState("0 */6 * * *");
   const [policyMsg, setPolicyMsg] = useState("");
-  const [datasetName, setDatasetName] = useState("user_events");
+  const [datasetName, setDatasetName] = useState("");
   const [datasetFile, setDatasetFile] = useState<File | null>(null);
   const [datasetPreview, setDatasetPreview] = useState<any>(null);
   const [datasetMsg, setDatasetMsg] = useState("");
@@ -59,6 +61,16 @@ export default function ModelDetailPage() {
   const versionsQuery = useQuery({
     queryKey: ["model-versions", tenantId, projectId, modelId],
     queryFn: () => fetchModelVersions(tenantId, projectId, modelId, token)
+  });
+  const resolvedPipelineQuery = useQuery({
+    queryKey: ["model-resolved-pipeline-ui", tenantId, projectId, modelId],
+    queryFn: () => fetchModelResolvedPipeline(tenantId, projectId, modelId, token),
+    enabled: Boolean(modelId && token)
+  });
+  const pipelinesListQuery = useQuery({
+    queryKey: ["pipelines-model-page", tenantId, projectId],
+    queryFn: () => fetchPipelines(tenantId, projectId, token),
+    enabled: Boolean(token)
   });
   const modelStatusQuery = useQuery({
     queryKey: ["model-status", tenantId, projectId, modelId],
@@ -191,8 +203,29 @@ export default function ModelDetailPage() {
     setConfirmOpen(true);
   };
 
-  const inferredPipelineId = String(latestRunQuery.data?.pipeline_id || "").trim();
-  const pipelineId = String(pipelineIdInput || inferredPipelineId || "vet_ai_training_pipeline").trim();
+  const envDefaultPipelineId = (process.env.NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID || "").trim();
+  const inferredPipelineId = useMemo(() => {
+    const fromMapping = String(resolvedPipelineQuery.data?.pipeline_id || "").trim();
+    if (fromMapping) return fromMapping;
+    const fromRun = String(latestRunQuery.data?.pipeline_id || "").trim();
+    if (fromRun) return fromRun;
+    if (envDefaultPipelineId) return envDefaultPipelineId;
+    const first = pipelinesListQuery.data?.items?.[0]?.pipeline_id;
+    return String(first || "").trim();
+  }, [
+    resolvedPipelineQuery.data,
+    latestRunQuery.data,
+    pipelinesListQuery.data,
+    envDefaultPipelineId
+  ]);
+  const pipelineId = String(pipelineIdInput || inferredPipelineId).trim();
+  const readinessDatasetName = datasetName.trim();
+  const gateSampleDataset = useMemo(() => {
+    const rows = (gateResult?.details || []) as Array<{ dataset?: string }>;
+    const d = rows.find((r) => String(r?.dataset || "").trim());
+    return String(d?.dataset || "").trim();
+  }, [gateResult]);
+  const lineageDatasetLabel = gateSampleDataset || readinessDatasetName || "—";
   const missingReason = gateResult?.blocking_datasets?.[0]
     ? `${gateResult.blocking_datasets[0].dataset}: thiếu ${Math.max(
         0,
@@ -259,7 +292,7 @@ export default function ModelDetailPage() {
             <input
               value={pipelineIdInput}
               onChange={(e) => setPipelineIdInput(e.target.value)}
-              placeholder={inferredPipelineId || "vet_ai_training_pipeline"}
+              placeholder={inferredPipelineId || "from mapping / last run / NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID / first pipeline"}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-100"
             />
           </label>
@@ -285,16 +318,24 @@ export default function ModelDetailPage() {
           </label>
           <div className="flex items-end gap-2">
             <button
-              disabled={isCheckingGate}
+              disabled={isCheckingGate || !pipelineId || !readinessDatasetName}
               className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 hover:bg-blue-900/20 disabled:opacity-60"
               onClick={async () => {
                 setGateError("");
+                if (!pipelineId) {
+                  setGateError("No pipeline_id: configure mapping, run history, NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID, or type one.");
+                  return;
+                }
+                if (!readinessDatasetName) {
+                  setGateError("Enter dataset name (must match pipeline readiness input dataset).");
+                  return;
+                }
                 setIsCheckingGate(true);
                 try {
                   const req = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
                   const out = await checkPipelineReadiness(tenantId, projectId, pipelineId, token, {
                     training_mode: trainingMode,
-                    override_config: { inputs: [{ dataset: "user_events", required_size: req }] }
+                    override_config: { inputs: [{ dataset: readinessDatasetName, required_size: req }] }
                   });
                   setGateResult(out);
                 } catch (e: any) {
@@ -307,10 +348,18 @@ export default function ModelDetailPage() {
               Check
             </button>
             <button
-              disabled={isRunning}
+              disabled={isRunning || !pipelineId || !readinessDatasetName}
               className="btn-action-primary rounded-lg px-3 py-2 text-xs disabled:opacity-60"
               onClick={async () => {
                 setGateError("");
+                if (!pipelineId) {
+                  setGateError("No pipeline_id: configure mapping, run history, NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID, or type one.");
+                  return;
+                }
+                if (!readinessDatasetName) {
+                  setGateError("Enter dataset name (must match pipeline readiness input dataset).");
+                  return;
+                }
                 setIsRunning(true);
                 try {
                   const req = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
@@ -320,7 +369,7 @@ export default function ModelDetailPage() {
                     max_parallel_tasks: 1,
                     idempotency_key: `model-run-${Date.now()}`,
                     training_mode: trainingMode,
-                    override_config: { inputs: [{ dataset: "user_events", required_size: req }] }
+                    override_config: { inputs: [{ dataset: readinessDatasetName, required_size: req }] }
                   });
                   if (res.run_id) router.push(`/runs/${res.run_id}`);
                 } catch (e: any) {
@@ -338,7 +387,7 @@ export default function ModelDetailPage() {
         {gateResult ? (
           <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="mb-2 text-xs text-slate-200">
-              Run Preview · Pipeline: {pipelineId} · Mode: {trainingMode} · Estimate: ~30s
+              Run Preview · Pipeline: {pipelineId || "—"} · Dataset: {readinessDatasetName || "—"} · Mode: {trainingMode}
             </div>
             <div className="overflow-auto rounded-lg border border-slate-700">
               <table className="w-full text-xs">
@@ -382,7 +431,7 @@ export default function ModelDetailPage() {
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-100"
-                placeholder="user_events"
+                placeholder="name matching pipeline input dataset"
               />
             </label>
             <label className="text-xs text-slate-400 md:col-span-2">
@@ -414,6 +463,10 @@ export default function ModelDetailPage() {
               className="btn-action-primary rounded-lg px-3 py-1 text-xs disabled:opacity-60"
               onClick={async () => {
                 setDatasetMsg("");
+                if (!pipelineId) {
+                  setDatasetMsg("No pipeline_id: configure mapping, run history, NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID, or type one.");
+                  return;
+                }
                 setIsTrainingWithDataset(true);
                 try {
                   const req = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
@@ -439,7 +492,7 @@ export default function ModelDetailPage() {
                   setIsTrainingWithDataset(false);
                 }
               }}
-              disabled={!datasetName.trim() || isTrainingWithDataset}
+              disabled={!datasetName.trim() || !pipelineId || isTrainingWithDataset}
             >
               Train with this dataset
             </button>
@@ -542,7 +595,7 @@ export default function ModelDetailPage() {
               ))}
             </div>
             <div className="mt-2 text-xs text-slate-400">
-              Lineage: user_events → {pipelineId} → {model?.name ?? modelId}
+              Lineage: {lineageDatasetLabel} → {pipelineId || "—"} → {model?.name ?? modelId}
             </div>
           </div>
         )}

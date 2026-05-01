@@ -16,7 +16,8 @@ import {
   fetchPipelines,
   fetchPipelineVersions,
   previewDatasetUpload,
-  triggerPipelineRunWithGating,
+  normalizeProjectId,
+  triggerRunFromModelDataset,
   uploadDatasetCsv
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
@@ -44,7 +45,7 @@ export default function DatasetsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { tenantId, projectId, token } = useAppContext();
-  const [datasetName, setDatasetName] = useState("user_events");
+  const [datasetName, setDatasetName] = useState("");
   const [datasetFile, setDatasetFile] = useState<File | null>(null);
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
@@ -95,11 +96,6 @@ export default function DatasetsPage() {
     queryFn: () => fetchPipelines(tenantId, projectId, token)
   });
   useEffect(() => {
-    if (pipelineId) return;
-    const first = pipelinesQuery.data?.items?.[0]?.pipeline_id;
-    if (first) setPipelineId(first);
-  }, [pipelinesQuery.data, pipelineId]);
-  useEffect(() => {
     if (selectedModelId) return;
     const first = modelsQuery.data?.items?.[0]?.model_id;
     if (first) setSelectedModelId(first);
@@ -115,8 +111,8 @@ export default function DatasetsPage() {
     () => resolvedPipelineQuery.data?.pipeline_id || "",
     [resolvedPipelineQuery.data]
   );
-  const pipelineMissing = !resolvedPipelineId;
-  const effectivePipeline = pipelineId || resolvedPipelineId;
+  const pipelineMissing = !resolvedPipelineId && !(advancedMode && pipelineId);
+  const effectivePipeline = advancedMode && pipelineId ? pipelineId : resolvedPipelineId;
   const pipelineVersionsQuery = useQuery({
     queryKey: ["pipeline-versions", tenantId, projectId, effectivePipeline],
     queryFn: () => fetchPipelineVersions(tenantId, projectId, effectivePipeline, token),
@@ -294,9 +290,32 @@ export default function DatasetsPage() {
                     </option>
                   ))}
                 </select>
-                <div className="flex items-center rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 md:col-span-2">
-                  <span className="ml-1 text-slate-100">
-                    {resolvedPipelineId ? `${resolvedPipelineId}-${modelVersionToken}` : "Not configured"}
+                <div className="flex flex-col justify-center gap-0.5 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 md:col-span-2">
+                  <span className="text-slate-100">
+                    Pipeline:{" "}
+                    <span className="font-mono text-slate-200">
+                      {effectivePipeline || "—"}
+                    </span>{" "}
+                    <span className="text-slate-500">
+                      (
+                      {advancedMode && pipelineId
+                        ? "override"
+                        : resolvedPipelineQuery.data?.source === "unresolved"
+                          ? "unresolved"
+                          : "from model"}
+                      )
+                    </span>
+                  </span>
+                  <span className="text-slate-400">
+                    Base weights:{" "}
+                    {resolvedPipelineQuery.data?.base_weights_source
+                      ? `${resolvedPipelineQuery.data.base_weights_source}${
+                          resolvedPipelineQuery.data.model_version != null &&
+                          resolvedPipelineQuery.data.model_version !== undefined
+                            ? ` · v${resolvedPipelineQuery.data.model_version}`
+                            : ""
+                        }`
+                      : "none (cold start / upload a version)"}
                   </span>
                 </div>
                 <select
@@ -379,19 +398,24 @@ export default function DatasetsPage() {
                             aria-label="Train"
                             onClick={async () => {
                               try {
-                                const latestPipelineVersionId = pipelineVersionsQuery.data?.items?.[0]?.version_id;
-                                const res = await triggerPipelineRunWithGating(tenantId, projectId, effectivePipeline, token, {
-                                  pipeline_id: effectivePipeline,
+                                const scopedPid = normalizeProjectId(String(projectId || "").trim());
+                                const runContext: Record<string, string> = {};
+                                if (scopedPid.startsWith("clinic_")) {
+                                  runContext.clinic_id = scopedPid.slice("clinic_".length);
+                                }
+                                if (selectedModelId) {
+                                  runContext.mlair_model_id = selectedModelId;
+                                }
+                                const res = await triggerRunFromModelDataset(tenantId, projectId, token, {
+                                  model_id: selectedModelId,
+                                  dataset_id: selectedDatasetId,
+                                  dataset_version_id: v.version_id,
+                                  ...(advancedMode && pipelineId ? { pipeline_id_override: pipelineId } : {}),
                                   idempotency_key: `dataset-page-train-${Date.now()}`,
                                   priority: "normal",
                                   max_parallel_tasks: 1,
-                                  pipeline_version_id: latestPipelineVersionId,
-                                  use_latest_pipeline_version: true,
                                   training_mode: trainingMode,
-                                  override_config: {
-                                    dataset_version_id: v.version_id,
-                                    inputs: [{ dataset: selectedDataset?.name || "user_events", required_size: 1 }]
-                                  }
+                                  ...(Object.keys(runContext).length ? { context: runContext } : {})
                                 });
                                 if (res.run_id) router.push(`/runs/${res.run_id}`);
                               } catch (err) {
@@ -400,6 +424,7 @@ export default function DatasetsPage() {
                             }}
                             disabled={
                               normalizeDatasetStatus(v.status) === "FAILED" ||
+                              !selectedModelId ||
                               !pluginPrecheck.ok ||
                               pipelineVersionsQuery.isLoading
                             }

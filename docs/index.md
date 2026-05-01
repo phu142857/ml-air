@@ -49,6 +49,7 @@ Each guide follows:
 - [Compare Runs](./guides/compare-runs.md)
 - [Register a Model](./guides/register-model.md)
 - [Promote a Model](./guides/promote-model.md)
+- [Model-centric pipeline mapping and run trigger](./guides/model-centric-pipeline-mapping-and-trigger.md)
 - [Sync External Model Registry](./guides/sync-external-model-registry.md)
 
 ### Plugin System
@@ -94,6 +95,7 @@ Each guide follows:
 - [POST /models](./api/post-models.md)
 - [POST /models/{id}/versions](./api/post-model-versions.md)
 - [GET /models/{id}/versions](./api/get-model-versions.md)
+- [Model-centric pipeline mapping and run trigger (guide)](./guides/model-centric-pipeline-mapping-and-trigger.md)
 
 ## External MLOps Integration
 

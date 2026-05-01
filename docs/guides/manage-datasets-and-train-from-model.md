@@ -278,6 +278,12 @@ Applied across:
 
 Using shared helper: `formatDateTimeCompact()` in `frontend/lib/utils.ts`.
 
+## Model + dataset trigger (MLAir-native)
+
+The Datasets UI can call **`POST /v1/tenants/{tenant}/projects/{project}/runs/trigger`** so users pick **model** and **dataset version** only; MLAir resolves **default pipeline** (`model_pipeline_mapping` or latest run linkage) and injects **production / latest `artifact_uri`** into run **`plugin_context`** when available. See:
+
+- [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md)
+
 ## Deploy and Verification Checklist
 
 1. Run migration:
