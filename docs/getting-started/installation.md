@@ -27,3 +27,5 @@ The environment is now ready for pipeline run execution, plugin loading, task pr
 ## Done
 
 You can continue with [Quickstart](./quickstart.md).
+
+For running MLAir **next to another stack** without vendoring this repo, see [Consume MLAir from Compose (decoupled)](../guides/consume-mlair-from-compose.md). For outbound promote webhooks, see [Downstream model promote webhook](../guides/downstream-model-promote-webhook.md).

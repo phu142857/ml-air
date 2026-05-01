@@ -2,12 +2,16 @@
 
 ## Goal
 
-Run pipeline tasks **outside** the built-in Redis executor: an external process (for example Vet-AI) **leases** work from MLAir, executes it, then calls **complete** or **fail**. MLAir remains the source of truth for run and task status.
+Run pipeline tasks **outside** the built-in Redis executor: an external process (your own worker or training service) **leases** work from MLAir, executes it, then calls **complete** or **fail**. MLAir remains the source of truth for run and task status.
 
 ## When to use this
 
 - You want **async, distributed** execution without embedding business HTTP calls inside MLAir.
 - Workers scale independently; MLAir keeps **orchestration + scheduling + DB state**.
+
+## Model-centric runs and `plugin_context`
+
+If the run was created with **`POST .../runs/trigger`**, the scheduler publishes tasks whose payload includes **`plugin_context`** built by the API after **pipeline mapping + dataset resolution** (model id, dataset ids, optional `artifact_uri`, etc.). See [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md#plugin_context-for-post-runstrigger). For a full narrative from mapping → trigger → lease → complete → optional promote → optional webhook, see [End-to-end: MLAir control plane + external executor](./downstream-executor-control-plane.md).
 
 ## Prerequisites
 
@@ -27,7 +31,7 @@ Restart **api** and **scheduler**. The executor container may stay running but w
 
 ### 2. Run a pipeline as usual
 
-Create a run through the normal API (for example Vet-AI triggering MLAir). Tasks that become ready enter **`QUEUED`** with a **`plugin`** name taken from `config_snapshot.tasks[].plugin`.
+Create a run through the normal API (for example your control plane calling MLAir). Tasks that become ready enter **`QUEUED`** with a **`plugin`** name taken from `config_snapshot.tasks[].plugin`.
 
 ### 3. Implement the worker loop
 
@@ -86,4 +90,4 @@ python scripts/external_worker_example.py
 - [Retry a Failed Task](./retry-failed-task.md)
 - [Configure Tenant and Project Scope](./configure-tenant-project-scope.md)
 
-Reference worker (leases tasks, runs continuous training, completes with metrics): **Vet-AI** repo — enable `VETAI_MLAIR_WORKER_ENABLED` and see its README section *External MLAir worker*.
+Reference pattern: implement a small worker that calls **`POST /v1/tasks/lease`**, executes the returned `plugin` + `payload`, then **`POST /v1/tasks/{task_id}/complete`** or **`/fail`**. See this repo’s smoke scripts under `scripts/` for HTTP examples.

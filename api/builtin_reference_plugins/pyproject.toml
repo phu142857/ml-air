@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mlair-reference-plugins"
 version = "0.1.0"
-description = "Reference MLAir plugins for contract validation and demo pipelines (used by vet-ai default DAG)."
+description = "Reference MLAir plugins for contract validation and demo pipelines (reference demo DAG / example adapters)."
 requires-python = ">=3.11"
 dependencies = []
 

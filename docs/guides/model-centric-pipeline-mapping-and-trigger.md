@@ -96,7 +96,7 @@ Content-Type: application/json
 - Resolves `pipeline_id` (unless `pipeline_id_override` is set).
 - Loads **latest** `pipeline_version_id` for that pipeline and validates plugin contract.
 - Merges **`override_config`** with `dataset_version_id` and readiness **`inputs`** using the dataset’s **logical name** from the `datasets` row.
-- Builds **`plugin_context`**: `mlair_model_id`, `model_id`, `dataset_id`, `dataset_version_id`, and when available `artifact_uri`, `base_weights_source`, `base_version_id`.
+- Builds **`plugin_context`** after **pipeline + mapping + dataset** resolution (not from UI alone); see [plugin_context](#plugin_context-for-post-runstrigger) below.
 - Runs the same **readiness gate** as `POST .../pipelines/{pipeline_id}/run`; on failure the run is marked `FAILED` and the response includes `blocked_by_gate` and `readiness`.
 
 **Response extras**
@@ -104,30 +104,31 @@ Content-Type: application/json
 - `resolved_pipeline_id`
 - `resolution`: `{ "pipeline_source", "base_weights_source" }`
 
-### Promote → optional HTTP notify (executor / serving)
+### Optional: HTTP notify after promote
 
-After a successful **`POST .../models/{model_id}/promote`**, MLAir may **POST JSON** to a URL you configure (any downstream system—not tied to a specific product name in code).
+After a successful **`POST .../models/{model_id}/promote`**, MLAir may call a **downstream** URL you configure. Full contract (headers, JSON schema, when the call is skipped, idempotency, SLA): **[Downstream model promote webhook](./downstream-model-promote-webhook.md)**. Env summary: [Promote a model](./promote-model.md).
 
-| Variable | Purpose |
-|----------|---------|
-| `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` | Full URL; if empty, no call. |
-| `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` | `Authorization: Bearer …`; both URL and token must be set. |
-| `MLAIR_MODEL_PROMOTE_WEBHOOK_TIMEOUT_SECONDS` | Optional; default `15`. |
+## `plugin_context` for `POST .../runs/trigger`
 
-**JSON body (example)**
+This object is attached to the **run** and flows to the **scheduler / worker** as part of the task payload (alongside `config_snapshot` from the pinned pipeline version). It is built **in the API** immediately after:
 
-```json
-{
-  "tenant_id": "...",
-  "project_id": "...",
-  "model_id": "...",
-  "version": 3,
-  "artifact_uri": "file:///...",
-  "idempotency_key": "mlair-promote-<model_id>-v3-production"
-}
-```
+1. Resolving **`pipeline_id`** (mapping or latest model-version run, unless `pipeline_id_override` is set).
+2. Loading the **dataset** row and chosen **dataset version**.
+3. Calling **`resolve_model_pipeline`** for optional base-weight hints.
 
-Failures are **logged only**; promotion in MLAir still succeeds.
+Implementation merges **`context`** from the request body first, then sets the keys below (callers should avoid colliding names unless they intend overrides; MLAir keys win for the same name).
+
+| Key | Always present | Type | Meaning |
+|-----|----------------|------|---------|
+| `mlair_model_id` | yes | string | Same as `model_id` (explicit alias for workers). |
+| `model_id` | yes | string | Registry model id from the trigger body. |
+| `dataset_id` | yes | string | Dataset id from the trigger body. |
+| `dataset_version_id` | yes | string | Resolved version id (explicit or latest). |
+| `artifact_uri` | if resolved | string | Base-weight URI from registry resolution when present (may be `file://`, `s3://`, or another scheme). **MLAir does not guarantee** your executor can read every scheme; that is a downstream capability decision. |
+| `base_weights_source` | if resolved | string | `production` or `latest_artifact` when `artifact_uri` comes from `resolve_model_pipeline`. |
+| `base_version_id` | if resolved | string | Model version row id tied to the chosen artifact. |
+
+**Readiness note:** `plugin_context` is fixed **before** `create_run`; the readiness gate then runs using **`override_config`** / pipeline snapshot inputs. External workers should treat `plugin_context` as **training hints**, and `config_snapshot` + `override_config` as **orchestration + gating** inputs.
 
 ## UI (MLAir frontend)
 
@@ -192,5 +193,8 @@ curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_proj
 
 - [Manage Datasets and Train from Model](./manage-datasets-and-train-from-model.md) — dataset quality, upload, and UI train rules.
 - [Configure Data Readiness and Gating](./configure-data-readiness-gating.md) — how gates use `inputs[].dataset`.
+- [POST /runs/trigger](../api/post-runs-trigger.md) — request/response reference for this endpoint.
 - [Promote a Model](./promote-model.md) — stage transitions + optional promote webhook.
+- [Downstream model promote webhook](./downstream-model-promote-webhook.md) — full outbound JSON contract.
+- [End-to-end: control plane + external executor](./downstream-executor-control-plane.md) — full integration narrative.
 - [External Worker Execution](./external-worker-execution.md) — lease / complete flow for executors consuming `plugin_context`.

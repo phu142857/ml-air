@@ -25,6 +25,10 @@ api:
     jwtAudience: ""
     jwtJwksUrl: ""
     jwtJwksCacheTtlSeconds: "300"
+    # Optional: POST to this URL with Bearer after model promote (executor reload / serving).
+    modelPromoteWebhookUrl: ""
+    modelPromoteWebhookBearerToken: ""
+    modelPromoteWebhookTimeoutSeconds: "15"
   secret:
     # If set, API will read JWT secret from an existing Kubernetes Secret.
     # Otherwise chart-managed Secret `ml-air-api-secrets` is used.

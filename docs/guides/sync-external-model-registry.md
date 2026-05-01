@@ -2,7 +2,7 @@
 
 ## Goal
 
-Sync models from an external MLOps app (for example Vet-AI) into MLAir model registry with clinic/project scope.
+Sync models from an external MLOps app into MLAir model registry with clinic/project scope.
 
 ## Steps
 
@@ -23,7 +23,7 @@ export MLAIR_MODEL_SCOPE_PER_CLINIC=true
 export MLAIR_CLINIC_PROJECT_MAP_JSON='{"clinic-a":"project_clinic_a","clinic-b":"project_clinic_b"}'
 export MLAIR_CLINIC_TENANT_MAP_JSON='{"clinic-a":"default","clinic-b":"default"}'
 
-# Manual sync endpoint (example from Vet-AI bridge)
+# Manual sync endpoint (example from an external bridge service)
 curl -X POST http://localhost:8000/mlair/models/sync \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 

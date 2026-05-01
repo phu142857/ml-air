@@ -15,7 +15,7 @@ Run pipelines only when required input datasets are ready, while still allowing 
 
 ```bash
 # 1) Check readiness first (non-executing check)
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/vet_ai_training_pipeline/check-readiness" \
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/check-readiness" \
   -H "Authorization: Bearer admin-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -28,11 +28,11 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
   }'
 
 # 2) Trigger run with gating
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/vet_ai_training_pipeline/run" \
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/run" \
   -H "Authorization: Bearer admin-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "pipeline_id": "vet_ai_training_pipeline",
+    "pipeline_id": "<pipeline_id>",
     "training_mode": "standard",
     "override_config": {
       "inputs": [

@@ -118,6 +118,77 @@ paths:
         "200":
           description: OK
 
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/trigger:
+    post:
+      tags: [Runs]
+      summary: Trigger run from model + dataset (resolved pipeline)
+      description: |
+        Resolves `pipeline_id` from `model_pipeline_mapping` (or latest model-version run), injects
+        `artifact_uri` / `base_weights_source` / `base_version_id` into `plugin_context` when available,
+        then creates a run and applies the data-readiness gate.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerRunByModelRequest"
+      responses:
+        "200":
+          description: Run created (may be FAILED if blocked by readiness gate)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerRunByModelResponse"
+        "404":
+          description: Model or dataset not found
+        "422":
+          description: Validation or BLOCKED (e.g. unresolved pipeline, missing plugins)
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/pipeline-mapping:
+    put:
+      tags: [Models]
+      summary: Set default pipeline for a model
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelPipelineMappingRequest"
+      responses:
+        "200":
+          description: Mapping upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelPipelineMappingRow"
+        "404":
+          description: Model not found
+        "422":
+          description: Pipeline not registered in project
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/resolved-pipeline:
+    get:
+      tags: [Models]
+      summary: Resolve default pipeline and base weights for a model
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Resolution payload (may be partially unresolved)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolvedPipeline"
+
   /v1/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs:
     get:
       tags: [Tasks]
@@ -375,6 +446,12 @@ components:
       required: true
       schema:
         type: string
+    ModelId:
+      in: path
+      name: model_id
+      required: true
+      schema:
+        type: string
 
   schemas:
     Project:
@@ -400,6 +477,130 @@ components:
           additionalProperties: true
         idempotency_key:
           type: string
+
+    TriggerRunByModelRequest:
+      type: object
+      required: [model_id, dataset_id]
+      properties:
+        model_id:
+          type: string
+          minLength: 1
+        dataset_id:
+          type: string
+          minLength: 1
+        dataset_version_id:
+          type: string
+          nullable: true
+          description: When omitted, uses latest version for the dataset.
+        pipeline_id_override:
+          type: string
+          nullable: true
+          description: Advanced; force pipeline while still using model registry for base weights.
+        experiment_id:
+          type: string
+          nullable: true
+        context:
+          type: object
+          additionalProperties: true
+        idempotency_key:
+          type: string
+          nullable: true
+        priority:
+          type: string
+          enum: [high, normal, low]
+          default: normal
+        max_parallel_tasks:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 1
+        training_mode:
+          type: string
+          description: Affects default readiness thresholds when override inputs are not set.
+          default: full
+        override_config:
+          type: object
+          additionalProperties: true
+
+    TriggerRunByModelResponse:
+      type: object
+      description: Run row plus trigger metadata (same shape as API JSON).
+      additionalProperties: true
+      properties:
+        run_id:
+          type: string
+        status:
+          type: string
+        blocked_by_gate:
+          type: boolean
+        resolved_pipeline_id:
+          type: string
+          nullable: true
+        resolution:
+          type: object
+          nullable: true
+          properties:
+            pipeline_source:
+              type: string
+              nullable: true
+            base_weights_source:
+              type: string
+              nullable: true
+        readiness:
+          type: object
+          additionalProperties: true
+
+    ModelPipelineMappingRequest:
+      type: object
+      required: [pipeline_id]
+      properties:
+        pipeline_id:
+          type: string
+          minLength: 1
+
+    ModelPipelineMappingRow:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+        project_id:
+          type: string
+        model_id:
+          type: string
+        pipeline_id:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    ResolvedPipeline:
+      type: object
+      properties:
+        model_id:
+          type: string
+        pipeline_id:
+          type: string
+          nullable: true
+        model_version:
+          type: integer
+          nullable: true
+        run_id:
+          type: string
+          nullable: true
+        source:
+          type: string
+          description: e.g. model_pipeline_mapping, latest_model_version_run, unresolved
+        artifact_uri:
+          type: string
+          nullable: true
+        base_weights_source:
+          type: string
+          nullable: true
+          description: e.g. production_artifact, latest_artifact
+        base_version_id:
+          type: string
+          nullable: true
     ModelApprovalUpdate:
       type: object
       required: [approval_status]

@@ -34,11 +34,11 @@ curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/d
   -H "Authorization: Bearer admin-token"
 
 # 3) Re-run with tracked override (example only)
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/vet_ai_training_pipeline/run" \
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/run" \
   -H "Authorization: Bearer admin-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "pipeline_id": "vet_ai_training_pipeline",
+    "pipeline_id": "<pipeline_id>",
     "training_mode": "quick",
     "override_config": {
       "inputs": [

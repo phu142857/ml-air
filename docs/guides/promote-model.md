@@ -26,16 +26,16 @@ Use the numeric **`version`** from the model registry (see `GET .../models/{mode
 Model version stage updates to `production`.
 Promotion links the model to a validated pipeline run, task outputs, plugin behavior, and lineage history.
 
-## Optional: notify an external executor after promote
+## Optional: notify downstream after promote
 
-If the serving or training runtime lives outside MLAir, set:
+If a **downstream** serving or executor process should react when a version reaches `production` (or another promoted stage), set:
 
-- `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` — POST target (full URL).
-- `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` — shared secret (`Authorization: Bearer …`).
+- `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` — POST target (**full URL**).
+- `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` — shared secret (`Authorization: Bearer …` on the outbound request).
 
-MLAir sends JSON with `tenant_id`, `project_id`, `model_id`, `version`, `artifact_uri`, and an idempotency key. If the URL or token is unset, no request is made. Failures are logged only; the promote in MLAir still succeeds.
+**Contract (mandatory reading for integrators):** [Downstream model promote webhook](./downstream-model-promote-webhook.md) — exact JSON schema, when MLAir **skips** the call (missing URL/token/`artifact_uri`), `idempotency_key` omission rules, and **best-effort** semantics (promote succeeds even if webhook fails).
 
-See [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md#promote--optional-http-notify-executor--serving).
+Context in the model-centric guide: [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md#optional-http-notify-after-promote).
 
 ## Done
 

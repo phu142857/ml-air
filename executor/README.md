@@ -12,4 +12,4 @@ This image ships a **stub executor** for orchestration demos:
 
 Optional: set **`ML_AIR_REFERENCE_TASK_SLEEP_MS`** to a fixed sleep in milliseconds (overrides the random 0.2–0.7 s when set), e.g. `5000` for a 5 s stub.
 
-Real model training from your business app belongs in **your training service** (e.g. Vet-AI) or a dedicated executor plugin that calls that service; MLAir tracks runs, readiness, and lineage around it.
+Real model training from your business app belongs in **your training service** (an external training app or worker you operate) or a dedicated executor plugin that calls that service; MLAir tracks runs, readiness, and lineage around it.

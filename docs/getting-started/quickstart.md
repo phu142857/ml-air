@@ -28,11 +28,11 @@ You should get a successful smoke run and be able to open UI at `http://localhos
 
 ## Startup Hooks (External Integrations)
 
-If your external service supports startup sync to MLAir registry, enable it with a service-specific flag and optional clinic mapping.
+If your external service supports startup sync to the MLAir model registry, enable it with **that service’s own** environment flags and optional clinic/tenant mapping (names vary by product).
 
 ```bash
-# Example from Vet-AI bridge
-export VETAI_MLAIR_SYNC_MODELS_ON_STARTUP=true
+# Example placeholders — use your bridge’s documented variables instead
+export YOUR_APP_MLAIR_SYNC_MODELS_ON_STARTUP=true
 export MLAIR_MODEL_SCOPE_PER_CLINIC=true
 export MLAIR_CLINIC_PROJECT_MAP_JSON='{"clinic-a":"project_clinic_a"}'
 export MLAIR_CLINIC_TENANT_MAP_JSON='{"clinic-a":"default"}'

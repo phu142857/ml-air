@@ -167,7 +167,7 @@ Token model and roles are documented under **Security** in [`docs/index.md`](doc
 
 - Plugins are discovered via Python **`importlib.metadata` entry points** in group **`mlair.plugins`** (see [`docs/guides/create-plugin.md`](docs/guides/create-plugin.md)).
 - **Pipeline version `config.tasks[]`** should declare a **`plugin`** per task; the API validates this on run trigger (and related paths) so misconfigured pipelines fail fast with **`BLOCKED` / `PLUGIN_NOT_FOUND`** instead of silent bad runs.
-- The **API image** installs **`mlair-reference-plugins`** from `api/builtin_reference_plugins/`, which registers **`app_etl_adapter`**, **`app_train_adapter`**, and **`echo_tracking`** for the default Vet-AI training DAG and built-in examples. Replace or extend with your own installable plugin packages in production.
+- The **API image** installs **`mlair-reference-plugins`** from `api/builtin_reference_plugins/`, which registers **`app_etl_adapter`**, **`app_train_adapter`**, and **`echo_tracking`** for a **reference demo DAG** and other built-in examples. Replace or extend with your own installable plugin packages in production.
 - The **executor** runs optional subprocess plugins (`ML_AIR_PLUGIN_RUNNER_MODULE`, default `mlair_runner`). The shipped reference executor is suitable for **orchestration demos**; **real training** belongs in your service or a dedicated plugin package you install into the executor image.
 
 ---
@@ -184,7 +184,7 @@ ml-air/
 ├── charts/ml-air/       # Helm chart
 ├── docs/                # Task-oriented guides & API reference
 ├── scripts/             # Smoke tests, gates, maintenance
-├── sdk/                 # Small helpers for plugins / integrations
+├── sdk/                 # Small helpers: tracking + model-centric trigger / pipeline-mapping
 ├── openapi-v1-draft.yaml
 ├── Makefile
 ├── ROADMAP.md
@@ -219,8 +219,9 @@ Use `make doctor` for diagnostics. See `Makefile` for additional targets (`day6-
 **Production-style:**
 
 1. **Build & publish images** via GitHub Actions (`.github/workflows/publish-images.yml`)—typically on SemVer tags `v*.*.*`.
-2. **Pull by tag** in your environment compose or Kubernetes (e.g. consumer stack pins `MLAIR_IMAGE_TAG`).
-3. **Helm:** `charts/ml-air/` with workflow `.github/workflows/deploy-helm-staging.yml` as a reference pattern.
+2. **Frontend bundle URL:** set the repository variable **`NEXT_PUBLIC_API_BASE_URL`** in GitHub (Settings → Secrets and variables → Actions → Variables) to the browser-reachable API base (for example `https://api.example.com`). It is passed as a Docker build-arg so the Next.js client is not stuck on `localhost:8080` in published images.
+3. **Pull by tag** in your environment compose or Kubernetes (e.g. consumer stack pins `MLAIR_IMAGE_TAG`).
+4. **Helm:** `charts/ml-air/` — see [`charts/ml-air/README.md`](charts/ml-air/README.md) and workflow `.github/workflows/deploy-helm-staging.yml` as a reference pattern.
 
 Operational runbooks live under [`docs/troubleshooting/`](docs/troubleshooting/).
 
@@ -236,16 +237,13 @@ Operational runbooks live under [`docs/troubleshooting/`](docs/troubleshooting/)
 
 ## Contributing
 
-1. Fork / branch from `main` (or your org’s default branch).
-2. Keep changes focused; update **`.env.example`** (and `.env` patterns) when adding configuration.
-3. Run `make test-env-sync` and relevant smoke targets before opening a PR.
-4. Open a PR with a clear description of behavior, risk, and rollback.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). In short: focused PRs, `make test-env-sync` when env vars change, and smoke/Helm checks when touching runtime services.
 
 ---
 
 ## License
 
-This subdirectory does not ship a `LICENSE` file. Set license terms at your **monorepo root** or add a `LICENSE` here per your organization’s policy.
+Released under the **MIT License** — see [`LICENSE`](LICENSE). API contract drafts may evolve; consumer-facing changes are summarized in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -254,6 +252,7 @@ This subdirectory does not ship a `LICENSE` file. Set license terms at your **mo
 | Document | Purpose |
 |----------|---------|
 | [`docs/index.md`](docs/index.md) | All guides (run, gating, plugins, UI, DR) |
+| [`CHANGELOG.md`](CHANGELOG.md) | Notable API and env changes for integrators |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Target enterprise architecture |
 | [`ROADMAP.md`](ROADMAP.md) | Delivery milestones |
 | [`docs/plugin-development-guide.md`](docs/plugin-development-guide.md) | Plugin packaging & contract |

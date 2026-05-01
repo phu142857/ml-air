@@ -54,7 +54,7 @@ Body:
 
 ```json
 {
-  "pipeline_id": "vet_ai_training_pipeline",
+  "pipeline_id": "<pipeline_id>",
   "idempotency_key": "my-run-key",
   "training_mode": "standard",
   "override_config": {

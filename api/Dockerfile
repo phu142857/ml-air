@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app
 
 # Register reference plugins (mlair.plugins) so pipeline contract validation sees
-# app_etl_adapter / app_train_adapter / echo_tracking (vet-ai default DAG + examples).
+# app_etl_adapter / app_train_adapter / echo_tracking (reference demo DAG + examples).
 RUN pip install --no-cache-dir /app/builtin_reference_plugins
 
 EXPOSE 8080

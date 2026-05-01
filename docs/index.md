@@ -50,6 +50,10 @@ Each guide follows:
 - [Register a Model](./guides/register-model.md)
 - [Promote a Model](./guides/promote-model.md)
 - [Model-centric pipeline mapping and run trigger](./guides/model-centric-pipeline-mapping-and-trigger.md)
+- [Downstream model promote webhook (contract)](./guides/downstream-model-promote-webhook.md)
+- [End-to-end: control plane + external executor](./guides/downstream-executor-control-plane.md)
+- [Integrate an external executor / worker](./guides/integrate-external-executor.md)
+- [Consume MLAir from Compose (decoupled)](./guides/consume-mlair-from-compose.md)
 - [Sync External Model Registry](./guides/sync-external-model-registry.md)
 
 ### Plugin System
@@ -91,6 +95,7 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md)
+- [POST /runs/trigger](./api/post-runs-trigger.md)
 - [Readiness and Gating API](./api/readiness-and-gating.md)
 - [POST /models](./api/post-models.md)
 - [POST /models/{id}/versions](./api/post-model-versions.md)
