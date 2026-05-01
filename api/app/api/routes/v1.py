@@ -937,9 +937,22 @@ def download_dataset_version_v1(
     try:
         data, filename = lineage_service.get_dataset_version_csv_bytes(tenant_id, project_id, version_id)
     except FileNotFoundError as exc:
-        detail = str(exc) or "dataset_version_file_not_found"
-        status = 404 if detail in {"dataset_version_not_found", "dataset_version_file_not_found"} else 400
-        raise HTTPException(status_code=status, detail=detail)
+        code = str(exc) or "dataset_version_file_not_found"
+        if code == "dataset_version_file_not_found":
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": code,
+                    "hint": (
+                        "CSV was recorded in the DB but the file is missing under ML_AIR_DATASET_ARTIFACT_ROOT "
+                        "(common after mlair-api recreate without a Docker volume). "
+                        "Mount a named volume on /mlair/artifacts/datasets, set ML_AIR_DATASET_ARTIFACT_ROOT if needed, "
+                        "then re-upload the dataset version."
+                    ),
+                },
+            )
+        status = 404 if code == "dataset_version_not_found" else 400
+        raise HTTPException(status_code=status, detail=code)
     safe_name = filename.replace('"', "")
     return Response(
         content=data,

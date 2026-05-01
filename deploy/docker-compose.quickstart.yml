@@ -37,8 +37,11 @@ services:
       ML_AIR_TASK_EXECUTION_MODE: ${ML_AIR_TASK_EXECUTION_MODE:-internal}
       ML_AIR_WORKER_TOKEN: ${ML_AIR_WORKER_TOKEN:-}
       ML_AIR_TASK_LEASE_SECONDS: ${ML_AIR_TASK_LEASE_SECONDS:-30}
+      ML_AIR_DATASET_ARTIFACT_ROOT: ${ML_AIR_DATASET_ARTIFACT_ROOT:-file:///mlair/artifacts/datasets}
     ports:
       - "${ML_AIR_API_PORT:-8080}:8080"
+    volumes:
+      - ml_air_dataset_artifacts:/mlair/artifacts/datasets
     depends_on:
       - redis
       - postgres
@@ -173,3 +176,4 @@ services:
 volumes:
   ml_air_pgdata:
   ml_air_minio:
+  ml_air_dataset_artifacts:
