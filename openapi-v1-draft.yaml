@@ -11,6 +11,10 @@ info:
     unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`), optional **serving slot** assignments
     (`candidate` | `challenger` | `champion` | `canary`), plus optional promote webhooks for downstream systems.
 
+    **Note:** The **serving** HTTP paths below match the intended contract; in the default repo tree their
+    FastAPI handlers may be **commented out** in `api/app/api/routes/v1.py` (DB table `model_serving_slots` and
+    service code may still exist). Prefer the running OpenAPI doc from the server or `v1.py` when integrating.
+
     **Runs, readiness, datasets, lineage, pipeline versions, tracking, search, and plugins** sections
     in this file are kept aligned with `api/app/api/routes/v1.py` (draft; prefer the running service
     when a field is documented as free-form JSON).
@@ -1565,6 +1569,8 @@ paths:
     get:
       tags: [Models]
       summary: List serving slot assignments for a model
+      description: |
+        Contract path; may be **unmounted** in `v1.py` until serving slots are re-shipped (see repo root README / ARCHITECTURE §7).
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
@@ -1583,6 +1589,8 @@ paths:
     put:
       tags: [Models]
       summary: Assign a model version to a serving slot
+      description: |
+        Contract path; may be **unmounted** in `v1.py` until serving slots are re-shipped (see repo root README / ARCHITECTURE §7).
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"

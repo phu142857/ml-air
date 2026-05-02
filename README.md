@@ -139,7 +139,7 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 ## API
 
 - **Base path:** `/v1`
-- **Contract draft:** [`openapi-v1-draft.yaml`](openapi-v1-draft.yaml) — aligned with implemented routes where noted (e.g. model **stages** `staging` / `production` / `archived`; no in-product approval or serving-slot APIs).
+- **Contract draft:** [`openapi-v1-draft.yaml`](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (e.g. model **stages** `staging` / `production` / `archived`, **per-version approval** `GET|PUT .../versions/{v}/approval`, **promote**). **Serving-slot** paths remain in the draft and **`model_serving_slots`** exists after migration `0013`, but the **`GET|PUT .../models/{id}/serving`** HTTP handlers are **commented out in `v1.py`** until the feature is turned back on; the product UI gates the same (`ENABLE_SERVING_SLOTS_UI` in the models pages).
 - **Narrative API docs:** [`docs/api/`](docs/api/)
 
 **Examples:**

@@ -61,7 +61,7 @@ Design notes:
   - Pipeline dashboard, DAG view, run timeline, realtime logs.
   - Tenant/project context switcher and role-aware UI actions.
 - `api` (FastAPI, `/v1/...`)
-  - AuthN/AuthZ, input validation, run/model/dataset/lineage APIs; **model lifecycle** includes **stages**, **per-version approval**, optional **serving-slot assignments**, and promote webhooks (see §7).
+  - AuthN/AuthZ, input validation, run/model/dataset/lineage APIs; **model lifecycle** includes **stages**, **per-version approval**, optional **serving-slot** rows (DB; **HTTP** for slots may be disabled in `v1.py` — see §7), and promote webhooks (see §7).
   - Emits run/task events and exposes query APIs for UI/integration.
 - `scheduler` (DAG engine service)
   - Parses DAG, resolves dependencies, enforces state transitions.
@@ -139,8 +139,7 @@ Security requirements:
 **Serving slots** (`model_serving_slots`):
 
 - Slots: **`candidate`**, **`challenger`**, **`champion`**, **`canary`** — at most one assigned `version_id` per `(model_id, slot)`.
-- **`GET .../models/{model_id}/serving`** — current assignments.
-- **`PUT .../models/{model_id}/serving/{slot}`** — bind a numeric version to a slot (separate from `stage`; for routing metadata / external load balancers).
+- Intended HTTP surface (see OpenAPI draft): **`GET .../models/{model_id}/serving`** (current assignments) and **`PUT .../models/{model_id}/serving/{slot}`** (bind a numeric version to a slot; separate from `stage`; routing metadata for external load balancers). **As of the default tree, these route handlers are commented out in `v1.py`** (service helpers and table remain); re-enable there and in the frontend flag when shipping the feature again.
 
 Optional **downstream webhook** on promote: `MLAIR_MODEL_PROMOTE_*`.
 
