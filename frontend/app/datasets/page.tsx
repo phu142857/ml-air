@@ -190,7 +190,7 @@ export default function DatasetsPage() {
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">Upload CSV</h2>
+          <h2 className="mb-3 text-section font-semibold text-slate-200">Upload CSV</h2>
           <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <input
               value={datasetName}
@@ -224,7 +224,7 @@ export default function DatasetsPage() {
           </div>
           <div className="mt-3 overflow-auto rounded-xl border border-slate-700">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900 text-slate-400">
+              <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Dataset</th>
                   <th className="px-3 py-2 text-left">Rows</th>
@@ -250,7 +250,7 @@ export default function DatasetsPage() {
 
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-200">
+            <h2 className="text-section font-semibold text-slate-200">
               Dataset Versions {selectedDataset ? `- ${selectedDataset.name}` : ""}
             </h2>
             {selectedDatasetId ? (
@@ -358,7 +358,7 @@ export default function DatasetsPage() {
               </div>
               <div className="overflow-auto rounded-xl border border-slate-700">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-900 text-slate-400">
+                  <thead className="bg-muted">
                     <tr>
                       <th className="px-3 py-2 text-left">Version</th>
                       <th className="px-3 py-2 text-left">Status</th>
@@ -483,7 +483,7 @@ function VersionDetailDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
-        <h3 className="mb-3 text-sm font-semibold text-slate-200">Dataset Version Detail</h3>
+        <h3 className="mb-3 text-section font-semibold text-slate-200">Dataset Version Detail</h3>
         <div className="space-y-1 text-sm">
           <div className="text-slate-200">
             Status: <span className="font-semibold">{String(version.status || "ready")}</span>
@@ -602,7 +602,7 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">{title}</h3>
+        <h3 className="mb-2 text-section font-semibold text-slate-200">{title}</h3>
         <p className="mb-4 text-sm text-slate-400">{body}</p>
         <div className="flex justify-end gap-2">
           <button

@@ -63,7 +63,7 @@ export default function SettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-200">Plugin Registry</h2>
+            <h2 className="text-section font-semibold text-slate-200">Plugin Registry</h2>
             <button
               className="btn-action-primary rounded-xl px-3 py-2 text-xs disabled:opacity-60"
               onClick={() => reloadMutation.mutate()}
@@ -74,7 +74,7 @@ export default function SettingsPage() {
           </div>
           <div className="overflow-auto rounded-xl border border-slate-700">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900 text-slate-400">
+              <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Name</th>
                   <th className="px-3 py-2 text-left">Version</th>
@@ -141,7 +141,7 @@ export default function SettingsPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">Plugin Detail</h2>
+          <h2 className="mb-3 text-section font-semibold text-slate-200">Plugin Detail</h2>
           {selected ? (
             <div className="space-y-3 text-sm text-slate-200">
               <div className="rounded-xl border border-slate-700 bg-slate-900 p-3">

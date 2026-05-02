@@ -15,13 +15,13 @@ from app.services.model_registry_service import (
     get_model,
     get_model_status,
     get_model_version_approval,
-    list_model_serving_slots,
+    # list_model_serving_slots,  # serving slots API temporarily disabled
     list_model_versions,
     list_models,
     preview_next_model_artifact_uri,
     promote_model_version,
     resolve_model_pipeline,
-    set_model_serving_slot,
+    # set_model_serving_slot,
     update_model_version_approval,
     upsert_model_pipeline_mapping,
 )
@@ -211,8 +211,8 @@ class ModelApprovalUpdateIn(BaseModel):
     reason: str | None = None
 
 
-class SetServingSlotIn(BaseModel):
-    version: int = Field(ge=1)
+# class SetServingSlotIn(BaseModel):
+#     version: int = Field(ge=1)
 
 
 class TriggerPolicyIn(BaseModel):
@@ -1515,44 +1515,45 @@ def put_model_version_approval_v1(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving")
-def get_model_serving_v1(
-    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
-) -> dict:
-    principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="model_not_found")
-    return list_model_serving_slots(model_id)
-
-
-@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}")
-def put_model_serving_slot_v1(
-    tenant_id: str,
-    project_id: str,
-    model_id: str,
-    slot: str,
-    payload: SetServingSlotIn,
-    authorization: str | None = Header(default=None),
-) -> dict:
-    principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="model_not_found")
-    try:
-        return set_model_serving_slot(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            model_id=model_id,
-            slot=slot,
-            version=payload.version,
-        )
-    except ValueError as exc:
-        if str(exc) == "invalid_serving_slot":
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+# --- Serving slots API temporarily disabled (restore imports + SetServingSlotIn + handlers) ---
+# @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving")
+# def get_model_serving_v1(
+#     tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+# ) -> dict:
+#     principal = authenticate_bearer(authorization)
+#     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+#     row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+#     if not row:
+#         raise HTTPException(status_code=404, detail="model_not_found")
+#     return list_model_serving_slots(model_id)
+#
+#
+# @router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}")
+# def put_model_serving_slot_v1(
+#     tenant_id: str,
+#     project_id: str,
+#     model_id: str,
+#     slot: str,
+#     payload: SetServingSlotIn,
+#     authorization: str | None = Header(default=None),
+# ) -> dict:
+#     principal = authenticate_bearer(authorization)
+#     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+#     row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+#     if not row:
+#         raise HTTPException(status_code=404, detail="model_not_found")
+#     try:
+#         return set_model_serving_slot(
+#             tenant_id=tenant_id,
+#             project_id=project_id,
+#             model_id=model_id,
+#             slot=slot,
+#             version=payload.version,
+#         )
+#     except ValueError as exc:
+#         if str(exc) == "invalid_serving_slot":
+#             raise HTTPException(status_code=422, detail=str(exc)) from exc
+#         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")

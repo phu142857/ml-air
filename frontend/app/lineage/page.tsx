@@ -148,7 +148,7 @@ function LineagePageInner() {
         {runId && <p className="text-xs text-slate-400">Run-scoped: {runId}</p>}
         </div>
         <aside className="flex h-[480px] flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900 p-3">
-          <h3 className="text-sm font-semibold text-slate-100">Dataset detail</h3>
+          <h3 className="text-section font-semibold text-slate-100">Dataset detail</h3>
           {!selectedVersionId && <p className="text-xs text-slate-400">Click a node to view detail.</p>}
           {selectedVersionId && (
             <>

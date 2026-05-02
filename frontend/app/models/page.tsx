@@ -18,16 +18,13 @@ import {
   updateModelVersionApproval
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 
-const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
+/** Set `true` when serving slot routes are re-enabled in `api/app/api/routes/v1.py`. */
+const ENABLE_SERVING_SLOTS_UI = false;
 
-function approvalBadgeClass(s?: string) {
-  if (s === "approved") return "bg-emerald-500/20 text-emerald-200";
-  if (s === "rejected") return "bg-rose-500/20 text-rose-200";
-  if (s === "pending_manual_approval") return "bg-amber-500/20 text-amber-200";
-  return "bg-slate-600/40 text-slate-300";
-}
+const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
 export default function ModelsPage() {
   const router = useRouter();
@@ -80,7 +77,7 @@ export default function ModelsPage() {
   const servingQuery = useQuery({
     queryKey: ["model-serving", tenantId, projectId, selectedModelId],
     queryFn: () => fetchModelServing(tenantId, effectiveProjectId, selectedModelId, token),
-    enabled: !!selectedModelId && !!selectedModel && projectId !== "all"
+    enabled: ENABLE_SERVING_SLOTS_UI && !!selectedModelId && !!selectedModel && projectId !== "all"
   });
   const previewArtifactQuery = useQuery({
     queryKey: ["model-next-artifact", tenantId, effectiveProjectId, selectedModelId],
@@ -196,7 +193,7 @@ export default function ModelsPage() {
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">Model Registry</h2>
+          <h2 className="mb-3 text-section font-semibold text-slate-200">Model Registry</h2>
           <div className="mb-3 space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <input
               value={newModelName}
@@ -220,7 +217,7 @@ export default function ModelsPage() {
           </div>
           <div className="overflow-auto rounded-xl border border-slate-700">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900 text-slate-400">
+              <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Name</th>
                   <th className="px-3 py-2 text-left">Updated</th>
@@ -275,7 +272,12 @@ export default function ModelsPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">Versions {selectedModel ? `- ${selectedModel.name}` : ""}</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-section font-semibold text-slate-200">
+              Versions {selectedModel ? `- ${selectedModel.name}` : ""}
+            </h2>
+            {versionBanner ? <span className="version-inline-banner">{versionBanner}</span> : null}
+          </div>
           {!selectedModelId ? (
             <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-400">
               Select a model to manage versions.
@@ -352,7 +354,7 @@ export default function ModelsPage() {
                           <button
                             type="button"
                             onClick={() => removeSelectedFile(f)}
-                            className="rounded bg-slate-700 px-2 py-0.5 text-[11px] text-slate-100 hover:bg-slate-600"
+                            className="rounded bg-slate-700 px-2 py-0.5 text-caption text-slate-100 hover:bg-slate-600"
                           >
                             Remove
                           </button>
@@ -384,58 +386,55 @@ export default function ModelsPage() {
                   Import model and create version (staging)
                 </button>
               </div>
-              <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-xs font-semibold text-slate-200">Serving slots</h3>
-                  {versionBanner ? (
-                    <span className="max-w-full truncate rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
-                      {versionBanner}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mb-2 text-[11px] text-slate-400">
-                  Map a registry version to champion / candidate / challenger / canary.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {SERVING_SLOTS.map((slot) => {
-                    const cur = servingQuery.data?.slots?.[slot];
-                    return (
-                      <div
-                        key={slot}
-                        className="flex flex-wrap items-center gap-2 rounded border border-slate-700 px-2 py-2 text-xs"
-                      >
-                        <span className="font-medium capitalize text-slate-200">{slot}</span>
-                        <span className="text-slate-400">{cur ? `v${cur.version}` : "—"}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          value={servingSlotDraft[slot] ?? ""}
-                          onChange={(e) =>
-                            setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
-                          }
-                          placeholder="ver"
-                          className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
-                        />
-                        <button
-                          type="button"
-                          className="rounded-lg bg-slate-700 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600 disabled:opacity-60"
-                          disabled={servingAssignMutation.isPending}
-                          onClick={() => {
-                            const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
-                            if (!Number.isFinite(n) || n < 1) return;
-                            servingAssignMutation.mutate({ slot, version: n });
-                          }}
+              {ENABLE_SERVING_SLOTS_UI ? (
+                <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-semibold text-slate-200">Serving slots</h3>
+                  </div>
+                  <p className="mb-2 text-caption text-slate-400">
+                    Map a registry version to champion / candidate / challenger / canary.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {SERVING_SLOTS.map((slot) => {
+                      const cur = servingQuery.data?.slots?.[slot];
+                      return (
+                        <div
+                          key={slot}
+                          className="flex flex-wrap items-center gap-2 rounded border border-slate-700 px-2 py-2 text-xs"
                         >
-                          Set
-                        </button>
-                      </div>
-                    );
-                  })}
+                          <span className="font-medium capitalize text-slate-200">{slot}</span>
+                          <span className="text-slate-400">{cur ? `v${cur.version}` : "—"}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={servingSlotDraft[slot] ?? ""}
+                            onChange={(e) =>
+                              setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
+                            }
+                            placeholder="ver"
+                            className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+                          />
+                          <button
+                            type="button"
+                            className="rounded-lg bg-slate-700 px-2 py-1 text-caption text-slate-100 hover:bg-slate-600 disabled:opacity-60"
+                            disabled={servingAssignMutation.isPending}
+                            onClick={() => {
+                              const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
+                              if (!Number.isFinite(n) || n < 1) return;
+                              servingAssignMutation.mutate({ slot, version: n });
+                            }}
+                          >
+                            Set
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              ) : null}
               <div className="overflow-auto rounded-xl border border-slate-700">
                 <table className="w-full table-fixed text-sm">
-                  <thead className="bg-slate-900 text-slate-400">
+                  <thead className="bg-muted">
                     <tr>
                       <th className="w-[110px] px-3 py-2 text-left">Version</th>
                       <th className="w-[120px] px-3 py-2 text-left">Stage</th>
@@ -453,7 +452,7 @@ export default function ModelsPage() {
                         <td className="px-3 py-2 align-top">
                           <div className="flex flex-col gap-1">
                             <span
-                              className={`inline-block w-fit max-w-full truncate rounded px-1.5 py-0.5 text-[10px] ${approvalBadgeClass(
+                              className={`inline-block w-fit max-w-full truncate ${modelApprovalPillClass(
                                 v.approval_status
                               )}`}
                               title={v.approval_reason || undefined}
@@ -464,7 +463,7 @@ export default function ModelsPage() {
                               <div className="flex flex-wrap gap-1">
                                 <button
                                   type="button"
-                                  className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-900/60 disabled:opacity-60"
+                                  className="approval-action-btn approval-action-btn--approve"
                                   disabled={approvalMutation.isPending}
                                   onClick={() =>
                                     approvalMutation.mutate({ version: v.version, approval_status: "approved" })
@@ -474,7 +473,7 @@ export default function ModelsPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="rounded bg-rose-900/40 px-1.5 py-0.5 text-[10px] text-rose-200 hover:bg-rose-900/60 disabled:opacity-60"
+                                  className="approval-action-btn approval-action-btn--reject"
                                   disabled={approvalMutation.isPending}
                                   onClick={() =>
                                     approvalMutation.mutate({ version: v.version, approval_status: "rejected" })
@@ -556,7 +555,7 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">{title}</h3>
+        <h3 className="mb-2 text-section font-semibold text-slate-200">{title}</h3>
         <p className="mb-4 text-sm text-slate-400">{body}</p>
         <div className="flex justify-end gap-2">
           <button

@@ -71,7 +71,7 @@ export default function RunDetailPage() {
       {/* 1. Header Actions */}
       <div className="flex items-center justify-between mb-8">
         <button
-          className="group flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+          className="group flex items-center gap-2 text-section font-semibold text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => router.push("/runs")}
         >
           <ChevronLeft size={18} /> 
@@ -81,12 +81,12 @@ export default function RunDetailPage() {
         <div className="flex items-center gap-3">
           <a
             href={`/lineage?runId=${encodeURIComponent(runId)}`}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-colors text-sm font-semibold"
+            className="flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-2 text-section font-semibold text-color-primary transition-colors hover:bg-secondary"
           >
             <GitBranch size={16} /> Lineage
           </a>
           <button
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-xl hover:border-slate-500 transition-colors text-sm font-semibold"
+            className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-section font-semibold text-foreground transition-colors hover:bg-muted"
             onClick={async () => {
               const t = tasks[0]?.task_id;
               if (!t) return;
@@ -119,7 +119,7 @@ export default function RunDetailPage() {
           {/* Properties - Thông tin định danh */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
             <section className="card p-5 shadow-md">
-              <h2 className="mb-3 text-sm font-semibold text-primary">Run Properties</h2>
+              <h2 className="mb-3 text-section font-semibold text-foreground">Run Properties</h2>
               <div className="space-y-3">
                 <DetailRow label="Current Status" value={runQuery.data?.status} highlight />
                 <DetailRow label="Project ID" value={runQuery.data?.project_id} />
@@ -141,7 +141,7 @@ export default function RunDetailPage() {
             <section className="card p-5 shadow-md h-full">
               {runQuery.data?.config_snapshot ? (
                 <table className="w-full text-sm">
-                  <thead className="bg-muted text-secondary">
+                  <thead className="bg-muted">
                     <tr>
                       <th className="px-3 py-2 text-left">Parameter</th>
                       <th className="px-3 py-2 text-left">Value</th>
@@ -149,8 +149,8 @@ export default function RunDetailPage() {
                   </thead>
                   <tbody>
                     {Object.entries(runQuery.data.config_snapshot as Record<string, any>).map(([key, value]) => (
-                      <tr key={key} className="interactive-row border-t border-default">
-                        <td className="px-3 py-2 text-primary font-mono text-xs">{key}</td>
+                      <tr key={key} className="interactive-row border-t border-border">
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{key}</td>
                         <td className="px-3 py-2">
                           <code className="text-xs font-mono text-warning bg-warning/20 px-2 py-1 rounded border border-warning/40 whitespace-pre-wrap break-all block max-w-[300px] overflow-x-auto">
                             {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
@@ -161,23 +161,23 @@ export default function RunDetailPage() {
                   </tbody>
                 </table>
               ) : (
-                <div className="p-10 text-center text-secondary text-sm">No configuration snapshot available.</div>
+                <div className="p-10 text-center text-sm text-muted-foreground">No configuration snapshot available.</div>
               )}
             </section>
           </div>
           <div className="col-span-12 lg:col-span-6">
             <section className="card p-5 shadow-md h-full">
-              <h2 className="mb-3 text-sm font-semibold text-primary">Readiness Snapshot</h2>
+              <h2 className="mb-3 text-section font-semibold text-foreground">Readiness Snapshot</h2>
               {!readinessQuery.data ? (
-                <div className="p-6 text-center text-secondary text-sm">No readiness snapshot.</div>
+                <div className="p-6 text-center text-sm text-muted-foreground">No readiness snapshot.</div>
               ) : (
                 <>
-                  <div className="mb-2 text-xs text-slate-200">
+                  <div className="mb-2 text-xs text-muted-foreground">
                     ready={String(readinessQuery.data.ready)} · mode={readinessQuery.data.training_mode}
                   </div>
-                  <div className="overflow-auto rounded-xl border border-default max-h-[260px]">
+                  <div className="max-h-[260px] overflow-auto rounded-xl border border-border">
                     <table className="w-full text-xs">
-                      <thead className="bg-muted text-secondary">
+                      <thead className="bg-muted">
                         <tr>
                           <th className="px-2 py-1 text-left">Dataset</th>
                           <th className="px-2 py-1 text-left">Actual</th>
@@ -187,7 +187,7 @@ export default function RunDetailPage() {
                       </thead>
                       <tbody>
                         {(readinessQuery.data.details || []).map((d) => (
-                          <tr key={`${d.dataset}-${d.role}`} className="border-t border-default">
+                          <tr key={`${d.dataset}-${d.role}`} className="border-t border-border">
                             <td className="px-2 py-1">{d.dataset}</td>
                             <td className="px-2 py-1">{d.actual_size}</td>
                             <td className="px-2 py-1">{d.required_size}</td>
@@ -236,14 +236,14 @@ function DetailRow({ label, value, highlight = false }: { label: string, value: 
   };
 
   return (
-    <div className="flex items-center justify-between border-b border-default py-2 last:border-b-0">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+    <div className="flex items-center justify-between border-b border-border py-2 last:border-b-0">
+      <span className="text-overline font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       {highlight ? (
         <span className={`text-xs font-mono px-3 py-1 rounded-lg border shadow-sm ${getStatusStyles(String(value))}`}>
           {value?.toString() || "N/A"}
         </span>
       ) : (
-        <span className="text-sm font-medium text-slate-200">{value?.toString() || "N/A"}</span>
+        <span className="text-sm font-medium text-foreground">{value?.toString() || "N/A"}</span>
       )}
     </div>
   );

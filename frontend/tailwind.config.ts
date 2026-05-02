@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: ["class"],
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
@@ -8,9 +9,58 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontSize: {
+        /** App chrome / logo (topbar) */
+        brand: ["1.125rem", { lineHeight: "1.5rem" }],
+        /** Route page `<h1>` — was `text-2xl` */
+        page: ["1.5rem", { lineHeight: "2rem" }],
+        /** Card section `<h2>` / sidebar labels density */
+        section: ["0.875rem", { lineHeight: "1.25rem" }],
+        /** Default body copy in forms & tables */
+        body: ["0.875rem", { lineHeight: "1.375rem" }],
+        /** Hints, table meta, compact lists */
+        caption: ["0.75rem", { lineHeight: "1rem" }],
+        /** Uppercase labels / micro meta (replaces 11px hacks) */
+        overline: ["0.6875rem", { lineHeight: "1rem" }]
+      },
       colors: {
+        // Semantic UI tokens (MLflow-inspired palette) — see app/globals.css
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)"
+        },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)"
+        },
+        primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)"
+        },
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)"
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)"
+        },
+        accent: {
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)"
+        },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)"
+        },
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+
         // Semantic colors using CSS variables
-        'bg-page': 'var(--bg-page)',
+        "bg-page": "var(--bg-page)",
         'bg-surface': 'var(--bg-surface)',
         'bg-muted': 'var(--bg-muted)',
         'text-primary': 'var(--text-primary)',

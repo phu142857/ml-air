@@ -33,7 +33,7 @@ export default function PipelinesPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="overflow-auto rounded-xl border border-slate-700">
           <table className="w-full text-sm">
-            <thead className="bg-bg-card text-slate-400">
+            <thead className="bg-muted">
               <tr>
                 <th className="px-3 py-2 text-left">Pipeline</th>
                 <th className="px-3 py-2 text-left">Status</th>
@@ -73,7 +73,7 @@ export default function PipelinesPage() {
           </table>
         </div>
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">DAG: {selectedPipeline}</h2>
+          <h2 className="mb-3 text-section font-semibold text-slate-200">DAG: {selectedPipeline}</h2>
           <DagView tasks={tasks} />
         </section>
       </div>

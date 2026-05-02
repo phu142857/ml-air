@@ -123,7 +123,7 @@ export default function RunsPage() {
       {/* Compare Section */}
       <section className="card p-5 mb-4 shadow-md">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-primary">
+          <h2 className="text-section font-semibold text-foreground">
             Compare Runs (metrics)
           </h2>
 
@@ -132,7 +132,7 @@ export default function RunsPage() {
               value={selectedMetricKey}
               onChange={(e) => setSelectedMetricKey(e.target.value)}
               placeholder="metric key (e.g. accuracy)"
-              className="rounded-lg border border-default bg-surface px-6 py-2 text-sm text-primary placeholder:!text-secondary"
+              className="rounded-lg border border-border bg-card px-6 py-2 text-sm text-foreground placeholder:text-muted-foreground"
               style={{
                 backgroundColor: 'var(--bg-surface)',
                 borderColor: 'var(--border-default)',
@@ -146,17 +146,17 @@ export default function RunsPage() {
           </div>
         </div>
 
-        <div className="mb-3 rounded-lg border border-default bg-muted p-2 text-xs text-primary">
+        <div className="mb-3 rounded-lg border border-border bg-muted p-2 text-xs text-foreground">
           {compareSummary || "Summary will appear after compare."}
         </div>
 
         {compareChartData.length ? (
-          <div className="h-72 rounded-xl border border-default bg-surface p-2">
+          <div className="h-72 rounded-xl border border-border bg-card p-2">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={compareChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="step" stroke="#6B7280" />
-                <YAxis stroke="#6B7280" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="step" stroke="var(--muted-foreground)" tick={{ fill: "var(--muted-foreground)" }} />
+                <YAxis stroke="var(--muted-foreground)" tick={{ fill: "var(--muted-foreground)" }} />
                 <Tooltip />
                 <Legend />
 
@@ -176,7 +176,7 @@ export default function RunsPage() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="min-h-16 flex items-center justify-center rounded-xl border border-default bg-muted p-3 text-xs text-disabled">
+          <div className="flex min-h-16 items-center justify-center rounded-xl border border-border bg-muted p-3 text-xs text-muted-foreground">
             Select 2–4 runs and click Compare Selected.
           </div>
         )}
@@ -186,7 +186,7 @@ export default function RunsPage() {
       <section className="card p-5">
         {/* Pagination */}
           <div className="mb-4 flex items-center justify-between">
-            <span className="text-sm text-secondary">
+            <span className="text-sm text-muted-foreground">
               Showing {(currentPage - 1) * pageSize + 1}-
               {Math.min(currentPage * pageSize, filteredRuns.length)} of{" "}
               {filteredRuns.length} runs
@@ -194,7 +194,7 @@ export default function RunsPage() {
 
             <div className="flex items-center gap-2">
             <select
-              className="rounded-lg border border-default bg-surface px-2 py-1 text-xs text-primary"
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
               value={trainingModeFilter}
               onChange={(e) => {
                 setTrainingModeFilter(e.target.value);
@@ -216,7 +216,7 @@ export default function RunsPage() {
               Previous
             </button>
 
-            <span className="px-3 text-sm text-primary">
+            <span className="px-3 text-sm text-foreground">
               Page {currentPage} / {totalPages}
             </span>
 

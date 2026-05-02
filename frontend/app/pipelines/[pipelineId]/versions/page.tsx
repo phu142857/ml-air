@@ -80,7 +80,7 @@ export default function PipelineVersionsPage() {
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-200">Create version</h2>
+          <h2 className="mb-2 text-section font-semibold text-slate-200">Create version</h2>
           <p className="mb-2 text-xs text-slate-400">POST creates the next monotonic version; previous rows are not modified.</p>
           <textarea
             className="mb-2 h-40 w-full rounded-xl border border-slate-600 bg-slate-950 p-2 font-mono text-xs"
@@ -98,7 +98,7 @@ export default function PipelineVersionsPage() {
           </button>
         </section>
         <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-200">Compare (pick two, then Open diff)</h2>
+          <h2 className="mb-2 text-section font-semibold text-slate-200">Compare (pick two, then Open diff)</h2>
           <div className="flex flex-col gap-2 text-sm">
             <label className="text-slate-400">
               Version A
@@ -135,11 +135,11 @@ export default function PipelineVersionsPage() {
       </div>
 
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">All versions</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">All versions</h2>
         {listQuery.isLoading && <p className="text-sm text-slate-400">Loading…</p>}
         <div className="overflow-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-700 text-slate-400">
+            <thead className="border-b border-border bg-muted">
               <tr>
                 <th className="py-2 pr-2">#</th>
                 <th className="py-2 pr-2">version_id</th>

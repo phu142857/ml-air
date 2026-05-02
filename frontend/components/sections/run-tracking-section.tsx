@@ -22,19 +22,19 @@ export function RunTrackingSection({ tracking }: Props) {
   // Component hiển thị khi không có data
   const EmptyState = ({ message }: { message: string }) => (
     <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
-      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3 text-secondary">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Search size={20} />
       </div>
-      <p className="text-sm text-secondary font-semibold">{message}</p>
+      <p className="text-section font-semibold text-muted-foreground">{message}</p>
     </div>
   );
 
   return (
     <section className="card p-5 shadow-md transition-colors">
-      <h2 className="mb-3 text-sm font-semibold text-primary">Tracking & Metadata</h2>
+      <h2 className="mb-3 text-section font-semibold text-foreground">Tracking & Metadata</h2>
       
       {/* Tabs Navigation */}
-      <div className="mb-4 border-b border-default">
+      <div className="mb-4 border-b border-border">
         <div className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -44,7 +44,7 @@ export function RunTrackingSection({ tracking }: Props) {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`tab-stable flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors relative ${
-                  isActive ? "text-color-primary border-color-primary" : "text-secondary hover:text-primary"
+                  isActive ? "text-color-primary border-color-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Icon size={14} />
@@ -71,9 +71,12 @@ export function RunTrackingSection({ tracking }: Props) {
                     ? tracking.metrics 
                     : Object.entries(tracking.metrics).map(([key, value]) => ({ key, value }))
                   ).map((metric: any, i: number) => (
-                    <div key={i} className="group flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors border-b border-default last:border-0">
-                      <span className="text-secondary font-mono text-xs">{metric.key || `metric_${i}`}</span>
-                      <span className="text-info font-mono text-xs font-bold bg-info/20 px-2 py-1 rounded border border-info/40">
+                    <div
+                      key={i}
+                      className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">{metric.key || `metric_${i}`}</span>
+                      <span className="rounded border border-color-info/40 bg-color-info/15 px-2 py-1 font-mono text-xs font-bold text-color-info">
                         {typeof metric.value === "number" ? metric.value.toFixed(4) : String(metric.value)}
                       </span>
                     </div>
@@ -84,11 +87,11 @@ export function RunTrackingSection({ tracking }: Props) {
 
             {/* PARAMS */}
             {activeTab === "params" && (
-              <div className="rounded-lg bg-muted p-3 border border-default">
+              <div className="rounded-lg border border-border bg-muted p-3">
                 {!tracking.params || Object.keys(tracking.params).length === 0 ? (
                   <EmptyState message="No parameters recorded." />
                 ) : (
-                  <pre className="text-[11px] font-mono text-success/80 leading-relaxed overflow-x-auto max-h-60">
+                  <pre className="max-h-60 overflow-x-auto font-mono text-caption leading-relaxed text-color-success">
                     {JSON.stringify(tracking.params, null, 2)}
                   </pre>
                 )}
@@ -102,9 +105,12 @@ export function RunTrackingSection({ tracking }: Props) {
                   <EmptyState message="No artifacts generated." />
                 ) : (
                   tracking.artifacts.map((artifact, i) => (
-                    <div key={i} className="group flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors border-b border-default last:border-0">
-                      <span className="text-secondary font-mono text-xs truncate flex-1 mr-2">{artifact.path}</span>
-                      <span className="text-info font-mono text-xs font-bold bg-info/20 px-2 py-1 rounded border border-info/40">
+                    <div
+                      key={i}
+                      className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
+                    >
+                      <span className="mr-2 flex-1 truncate font-mono text-xs text-muted-foreground">{artifact.path}</span>
+                      <span className="rounded border border-color-info/40 bg-color-info/15 px-2 py-1 font-mono text-xs font-bold text-color-info">
                         {artifact.uri ? (
                           <a href={artifact.uri} target="_blank" rel="noreferrer" className="hover:underline">
                             VIEW

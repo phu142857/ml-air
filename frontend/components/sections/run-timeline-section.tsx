@@ -32,7 +32,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
 
   if (!tasks.length) {
     return (
-      <div className="rounded-2xl border border-default bg-muted p-4 text-sm text-secondary">
+      <div className="rounded-2xl border border-border bg-muted p-4 text-body text-muted-foreground">
         No tasks yet
       </div>
     );
@@ -61,12 +61,12 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
             <div
               key={t.task_id + t.attempt}
               ref={isLastFailed ? failRef : undefined}
-              className={`rounded-xl border border-default p-3 transition ${
+              className={`rounded-xl border border-border p-3 transition ${
                 taskStatus === "error" ? "border-color-error bg-bg-error" :
                 taskStatus === "success" ? "border-color-success bg-bg-success" :
                 taskStatus === "running" ? "border-color-info bg-bg-info" :
                 taskStatus === "queued" ? "border border-amber-500/30 bg-amber-500/10" :
-                "border-default bg-muted"
+                "border-border bg-muted"
               }`}
             >
               {/* Task Header */}
@@ -74,12 +74,12 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                 <button
                   type="button"
                   onClick={() => onOpenTask(t.task_id)}
-                  className="font-mono text-xs text-primary hover:text-color-primary hover:underline"
+                  className="font-mono text-caption text-foreground hover:text-color-primary hover:underline"
                 >
                   {t.task_id} · attempt {t.attempt}
                 </button>
                 <span
-                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  className={`text-overline font-semibold px-2 py-0.5 rounded-full ${
                     taskStatus === "error" && "bg-bg-error text-color-error"
                   }${
                     taskStatus === "success" && " bg-bg-success text-color-success"
@@ -107,7 +107,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
               </div>
 
               {/* Meta Info */}
-              <div className="flex gap-4 text-[11px] text-secondary">
+              <div className="flex gap-4 text-caption text-muted-foreground">
                 <span>wall: {t.duration_ms ?? "-"}ms</span>
                 <span>cpu: {t.cpu_time_seconds?.toFixed(4) ?? "-"}s</span>
                 <span>rss: {t.memory_rss_kb ?? "-"}KB</span>
@@ -115,7 +115,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
 
               {/* Error Message */}
               {t.error_message && (
-                <div className="mt-2 rounded-md bg-bg-error border border-color-error px-2 py-1 text-xs font-semibold text-color-error">
+                <div className="mt-2 rounded-md bg-bg-error border border-color-error px-2 py-1 text-caption font-semibold text-color-error">
                   {t.error_message}
                 </div>
               )}

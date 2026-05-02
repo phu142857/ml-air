@@ -44,19 +44,19 @@ export function LogsSection({
 
   const EmptyState = ({ message }: { message: string }) => (
     <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
-      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3 text-secondary">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Terminal size={20} />
       </div>
-      <p className="text-sm text-secondary font-semibold">{message}</p>
+      <p className="text-section font-semibold text-muted-foreground">{message}</p>
     </div>
   );
 
   return (
     <section className="card p-5 shadow-md transition-colors">
-      <h2 className="mb-3 text-sm font-semibold text-primary">Live System Output</h2>
+      <h2 className="mb-3 text-section font-semibold text-foreground">Live System Output</h2>
       
       {/* Tabs Navigation */}
-      <div className="mb-4 border-b border-default">
+      <div className="mb-4 border-b border-border">
         <div className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -66,7 +66,7 @@ export function LogsSection({
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`tab-stable flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors relative ${
-                  isActive ? "text-color-primary border-color-primary" : "text-secondary hover:text-primary"
+                  isActive ? "text-color-primary border-color-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Icon size={14} />
@@ -86,7 +86,7 @@ export function LogsSection({
                 value={logKeyword}
                 onChange={(e) => onChangeLogKeyword(e.target.value)}
                 placeholder="Search logs..."
-                className="flex-1 rounded-lg border border-default bg-surface px-3 py-2 text-xs text-primary placeholder:!text-secondary"
+                className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground"
                 style={{
                   backgroundColor: 'var(--bg-surface)',
                   borderColor: 'var(--border-default)',
@@ -101,7 +101,7 @@ export function LogsSection({
                 {streaming ? "Stop" : "Start"}
               </Button>
             </div>
-            <div className="bg-muted rounded-lg p-4 font-mono text-xs text-primary h-96 overflow-y-auto whitespace-pre-wrap">
+            <div className="h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted p-4 font-mono text-xs text-foreground">
               {logs.length ? logs.join("\n") : "No logs available"}
             </div>
           </div>
@@ -109,7 +109,7 @@ export function LogsSection({
 
         {activeTab === "details" && (
           <div className="space-y-4">
-            <div className="bg-muted rounded-lg p-4 font-mono text-xs text-success h-96 overflow-y-auto whitespace-pre-wrap break-all">
+            <div className="h-96 max-h-96 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-4 font-mono text-xs text-color-success">
               {JSON.stringify({ runId, taskId, runDetail, tasks }, null, 2)}
             </div>
           </div>
@@ -133,7 +133,7 @@ export function LogsSection({
                 Replay DLQ
               </Button>
             </div>
-            <div className="bg-muted rounded-lg p-4 text-center text-secondary text-sm">
+            <div className="rounded-lg bg-muted p-4 text-center text-sm text-muted-foreground">
               <p className="mb-2">Quick actions for run management</p>
               <p className="text-xs">Use these buttons to refresh run data or replay failed messages</p>
             </div>

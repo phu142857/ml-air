@@ -27,11 +27,11 @@ export function OverviewSection({
   return (
     <div className="grid grid-cols-2 gap-4">
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Run Status Distribution</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">Run Status Distribution</h2>
         <StatusColumns success={success} failed={failed} pending={pending} />
       </section>
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Pipeline Info</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">Pipeline Info</h2>
         <pre className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200">
           {JSON.stringify({ tenantId, projectId, totalRuns, isFetching }, null, 2)}
         </pre>

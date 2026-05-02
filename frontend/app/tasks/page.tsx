@@ -11,7 +11,7 @@ export default function TasksPage() {
   return (
     <RouteShell activeNav="Tasks" title="Tasks" subtitle="Task-level logs, metrics and artifacts">
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Task Detail</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">Task Detail</h2>
         <div className="flex items-center gap-2">
           <input
             value={taskId}

@@ -106,7 +106,7 @@ function DiffPageInner() {
       {canDiff && !diffQuery.isLoading && details.length > 0 && (
         <div className="overflow-auto rounded-2xl border border-slate-700">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-900 text-slate-400">
+            <thead className="bg-muted">
               <tr>
                 <th className="w-1/4 px-3 py-2">Key</th>
                 <th className="px-3 py-2">Left</th>

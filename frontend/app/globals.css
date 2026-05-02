@@ -3,104 +3,173 @@
 @tailwind utilities;
 
 :root {
-  /* Base Color Palette */
-  --gray-50: #F9FAFB;
-  --gray-100: #F3F4F6;
-  --gray-200: #E5E7EB;
-  --gray-300: #D1D5DB;
-  --gray-400: #9CA3AF;
-  --gray-500: #6B7280;
-  --gray-600: #4B5563;
+  /*
+   * MLflow 3.11.x–style scheme (light / dark): shell + sidebar muted, white/raised cards,
+   * Ant-like borders, warm orange primary (~#ff5a1f family). Dark: ~#141414 / elevated panels.
+   * Tokens mirror shadcn naming (--background, --primary, …) for Tailwind semantic utilities.
+   */
+  --radius: 0.625rem;
+  --background: oklch(0.97 0.002 85);
+  --foreground: oklch(0.22 0.01 85);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.01 85);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.01 85);
+  --primary: oklch(0.6 0.2 42);
+  --primary-foreground: oklch(0.99 0.01 85);
+  --secondary: oklch(0.96 0.005 85);
+  --secondary-foreground: oklch(0.28 0.015 85);
+  /* Sidebar / chrome — slightly darker than white cards (MLflow left rail) */
+  --muted: oklch(0.925 0.006 85);
+  --muted-foreground: oklch(0.48 0.02 85);
+  --accent: oklch(0.94 0.02 85);
+  --accent-foreground: oklch(0.26 0.02 85);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0.01 85);
+  --border: oklch(0.88 0.004 85);
+  --input: oklch(0.88 0.004 85);
+  --ring: oklch(0.62 0.14 48);
+
+  /* Legacy ML Air names (maps entire app to the preset above) */
+  --bg-page: var(--background);
+  --bg-surface: var(--card);
+  --bg-muted: var(--muted);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-disabled: oklch(0.65 0.01 85);
+  --text-warning-strong: oklch(0.4 0.1 55);
+  --text-error-strong: oklch(0.42 0.18 25);
+  --border-default: var(--border);
+  --border-strong: oklch(0.8 0.006 85);
+  --color-primary: var(--primary);
+  --color-success: oklch(0.5 0.16 155);
+  --color-error: var(--destructive);
+  --color-warning: oklch(0.65 0.16 75);
+  --color-info: oklch(0.48 0.12 250);
+  --bg-success: oklch(0.96 0.035 155);
+  --bg-error: oklch(0.96 0.04 25);
+  --bg-warning: oklch(0.97 0.04 85);
+  --bg-info: oklch(0.95 0.04 250);
+
+  /* Base palette (utilities / one-off) */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
   --gray-700: #374151;
-  --gray-800: #1F2937;
+  --gray-800: #1f2937;
   --gray-900: #111827;
-  
-  --blue-500: #3B82F6;
-  --blue-600: #2563EB;
-  
-  --green-500: #22C55E;
-  --green-600: #16A34A;
-  
-  --red-500: #EF4444;
-  --red-600: #DC2626;
-  
-  --yellow-500: #F59E0B;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --green-500: #22c55e;
+  --green-600: #16a34a;
+  --red-500: #ef4444;
+  --red-600: #dc2626;
+  --yellow-500: #f59e0b;
 
-  /* Light Theme Semantic Tokens */
-  /* Background */
-  --bg-page: #F5F7FA;
-  --bg-surface: #FFFFFF;
-  --bg-muted: #F9FAFB;
+  /* Pills / badges (WCAG-friendly on light surfaces; pairs from emerald/amber/rose scales) */
+  --pill-success-bg: #ecfdf5;
+  --pill-success-fg: #047857;
+  --pill-success-border: #6ee7b7;
+  --pill-warning-bg: #fffbeb;
+  --pill-warning-fg: #92400e;
+  --pill-warning-border: #fcd34d;
+  --pill-danger-bg: #fef2f2;
+  --pill-danger-fg: #b91c1c;
+  --pill-danger-border: #fca5a5;
+  --pill-neutral-bg: oklch(0.955 0.006 85);
+  --pill-neutral-fg: oklch(0.35 0.02 85);
+  --pill-neutral-border: oklch(0.85 0.008 85);
 
-  /* Text */
-  --text-primary: #111827;
-  --text-secondary: #6B7280;
-  --text-disabled: #9CA3AF;
-  --text-warning-strong: #92400E;
-  --text-error-strong: #991B1B;
+  --banner-warn-bg: oklch(0.97 0.04 85);
+  --banner-warn-fg: oklch(0.38 0.09 55);
+  --banner-warn-border: oklch(0.72 0.14 75);
 
-  /* Border */
-  --border-default: #E5E7EB;
-  --border-strong: #D1D5DB;
-
-  /* Brand */
-  --color-primary: #2563EB;
-
-  /* Status */
-  --color-success: #16A34A;
-  --color-error: #DC2626;
-  --color-warning: #F59E0B;
-  --color-info: #3B82F6;
-
-  /* State backgrounds */
-  --bg-success: #ECFDF5;
-  --bg-error: #FEF2F2;
-  --bg-warning: #FFFBEB;
-  --bg-info: #EFF6FF;
+  --pill-action-success-bg: #d1fae5;
+  --pill-action-success-fg: #065f46;
+  --pill-action-success-hover: #a7f3d0;
+  --pill-action-danger-bg: #fee2e2;
+  --pill-action-danger-fg: #991b1b;
+  --pill-action-danger-hover: #fecaca;
 
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
 
-  /* Radius scale */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* Radius scale (component spacing; --radius is shadcn baseline) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 .dark {
-  /* Dark Theme Semantic Tokens */
-  /* Background */
-  --bg-page: #0B1220;
-  --bg-surface: #111827;
-  --bg-muted: #1F2937;
+  --background: oklch(0.21 0.008 265);
+  --foreground: oklch(0.97 0.005 85);
+  --card: oklch(0.245 0.01 265);
+  --card-foreground: oklch(0.97 0.005 85);
+  --popover: oklch(0.26 0.01 265);
+  --popover-foreground: oklch(0.97 0.005 85);
+  --primary: oklch(0.72 0.17 48);
+  --primary-foreground: oklch(0.99 0.01 85);
+  --secondary: oklch(0.3 0.012 265);
+  --secondary-foreground: oklch(0.95 0.005 85);
+  --muted: oklch(0.28 0.01 265);
+  --muted-foreground: oklch(0.72 0.02 85);
+  --accent: oklch(0.3 0.014 265);
+  --accent-foreground: oklch(0.96 0.005 85);
+  --destructive: oklch(0.66 0.19 22);
+  --destructive-foreground: oklch(0.99 0.01 85);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.68 0.14 50);
 
-  /* Text */
-  --text-primary: #F9FAFB;
-  --text-secondary: #9CA3AF;
-  --text-disabled: #6B7280;
-  --text-warning-strong: #FCD34D;
-  --text-error-strong: #FCA5A5;
+  --bg-page: var(--background);
+  --bg-surface: var(--card);
+  --bg-muted: var(--muted);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-disabled: oklch(0.5 0.015 265);
+  --text-warning-strong: oklch(0.9 0.09 90);
+  --text-error-strong: oklch(0.86 0.07 25);
+  --border-default: var(--border);
+  --border-strong: oklch(1 0 0 / 20%);
+  --color-primary: var(--primary);
+  --color-success: oklch(0.72 0.14 155);
+  --color-error: var(--destructive);
+  --color-warning: oklch(0.78 0.12 80);
+  --color-info: oklch(0.68 0.1 250);
+  --bg-success: oklch(0.3 0.06 155 / 0.4);
+  --bg-error: oklch(0.32 0.1 25 / 0.38);
+  --bg-warning: oklch(0.3 0.06 80 / 0.38);
+  --bg-info: oklch(0.28 0.06 250 / 0.38);
 
-  /* Border */
-  --border-default: #374151;
-  --border-strong: #4B5563;
+  --pill-success-bg: rgba(6, 78, 59, 0.45);
+  --pill-success-fg: #ecfdf5;
+  --pill-success-border: rgba(52, 211, 153, 0.45);
+  --pill-warning-bg: rgba(120, 53, 15, 0.35);
+  --pill-warning-fg: #fef3c7;
+  --pill-warning-border: rgba(251, 191, 36, 0.45);
+  --pill-danger-bg: rgba(127, 29, 29, 0.4);
+  --pill-danger-fg: #fecaca;
+  --pill-danger-border: rgba(248, 113, 113, 0.45);
+  --pill-neutral-bg: oklch(0.32 0.015 265 / 0.65);
+  --pill-neutral-fg: oklch(0.92 0.01 85);
+  --pill-neutral-border: oklch(0.55 0.02 265 / 0.45);
 
-  /* Brand */
-  --color-primary: #3B82F6;
+  --banner-warn-bg: oklch(0.32 0.06 70 / 0.45);
+  --banner-warn-fg: oklch(0.93 0.06 90);
+  --banner-warn-border: oklch(0.68 0.12 75 / 0.55);
 
-  /* Status */
-  --color-success: #22C55E;
-  --color-error: #EF4444;
-  --color-warning: #F59E0B;
-  --color-info: #60A5FA;
-
-  /* State backgrounds */
-  --bg-success: rgba(34,197,94,0.1);
-  --bg-error: rgba(239,68,68,0.1);
-  --bg-warning: rgba(245,158,11,0.1);
-  --bg-info: rgba(59,130,246,0.1);
+  --pill-action-success-bg: rgba(6, 95, 70, 0.55);
+  --pill-action-success-fg: #d1fae5;
+  --pill-action-success-hover: rgba(4, 120, 87, 0.65);
+  --pill-action-danger-bg: rgba(127, 29, 29, 0.55);
+  --pill-action-danger-fg: #fecaca;
+  --pill-action-danger-hover: rgba(153, 27, 27, 0.65);
 }
 
 html,
@@ -113,6 +182,23 @@ body {
   border-color: var(--border-default);
 }
 
+/* Data tables: size + header/body colors (light + dark) */
+table {
+  font-size: 0.875rem;
+  line-height: 1.35rem;
+}
+
+table thead th {
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--muted-foreground) !important;
+  font-weight: 600;
+}
+
+table tbody td {
+  color: var(--foreground) !important;
+}
+
 /* Component Rules */
 .card {
   background: var(--bg-surface);
@@ -121,8 +207,8 @@ body {
 }
 
 .button-primary {
-  background: var(--color-primary);
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .button-secondary {
@@ -145,8 +231,8 @@ body {
 
 /* Semantic action button colors */
 .btn-action-primary {
-  background-color: var(--color-primary) !important;
-  color: #fff !important;
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
 }
 
 .btn-action-primary:hover {
@@ -172,8 +258,8 @@ body {
 }
 
 .btn-action-delete {
-  background-color: var(--color-error) !important;
-  color: #fff !important;
+  background-color: var(--destructive) !important;
+  color: var(--destructive-foreground) !important;
 }
 
 .btn-action-delete:hover {
@@ -190,8 +276,8 @@ body {
 }
 
 .btn-action-cancel {
-  background-color: var(--color-primary) !important;
-  color: #fff !important;
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
 }
 
 .btn-action-cancel:hover {
@@ -204,7 +290,7 @@ body {
 }
 
 .interactive-row:hover {
-  border-left-color: var(--color-primary);
+  border-left-color: var(--primary);
 }
 
 .interactive-item {
@@ -212,7 +298,7 @@ body {
 }
 
 .interactive-item:hover {
-  border-left-color: var(--color-primary);
+  border-left-color: var(--primary);
 }
 
 .tab-stable {
@@ -243,6 +329,89 @@ body {
   border: 1px solid var(--color-info);
 }
 
+/* Model governance / inline status pills — same tokens in light & dark */
+.approval-pill {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.625rem;
+  line-height: 1.25;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.approval-pill--success {
+  background-color: var(--pill-success-bg);
+  color: var(--pill-success-fg);
+  border-color: var(--pill-success-border);
+}
+
+.approval-pill--warning {
+  background-color: var(--pill-warning-bg);
+  color: var(--pill-warning-fg);
+  border-color: var(--pill-warning-border);
+}
+
+.approval-pill--danger {
+  background-color: var(--pill-danger-bg);
+  color: var(--pill-danger-fg);
+  border-color: var(--pill-danger-border);
+}
+
+.approval-pill--neutral {
+  background-color: var(--pill-neutral-bg);
+  color: var(--pill-neutral-fg);
+  border-color: var(--pill-neutral-border);
+}
+
+.approval-action-btn {
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.625rem;
+  line-height: 1.25;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.approval-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.approval-action-btn--approve {
+  background-color: var(--pill-action-success-bg);
+  color: var(--pill-action-success-fg);
+  border-color: var(--pill-success-border);
+}
+
+.approval-action-btn--approve:hover:not(:disabled) {
+  background-color: var(--pill-action-success-hover);
+}
+
+.approval-action-btn--reject {
+  background-color: var(--pill-action-danger-bg);
+  color: var(--pill-action-danger-fg);
+  border-color: var(--pill-danger-border);
+}
+
+.approval-action-btn--reject:hover:not(:disabled) {
+  background-color: var(--pill-action-danger-hover);
+}
+
+.version-inline-banner {
+  max-width: min(100%, 42rem);
+  word-break: break-word;
+  border-radius: 0.25rem;
+  border: 1px solid var(--banner-warn-border);
+  background-color: var(--banner-warn-bg);
+  color: var(--banner-warn-fg);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
 .progress-bar .track {
   background: var(--bg-muted);
 }
@@ -255,26 +424,45 @@ body {
   background: var(--color-error);
 }
 
-/* Override legacy utility classes */
-.bg-bg-main,
-.bg-slate-900 {
+/*
+ * Legacy Tailwind slate/blue → MLflow 3.x semantic surfaces (light: gray shell, white cards, orange primary).
+ */
+.bg-bg-main {
   background-color: var(--bg-page) !important;
 }
 
-.bg-bg-card,
-.bg-slate-950,
+.bg-bg-card {
+  background-color: var(--card) !important;
+}
+
+.bg-bg-muted {
+  background-color: var(--muted) !important;
+}
+
+/* Panels / table chrome / form wells */
+.bg-slate-900 {
+  background-color: var(--muted) !important;
+}
+
+.bg-slate-950 {
+  background-color: var(--secondary) !important;
+}
+
+/* Secondary controls, inactive nav chips */
 .bg-slate-800,
 .bg-slate-700 {
-  background-color: var(--bg-surface) !important;
+  background-color: var(--secondary) !important;
 }
 
-.bg-bg-muted,
-.bg-slate-800 {
-  background-color: var(--bg-muted) !important;
-}
-
-.border-slate-700 {
+.border-slate-700,
+.border-slate-600,
+.border-slate-800 {
   border-color: var(--border-default) !important;
+}
+
+/* Row / nav selection tint (replaces blue-900/20) */
+.bg-blue-900\/20 {
+  background-color: color-mix(in oklch, var(--primary) 16%, transparent) !important;
 }
 
 .text-slate-100,
@@ -284,7 +472,8 @@ body {
 }
 
 .text-slate-400,
-.text-slate-500 {
+.text-slate-500,
+.text-slate-600 {
   color: var(--text-secondary) !important;
 }
 
@@ -311,11 +500,14 @@ textarea::placeholder {
 }
 
 .bg-blue-600 {
-  background-color: var(--color-primary) !important;
+  background-color: var(--primary) !important;
 }
 
 .hover\:bg-slate-700:hover,
-.hover\:bg-slate-800:hover,
+.hover\:bg-slate-800:hover {
+  filter: brightness(0.96);
+}
+
 .hover\:bg-blue-500:hover {
-  filter: brightness(0.9);
+  filter: brightness(0.92);
 }

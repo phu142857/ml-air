@@ -983,6 +983,7 @@ export async function updateModelVersionApproval(
   return data as ModelVersionItem;
 }
 
+/** Requires `GET .../serving` — route commented out in `api/app/api/routes/v1.py` until serving slots ship again. */
 export async function fetchModelServing(tenantId: string, projectId: string, modelId: string, token: string) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/serving`, {
     headers: authHeaders(token),
@@ -993,6 +994,7 @@ export async function fetchModelServing(tenantId: string, projectId: string, mod
   return data as ModelServingMatrix;
 }
 
+/** Requires `PUT .../serving/{slot}` — route commented out in `api/app/api/routes/v1.py` until serving slots ship again. */
 export async function setModelServingSlot(
   tenantId: string,
   projectId: string,

@@ -21,7 +21,7 @@ function SearchPageInner() {
   return (
     <RouteShell activeNav="Dashboard" title="Search" subtitle={q || "Enter a query in the top bar"}>
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Search Results</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">Search Results</h2>
         <div className="space-y-2">
           {query.isLoading && <p className="text-sm text-slate-400">Loading…</p>}
           {query.error && <p className="text-sm text-red-400">Error</p>}

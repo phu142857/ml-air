@@ -61,9 +61,9 @@ export function Topbar() {
   }, [tenantId, token, isLoadingScope, loadScope]);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-700 bg-bg-muted px-6">
+    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="text-lg font-semibold">MLAir</div>
+        <div className="text-brand font-semibold tracking-tight text-foreground">MLAir</div>
         <form
           className="flex"
           onSubmit={(e) => {
@@ -75,16 +75,16 @@ export function Topbar() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-80 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+            className="w-80 rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
             placeholder="Search run, task error, dataset…"
           />
         </form>
       </div>
-      <div className="flex items-center gap-3 text-sm text-slate-400">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <button
           type="button"
           onClick={toggleTheme}
-          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+          className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary"
           title="Switch light/dark theme"
         >
           {theme === "dark" ? "Light" : "Dark"}
@@ -98,7 +98,7 @@ export function Topbar() {
             setProjectId("all");
             void loadScope(t);
           }}
-          className="min-w-40 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+          className="min-w-40 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
         >
           {tenantOptions.map((x) => (
             <option key={x} value={x}>
@@ -112,7 +112,7 @@ export function Topbar() {
             const raw = e.target.value;
             setProjectId(raw);
           }}
-          className="min-w-44 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+          className="min-w-44 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
         >
           <option value="all">all</option>
           {projectOptions.map((x) => (
@@ -124,14 +124,14 @@ export function Topbar() {
         <input
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          className="w-64 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+          className="w-64 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
           placeholder="admin-token / maintainer-token / jwt..."
         />
         <button
           type="button"
           onClick={() => void loadScope()}
           disabled={isLoadingScope}
-          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+          className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
         >
           {isLoadingScope ? "Loading..." : "Load Scope"}
         </button>

@@ -14,9 +14,9 @@ type Props = {
 export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [], onToggleCompare }: Props) {
   return (
     <section className="card p-5 shadow-md">
-      <div className="overflow-auto rounded-xl border border-default">
+      <div className="overflow-auto rounded-xl border border-border">
         <table className="w-full text-sm">
-          <thead className="bg-muted text-secondary">
+          <thead className="bg-muted">
             <tr>
               <th className="px-3 py-2 text-left">Compare</th>
               <th className="px-3 py-2 text-left">Run ID</th>
@@ -30,7 +30,7 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
             {rows.map((row) => (
               <tr
                 key={row.run_id}
-                className="interactive-row cursor-pointer border-t border-default"
+                className="interactive-row cursor-pointer border-t border-border"
                 onClick={() => onSelectRun(row.run_id)}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>

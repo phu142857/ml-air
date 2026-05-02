@@ -56,11 +56,11 @@ export default function PipelineDetailPage() {
         </Link>
       </div>
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">DAG</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">DAG</h2>
         <DagView tasks={tasks} />
       </section>
       <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">Readiness & Gating</h2>
+        <h2 className="mb-3 text-section font-semibold text-slate-200">Readiness & Gating</h2>
         <p className="mb-3 text-xs text-slate-400">
           Scope: tenant <span className="text-slate-200">{tenantId}</span> · project{" "}
           <span className="text-slate-200">{normalizeProjectId(projectId)}</span>. Use the exact{" "}
@@ -176,7 +176,7 @@ export default function PipelineDetailPage() {
             </div>
             <div className="overflow-auto rounded-lg border border-slate-700">
               <table className="w-full text-xs">
-                <thead className="bg-slate-900 text-slate-400">
+                <thead className="bg-muted">
                   <tr>
                     <th className="px-2 py-1 text-left">Dataset</th>
                     <th className="px-2 py-1 text-left">Actual</th>

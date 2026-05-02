@@ -26,16 +26,13 @@ import {
   updateModelTriggerPolicy
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 
-const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
+/** Set `true` when serving slot routes are re-enabled in `api/app/api/routes/v1.py`. */
+const ENABLE_SERVING_SLOTS_UI = false;
 
-function approvalBadgeClass(s?: string) {
-  if (s === "approved") return "bg-emerald-500/20 text-emerald-200";
-  if (s === "rejected") return "bg-rose-500/20 text-rose-200";
-  if (s === "pending_manual_approval") return "bg-amber-500/20 text-amber-200";
-  return "bg-slate-600/40 text-slate-300";
-}
+const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
 export default function ModelDetailPage() {
   const params = useParams<{ modelId: string }>();
@@ -166,7 +163,7 @@ export default function ModelDetailPage() {
   const servingQuery = useQuery({
     queryKey: ["model-serving", tenantId, projectId, modelId],
     queryFn: () => fetchModelServing(tenantId, projectId, modelId, token),
-    enabled: Boolean(modelId && token && projectId !== "all")
+    enabled: ENABLE_SERVING_SLOTS_UI && Boolean(modelId && token && projectId !== "all")
   });
 
   const approvalMutation = useMutation({
@@ -441,7 +438,7 @@ export default function ModelDetailPage() {
             </div>
             <div className="overflow-auto rounded-lg border border-slate-700">
               <table className="w-full text-xs">
-                <thead className="bg-slate-900 text-slate-400">
+                <thead className="bg-muted">
                   <tr>
                     <th className="px-2 py-1 text-left">Dataset</th>
                     <th className="px-2 py-1 text-left">Eligible / Minimum</th>
@@ -610,7 +607,7 @@ export default function ModelDetailPage() {
               />
             </label>
           </div>
-          <div className="mt-2 text-[11px] text-slate-400">
+          <div className="mt-2 text-caption text-slate-400">
             Applied mode: <span className="text-slate-200">{effectiveTriggerMode}</span> · debounce:{" "}
             <span className="text-slate-200">{effectiveDebounce}m</span>
             {effectiveTriggerMode === "schedule" ? (
@@ -650,10 +647,10 @@ export default function ModelDetailPage() {
           </div>
         )}
 
-        {projectId !== "all" ? (
+        {projectId !== "all" && ENABLE_SERVING_SLOTS_UI ? (
           <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <h3 className="mb-2 text-xs font-semibold text-slate-200">Serving slots</h3>
-            <p className="mb-2 text-[11px] text-slate-400">
+            <p className="mb-2 text-caption text-slate-400">
               Map a registry version to champion / candidate / challenger / canary for routing metadata.
             </p>
             <div className="grid gap-2 md:grid-cols-2">
@@ -678,7 +675,7 @@ export default function ModelDetailPage() {
                     />
                     <button
                       type="button"
-                      className="rounded-lg bg-slate-700 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600 disabled:opacity-60"
+                      className="rounded-lg bg-slate-700 px-2 py-1 text-caption text-slate-100 hover:bg-slate-600 disabled:opacity-60"
                       disabled={servingAssignMutation.isPending}
                       onClick={() => {
                         const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
@@ -696,11 +693,9 @@ export default function ModelDetailPage() {
         ) : null}
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-200">Versions</h2>
+          <h2 className="text-section font-semibold text-slate-200">Versions</h2>
           {versionBanner ? (
-            <span className="max-w-full truncate rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
-              {versionBanner}
-            </span>
+            <span className="version-inline-banner">{versionBanner}</span>
           ) : null}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Filter stage</span>
@@ -718,7 +713,7 @@ export default function ModelDetailPage() {
         </div>
         <div className="overflow-auto rounded-xl border border-slate-700">
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-900 text-slate-400">
+            <thead className="bg-muted">
               <tr>
                 <th className="w-[110px] px-3 py-2 text-left">Version</th>
                 <th className="w-[120px] px-3 py-2 text-left">Stage</th>
@@ -737,7 +732,7 @@ export default function ModelDetailPage() {
                   <td className="px-3 py-2 align-top">
                     <div className="flex flex-col gap-1">
                       <span
-                        className={`inline-block w-fit max-w-full truncate rounded px-1.5 py-0.5 text-[10px] ${approvalBadgeClass(
+                        className={`inline-block w-fit max-w-full truncate ${modelApprovalPillClass(
                           v.approval_status
                         )}`}
                         title={v.approval_reason || undefined}
@@ -748,7 +743,7 @@ export default function ModelDetailPage() {
                         <div className="flex flex-wrap gap-1">
                           <button
                             type="button"
-                            className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-900/60 disabled:opacity-60"
+                            className="approval-action-btn approval-action-btn--approve"
                             disabled={approvalMutation.isPending}
                             onClick={() =>
                               approvalMutation.mutate({ version: v.version, approval_status: "approved" })
@@ -758,7 +753,7 @@ export default function ModelDetailPage() {
                           </button>
                           <button
                             type="button"
-                            className="rounded bg-rose-900/40 px-1.5 py-0.5 text-[10px] text-rose-200 hover:bg-rose-900/60 disabled:opacity-60"
+                            className="approval-action-btn approval-action-btn--reject"
                             disabled={approvalMutation.isPending}
                             onClick={() =>
                               approvalMutation.mutate({ version: v.version, approval_status: "rejected" })
@@ -843,7 +838,7 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
-        <h3 className="mb-2 text-sm font-semibold text-slate-200">{title}</h3>
+        <h3 className="mb-2 text-section font-semibold text-slate-200">{title}</h3>
         <p className="mb-4 text-sm text-slate-400">{body}</p>
         <div className="flex justify-end gap-2">
           <button

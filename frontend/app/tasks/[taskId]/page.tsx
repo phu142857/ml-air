@@ -28,7 +28,7 @@ export default function TaskDetailPage() {
         </button>
       </div>
       <section className="card p-5">
-        <h2 className="mb-3 text-sm font-semibold text-primary">Task Detail</h2>
+        <h2 className="mb-3 text-section font-semibold text-foreground">Task Detail</h2>
         <div className="font-mono text-xs text-success h-96 overflow-y-auto whitespace-pre-wrap break-all">
           {isLoading ? "Loading..." : JSON.stringify(data, null, 2)}
         </div>
