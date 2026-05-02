@@ -139,7 +139,7 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 ## API
 
 - **Base path:** `/v1`
-- **Contract draft:** [`openapi-v1-draft.yaml`](openapi-v1-draft.yaml)
+- **Contract draft:** [`openapi-v1-draft.yaml`](openapi-v1-draft.yaml) — aligned with implemented routes where noted (e.g. model **stages** `staging` / `production` / `archived`; no in-product approval or serving-slot APIs).
 - **Narrative API docs:** [`docs/api/`](docs/api/)
 
 **Examples:**

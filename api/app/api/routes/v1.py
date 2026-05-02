@@ -14,11 +14,15 @@ from app.services.model_registry_service import (
     delete_model_version,
     get_model,
     get_model_status,
+    get_model_version_approval,
+    list_model_serving_slots,
     list_model_versions,
     list_models,
     preview_next_model_artifact_uri,
     promote_model_version,
     resolve_model_pipeline,
+    set_model_serving_slot,
+    update_model_version_approval,
     upsert_model_pipeline_mapping,
 )
 from app.plugins.registry import plugin_registry
@@ -200,6 +204,15 @@ class CreateModelVersionIn(BaseModel):
 class PromoteModelVersionIn(BaseModel):
     version: int = Field(ge=1)
     stage: str = "production"
+
+
+class ModelApprovalUpdateIn(BaseModel):
+    approval_status: str = Field(min_length=1)
+    reason: str | None = None
+
+
+class SetServingSlotIn(BaseModel):
+    version: int = Field(ge=1)
 
 
 class TriggerPolicyIn(BaseModel):
@@ -991,38 +1004,6 @@ def delete_dataset_version_v1(
     return {"dataset_id": dataset_id, "version_id": version_id, "deleted": True}
 
 
-@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
-def delete_dataset_v1(
-    tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
-) -> dict:
-    principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
-        raise HTTPException(status_code=404, detail="dataset_not_found")
-    ok = lineage_service.delete_dataset(tenant_id, project_id, dataset_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="dataset_not_found")
-    return {"dataset_id": dataset_id, "deleted": True}
-
-
-@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}")
-def delete_dataset_version_v1(
-    tenant_id: str,
-    project_id: str,
-    dataset_id: str,
-    version_id: str,
-    authorization: str | None = Header(default=None),
-) -> dict:
-    principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
-        raise HTTPException(status_code=404, detail="dataset_not_found")
-    ok = lineage_service.delete_dataset_version(tenant_id, project_id, dataset_id, version_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="dataset_version_not_found")
-    return {"dataset_id": dataset_id, "version_id": version_id, "deleted": True}
-
-
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/runs")
 def list_dataset_runs_v1(
     tenant_id: str,
@@ -1467,7 +1448,14 @@ def promote_model_v1(
     try:
         out = promote_model_version(model_id=model_id, version=payload.version, stage=payload.stage)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        code = str(exc)
+        if code == "approval_required_for_production":
+            raise HTTPException(
+                status_code=422,
+                detail="approval_required_for_production: PUT .../versions/{v}/approval with approved, "
+                "or ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1 for dev-only bypass.",
+            ) from exc
+        raise HTTPException(status_code=404, detail=code) from exc
     notify_model_promotion_webhook(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -1477,6 +1465,94 @@ def promote_model_v1(
         idempotency_key=f"mlair-promote-{model_id}-v{int(payload.version)}-{str(payload.stage or '').strip()}",
     )
     return out
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/approval")
+def get_model_version_approval_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    out = get_model_version_approval(tenant_id, project_id, model_id, version)
+    if not out:
+        raise HTTPException(status_code=404, detail="model_version_not_found")
+    return out
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/approval")
+def put_model_version_approval_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    payload: ModelApprovalUpdateIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        return update_model_version_approval(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            version=version,
+            approval_status=payload.approval_status,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        if str(exc) == "invalid_approval_status":
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving")
+def get_model_serving_v1(
+    tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return list_model_serving_slots(model_id)
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}")
+def put_model_serving_slot_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    slot: str,
+    payload: SetServingSlotIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        return set_model_serving_slot(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            slot=slot,
+            version=payload.version,
+        )
+    except ValueError as exc:
+        if str(exc) == "invalid_serving_slot":
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")

@@ -246,13 +246,13 @@ Orchestration (run → task → plugin) and ML tracking/registry are in place, b
 - Multi-tenant guardrails:
   - enforced tenant/project filters in all queries
   - quota/rate limits by tenant/project
-- Model governance:
-  - approval lifecycle (`pending_manual_approval -> approved/rejected`)
-  - serving slots (`candidate/challenger/champion/canary`)
-  - promotion policy gate + rollback audit trail
+- Model governance (partially shipped in `/v1`; see `ARCHITECTURE.md` §7):
+  - approval lifecycle (`pending_manual_approval -> approved/rejected`) — **API + DB**
+  - serving slots (`candidate/challenger/champion/canary`) — **API + DB**
+  - promotion policy gate + rollback audit trail — **promote gate shipped**; unified audit timeline API still roadmap
 - Deliverables:
   - secure APIs with role checks
-  - governance endpoints and audit timeline
+  - governance endpoints (approval + serving slots + production promote gate shipped; audit timeline API still roadmap — see `ARCHITECTURE.md` §7)
 - Definition of Done:
   - cross-tenant data access is blocked by design and tested
 

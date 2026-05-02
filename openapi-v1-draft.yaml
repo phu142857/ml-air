@@ -6,19 +6,53 @@ info:
     Draft API contract for MLAir v1.
     All resources are tenant/project scoped by design.
 
+    **Model registry:** stages `staging` | `production` | `archived`, **per-version approval**
+    (`pending_manual_approval` | `approved` | `rejected`), **promote** (production requires `approved`
+    unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`), optional **serving slot** assignments
+    (`candidate` | `challenger` | `champion` | `canary`), plus optional promote webhooks for downstream systems.
+
+    **Runs, readiness, datasets, lineage, pipeline versions, tracking, search, and plugins** sections
+    in this file are kept aligned with `api/app/api/routes/v1.py` (draft; prefer the running service
+    when a field is documented as free-form JSON).
+
 servers:
   - url: https://api.ml-air.example.com
 
 tags:
+  - name: Auth
   - name: Pipelines
   - name: Runs
   - name: Tasks
   - name: Worker
   - name: Models
-  - name: Serving
+  - name: Datasets
+  - name: Lineage
+  - name: Tracking
+  - name: Search
+  - name: Plugins
   - name: Audit
 
 paths:
+  /v1/tenants:
+    get:
+      tags: [Pipelines]
+      summary: List tenants (scope depends on caller token)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantList"
+
   /v1/tenants/{tenant_id}/projects:
     get:
       tags: [Pipelines]
@@ -75,11 +109,15 @@ paths:
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
 
-  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/runs:
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness:
     post:
       tags: [Runs]
-      summary: Trigger run
+      summary: Evaluate data readiness using latest pipeline run snapshot
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
@@ -89,10 +127,85 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RunTrigger"
+              $ref: "#/components/schemas/CheckReadinessRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Readiness result (includes ephemeral run_id)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckReadinessResponse"
+        "404":
+          description: pipeline_has_no_runs
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run:
+    post:
+      tags: [Runs]
+      summary: Create run with readiness gate (pipeline_id from path)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerRunRequest"
+      responses:
+        "200":
+          description: Run created or FAILED with blocked_by_gate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatedRunResponse"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs:
+    post:
+      tags: [Runs]
+      summary: Create run for a pipeline (enqueue)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerRunRequest"
+      responses:
+        "200":
+          description: Run row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRow"
+    get:
+      tags: [Runs]
+      summary: List runs in project
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Run list page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunList"
 
   /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}:
     get:
@@ -105,6 +218,243 @@ paths:
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRow"
+        "404":
+          description: run_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/readiness:
+    get:
+      tags: [Runs]
+      summary: Dataset readiness rows for this run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Aggregate readiness view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunReadinessResponse"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/status:
+    post:
+      tags: [Runs]
+      summary: Update run status (external integration)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRunStatusRequest"
+      responses:
+        "200":
+          description: Updated run row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRow"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/dlq/replay:
+    post:
+      tags: [Runs]
+      summary: Replay dead-letter tasks for a run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Replay summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DlqReplayResponse"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/logs:
+    get:
+      tags: [Runs]
+      summary: List run log entries
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2000
+            default: 200
+      responses:
+        "200":
+          description: Log page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunLogsPage"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/replay:
+    post:
+      tags: [Runs]
+      summary: Partial replay from a task (fork run)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplayRunRequest"
+      responses:
+        "200":
+          description: New replay run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRow"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/params:
+    post:
+      tags: [Tracking]
+      summary: Log one param for a run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogParamRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/metrics:
+    post:
+      tags: [Tracking]
+      summary: Log one metric (optional step)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogMetricRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/artifacts:
+    post:
+      tags: [Tracking]
+      summary: Log one artifact binding
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogArtifactRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks/{task_id}/manifest:
+    post:
+      tags: [Runs]
+      summary: Upsert signed task manifest (replay / audit)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskManifestRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tracking:
+    get:
+      tags: [Tracking]
+      summary: Aggregated params, metrics, artifacts for a run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Tracking bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunTrackingPayload"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/runs/compare:
+    post:
+      tags: [Tracking]
+      summary: Compare metrics across runs
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompareRunsRequest"
+      responses:
+        "200":
+          description: Compare result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
 
   /v1/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks:
     get:
@@ -117,6 +467,28 @@ paths:
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunTasksResponse"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}:
+    get:
+      tags: [Tasks]
+      summary: Get one task by ID
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskRow"
+        "404":
+          description: task_not_found
 
   /v1/tenants/{tenant_id}/projects/{project_id}/runs/trigger:
     post:
@@ -146,6 +518,633 @@ paths:
           description: Model or dataset not found
         "422":
           description: Validation or BLOCKED (e.g. unresolved pipeline, missing plugins)
+
+  /v1/auth/whoami:
+    get:
+      tags: [Auth]
+      summary: Return principal from bearer token
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Caller identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Whoami"
+
+  /v1/pipelines/validate:
+    post:
+      tags: [Pipelines]
+      summary: Validate pipeline config plugin contract
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePipelineRequest"
+      responses:
+        "200":
+          description: Contract OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [VALID]
+        "403":
+          description: forbidden
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/search:
+    get:
+      tags: [Search]
+      summary: Full-text search runs, tasks, datasets
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: q
+          in: query
+          schema:
+            type: string
+            default: ""
+        - name: type
+          in: query
+          description: Filter by item type
+          schema:
+            type: string
+            enum: [all, run, task, dataset]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Search hits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "429":
+          description: search_rate_limited
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/experiments:
+    post:
+      tags: [Tracking]
+      summary: Create experiment
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExperimentRequest"
+      responses:
+        "200":
+          description: Created experiment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+    get:
+      tags: [Tracking]
+      summary: List experiments
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentList"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets:
+    get:
+      tags: [Datasets]
+      summary: List datasets
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetList"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/upload-preview:
+    post:
+      tags: [Datasets]
+      summary: Preview CSV columns and row count (multipart)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Preview payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/upload:
+    post:
+      tags: [Datasets]
+      summary: Upload CSV as new dataset version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [dataset_name, file]
+              properties:
+                dataset_name:
+                  type: string
+                required_cols:
+                  type: string
+                  description: JSON array of column names (optional)
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Created dataset version summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "400":
+          description: Validation error
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}:
+    get:
+      tags: [Datasets]
+      summary: Get dataset
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetRow"
+        "404":
+          description: dataset_not_found
+    delete:
+      tags: [Datasets]
+      summary: Delete dataset and versions
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetDeleteResult"
+        "404":
+          description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness:
+    get:
+      tags: [Datasets]
+      summary: Row-count readiness vs required_size threshold
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - name: required_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1000
+      responses:
+        "200":
+          description: Readiness summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetReadiness"
+        "404":
+          description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions:
+    get:
+      tags: [Datasets]
+      summary: List dataset versions
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionList"
+        "404":
+          description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}:
+    delete:
+      tags: [Datasets]
+      summary: Delete one dataset version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionDeleteResult"
+        "404":
+          description: dataset_not_found or dataset_version_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/runs:
+    get:
+      tags: [Datasets]
+      summary: Runs that consumed this dataset
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetRunsList"
+        "404":
+          description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}:
+    get:
+      tags: [Datasets]
+      summary: Get dataset version by ID
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionRow"
+        "404":
+          description: dataset_version_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/download:
+    get:
+      tags: [Datasets]
+      summary: Download CSV bytes for a dataset version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Missing file or version
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/lineage/runs/{run_id}:
+    get:
+      tags: [Lineage]
+      summary: Lineage graph slice for a run
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Lineage payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "404":
+          description: run_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/lineage:
+    get:
+      tags: [Lineage]
+      summary: Lineage neighborhood from a dataset version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: dataset_version_id
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 2
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [up, down, both]
+            default: both
+      responses:
+        "200":
+          description: Graph neighborhood
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/lineage/ingest:
+    post:
+      tags: [Lineage]
+      summary: Ingest lineage from a completed task
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LineageIngestRequest"
+      responses:
+        "200":
+          description: Ingest result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "404":
+          description: run_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/versions:
+    post:
+      tags: [Pipelines]
+      summary: Create immutable pipeline version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePipelineVersionRequest"
+      responses:
+        "200":
+          description: Created version row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+    get:
+      tags: [Pipelines]
+      summary: List pipeline versions
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineVersionList"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipeline-versions/{version_id}:
+    get:
+      tags: [Pipelines]
+      summary: Get pipeline version by ID
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineVersionRecordId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "404":
+          description: pipeline_version_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/pipeline-versions/{version_id}/diff:
+    get:
+      tags: [Pipelines]
+      summary: Diff two pipeline version configs
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PipelineVersionRecordId"
+        - name: other
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Other pipeline_version_id to compare
+      responses:
+        "200":
+          description: Key-level diff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineVersionDiff"
+        "404":
+          description: pipeline_version_not_found or other_version_not_found
+
+  /v1/plugins:
+    get:
+      tags: [Plugins]
+      summary: List registered plugins
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Registry snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginRegistryResponse"
+
+  /v1/plugins/{plugin_name}:
+    get:
+      tags: [Plugins]
+      summary: Get plugin metadata
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PluginName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "404":
+          description: plugin_not_found
+
+  /v1/plugins/{plugin_name}/validate:
+    post:
+      tags: [Plugins]
+      summary: Run plugin validate(context)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PluginName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginValidateRequest"
+      responses:
+        "200":
+          description: Validation outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginValidateResponse"
+
+  /v1/plugins/reload:
+    post:
+      tags: [Plugins]
+      summary: Reload plugin entry points (admin)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Reload result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/plugins/{plugin_name}/toggle:
+    post:
+      tags: [Plugins]
+      summary: Enable or disable a plugin (admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PluginName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginToggleRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginToggleResponse"
+        "404":
+          description: plugin_not_found
 
   /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/pipeline-mapping:
     put:
@@ -189,6 +1188,259 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResolvedPipeline"
 
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}:
+    get:
+      tags: [Models]
+      summary: Get model by ID
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Model registry row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelRow"
+        "404":
+          description: model_not_found
+    delete:
+      tags: [Models]
+      summary: Delete model and its versions
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelDeleteResult"
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/status:
+    get:
+      tags: [Models]
+      summary: Latest version + readiness summary for input datasets
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Status payload (shape varies by training linkage)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelStatus"
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy:
+    get:
+      tags: [Models]
+      summary: Get trigger policy for a model
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Policy row or defaults
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerPolicy"
+        "404":
+          description: model_not_found
+    put:
+      tags: [Models]
+      summary: Upsert trigger policy for a model
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerPolicyUpsert"
+      responses:
+        "200":
+          description: Stored policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerPolicy"
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions:
+    get:
+      tags: [Models]
+      summary: List versions for a model
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Version rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionList"
+        "404":
+          description: model_not_found
+    post:
+      tags: [Models]
+      summary: Create model version from run / URI
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateModelVersionRequest"
+      responses:
+        "200":
+          description: Created version row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionRow"
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/import:
+    post:
+      tags: [Models]
+      summary: Import a model version (multipart upload to object storage)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [model_file]
+              properties:
+                model_file:
+                  type: string
+                  format: binary
+                  description: Primary model artifact (e.g. weights archive)
+                metadata_file:
+                  type: string
+                  format: binary
+                  description: Optional sidecar metadata
+                run_id:
+                  type: string
+                  nullable: true
+                stage:
+                  type: string
+                  default: staging
+                  description: Target lifecycle stage (typically staging)
+      responses:
+        "200":
+          description: Created version row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionRow"
+        "400":
+          description: Validation / storage error
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/import-many:
+    post:
+      tags: [Models]
+      summary: Import a version from multiple uploaded files (bundle)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  minItems: 1
+                  description: One or more parts named `files` (client sends repeated file fields)
+                run_id:
+                  type: string
+                  nullable: true
+                stage:
+                  type: string
+                  default: staging
+      responses:
+        "200":
+          description: Created version row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionRow"
+        "400":
+          description: Validation / storage error
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/next-artifact-uri:
+    get:
+      tags: [Models]
+      summary: Preview next version number and default artifact URI
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Next version suggestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextArtifactUriPreview"
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}:
+    delete:
+      tags: [Models]
+      summary: Delete one model version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+        - $ref: "#/components/parameters/ModelVersionNumber"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionDeleteResult"
+        "404":
+          description: model_not_found or model_version_not_found
+
   /v1/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs:
     get:
       tags: [Tasks]
@@ -204,50 +1456,49 @@ paths:
   /v1/tenants/{tenant_id}/projects/{project_id}/models:
     get:
       tags: [Models]
-      summary: List model versions
+      summary: List models
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: OK
-
-  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_version}/approval:
-    get:
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+    post:
       tags: [Models]
-      summary: Get model approval state
+      summary: Create model
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/ModelVersion"
-      responses:
-        "200":
-          description: OK
-    put:
-      tags: [Models]
-      summary: Update model approval state
-      parameters:
-        - $ref: "#/components/parameters/TenantId"
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/ModelVersion"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ModelApprovalUpdate"
+              $ref: "#/components/schemas/CreateModelRequest"
       responses:
         "200":
-          description: Updated
+          description: Created model row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelRow"
 
-  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_version}/promote:
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/promote:
     post:
-      tags: [Serving]
-      summary: Promote model version to slot
+      tags: [Models]
+      summary: Promote a model version to a stage
+      description: |
+        Archives any existing version on the same `stage` for this model, then sets the given
+        `version` to that stage. **Production** promote requires `approval_status=approved` on that
+        version unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`. Optional webhook may notify downstream serving.
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/ModelVersion"
+        - $ref: "#/components/parameters/ModelId"
       requestBody:
         required: true
         content:
@@ -256,30 +1507,104 @@ paths:
               $ref: "#/components/schemas/PromoteRequest"
       responses:
         "200":
-          description: Promoted
+          description: Promoted version row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionRow"
+        "404":
+          description: Model version not found
+        "422":
+          description: approval_required_for_production (unless skip env is set)
 
-  /v1/tenants/{tenant_id}/projects/{project_id}/serving/route:
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/approval:
     get:
-      tags: [Serving]
-      summary: Resolve current route by slot
+      tags: [Models]
+      summary: Get approval state for a model version
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
-        - in: query
-          name: use_case_key
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: slot
-          required: false
-          schema:
-            type: string
-            enum: [candidate, challenger, champion, canary]
-            default: champion
+        - $ref: "#/components/parameters/ModelId"
+        - $ref: "#/components/parameters/ModelVersionNumber"
       responses:
         "200":
-          description: OK
+          description: Approval slice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelApprovalState"
+        "404":
+          description: model_not_found or model_version_not_found
+    put:
+      tags: [Models]
+      summary: Update approval state (maintainer)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+        - $ref: "#/components/parameters/ModelVersionNumber"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelApprovalUpdate"
+      responses:
+        "200":
+          description: Full version row after update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelVersionRow"
+        "404":
+          description: model_not_found or model_version_not_found
+        "422":
+          description: invalid_approval_status
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving:
+    get:
+      tags: [Models]
+      summary: List serving slot assignments for a model
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Slot map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelServingMatrix"
+        "404":
+          description: model_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}:
+    put:
+      tags: [Models]
+      summary: Assign a model version to a serving slot
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ModelId"
+        - $ref: "#/components/parameters/ServingSlot"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetServingSlotRequest"
+      responses:
+        "200":
+          description: Updated slot matrix
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelServingMatrix"
+        "404":
+          description: model_not_found or model_version_not_found
+        "422":
+          description: invalid_serving_slot
 
   /v1/tasks/lease:
     post:
@@ -440,18 +1765,58 @@ components:
       required: true
       schema:
         type: string
-    ModelVersion:
-      in: path
-      name: model_version
-      required: true
-      schema:
-        type: string
     ModelId:
       in: path
       name: model_id
       required: true
       schema:
         type: string
+    ModelVersionNumber:
+      in: path
+      name: version
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Integer model version (monotonic per model)
+
+    DatasetId:
+      in: path
+      name: dataset_id
+      required: true
+      schema:
+        type: string
+
+    DatasetVersionId:
+      in: path
+      name: version_id
+      required: true
+      schema:
+        type: string
+      description: Dataset version UUID (also path param under /dataset-versions/)
+
+    PipelineVersionRecordId:
+      in: path
+      name: version_id
+      required: true
+      schema:
+        type: string
+      description: Pipeline version UUID
+
+    PluginName:
+      in: path
+      name: plugin_name
+      required: true
+      schema:
+        type: string
+
+    ServingSlot:
+      in: path
+      name: slot
+      required: true
+      schema:
+        type: string
+        enum: [candidate, challenger, champion, canary]
 
   schemas:
     Project:
@@ -469,14 +1834,6 @@ components:
           type: string
         dag:
           type: object
-    RunTrigger:
-      type: object
-      properties:
-        parameters:
-          type: object
-          additionalProperties: true
-        idempotency_key:
-          type: string
 
     TriggerRunByModelRequest:
       type: object
@@ -601,6 +1958,102 @@ components:
         base_version_id:
           type: string
           nullable: true
+    CreateModelRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+
+    ModelRow:
+      type: object
+      description: Registry row for a logical model
+      properties:
+        model_id:
+          type: string
+        tenant_id:
+          type: string
+        project_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    ModelList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelRow"
+
+    ModelDeleteResult:
+      type: object
+      properties:
+        model_id:
+          type: string
+        deleted:
+          type: boolean
+
+    ModelVersionRow:
+      type: object
+      properties:
+        version_id:
+          type: string
+        model_id:
+          type: string
+        version:
+          type: integer
+        run_id:
+          type: string
+          nullable: true
+        artifact_uri:
+          type: string
+          nullable: true
+        stage:
+          type: string
+          description: Typically staging, production, or archived
+        created_at:
+          type: string
+        approval_status:
+          type: string
+          enum: [pending_manual_approval, approved, rejected]
+        approval_reason:
+          type: string
+          nullable: true
+        approval_updated_at:
+          type: string
+          nullable: true
+
+    ModelApprovalState:
+      type: object
+      properties:
+        model_id:
+          type: string
+        version:
+          type: integer
+        version_id:
+          type: string
+        approval_status:
+          type: string
+          enum: [pending_manual_approval, approved, rejected]
+        approval_reason:
+          type: string
+          nullable: true
+        approval_updated_at:
+          type: string
+          nullable: true
+
     ModelApprovalUpdate:
       type: object
       required: [approval_status]
@@ -610,18 +2063,621 @@ components:
           enum: [pending_manual_approval, approved, rejected]
         reason:
           type: string
+          nullable: true
+
+    SetServingSlotRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+
+    ModelServingMatrix:
+      type: object
+      properties:
+        model_id:
+          type: string
+        slots:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              slot:
+                type: string
+              version_id:
+                type: string
+              version:
+                type: integer
+              artifact_uri:
+                type: string
+                nullable: true
+              stage:
+                type: string
+              approval_status:
+                type: string
+
+    ModelVersionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelVersionRow"
+
+    ModelVersionDeleteResult:
+      type: object
+      properties:
+        model_id:
+          type: string
+        version:
+          type: integer
+        deleted:
+          type: boolean
+
+    CreateModelVersionRequest:
+      type: object
+      properties:
+        run_id:
+          type: string
+          nullable: true
+        artifact_uri:
+          type: string
+          nullable: true
+          description: When omitted, server assigns default URI for next version
+        stage:
+          type: string
+          default: staging
+          description: Recommended values staging | production | archived
+
+    NextArtifactUriPreview:
+      type: object
+      properties:
+        model_id:
+          type: string
+        next_version:
+          type: integer
+        artifact_uri:
+          type: string
+
+    ModelStatus:
+      type: object
+      description: |
+        Latest-version linkage and dataset readiness for the model's training run.
+        Exact keys depend on linkage (see API implementation).
+      additionalProperties: true
+
+    TriggerPolicy:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+        project_id:
+          type: string
+        model_id:
+          type: string
+        trigger_mode:
+          type: string
+          enum: [manual, auto_ready, schedule]
+        debounce_minutes:
+          type: integer
+        schedule_cron:
+          type: string
+        source:
+          type: string
+          description: default when no row stored, or stored
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    TriggerPolicyUpsert:
+      type: object
+      properties:
+        trigger_mode:
+          type: string
+          enum: [manual, auto_ready, schedule]
+          default: manual
+        debounce_minutes:
+          type: integer
+          default: 10
+          minimum: 1
+        schedule_cron:
+          type: string
+          nullable: true
+          description: Cron expression when mode is schedule
+
     PromoteRequest:
       type: object
-      required: [use_case_key, slot]
+      required: [version]
       properties:
-        use_case_key:
+        version:
+          type: integer
+          minimum: 1
+          description: Numeric model version to promote
+        stage:
           type: string
-        slot:
+          description: Target lifecycle stage (MLflow-style)
+          enum: [staging, production, archived]
+          default: production
+
+    JsonValue:
+      type: object
+      description: Free-form JSON object from API (shape varies by endpoint).
+      additionalProperties: true
+
+    TenantList:
+      type: object
+      properties:
+        limit:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              tenant_id:
+                type: string
+              name:
+                type: string
+
+    Whoami:
+      type: object
+      properties:
+        role:
           type: string
-          enum: [candidate, challenger, champion, canary]
-        metadata:
+        tenant_id:
+          type: string
+          nullable: true
+        project_ids:
+          type: array
+          items:
+            type: string
+
+    TriggerRunRequest:
+      type: object
+      required: [pipeline_id]
+      properties:
+        pipeline_id:
+          type: string
+          minLength: 1
+        experiment_id:
+          type: string
+          nullable: true
+        plugin_name:
+          type: string
+          nullable: true
+        context:
           type: object
           additionalProperties: true
+        idempotency_key:
+          type: string
+          nullable: true
+        priority:
+          type: string
+          default: normal
+        max_parallel_tasks:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 1
+        pipeline_version_id:
+          type: string
+          nullable: true
+        use_latest_pipeline_version:
+          type: boolean
+          default: false
+        training_mode:
+          type: string
+          default: full
+        override_config:
+          type: object
+          additionalProperties: true
+
+    CheckReadinessRequest:
+      type: object
+      properties:
+        training_mode:
+          type: string
+          default: full
+        override_config:
+          type: object
+          additionalProperties: true
+
+    CheckReadinessResponse:
+      type: object
+      additionalProperties: true
+
+    GatedRunResponse:
+      type: object
+      additionalProperties: true
+      description: Run row plus optional blocked_by_gate and readiness
+
+    RunRow:
+      type: object
+      additionalProperties: true
+      description: Persisted run (see GET run in service)
+
+    RunList:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+        project_id:
+          type: string
+        limit:
+          type: integer
+        offset:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunRow"
+
+    RunReadinessResponse:
+      type: object
+      additionalProperties: true
+
+    UpdateRunStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          minLength: 1
+        reason:
+          type: string
+          nullable: true
+
+    DlqReplayResponse:
+      type: object
+      properties:
+        run_id:
+          type: string
+        replayed:
+          type: integer
+          description: Number of DLQ messages replayed
+
+    RunLogsPage:
+      type: object
+      properties:
+        run_id:
+          type: string
+        offset:
+          type: integer
+        limit:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    ReplayRunRequest:
+      type: object
+      required: [from_task_id]
+      properties:
+        from_task_id:
+          type: string
+          minLength: 1
+        idempotency_key:
+          type: string
+          nullable: true
+        plugin_name:
+          type: string
+          nullable: true
+        context:
+          type: object
+          additionalProperties: true
+
+    LogParamRequest:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+          minLength: 1
+        value:
+          type: string
+
+    LogMetricRequest:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+          minLength: 1
+        value:
+          type: number
+        step:
+          type: integer
+          default: 0
+
+    LogArtifactRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          minLength: 1
+        uri:
+          type: string
+          nullable: true
+
+    ManifestArtifact:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          minLength: 1
+        uri:
+          type: string
+          nullable: true
+
+    ManifestPayload:
+      type: object
+      required: [run_id, task_id, status, pipeline_id, attempt, finished_at]
+      properties:
+        run_id:
+          type: string
+          minLength: 1
+        task_id:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          minLength: 1
+        pipeline_id:
+          type: string
+          minLength: 1
+        attempt:
+          type: integer
+          minimum: 1
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ManifestArtifact"
+        lineage:
+          type: object
+          additionalProperties: true
+        finished_at:
+          type: string
+          minLength: 1
+
+    TaskManifestRequest:
+      type: object
+      required: [signature, payload]
+      properties:
+        algorithm:
+          type: string
+          minLength: 1
+          default: hmac-sha256
+        key_id:
+          type: string
+          minLength: 1
+          default: v1
+        signature:
+          type: string
+          minLength: 1
+        payload:
+          $ref: "#/components/schemas/ManifestPayload"
+
+    RunTrackingPayload:
+      type: object
+      additionalProperties: true
+
+    CompareRunsRequest:
+      type: object
+      properties:
+        run_ids:
+          type: array
+          items:
+            type: string
+
+    RunTasksResponse:
+      type: object
+      properties:
+        run_id:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    TaskRow:
+      type: object
+      additionalProperties: true
+
+    ValidatePipelineRequest:
+      type: object
+      required: [config]
+      properties:
+        config:
+          type: object
+          additionalProperties: true
+
+    SearchResponse:
+      type: object
+      additionalProperties: true
+
+    CreateExperimentRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+
+    ExperimentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    DatasetList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetRow"
+
+    DatasetRow:
+      type: object
+      additionalProperties: true
+
+    DatasetDeleteResult:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        deleted:
+          type: boolean
+
+    DatasetReadiness:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        dataset_name:
+          type: string
+          nullable: true
+        current_size:
+          type: integer
+        required_size:
+          type: integer
+        ready:
+          type: boolean
+
+    DatasetVersionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetVersionRow"
+
+    DatasetVersionRow:
+      type: object
+      additionalProperties: true
+
+    DatasetVersionDeleteResult:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        version_id:
+          type: string
+        deleted:
+          type: boolean
+
+    DatasetRunsList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    LineageIngestRequest:
+      type: object
+      required: [run_id, task_id]
+      properties:
+        run_id:
+          type: string
+          minLength: 1
+        task_id:
+          type: string
+          minLength: 1
+        lineage:
+          type: object
+          additionalProperties: true
+
+    CreatePipelineVersionRequest:
+      type: object
+      properties:
+        config:
+          type: object
+          additionalProperties: true
+
+    PipelineVersionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    PipelineVersionDiff:
+      type: object
+      properties:
+        version_id_a:
+          type: string
+        version_id_b:
+          type: string
+        changed_keys:
+          type: array
+          items:
+            type: string
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    PluginRegistryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        errors:
+          type: array
+          items:
+            type: string
+
+    PluginValidateRequest:
+      type: object
+      properties:
+        context:
+          type: object
+          additionalProperties: true
+
+    PluginValidateResponse:
+      type: object
+      properties:
+        plugin:
+          type: string
+        valid:
+          type: boolean
+
+    PluginToggleRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          default: true
+
+    PluginToggleResponse:
+      type: object
+      properties:
+        plugin:
+          type: string
+        enabled:
+          type: boolean
 
     WorkerLeaseRequest:
       type: object

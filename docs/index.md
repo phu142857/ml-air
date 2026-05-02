@@ -24,6 +24,8 @@ Each guide follows:
 - [Quickstart](./getting-started/quickstart.md)
 - [Run Your First Pipeline](./getting-started/run-first-pipeline.md)
 
+**Model registry contract:** **stages** `staging` / `production` / `archived`, **approval** (`GET|PUT .../versions/{v}/approval`), **serving slots** (`GET|PUT .../serving/...`), and **`POST .../models/{model_id}/promote`** (production requires `approved` unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`) — see [ARCHITECTURE.md](../ARCHITECTURE.md) §7.
+
 ## Guides
 
 ### Run and Orchestration

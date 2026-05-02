@@ -11,6 +11,7 @@ import {
   fetchDataset,
   fetchModelResolvedPipeline,
   fetchModels,
+  fetchModelServing,
   fetchModelStatus,
   fetchModelTriggerPolicy,
   fetchModelVersions,
@@ -18,12 +19,23 @@ import {
   fetchRun,
   previewDatasetUpload,
   promoteModelVersion,
+  setModelServingSlot,
   triggerPipelineRunWithGating,
+  updateModelVersionApproval,
   uploadDatasetCsv,
   updateModelTriggerPolicy
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
-import { formatDateTimeCompact } from "@/lib/utils";
+import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
+
+const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
+
+function approvalBadgeClass(s?: string) {
+  if (s === "approved") return "bg-emerald-500/20 text-emerald-200";
+  if (s === "rejected") return "bg-rose-500/20 text-rose-200";
+  if (s === "pending_manual_approval") return "bg-amber-500/20 text-amber-200";
+  return "bg-slate-600/40 text-slate-300";
+}
 
 export default function ModelDetailPage() {
   const params = useParams<{ modelId: string }>();
@@ -53,6 +65,8 @@ export default function ModelDetailPage() {
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmBody, setConfirmBody] = useState("");
   const [confirmAction, setConfirmAction] = useState<null | (() => Promise<void>)>(null);
+  const [versionBanner, setVersionBanner] = useState("");
+  const [servingSlotDraft, setServingSlotDraft] = useState<Record<string, string>>({});
 
   const modelsQuery = useQuery({
     queryKey: ["models", tenantId, projectId],
@@ -126,6 +140,11 @@ export default function ModelDetailPage() {
     setScheduleCron(triggerPolicyQuery.data.schedule_cron || "0 */6 * * *");
   }, [triggerPolicyQuery.data]);
 
+  useEffect(() => {
+    setServingSlotDraft({});
+    setVersionBanner("");
+  }, [modelId]);
+
   const model = useMemo(() => modelsQuery.data?.items.find((x) => x.model_id === modelId) ?? null, [modelsQuery.data, modelId]);
 
   const versions = useMemo(() => {
@@ -138,8 +157,39 @@ export default function ModelDetailPage() {
     mutationFn: ({ version, stage }: { version: number; stage: string }) =>
       promoteModelVersion(tenantId, projectId, modelId, token, { version, stage }),
     onSuccess: async () => {
+      setVersionBanner("");
       await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, modelId] });
-    }
+    },
+    onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
+  });
+
+  const servingQuery = useQuery({
+    queryKey: ["model-serving", tenantId, projectId, modelId],
+    queryFn: () => fetchModelServing(tenantId, projectId, modelId, token),
+    enabled: Boolean(modelId && token && projectId !== "all")
+  });
+
+  const approvalMutation = useMutation({
+    mutationFn: (p: { version: number; approval_status: "approved" | "rejected" }) =>
+      updateModelVersionApproval(tenantId, projectId, modelId, p.version, token, {
+        approval_status: p.approval_status,
+        reason: p.approval_status === "rejected" ? "rejected via UI" : null
+      }),
+    onSuccess: async () => {
+      setVersionBanner("");
+      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, modelId] });
+    },
+    onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
+  });
+
+  const servingAssignMutation = useMutation({
+    mutationFn: (p: { slot: string; version: number }) =>
+      setModelServingSlot(tenantId, projectId, modelId, p.slot, token, { version: p.version }),
+    onSuccess: async () => {
+      setVersionBanner("");
+      await queryClient.invalidateQueries({ queryKey: ["model-serving", tenantId, projectId, modelId] });
+    },
+    onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
   const triggerPolicyMutation = useMutation({
     mutationFn: () =>
@@ -600,8 +650,58 @@ export default function ModelDetailPage() {
           </div>
         )}
 
-        <div className="mb-3 flex items-center justify-between">
+        {projectId !== "all" ? (
+          <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
+            <h3 className="mb-2 text-xs font-semibold text-slate-200">Serving slots</h3>
+            <p className="mb-2 text-[11px] text-slate-400">
+              Map a registry version to champion / candidate / challenger / canary for routing metadata.
+            </p>
+            <div className="grid gap-2 md:grid-cols-2">
+              {SERVING_SLOTS.map((slot) => {
+                const cur = servingQuery.data?.slots?.[slot];
+                return (
+                  <div
+                    key={slot}
+                    className="flex flex-wrap items-center gap-2 rounded border border-slate-700 px-2 py-2 text-xs"
+                  >
+                    <span className="font-medium capitalize text-slate-200">{slot}</span>
+                    <span className="text-slate-400">{cur ? `v${cur.version}` : "—"}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={servingSlotDraft[slot] ?? ""}
+                      onChange={(e) =>
+                        setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
+                      }
+                      placeholder="ver"
+                      className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      className="rounded-lg bg-slate-700 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600 disabled:opacity-60"
+                      disabled={servingAssignMutation.isPending}
+                      onClick={() => {
+                        const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
+                        if (!Number.isFinite(n) || n < 1) return;
+                        servingAssignMutation.mutate({ slot, version: n });
+                      }}
+                    >
+                      Set
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-200">Versions</h2>
+          {versionBanner ? (
+            <span className="max-w-full truncate rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+              {versionBanner}
+            </span>
+          ) : null}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Filter stage</span>
             <select
@@ -621,9 +721,10 @@ export default function ModelDetailPage() {
             <thead className="bg-slate-900 text-slate-400">
               <tr>
                 <th className="w-[110px] px-3 py-2 text-left">Version</th>
-                <th className="w-[140px] px-3 py-2 text-left">Stage</th>
+                <th className="w-[120px] px-3 py-2 text-left">Stage</th>
+                <th className="w-[160px] px-3 py-2 text-left">Approval</th>
                 <th className="px-3 py-2 text-left">Run</th>
-                <th className="w-[420px] px-3 py-2 text-left">Action</th>
+                <th className="min-w-[420px] px-3 py-2 text-left">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -633,11 +734,47 @@ export default function ModelDetailPage() {
                   <td className="px-3 py-2">
                     <span className="inline-block w-full truncate">{v.stage}</span>
                   </td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="flex flex-col gap-1">
+                      <span
+                        className={`inline-block w-fit max-w-full truncate rounded px-1.5 py-0.5 text-[10px] ${approvalBadgeClass(
+                          v.approval_status
+                        )}`}
+                        title={v.approval_reason || undefined}
+                      >
+                        {v.approval_status || "—"}
+                      </span>
+                      {projectId !== "all" && v.approval_status === "pending_manual_approval" ? (
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-900/60 disabled:opacity-60"
+                            disabled={approvalMutation.isPending}
+                            onClick={() =>
+                              approvalMutation.mutate({ version: v.version, approval_status: "approved" })
+                            }
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded bg-rose-900/40 px-1.5 py-0.5 text-[10px] text-rose-200 hover:bg-rose-900/60 disabled:opacity-60"
+                            disabled={approvalMutation.isPending}
+                            onClick={() =>
+                              approvalMutation.mutate({ version: v.version, approval_status: "rejected" })
+                            }
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="px-3 py-2">
                     <span className="inline-block w-full truncate">{v.run_id || "-"}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex flex-nowrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
                         className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
@@ -674,7 +811,7 @@ export default function ModelDetailPage() {
               ))}
               {!versions.length && (
                 <tr>
-                  <td className="px-3 py-3 text-slate-400" colSpan={4}>
+                  <td className="px-3 py-3 text-slate-400" colSpan={5}>
                     No versions for current filter.
                   </td>
                 </tr>

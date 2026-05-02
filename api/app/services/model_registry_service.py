@@ -9,6 +9,34 @@ from urllib.parse import urlparse
 
 from app.services.db_service import db_conn
 
+APPROVAL_PENDING = "pending_manual_approval"
+APPROVAL_APPROVED = "approved"
+APPROVAL_REJECTED = "rejected"
+VALID_APPROVAL_STATUSES = frozenset({APPROVAL_PENDING, APPROVAL_APPROVED, APPROVAL_REJECTED})
+VALID_SERVING_SLOTS = frozenset({"candidate", "challenger", "champion", "canary"})
+
+
+def _require_approval_for_production_promote() -> bool:
+    """When True, promote to production requires approval_status=approved."""
+    skip = str(os.getenv("ML_AIR_SKIP_APPROVAL_FOR_PROMOTE", "")).strip().lower()
+    return skip not in ("1", "true", "yes")
+
+
+def _version_row_to_dict(row: tuple) -> dict:
+    """Map SELECT/RETURNING row: version_id, model_id, version, run_id, artifact_uri, stage, created_at, approval_*."""
+    return {
+        "version_id": row[0],
+        "model_id": row[1],
+        "version": row[2],
+        "run_id": row[3],
+        "artifact_uri": row[4],
+        "stage": row[5],
+        "created_at": row[6].isoformat(),
+        "approval_status": row[7],
+        "approval_reason": row[8],
+        "approval_updated_at": row[9].isoformat() if row[9] else None,
+    }
+
 
 def create_model(tenant_id: str, project_id: str, name: str, description: str | None = None) -> dict:
     model_id = str(uuid4())
@@ -157,26 +185,33 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
     version_id = str(uuid4())
     version_num = _next_model_version(model_id)
     resolved_artifact_uri = str(artifact_uri or "").strip() or _default_artifact_uri(model_id, version_num)
+    now = datetime.now(timezone.utc)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO model_versions(version_id, model_id, version, run_id, artifact_uri, stage)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                INSERT INTO model_versions(
+                    version_id, model_id, version, run_id, artifact_uri, stage,
+                    approval_status, approval_reason, approval_updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
+                    approval_status, approval_reason, approval_updated_at
                 """,
-                (version_id, model_id, version_num, run_id, resolved_artifact_uri, stage),
+                (
+                    version_id,
+                    model_id,
+                    version_num,
+                    run_id,
+                    resolved_artifact_uri,
+                    stage,
+                    APPROVAL_PENDING,
+                    None,
+                    now,
+                ),
             )
             row = cur.fetchone()
-    return {
-        "version_id": row[0],
-        "model_id": row[1],
-        "version": row[2],
-        "run_id": row[3],
-        "artifact_uri": row[4],
-        "stage": row[5],
-        "created_at": row[6].isoformat(),
-    }
+    return _version_row_to_dict(row)
 
 
 def _safe_filename(name: str) -> str:
@@ -240,27 +275,35 @@ def create_model_version_from_upload(
         with open(metadata_path, "wb") as f:
             f.write(metadata_content)
 
+    now = datetime.now(timezone.utc)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO model_versions(version_id, model_id, version, run_id, artifact_uri, stage)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                INSERT INTO model_versions(
+                    version_id, model_id, version, run_id, artifact_uri, stage,
+                    approval_status, approval_reason, approval_updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
+                    approval_status, approval_reason, approval_updated_at
                 """,
-                (version_id, model_id, version_num, run_id, artifact_uri, stage),
+                (
+                    version_id,
+                    model_id,
+                    version_num,
+                    run_id,
+                    artifact_uri,
+                    stage,
+                    APPROVAL_PENDING,
+                    None,
+                    now,
+                ),
             )
             row = cur.fetchone()
-    return {
-        "version_id": row[0],
-        "model_id": row[1],
-        "version": row[2],
-        "run_id": row[3],
-        "artifact_uri": row[4],
-        "stage": row[5],
-        "created_at": row[6].isoformat(),
-        "metadata_generated": metadata_generated,
-    }
+    out = _version_row_to_dict(row)
+    out["metadata_generated"] = metadata_generated
+    return out
 
 
 def create_model_version_from_uploads(
@@ -315,28 +358,36 @@ def create_model_version_from_uploads(
                 f.write(metadata_content)
             safe_saved_names.append("metadata.json")
 
+    now = datetime.now(timezone.utc)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO model_versions(version_id, model_id, version, run_id, artifact_uri, stage)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                INSERT INTO model_versions(
+                    version_id, model_id, version, run_id, artifact_uri, stage,
+                    approval_status, approval_reason, approval_updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
+                    approval_status, approval_reason, approval_updated_at
                 """,
-                (version_id, model_id, version_num, run_id, artifact_uri, stage),
+                (
+                    version_id,
+                    model_id,
+                    version_num,
+                    run_id,
+                    artifact_uri,
+                    stage,
+                    APPROVAL_PENDING,
+                    None,
+                    now,
+                ),
             )
             row = cur.fetchone()
-    return {
-        "version_id": row[0],
-        "model_id": row[1],
-        "version": row[2],
-        "run_id": row[3],
-        "artifact_uri": row[4],
-        "stage": row[5],
-        "created_at": row[6].isoformat(),
-        "metadata_generated": metadata_generated,
-        "uploaded_files": safe_saved_names,
-    }
+    out = _version_row_to_dict(row)
+    out["metadata_generated"] = metadata_generated
+    out["uploaded_files"] = safe_saved_names
+    return out
 
 
 def list_model_versions(model_id: str) -> list[dict]:
@@ -344,7 +395,8 @@ def list_model_versions(model_id: str) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                SELECT version_id, model_id, version, run_id, artifact_uri, stage, created_at,
+                    approval_status, approval_reason, approval_updated_at
                 FROM model_versions
                 WHERE model_id = %s
                 ORDER BY version DESC
@@ -352,18 +404,7 @@ def list_model_versions(model_id: str) -> list[dict]:
                 (model_id,),
             )
             rows = cur.fetchall()
-    return [
-        {
-            "version_id": row[0],
-            "model_id": row[1],
-            "version": row[2],
-            "run_id": row[3],
-            "artifact_uri": row[4],
-            "stage": row[5],
-            "created_at": row[6].isoformat(),
-        }
-        for row in rows
-    ]
+    return [_version_row_to_dict(row) for row in rows]
 
 
 def delete_model(model_id: str) -> bool:
@@ -386,6 +427,20 @@ def delete_model_version(model_id: str, version: int) -> bool:
 
 
 def promote_model_version(model_id: str, version: int, stage: str = "production") -> dict:
+    stage_norm = (stage or "").strip().lower() or "production"
+    if stage_norm == "production" and _require_approval_for_production_promote():
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT approval_status FROM model_versions WHERE model_id = %s AND version = %s",
+                    (model_id, int(version)),
+                )
+                row_a = cur.fetchone()
+        if not row_a:
+            raise ValueError("model_version_not_found")
+        if str(row_a[0]) != APPROVAL_APPROVED:
+            raise ValueError("approval_required_for_production")
+
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE model_versions SET stage = 'archived' WHERE model_id = %s AND stage = %s", (model_id, stage))
@@ -394,22 +449,15 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
                 UPDATE model_versions
                 SET stage = %s
                 WHERE model_id = %s AND version = %s
-                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at
+                RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
+                    approval_status, approval_reason, approval_updated_at
                 """,
                 (stage, model_id, version),
             )
             row = cur.fetchone()
     if not row:
         raise ValueError("model_version_not_found")
-    return {
-        "version_id": row[0],
-        "model_id": row[1],
-        "version": row[2],
-        "run_id": row[3],
-        "artifact_uri": row[4],
-        "stage": row[5],
-        "created_at": row[6].isoformat(),
-    }
+    return _version_row_to_dict(row)
 
 
 def get_model_status(tenant_id: str, project_id: str, model_id: str) -> dict:
@@ -496,12 +544,13 @@ def resolve_base_model_artifact(tenant_id: str, project_id: str, model_id: str) 
                   AND m.project_id = %s
                   AND m.model_id = %s
                   AND mv.stage = 'production'
+                  AND mv.approval_status = %s
                   AND mv.artifact_uri IS NOT NULL
                   AND TRIM(mv.artifact_uri) <> ''
                 ORDER BY mv.created_at DESC
                 LIMIT 1
                 """,
-                (tenant_id, project_id, model_id),
+                (tenant_id, project_id, model_id, APPROVAL_APPROVED),
             )
             row = cur.fetchone()
             if row:
@@ -645,3 +694,125 @@ def resolve_model_pipeline(tenant_id: str, project_id: str, model_id: str) -> di
         out3["base_weights_source"] = base["source"]
         out3["base_version_id"] = base["version_id"]
     return out3
+
+
+def get_model_version_approval(tenant_id: str, project_id: str, model_id: str, version: int) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mv.version_id, mv.model_id, mv.version, mv.approval_status, mv.approval_reason,
+                    mv.approval_updated_at
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s AND mv.version = %s
+                """,
+                (tenant_id, project_id, model_id, int(version)),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "model_id": row[1],
+        "version": row[2],
+        "approval_status": row[3],
+        "approval_reason": row[4],
+        "approval_updated_at": row[5].isoformat() if row[5] else None,
+        "version_id": row[0],
+    }
+
+
+def update_model_version_approval(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    approval_status: str,
+    reason: str | None = None,
+) -> dict:
+    st = str(approval_status or "").strip()
+    if st not in VALID_APPROVAL_STATUSES:
+        raise ValueError("invalid_approval_status")
+    now = datetime.now(timezone.utc)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE model_versions mv
+                SET approval_status = %s, approval_reason = %s, approval_updated_at = %s
+                WHERE mv.model_id = %s
+                  AND mv.version = %s
+                  AND EXISTS (
+                    SELECT 1 FROM models m
+                    WHERE m.model_id = mv.model_id
+                      AND m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s
+                  )
+                RETURNING mv.version_id, mv.model_id, mv.version, mv.run_id, mv.artifact_uri, mv.stage,
+                    mv.created_at, mv.approval_status, mv.approval_reason, mv.approval_updated_at
+                """,
+                (st, reason, now, model_id, int(version), tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        raise ValueError("model_version_not_found")
+    return _version_row_to_dict(row)
+
+
+def list_model_serving_slots(model_id: str) -> dict:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mss.slot, mss.version_id, mv.version, mv.artifact_uri, mv.stage, mv.approval_status
+                FROM model_serving_slots mss
+                JOIN model_versions mv ON mv.version_id = mss.version_id
+                WHERE mss.model_id = %s
+                ORDER BY mss.slot ASC
+                """,
+                (model_id,),
+            )
+            rows = cur.fetchall()
+    slots: dict[str, dict] = {}
+    for row in rows:
+        slots[str(row[0])] = {
+            "slot": row[0],
+            "version_id": row[1],
+            "version": int(row[2]) if row[2] is not None else None,
+            "artifact_uri": row[3],
+            "stage": row[4],
+            "approval_status": row[5],
+        }
+    return {"model_id": model_id, "slots": slots}
+
+
+def set_model_serving_slot(
+    tenant_id: str, project_id: str, model_id: str, slot: str, version: int
+) -> dict:
+    sl = str(slot or "").strip().lower()
+    if sl not in VALID_SERVING_SLOTS:
+        raise ValueError("invalid_serving_slot")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mv.version_id
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s AND mv.version = %s
+                """,
+                (tenant_id, project_id, model_id, int(version)),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("model_version_not_found")
+            version_id = str(row[0])
+            cur.execute(
+                """
+                INSERT INTO model_serving_slots(model_id, slot, version_id, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (model_id, slot) DO UPDATE
+                SET version_id = EXCLUDED.version_id, updated_at = NOW()
+                """,
+                (model_id, sl, version_id),
+            )
+    return list_model_serving_slots(model_id)

@@ -27,6 +27,8 @@ curl -X POST \
 
 HTTP 200 with created model version metadata and server version identifier.
 
+OpenAPI: [`openapi-v1-draft.yaml`](../../openapi-v1-draft.yaml) — `CreateModelVersionRequest`, `ModelVersionRow`.
+
 ## Done
 
 Version is now available for promotion and deployment workflows.

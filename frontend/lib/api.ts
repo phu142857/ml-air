@@ -110,6 +110,8 @@ export function normalizeProjectId(projectId: string): string {
   return String(projectId || "").trim();
 }
 
+export type ModelApprovalStatus = "pending_manual_approval" | "approved" | "rejected";
+
 export type ModelVersionItem = {
   version_id: string;
   model_id: string;
@@ -118,6 +120,23 @@ export type ModelVersionItem = {
   artifact_uri?: string | null;
   stage: string;
   created_at: string;
+  approval_status?: ModelApprovalStatus | string;
+  approval_reason?: string | null;
+  approval_updated_at?: string | null;
+};
+
+export type ModelServingSlotEntry = {
+  slot: string;
+  version_id: string;
+  version: number;
+  artifact_uri?: string | null;
+  stage?: string;
+  approval_status?: string;
+};
+
+export type ModelServingMatrix = {
+  model_id: string;
+  slots: Record<string, ModelServingSlotEntry>;
 };
 
 export type ReadinessItem = {
@@ -941,6 +960,58 @@ export async function promoteModelVersion(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ModelVersionItem;
+}
+
+export async function updateModelVersionApproval(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  version: number,
+  token: string,
+  payload: { approval_status: ModelApprovalStatus; reason?: string | null }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/versions/${version}/approval`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelVersionItem;
+}
+
+export async function fetchModelServing(tenantId: string, projectId: string, modelId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/serving`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelServingMatrix;
+}
+
+export async function setModelServingSlot(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  slot: string,
+  token: string,
+  payload: { version: number }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/serving/${encodeURIComponent(slot)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelServingMatrix;
 }
 
 export async function deleteModel(tenantId: string, projectId: string, modelId: string, token: string) {

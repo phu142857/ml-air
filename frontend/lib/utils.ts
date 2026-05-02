@@ -27,3 +27,35 @@ export function formatDateTimeCompact(input?: string | null): string {
       : `UTC${sign}${String(offH).padStart(2, "0")}:${String(offM).padStart(2, "0")}`;
   return `${hh}:${mm}:${ss} ${dd}/${mo}/${yyyy} (${utc})`;
 }
+
+/** Turn thrown API client errors (often `Error(JSON.stringify(body))`) into a short user-facing string. */
+export function formatApiClientError(err: unknown): string {
+  const raw =
+    err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
+  const trimmed = raw.trim();
+  if (!trimmed) return "Request failed";
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const o = parsed as Record<string, unknown>;
+      if (typeof o.detail === "string") return o.detail;
+      if (Array.isArray(o.detail)) {
+        const parts = o.detail
+          .map((item) => {
+            if (item && typeof item === "object" && item !== null && "msg" in item) {
+              const msg = (item as { msg?: unknown }).msg;
+              return typeof msg === "string" ? msg : JSON.stringify(item);
+            }
+            return typeof item === "string" ? item : JSON.stringify(item);
+          })
+          .filter(Boolean);
+        if (parts.length) return parts.join("; ");
+      }
+      if (typeof o.message === "string") return o.message;
+      if (typeof o.error === "string") return o.error;
+    }
+  } catch {
+    /* message is not JSON */
+  }
+  return trimmed;
+}

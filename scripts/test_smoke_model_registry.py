@@ -77,6 +77,14 @@ def main() -> int:
     record("list-model-versions", c == 200 and has_created_version, f"{c} count={len(v_items)}")
 
     c, b = req(
+        "PUT",
+        f"/v1/tenants/{TENANT}/projects/{PROJECT}/models/{model_id}/versions/{created_version}/approval",
+        "maintainer-token",
+        {"approval_status": "approved", "reason": "smoke"},
+    )
+    record("approve-model-version", c == 200 and b.get("approval_status") == "approved", f"{c} {b}")
+
+    c, b = req(
         "POST",
         f"/v1/tenants/{TENANT}/projects/{PROJECT}/models/{model_id}/promote",
         "maintainer-token",

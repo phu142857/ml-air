@@ -7,12 +7,19 @@ Promote a registered model version to the target stage.
 ## Steps
 
 1. Pick model and version.
-2. Transition stage.
-3. Verify stage history.
+2. **Approve** the version for production (unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1` is set on the API).
+3. Transition stage with **promote**.
+4. Verify stage history.
 
-## Command
+## Command (approve then promote)
 
 ```bash
+# Required when ML_AIR_SKIP_APPROVAL_FOR_PROMOTE is unset/0
+curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/versions/3/approval" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"approval_status": "approved", "reason": "validated offline"}'
+
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/promote" \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \

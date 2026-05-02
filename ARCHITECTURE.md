@@ -61,7 +61,7 @@ Design notes:
   - Pipeline dashboard, DAG view, run timeline, realtime logs.
   - Tenant/project context switcher and role-aware UI actions.
 - `api` (FastAPI, `/v1/...`)
-  - AuthN/AuthZ, input validation, run trigger APIs, governance APIs.
+  - AuthN/AuthZ, input validation, run/model/dataset/lineage APIs; **model lifecycle** includes **stages**, **per-version approval**, optional **serving-slot assignments**, and promote webhooks (see §7).
   - Emits run/task events and exposes query APIs for UI/integration.
 - `scheduler` (DAG engine service)
   - Parses DAG, resolves dependencies, enforces state transitions.
@@ -72,7 +72,7 @@ Design notes:
 - `queue` (Redis first, Kafka-ready abstraction)
   - Durable task dispatch and backpressure boundary.
 - `metadata-db` (Postgres required)
-  - Source of truth for pipelines, runs, tasks, attempts, governance, audit.
+  - Source of truth for pipelines, runs, tasks, attempts, model registry (stages + **approval_status** + **model_serving_slots**), lineage, readiness rows, and operational history.
 - `artifact-store` (S3/MinIO)
   - Artifact payloads, models, logs bundle, output snapshots.
 
@@ -121,25 +121,32 @@ Security requirements:
 
 ## 7) Governance and Model Routing
 
-Model approval lifecycle:
+### Implemented today (`/v1` model registry)
 
-- `pending_manual_approval`
-- `approved`
-- `rejected`
+**Stages** (`model_versions.stage`) — MLflow-style lifecycle:
 
-Serving slots/aliases:
+- **`staging`** — typical default for new versions.
+- **`production`** — after **promote**; older rows at the same stage are archived by the promote operation.
+- **`archived`** — historical or demoted versions.
 
-- `candidate`
-- `challenger`
-- `champion`
-- `canary`
+**Approval** (`model_versions.approval_status`):
 
-Governance policies:
+- New versions start **`pending_manual_approval`** (create/import APIs).
+- **`GET|PUT .../models/{model_id}/versions/{version}/approval`** — read/update `approved` / `rejected` (maintainer on PUT).
+- **`POST .../promote`** to **`production`** requires **`approved`** unless **`ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`** (dev escape hatch; quickstart compose defaults to skip for local demos).
+- **`resolve_base_model_artifact`** only considers **production** rows that are **`approved`**, so rejected weights are not used as base weights.
 
-- Train/import always starts at `pending_manual_approval`.
-- Promotion to live slots requires `approved`.
-- Rollback and route update must generate audit events.
-- `serving/route` is the source of truth for currently served model.
+**Serving slots** (`model_serving_slots`):
+
+- Slots: **`candidate`**, **`challenger`**, **`champion`**, **`canary`** — at most one assigned `version_id` per `(model_id, slot)`.
+- **`GET .../models/{model_id}/serving`** — current assignments.
+- **`PUT .../models/{model_id}/serving/{slot}`** — bind a numeric version to a slot (separate from `stage`; for routing metadata / external load balancers).
+
+Optional **downstream webhook** on promote: `MLAIR_MODEL_PROMOTE_*`.
+
+### Extended governance (roadmap)
+
+Not yet in `/v1`: unified **audit timeline** API, promotion policy engine beyond approval+stage, and a single **`serving/route`** resolver that performs traffic splitting (use external LB + this slot metadata until then).
 
 ## 8) Observability and Operations
 

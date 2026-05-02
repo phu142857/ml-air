@@ -191,6 +191,14 @@ def main() -> int:
         record("create-model-version", c == 200 and isinstance(version, int), f"{c} {b}")
 
         c, b = req(
+            "PUT",
+            f"/v1/tenants/{TENANT}/projects/{PROJECT}/models/{model_id}/versions/{version}/approval",
+            "maintainer-token",
+            {"approval_status": "approved", "reason": "smoke"},
+        )
+        record("approve-model-version", c == 200 and b.get("approval_status") == "approved", f"{c} {b}")
+
+        c, b = req(
             "POST",
             f"/v1/tenants/{TENANT}/projects/{PROJECT}/models/{model_id}/promote",
             "maintainer-token",
