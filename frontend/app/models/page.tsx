@@ -18,6 +18,7 @@ import {
   updateModelVersionApproval
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 
@@ -45,7 +46,8 @@ export default function ModelsPage() {
 
   const modelsQuery = useQuery({
     queryKey: ["models", tenantId, projectId],
-    queryFn: () => fetchModels(tenantId, projectId, token)
+    queryFn: () => fetchModels(tenantId, projectId, token),
+    ...realtimeFallbackPolling()
   });
 
   const selectedModel = useMemo(
@@ -72,17 +74,20 @@ export default function ModelsPage() {
   const versionsQuery = useQuery({
     queryKey: ["model-versions", tenantId, projectId, selectedModelId],
     queryFn: () => fetchModelVersions(tenantId, effectiveProjectId, selectedModelId, token),
-    enabled: !!selectedModelId && !!selectedModel && projectId !== "all"
+    enabled: !!selectedModelId && !!selectedModel && projectId !== "all",
+    ...realtimeFallbackPolling()
   });
   const servingQuery = useQuery({
     queryKey: ["model-serving", tenantId, projectId, selectedModelId],
     queryFn: () => fetchModelServing(tenantId, effectiveProjectId, selectedModelId, token),
-    enabled: ENABLE_SERVING_SLOTS_UI && !!selectedModelId && !!selectedModel && projectId !== "all"
+    enabled: ENABLE_SERVING_SLOTS_UI && !!selectedModelId && !!selectedModel && projectId !== "all",
+    ...realtimeFallbackPolling()
   });
   const previewArtifactQuery = useQuery({
     queryKey: ["model-next-artifact", tenantId, effectiveProjectId, selectedModelId],
     queryFn: () => fetchNextModelArtifactUri(tenantId, effectiveProjectId, selectedModelId, token),
-    enabled: !!selectedModelId && !!selectedModel && projectId !== "all"
+    enabled: !!selectedModelId && !!selectedModel && projectId !== "all",
+    ...realtimeFallbackPolling()
   });
 
   const createModelMutation = useMutation({

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
@@ -10,8 +11,20 @@ from app.services import pipeline_version_service as pvs
 from app.services.db_service import db_conn
 from app.services.log_service import append_run_log
 from app.services.queue_service import publish_run_event
+from app.services import realtime_events as rt
 
 logger = logging.getLogger("mlair.api.run_service")
+
+
+def _parse_updated_at_dt(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
 
 
 def _row_to_run(row: tuple) -> dict:
@@ -229,6 +242,14 @@ def create_run(
             "training_mode": mode,
         },
     )
+    rt.emit_run_created(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        run_id=str(created[0]),
+        status="PENDING",
+        updated_at=created[16],
+        trace_id=trace_id,
+    )
     return _row_to_run(created)
 
 
@@ -291,6 +312,18 @@ def mark_run_running(run_id: str) -> None:
                 """,
                 (run_id,),
             )
+            changed = cur.rowcount > 0
+    if changed:
+        row = get_run(run_id)
+        if row:
+            rt.emit_run_updated(
+                tenant_id=str(row["tenant_id"]),
+                project_id=str(row["project_id"]),
+                run_id=str(row["run_id"]),
+                status=str(row["status"]),
+                updated_at=_parse_updated_at_dt(row.get("updated_at")),
+                trace_id=None,
+            )
 
 
 def set_run_status(run_id: str, status: str) -> bool:
@@ -308,6 +341,17 @@ def set_run_status(run_id: str, status: str) -> bool:
                 (normalized, run_id),
             )
             updated = cur.rowcount
+    if updated:
+        row = get_run(run_id)
+        if row:
+            rt.emit_run_updated(
+                tenant_id=str(row["tenant_id"]),
+                project_id=str(row["project_id"]),
+                run_id=str(row["run_id"]),
+                status=str(row["status"]),
+                updated_at=_parse_updated_at_dt(row.get("updated_at")),
+                trace_id=None,
+            )
     return bool(updated)
 
 

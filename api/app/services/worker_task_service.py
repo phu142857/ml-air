@@ -13,6 +13,7 @@ from psycopg import connect
 from app.services.auth_service import Principal
 from app.services.db_service import database_url
 from app.services.queue_service import publish_task_finished
+from app.services import realtime_events as rt
 
 
 @contextmanager
@@ -126,7 +127,8 @@ def lease_tasks(
                     r.tenant_id, r.project_id, r.pipeline_id, r.priority,
                     r.pipeline_version_id, r.config_snapshot, r.plugin_context, r.replay_from_task_id,
                     r.training_mode, r.override_config,
-                    r.plugin_name
+                    r.plugin_name,
+                    t.updated_at
                 FROM tasks t
                 INNER JOIN runs r ON r.run_id = t.run_id
                 WHERE t.task_id = ANY(%s::text[])
@@ -168,6 +170,7 @@ def lease_tasks(
             except json.JSONDecodeError:
                 override_cfg = {}
         run_plugin_name = row[14]
+        task_updated_at = row[15] if len(row) > 15 else None
         task_key = full_task_id[len(run_id) + 1 :] if full_task_id.startswith(f"{run_id}:") else full_task_id
         base_payload = dict(pctx)
         base_payload.setdefault("run_id", run_id)
@@ -199,6 +202,16 @@ def lease_tasks(
                 },
             }
         )
+        if isinstance(task_updated_at, datetime):
+            rt.emit_task_updated(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                task_id=full_task_id,
+                run_id=run_id,
+                status="RUNNING",
+                updated_at=task_updated_at,
+                trace_id=None,
+            )
     return out
 
 
@@ -393,6 +406,22 @@ def complete_task(
         "replay_from_task_id": row.get("replay_from_task_id"),
     }
     publish_task_finished(done_payload)
+    task_updated_at: datetime | None = None
+    with connect(database_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT updated_at FROM tasks WHERE task_id = %s", (task_id,))
+            urow = cur.fetchone()
+            if urow and isinstance(urow[0], datetime):
+                task_updated_at = urow[0]
+    rt.emit_task_updated(
+        tenant_id=str(row["tenant_id"]),
+        project_id=str(row["project_id"]),
+        task_id=task_id,
+        run_id=str(row["run_id"]),
+        status="SUCCESS",
+        updated_at=task_updated_at,
+        trace_id=done_payload.get("trace_id"),
+    )
     return "ok", {"task_id": task_id, "status": "SUCCESS"}
 
 
@@ -462,3 +491,19 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         "replay_from_task_id": row.get("replay_from_task_id"),
     }
     publish_task_finished(done_payload)
+    task_updated_at_fail: datetime | None = None
+    with connect(database_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT updated_at FROM tasks WHERE task_id = %s", (task_id,))
+            urow = cur.fetchone()
+            if urow and isinstance(urow[0], datetime):
+                task_updated_at_fail = urow[0]
+    rt.emit_task_updated(
+        tenant_id=str(row["tenant_id"]),
+        project_id=str(row["project_id"]),
+        task_id=task_id,
+        run_id=str(row["run_id"]),
+        status="FAILED",
+        updated_at=task_updated_at_fail,
+        trace_id=done_payload.get("trace_id"),
+    )

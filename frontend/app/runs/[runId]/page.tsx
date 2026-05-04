@@ -17,6 +17,7 @@ import { LogsSection } from "@/components/sections/logs-section";
 import { RunTimelineSection } from "@/components/sections/run-timeline-section";
 import { RunTrackingSection } from "@/components/sections/run-tracking-section";
 import { useAppContext } from "@/lib/app-context";
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { formatDateTimeCompact } from "@/lib/utils";
 import { ChevronLeft, RotateCcw, GitBranch, Terminal, Activity, Info, Database } from "lucide-react";
 
@@ -31,23 +32,28 @@ export default function RunDetailPage() {
   // Queries
   const runQuery = useQuery({
     queryKey: ["run", runId],
-    queryFn: () => fetchRun(tenantId, projectId, runId, token)
+    queryFn: () => fetchRun(tenantId, projectId, runId, token),
+    ...realtimeFallbackPolling()
   });
   const tasksQuery = useQuery({
     queryKey: ["run-tasks", runId],
-    queryFn: () => fetchRunTasks(tenantId, projectId, runId, token)
+    queryFn: () => fetchRunTasks(tenantId, projectId, runId, token),
+    ...realtimeFallbackPolling()
   });
   const logsQuery = useQuery({
     queryKey: ["run-logs", runId],
-    queryFn: () => fetchRunLogs(tenantId, projectId, runId, token)
+    queryFn: () => fetchRunLogs(tenantId, projectId, runId, token),
+    ...realtimeFallbackPolling()
   });
   const trackingQuery = useQuery({
     queryKey: ["run-tracking", runId],
-    queryFn: () => fetchRunTracking(tenantId, projectId, runId, token)
+    queryFn: () => fetchRunTracking(tenantId, projectId, runId, token),
+    ...realtimeFallbackPolling()
   });
   const readinessQuery = useQuery({
     queryKey: ["run-readiness", runId],
-    queryFn: () => fetchRunReadiness(tenantId, projectId, runId, token)
+    queryFn: () => fetchRunReadiness(tenantId, projectId, runId, token),
+    ...realtimeFallbackPolling()
   });
 
   const tasks = tasksQuery.data?.items ?? [];

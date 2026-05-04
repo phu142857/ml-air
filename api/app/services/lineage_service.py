@@ -6,13 +6,59 @@ import io
 import json
 import os
 import re
+import time
+from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import urlparse
 from uuid import uuid4
 
 from app.services.db_service import db_conn
+from app.services import realtime_events as rt
 
 Direction = Literal["up", "down", "both"]
+
+
+def _dataset_row_updated_at(tenant_id: str, project_id: str, dataset_id: str) -> datetime | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT updated_at FROM datasets
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+    if not row or row[0] is None:
+        return None
+    val = row[0]
+    return val if isinstance(val, datetime) else None
+
+
+def _notify_dataset_updated(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    *,
+    trace_id: str | None = None,
+    action: str | None = None,
+) -> None:
+    ua = _dataset_row_updated_at(tenant_id, project_id, dataset_id)
+    if ua is None and action:
+        ua = datetime.fromtimestamp(time.time(), tz=timezone.utc)
+    rt.emit_dataset_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        updated_at=ua,
+        trace_id=trace_id,
+        action=action,
+    )
+
+
+def _flush_touched_datasets(tenant_id: str, project_id: str, touched_dataset_ids: set[str]) -> None:
+    for ds_id in sorted(touched_dataset_ids):
+        _notify_dataset_updated(tenant_id, project_id, ds_id)
 
 
 def _upsert_dataset(
@@ -283,6 +329,7 @@ def create_dataset_version_from_csv_upload(
         summary=[str(x) for x in (business_validation.get("summary") or [])],
         details=[d for d in (business_validation.get("details") or []) if isinstance(d, dict)],
     )
+    _notify_dataset_updated(tenant_id, project_id, dataset_id)
     return {
         "dataset_id": dataset_id,
         "dataset_name": safe_dataset_name,
@@ -352,6 +399,7 @@ def ingest_lineage_from_task(
     if not isinstance(ins, list) or not isinstance(outs, list):
         return {"ingested": False, "edges": 0, "error": "invalid_lineage_shape"}
 
+    touched_dataset_ids: set[str] = set()
     input_vids: list[str | None] = []
     for item in ins:
         if not isinstance(item, dict):
@@ -375,9 +423,11 @@ def ingest_lineage_from_task(
             checksum=str(chk) if chk else None,
             current_size=size,
         )
+        touched_dataset_ids.add(str(ds))
         input_vids.append(_upsert_dataset_version(ds, ver, str(uri) if uri else None, str(chk) if chk else None))
 
     if not input_vids and not outs:
+        _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)
         return {"ingested": True, "edges": 0}
 
     output_vids: list[str] = []
@@ -403,9 +453,11 @@ def ingest_lineage_from_task(
             checksum=str(chk) if chk else None,
             current_size=size,
         )
+        touched_dataset_ids.add(str(ds))
         output_vids.append(_upsert_dataset_version(ds, ver, str(uri) if uri else None, str(chk) if chk else None))
 
     if not output_vids:
+        _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)
         return {"ingested": True, "edges": 0, "note": "no_outputs"}
 
     edges = 0
@@ -417,6 +469,7 @@ def ingest_lineage_from_task(
         else:
             if _insert_edge(tenant_id, project_id, run_id, task_id, None, out_vid):
                 edges += 1
+    _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)
     return {"ingested": True, "edges": edges}
 
 
@@ -562,72 +615,6 @@ def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: s
 def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, version_id: str) -> bool:
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                DELETE FROM lineage_edges
-                WHERE tenant_id = %s
-                  AND project_id = %s
-                  AND (input_dataset_version_id = %s OR output_dataset_version_id = %s)
-                """,
-                (tenant_id, project_id, version_id, version_id),
-            )
-            cur.execute(
-                """
-                DELETE FROM dataset_versions dv
-                USING datasets d
-                WHERE dv.dataset_id = d.dataset_id
-                  AND d.tenant_id = %s
-                  AND d.project_id = %s
-                  AND d.dataset_id = %s
-                  AND dv.version_id = %s
-                """,
-                (tenant_id, project_id, dataset_id, version_id),
-            )
-            deleted = cur.rowcount
-    return bool(deleted)
-
-
-def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT dv.version_id
-                FROM dataset_versions dv
-                JOIN datasets d ON d.dataset_id = dv.dataset_id
-                WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
-                """,
-                (tenant_id, project_id, dataset_id),
-            )
-            version_ids = [str(r[0]) for r in (cur.fetchall() or [])]
-            if version_ids:
-                cur.execute(
-                    """
-                    DELETE FROM lineage_edges
-                    WHERE tenant_id = %s
-                      AND project_id = %s
-                      AND (
-                        input_dataset_version_id = ANY(%s::text[])
-                        OR output_dataset_version_id = ANY(%s::text[])
-                      )
-                    """,
-                    (tenant_id, project_id, version_ids, version_ids),
-                )
-                cur.execute("DELETE FROM dataset_versions WHERE dataset_id = %s", (dataset_id,))
-            cur.execute(
-                """
-                DELETE FROM datasets
-                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
-                """,
-                (tenant_id, project_id, dataset_id),
-            )
-            deleted = cur.rowcount
-    return bool(deleted)
-
-
-def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, version_id: str) -> bool:
-    with db_conn() as conn:
-        with conn.cursor() as cur:
             # Remove lineage links tied to this dataset version first.
             cur.execute(
                 """
@@ -651,7 +638,10 @@ def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, ver
                 (tenant_id, project_id, dataset_id, version_id),
             )
             deleted = cur.rowcount
-    return bool(deleted)
+    ok = bool(deleted)
+    if ok:
+        _notify_dataset_updated(tenant_id, project_id, dataset_id, action="version_deleted")
+    return ok
 
 
 def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
@@ -695,7 +685,10 @@ def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
                 (tenant_id, project_id, dataset_id),
             )
             deleted = cur.rowcount
-    return bool(deleted)
+    ok = bool(deleted)
+    if ok:
+        _notify_dataset_updated(tenant_id, project_id, dataset_id, action="dataset_deleted")
+    return ok
 
 
 def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: int = 50, offset: int = 0) -> list[dict]:

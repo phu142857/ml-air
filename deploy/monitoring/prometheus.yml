@@ -18,3 +18,7 @@ scrape_configs:
   - job_name: "mlair-executor"
     static_configs:
       - targets: ["executor:9103"]
+
+  - job_name: "mlair-realtime"
+    static_configs:
+      - targets: ["realtime:9104"]

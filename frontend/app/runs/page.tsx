@@ -16,6 +16,7 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { compareRunMetrics, fetchRuns } from "@/lib/api";
 import { RunsHistorySection } from "@/components/sections/runs-history-section";
 import { useAppContext } from "@/lib/app-context";
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 
 export default function RunsPage() {
   const { tenantId, projectId, token } = useAppContext();
@@ -31,7 +32,8 @@ export default function RunsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["runs", tenantId, projectId],
-    queryFn: () => fetchRuns(tenantId, projectId, token)
+    queryFn: () => fetchRuns(tenantId, projectId, token),
+    ...realtimeFallbackPolling()
   });
 
   function onSelectRun(runId: string) {

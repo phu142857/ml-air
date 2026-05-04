@@ -22,6 +22,7 @@ venv/
 dist/
 build/
 .DS_Store
+frontend/tsconfig.tsbuildinfo
 
 # Local environment
 .env

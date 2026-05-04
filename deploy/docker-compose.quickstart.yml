@@ -5,11 +5,13 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_MLAIR_REALTIME_WS: ${NEXT_PUBLIC_MLAIR_REALTIME_WS:-ws://localhost:8001}
     container_name: ml-air-frontend
     ports:
       - "${ML_AIR_FRONTEND_PORT:-38080}:3000"
     depends_on:
       - api
+      - realtime
     restart: unless-stopped
 
   api:
@@ -43,6 +45,7 @@ services:
       ML_AIR_WORKER_TOKEN: ${ML_AIR_WORKER_TOKEN:-}
       ML_AIR_TASK_LEASE_SECONDS: ${ML_AIR_TASK_LEASE_SECONDS:-30}
       ML_AIR_DATASET_ARTIFACT_ROOT: ${ML_AIR_DATASET_ARTIFACT_ROOT:-file:///mlair/artifacts/datasets}
+      MLAIR_REALTIME_ENABLED: ${MLAIR_REALTIME_ENABLED:-true}
     ports:
       - "${ML_AIR_API_PORT:-8080}:8080"
     volumes:
@@ -50,6 +53,27 @@ services:
     depends_on:
       - redis
       - postgres
+    restart: unless-stopped
+
+  realtime:
+    build:
+      context: ../realtime
+      dockerfile: Dockerfile
+    container_name: ml-air-realtime
+    environment:
+      ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
+      ML_AIR_LOG_LEVEL: ${ML_AIR_LOG_LEVEL:-INFO}
+      ML_AIR_REALTIME_METRICS_PORT: ${ML_AIR_REALTIME_METRICS_PORT:-9104}
+      ML_AIR_JWT_HS256_SECRET: ${ML_AIR_JWT_HS256_SECRET:-mlair-dev-jwt-secret-32bytes-minimum-key}
+      ML_AIR_AUTH_TOKENS_JSON: ${ML_AIR_AUTH_TOKENS_JSON:-}
+      ML_AIR_JWT_ISSUER: ${ML_AIR_JWT_ISSUER:-}
+      ML_AIR_JWT_AUDIENCE: ${ML_AIR_JWT_AUDIENCE:-}
+      ML_AIR_JWT_JWKS_URL: ${ML_AIR_JWT_JWKS_URL:-}
+    ports:
+      - "${MLAIR_REALTIME_PORT:-8001}:8001"
+      - "${ML_AIR_REALTIME_METRICS_PORT:-9104}:9104"
+    depends_on:
+      - redis
     restart: unless-stopped
 
   scheduler:
@@ -76,6 +100,7 @@ services:
       ML_AIR_MANIFEST_ED25519_PUBLIC_KEYS_JSON: ${ML_AIR_MANIFEST_ED25519_PUBLIC_KEYS_JSON:-}
       ML_AIR_TASK_EXECUTION_MODE: ${ML_AIR_TASK_EXECUTION_MODE:-internal}
       ML_AIR_LEASE_REAP_INTERVAL_SECONDS: ${ML_AIR_LEASE_REAP_INTERVAL_SECONDS:-5}
+      MLAIR_REALTIME_ENABLED: ${MLAIR_REALTIME_ENABLED:-true}
     ports:
       - "${ML_AIR_SCHEDULER_METRICS_PORT:-9102}:9102"
     depends_on:
@@ -159,6 +184,7 @@ services:
       - api
       - scheduler
       - executor
+      - realtime
     restart: unless-stopped
 
   grafana:

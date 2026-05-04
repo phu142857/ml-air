@@ -26,6 +26,7 @@ import {
   updateModelTriggerPolicy
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 
@@ -67,30 +68,36 @@ export default function ModelDetailPage() {
 
   const modelsQuery = useQuery({
     queryKey: ["models", tenantId, projectId],
-    queryFn: () => fetchModels(tenantId, projectId, token)
+    queryFn: () => fetchModels(tenantId, projectId, token),
+    ...realtimeFallbackPolling()
   });
   const versionsQuery = useQuery({
     queryKey: ["model-versions", tenantId, projectId, modelId],
-    queryFn: () => fetchModelVersions(tenantId, projectId, modelId, token)
+    queryFn: () => fetchModelVersions(tenantId, projectId, modelId, token),
+    ...realtimeFallbackPolling()
   });
   const resolvedPipelineQuery = useQuery({
     queryKey: ["model-resolved-pipeline-ui", tenantId, projectId, modelId],
     queryFn: () => fetchModelResolvedPipeline(tenantId, projectId, modelId, token),
-    enabled: Boolean(modelId && token)
+    enabled: Boolean(modelId && token),
+    ...realtimeFallbackPolling()
   });
   const pipelinesListQuery = useQuery({
     queryKey: ["pipelines-model-page", tenantId, projectId],
     queryFn: () => fetchPipelines(tenantId, projectId, token),
-    enabled: Boolean(token)
+    enabled: Boolean(token),
+    ...realtimeFallbackPolling()
   });
   const modelStatusQuery = useQuery({
     queryKey: ["model-status", tenantId, projectId, modelId],
-    queryFn: () => fetchModelStatus(tenantId, projectId, modelId, token)
+    queryFn: () => fetchModelStatus(tenantId, projectId, modelId, token),
+    ...realtimeFallbackPolling()
   });
   const latestRunQuery = useQuery({
     queryKey: ["model-status-run", tenantId, projectId, modelStatusQuery.data?.run_id],
     queryFn: () => fetchRun(tenantId, projectId, String(modelStatusQuery.data?.run_id), token),
-    enabled: !!modelStatusQuery.data?.run_id
+    enabled: !!modelStatusQuery.data?.run_id,
+    ...realtimeFallbackPolling()
   });
   const recentRunsQuery = useQuery({
     queryKey: ["model-recent-runs", tenantId, projectId, modelId, (versionsQuery.data?.items || []).map((v) => v.run_id).join(",")],
@@ -102,13 +109,15 @@ export default function ModelDetailPage() {
       const rows = await Promise.all(ids.map((id) => fetchRun(tenantId, projectId, id, token).catch(() => null)));
       return rows.filter(Boolean) as Array<any>;
     },
-    enabled: !!versionsQuery.data?.items?.length
+    enabled: !!versionsQuery.data?.items?.length,
+    ...realtimeFallbackPolling()
   });
 
   const gateDetails = useMemo(() => (gateResult?.details || []) as Array<any>, [gateResult]);
   const triggerPolicyQuery = useQuery({
     queryKey: ["model-trigger-policy", tenantId, projectId, modelId],
-    queryFn: () => fetchModelTriggerPolicy(tenantId, projectId, modelId, token)
+    queryFn: () => fetchModelTriggerPolicy(tenantId, projectId, modelId, token),
+    ...realtimeFallbackPolling()
   });
   const freshnessQuery = useQuery({
     queryKey: ["model-gate-freshness", tenantId, projectId, gateDetails.map((d) => d.dataset_id || d.dataset).join(",")],
@@ -163,7 +172,8 @@ export default function ModelDetailPage() {
   const servingQuery = useQuery({
     queryKey: ["model-serving", tenantId, projectId, modelId],
     queryFn: () => fetchModelServing(tenantId, projectId, modelId, token),
-    enabled: ENABLE_SERVING_SLOTS_UI && Boolean(modelId && token && projectId !== "all")
+    enabled: ENABLE_SERVING_SLOTS_UI && Boolean(modelId && token && projectId !== "all"),
+    ...realtimeFallbackPolling()
   });
 
   const approvalMutation = useMutation({

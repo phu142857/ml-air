@@ -8,6 +8,7 @@ from uuid import uuid4
 from urllib.parse import urlparse
 
 from app.services.db_service import db_conn
+from app.services import realtime_events as rt
 
 APPROVAL_PENDING = "pending_manual_approval"
 APPROVAL_APPROVED = "approved"
@@ -457,7 +458,27 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
             row = cur.fetchone()
     if not row:
         raise ValueError("model_version_not_found")
-    return _version_row_to_dict(row)
+    out = _version_row_to_dict(row)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT tenant_id, project_id FROM models WHERE model_id = %s",
+                (model_id,),
+            )
+            scope = cur.fetchone()
+    if scope:
+        appr_at = row[9] if len(row) > 9 else None
+        ua = appr_at if isinstance(appr_at, datetime) else datetime.now(timezone.utc)
+        rt.emit_model_promoted(
+            tenant_id=str(scope[0]),
+            project_id=str(scope[1]),
+            model_id=model_id,
+            version=int(version),
+            stage=str(out.get("stage") or stage_norm),
+            updated_at=ua,
+            trace_id=None,
+        )
+    return out
 
 
 def get_model_status(tenant_id: str, project_id: str, model_id: str) -> dict:

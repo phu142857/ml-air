@@ -30,6 +30,7 @@ Each guide follows:
 
 ### Run and Orchestration
 
+- [Runbook: Realtime / WebSocket service](./runbooks/realtime-service.md)
 - [Run a Pipeline](./guides/run-pipeline.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)
 - [Configure Data Readiness and Gating](./guides/configure-data-readiness-gating.md)

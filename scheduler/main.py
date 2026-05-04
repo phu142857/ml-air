@@ -15,6 +15,8 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from psycopg import connect
 from redis import Redis
 
+import realtime_publish
+
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -402,7 +404,8 @@ def _project_running_tasks(tenant_id: str, project_id: str) -> int:
             return int(row[0]) if row else 0
 
 
-def _transition_run_status(run_id: str, next_status: str) -> None:
+def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | None = None) -> None:
+    updated: tuple | None = None
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT status FROM runs WHERE run_id = %s", (run_id,))
@@ -414,9 +417,47 @@ def _transition_run_status(run_id: str, next_status: str) -> None:
                 logger.warning("invalid_run_transition run_id=%s from=%s to=%s", run_id, current_status, next_status)
                 return
             cur.execute(
-                "UPDATE runs SET status = %s, updated_at = NOW() WHERE run_id = %s",
+                """
+                UPDATE runs SET status = %s, updated_at = NOW()
+                WHERE run_id = %s
+                RETURNING tenant_id, project_id, status, updated_at
+                """,
                 (next_status, run_id),
             )
+            updated = cur.fetchone()
+    if updated and redis_client is not None:
+        realtime_publish.publish_run_updated(
+            redis_client,
+            tenant_id=str(updated[0]),
+            project_id=str(updated[1]),
+            run_id=run_id,
+            status=str(updated[2]),
+            updated_at=updated[3] if isinstance(updated[3], datetime) else None,
+            trace_id=None,
+        )
+
+
+def _emit_task_scheduler_realtime(client: Redis, done_event: dict) -> None:
+    if _task_execution_mode() == "external":
+        return
+    tid = done_event["task_id"]
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT status, updated_at FROM tasks WHERE task_id = %s", (tid,))
+            row = cur.fetchone()
+    if not row:
+        return
+    st, ua = row[0], row[1]
+    realtime_publish.publish_task_updated(
+        client,
+        tenant_id=str(done_event.get("tenant_id", "default")),
+        project_id=str(done_event.get("project_id", "default_project")),
+        task_id=str(tid),
+        run_id=str(done_event["run_id"]),
+        status=str(st).upper(),
+        updated_at=ua if isinstance(ua, datetime) else None,
+        trace_id=done_event.get("trace_id"),
+    )
 
 
 def _upsert_or_transition_task(
@@ -1041,18 +1082,18 @@ def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
         else:
             enqueue_failed = True
     if enqueue_failed:
-        _sync_run_status_after_task(run_id, plan, selected)
+        _sync_run_status_after_task(run_id, plan, selected, client)
     return scheduled
 
 
-def _sync_run_status_after_task(run_id: str, plan: dict[str, list[str]], selected: set[str]) -> None:
+def _sync_run_status_after_task(run_id: str, plan: dict[str, list[str]], selected: set[str], redis_client: Redis) -> None:
     states = _list_run_task_states(run_id)
     selected_states = [states.get(key, ("PENDING", 1))[0] for key in selected]
     if selected_states and all(s == "SUCCESS" for s in selected_states):
-        _transition_run_status(run_id, "SUCCESS")
+        _transition_run_status(run_id, "SUCCESS", redis_client)
         return
     if any(s == "FAILED" for s in selected_states):
-        _transition_run_status(run_id, "FAILED")
+        _transition_run_status(run_id, "FAILED", redis_client)
 
 
 def _load_run_event_for_scheduler(run_id: str) -> dict | None:
@@ -1166,7 +1207,7 @@ def main() -> None:
                 RUN_REQUEUED_TOTAL.inc()
                 time.sleep(0.2)
             else:
-                _transition_run_status(run_id, "RUNNING")
+                _transition_run_status(run_id, "RUNNING", client)
                 plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
                 selected, skipped = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
                 replay_parent = run_event.get("replay_of_run_id")
@@ -1180,7 +1221,7 @@ def main() -> None:
                         skipped=skipped,
                     )
                     if not gating_ok:
-                        _transition_run_status(run_id, "FAILED")
+                        _transition_run_status(run_id, "FAILED", client)
                         logger.error("replay_gating_failed run_id=%s parent_run_id=%s", run_id, replay_parent)
                         continue
                 else:
@@ -1238,7 +1279,7 @@ def main() -> None:
                 _schedule_ready_tasks(client=client, run_event=run_event)
                 plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
                 selected, _ = _apply_replay_filter(plan, replay_from_task_id, done_event["run_id"])
-                _sync_run_status_after_task(done_event["run_id"], plan, selected)
+                _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
             else:
                 max_attempts, backoff_ms = _load_task_retry_policy(done_event["task_id"])
                 current_attempt = int(done_event.get("attempt", 1))
@@ -1287,14 +1328,15 @@ def main() -> None:
                     else:
                         plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
                         selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
-                        _sync_run_status_after_task(done_event["run_id"], plan, selected)
+                        _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
                 else:
                     client.rpush("mlair:tasks:dlq", raw_done)
                     DLQ_PUSHED_TOTAL.inc()
                     plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
                     selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
-                    _sync_run_status_after_task(done_event["run_id"], plan, selected)
+                    _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
                     logger.error("task_moved_to_dlq task_id=%s run_id=%s", done_event["task_id"], done_event["run_id"])
+            _emit_task_scheduler_realtime(client, done_event)
             TASK_COMPLETED_TOTAL.labels(status=done_event["status"]).inc()
             logger.info(
                 "task_completed task_id=%s status=%s run_id=%s",

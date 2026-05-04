@@ -21,6 +21,7 @@ import {
   uploadDatasetCsv
 } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
 import { formatDateTimeCompact } from "@/lib/utils";
 
@@ -62,7 +63,8 @@ export default function DatasetsPage() {
 
   const datasetsQuery = useQuery({
     queryKey: ["datasets", tenantId, projectId],
-    queryFn: () => fetchDatasets(tenantId, projectId, token)
+    queryFn: () => fetchDatasets(tenantId, projectId, token),
+    ...realtimeFallbackPolling()
   });
   const selectedDataset = useMemo(
     () => (datasetsQuery.data?.items || []).find((d) => d.dataset_id === selectedDatasetId) || null,
@@ -71,11 +73,13 @@ export default function DatasetsPage() {
   const versionsQuery = useQuery({
     queryKey: ["dataset-versions", tenantId, projectId, selectedDatasetId],
     queryFn: () => fetchDatasetVersions(tenantId, projectId, selectedDatasetId, token),
-    enabled: !!selectedDatasetId
+    enabled: !!selectedDatasetId,
+    ...realtimeFallbackPolling()
   });
   const modelsQuery = useQuery({
     queryKey: ["models", tenantId, projectId],
-    queryFn: () => fetchModels(tenantId, projectId, token)
+    queryFn: () => fetchModels(tenantId, projectId, token),
+    ...realtimeFallbackPolling()
   });
   const selectedModel = useMemo(
     () => (modelsQuery.data?.items || []).find((m) => m.model_id === selectedModelId) || null,
