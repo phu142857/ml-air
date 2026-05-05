@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from app.services.db_service import db_conn
 from app.services import realtime_events as rt
+from app.services.trace_service import get_trace_id
 
 APPROVAL_PENDING = "pending_manual_approval"
 APPROVAL_APPROVED = "approved"
@@ -476,7 +477,7 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
             version=int(version),
             stage=str(out.get("stage") or stage_norm),
             updated_at=ua,
-            trace_id=None,
+            trace_id=get_trace_id(),
         )
     return out
 

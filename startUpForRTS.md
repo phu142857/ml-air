@@ -284,6 +284,7 @@ function scheduleInvalidate(
 
 **Unit / integration**
 
+- `api/tests/test_realtime_events.py`: envelope + publish channel (chạy `cd api && PYTHONPATH=. python -m unittest discover -s tests -v`; stub `redis` trong test nên không bắt buộc cài deps trên máy dev).
 - Publish một event giả → subscriber nhận đúng channel.
 - WS: client hợp lệ nhận JSON; client sai token bị từ chối.
 - Frontend: mock `WebSocket`, assert sau debounce chỉ **một** wave `invalidateQueries` cho nhiều message; assert duplicate `event_id` không gọi refetch hai lần.
@@ -350,7 +351,9 @@ function scheduleInvalidate(
 ## 10. Lộ trình nâng cấp (sau v1)
 
 - **v1.5 (optional sớm):** thay một phần `invalidateQueries` bằng `queryClient.setQueryData` cho detail run/task khi payload đủ + guard `updated_at` — giảm flash và tải API.
+  - *Đã làm (một phần):* UI merge `status`/`updated_at` vào cache `["run", runId]`, `["runs", tenant, project]`, `["run-tasks", runId]` cho `run.*` / `task.updated`; merge `updated_at` vào `["models", …]` / `["datasets", …]` cho `model.promoted` / `dataset.updated`; sau đó debounce `invalidateQueries`; LRU `event_id`; publish API gắn `get_trace_id()` nhiều luồng; log `realtime_published` INFO khi có `trace_id`; `done_payload.trace_id` khi worker HTTP complete/fail (parity với executor).
 - **v2:** batching nhiều event một frame trên wire; heartbeat/metrics chuẩn hóa thêm.
+  - *Đã làm (một phần):* realtime service debounce **coalesce** theo `(tenant, project, type, resource_id)` trước fan-out (`MLAIR_REALTIME_COALESCE_MS`, metric `mlair_realtime_events_coalesced_total`).
 - **v3:** Redis Streams / Kafka; replay theo offset; ordering + durability mạnh.
 
 ---

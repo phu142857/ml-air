@@ -12,6 +12,7 @@ from app.services.db_service import db_conn
 from app.services.log_service import append_run_log
 from app.services.queue_service import publish_run_event
 from app.services import realtime_events as rt
+from app.services.trace_service import get_trace_id
 
 logger = logging.getLogger("mlair.api.run_service")
 
@@ -322,7 +323,7 @@ def mark_run_running(run_id: str) -> None:
                 run_id=str(row["run_id"]),
                 status=str(row["status"]),
                 updated_at=_parse_updated_at_dt(row.get("updated_at")),
-                trace_id=None,
+                trace_id=get_trace_id(),
             )
 
 
@@ -350,7 +351,7 @@ def set_run_status(run_id: str, status: str) -> bool:
                 run_id=str(row["run_id"]),
                 status=str(row["status"]),
                 updated_at=_parse_updated_at_dt(row.get("updated_at")),
-                trace_id=None,
+                trace_id=get_trace_id(),
             )
     return bool(updated)
 

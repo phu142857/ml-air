@@ -18,4 +18,8 @@ EVENTS_DROPPED_BACKPRESSURE = Counter(
     "mlair_realtime_events_dropped_total",
     "Events skipped for a socket due to max pending sends",
 )
+EVENTS_COALESCED = Counter(
+    "mlair_realtime_events_coalesced_total",
+    "Superseded events merged in the pre-fan-out debounce buffer",
+)
 WS_ACTIVE = Gauge("mlair_realtime_ws_active_connections", "Accepted WebSocket connections")

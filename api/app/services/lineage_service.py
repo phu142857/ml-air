@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from app.services.db_service import db_conn
 from app.services import realtime_events as rt
+from app.services.trace_service import get_trace_id
 
 Direction = Literal["up", "down", "both"]
 
@@ -51,7 +52,7 @@ def _notify_dataset_updated(
         project_id=project_id,
         dataset_id=dataset_id,
         updated_at=ua,
-        trace_id=trace_id,
+        trace_id=trace_id or get_trace_id(),
         action=action,
     )
 

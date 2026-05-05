@@ -9,7 +9,8 @@
 ## Quick checks
 
 - Realtime health: `curl -s http://<host>:8001/healthz` → `{"status":"ok"}`.
-- Metrics (Prometheus): scrape port **9104** (see `ML_AIR_REALTIME_METRICS_PORT`). Counters include `mlair_realtime_redis_events_received_total`, `mlair_realtime_ws_send_errors_total`, `mlair_realtime_events_dropped_total`.
+- Metrics (Prometheus): scrape port **9104** (see `ML_AIR_REALTIME_METRICS_PORT`). Counters include `mlair_realtime_redis_events_received_total`, `mlair_realtime_ws_send_errors_total`, `mlair_realtime_events_dropped_total`, `mlair_realtime_events_coalesced_total`.
+- Coalesce (debounce before fan-out): set **`MLAIR_REALTIME_COALESCE_MS`** (milliseconds, default **150**) to merge bursts for the same `(tenant, project, type, resource_id)`; higher values reduce WS traffic at the cost of slightly higher latency.
 - Redis: publishers use channel pattern `mlair.events.{tenant_id}.{project_id}`; subscriber uses `PSUBSCRIBE mlair.events.*`.
 
 ## Production notes

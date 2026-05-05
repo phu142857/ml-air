@@ -16,6 +16,7 @@ from redis import asyncio as redis_asyncio
 from starlette.websockets import WebSocketState
 
 from app.auth_ws import authorize_ws, decode_principal
+from app.coalesce import RealtimeCoalescer
 from app.metrics import (
     EVENTS_DROPPED_BACKPRESSURE,
     EVENTS_RECEIVED,
@@ -34,6 +35,7 @@ REDIS_URL = os.getenv("ML_AIR_REDIS_URL", "redis://localhost:6379/0")
 PING_INTERVAL = float(os.getenv("MLAIR_REALTIME_PING_SECONDS", "30"))
 MAX_PENDING_SENDS = max(1, int(os.getenv("MLAIR_REALTIME_MAX_PENDING_SENDS", "64")))
 METRICS_PORT = int(os.getenv("ML_AIR_REALTIME_METRICS_PORT", "9104"))
+COALESCE_MS = float(os.getenv("MLAIR_REALTIME_COALESCE_MS", "150"))
 
 
 class ConnectionManager:
@@ -133,7 +135,7 @@ async def _ws_ping_loop(ws: WebSocket) -> None:
             return
 
 
-async def _redis_listener(manager: ConnectionManager, r: redis_asyncio.Redis) -> None:
+async def _redis_listener(coalescer: RealtimeCoalescer, r: redis_asyncio.Redis) -> None:
     pubsub = r.pubsub()
     await pubsub.psubscribe("mlair.events.*")
     try:
@@ -155,8 +157,7 @@ async def _redis_listener(manager: ConnectionManager, r: redis_asyncio.Redis) ->
             pid = str(event.get("project_id") or "").strip()
             if not tid or not pid:
                 continue
-            key = f"{tid}:{pid}"
-            await manager.fanout_json(key, event)
+            await coalescer.push(event)
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -177,14 +178,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     r = redis_asyncio.from_url(REDIS_URL, decode_responses=True)
     manager = ConnectionManager()
+
+    async def _emit_coalesced(ev: dict[str, Any]) -> None:
+        tid = str(ev.get("tenant_id") or "").strip()
+        pid = str(ev.get("project_id") or "").strip()
+        if not tid or not pid:
+            return
+        await manager.fanout_json(f"{tid}:{pid}", ev)
+
+    coalescer = RealtimeCoalescer(COALESCE_MS, _emit_coalesced)
     app.state.manager = manager
+    app.state.coalescer = coalescer
     app.state.redis = r
-    listener = asyncio.create_task(_redis_listener(manager, r))
+    listener = asyncio.create_task(_redis_listener(coalescer, r))
     logger.info(
-        "realtime_started redis=%s metrics_port=%s max_pending_sends=%s",
+        "realtime_started redis=%s metrics_port=%s max_pending_sends=%s coalesce_ms=%s",
         REDIS_URL.split("@")[-1],
         METRICS_PORT,
         MAX_PENDING_SENDS,
+        COALESCE_MS,
     )
     try:
         yield
@@ -192,6 +204,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         listener.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await listener
+        await coalescer.shutdown()
         await manager.close_all()
         await r.aclose()
         logger.info("realtime_shutdown_complete")

@@ -86,14 +86,24 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
             exc,
         )
         return
-    logger.debug(
-        "realtime_published type=%s resource_id=%s tenant=%s project=%s trace_id=%s",
-        ev_type,
-        event.get("resource_id"),
-        tenant_id,
-        project_id,
-        event.get("trace_id"),
-    )
+    tr = event.get("trace_id")
+    if tr:
+        logger.info(
+            "realtime_published type=%s trace_id=%s tenant=%s project=%s resource=%s",
+            ev_type,
+            tr,
+            tenant_id,
+            project_id,
+            event.get("resource_id"),
+        )
+    else:
+        logger.debug(
+            "realtime_published type=%s resource_id=%s tenant=%s project=%s",
+            ev_type,
+            event.get("resource_id"),
+            tenant_id,
+            project_id,
+        )
 
 
 def emit_run_created(

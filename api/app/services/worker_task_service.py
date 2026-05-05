@@ -14,6 +14,7 @@ from app.services.auth_service import Principal
 from app.services.db_service import database_url
 from app.services.queue_service import publish_task_finished
 from app.services import realtime_events as rt
+from app.services.trace_service import get_trace_id
 
 
 @contextmanager
@@ -210,7 +211,7 @@ def lease_tasks(
                 run_id=run_id,
                 status="RUNNING",
                 updated_at=task_updated_at,
-                trace_id=None,
+                trace_id=get_trace_id(),
             )
     return out
 
@@ -394,7 +395,7 @@ def complete_task(
         "priority": str(row.get("priority") or "normal"),
         "tenant_id": row["tenant_id"],
         "project_id": row["project_id"],
-        "trace_id": None,
+        "trace_id": get_trace_id(),
         "plugin_name": row.get("plugin") or row.get("plugin_name"),
         "plugin_exec": plugin_exec,
         "context": ctx,
@@ -420,7 +421,7 @@ def complete_task(
         run_id=str(row["run_id"]),
         status="SUCCESS",
         updated_at=task_updated_at,
-        trace_id=done_payload.get("trace_id"),
+        trace_id=done_payload.get("trace_id") or get_trace_id(),
     )
     return "ok", {"task_id": task_id, "status": "SUCCESS"}
 
@@ -479,7 +480,7 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         "priority": str(row.get("priority") or "normal"),
         "tenant_id": row["tenant_id"],
         "project_id": row["project_id"],
-        "trace_id": None,
+        "trace_id": get_trace_id(),
         "plugin_name": row.get("plugin") or row.get("plugin_name"),
         "plugin_exec": plugin_exec,
         "context": ctx,
@@ -505,5 +506,5 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         run_id=str(row["run_id"]),
         status="FAILED",
         updated_at=task_updated_at_fail,
-        trace_id=done_payload.get("trace_id"),
+        trace_id=done_payload.get("trace_id") or get_trace_id(),
     )
