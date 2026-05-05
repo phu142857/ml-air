@@ -1,0 +1,26 @@
+pipeline_id: my_custom_plugin_pipeline
+priority: normal
+max_parallel_tasks: 1
+plugin_name: my_train_plugin
+use_latest_pipeline_version: true
+context:
+  dataset_uri: s3://bucket/datasets/train.parquet
+  params:
+    source: custom_plugin_example
+    model: baseline
+  metrics:
+    expected_quality:
+      step: 1
+      value: 0.9
+  artifacts:
+    - path: custom/model.bin
+      uri: s3://bucket/models/custom/model.bin
+  lineage:
+    inputs:
+      - name: training_dataset
+        version: v1
+        uri: s3://bucket/datasets/train.parquet
+    outputs:
+      - name: trained_model
+        version: v1
+        uri: s3://bucket/models/custom/model.bin
