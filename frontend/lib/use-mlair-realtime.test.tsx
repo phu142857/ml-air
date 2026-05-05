@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useMlairRealtime } from "./use-mlair-realtime";
@@ -33,6 +32,10 @@ class FakeWebSocket {
 
   emitJson(payload: unknown) {
     this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent);
+  }
+
+  emitClose(code: number) {
+    this.onclose?.({ code } as CloseEvent);
   }
 }
 
@@ -139,6 +142,81 @@ describe("useMlairRealtime", () => {
       queryKey: ["model-versions", "t1", "p1", "m1"],
       exact: false
     });
+    unmount();
+  });
+
+  it("ignores unsupported envelope version and ping event", () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { unmount } = renderWithQueryClient(queryClient);
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emitJson({
+      version: "v2",
+      event_id: "evt-4",
+      type: "run.updated",
+      resource_id: "run-1",
+      payload: { status: "RUNNING", updated_at: 1710000002 }
+    });
+    ws.emitJson({
+      version: "v1",
+      event_id: "evt-5",
+      type: "ping"
+    });
+    vi.advanceTimersByTime(400);
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("patches dataset cache on dataset.updated with newer timestamp", () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["datasets", "t1", "p1"], {
+      items: [{ dataset_id: "d1", name: "train", created_at: "2025-01-01T00:00:00.000Z", updated_at: "2025-01-01T00:00:01.000Z" }]
+    });
+    const { unmount } = renderWithQueryClient(queryClient);
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emitJson({
+      version: "v1",
+      event_id: "evt-6",
+      type: "dataset.updated",
+      resource_id: "d1",
+      payload: { updated_at: 1735689605 }
+    });
+
+    const ds = queryClient.getQueryData<{ items: Array<{ dataset_id: string; updated_at?: string }> }>([
+      "datasets",
+      "t1",
+      "p1"
+    ]);
+    expect(ds?.items[0]?.updated_at).toBe("2025-01-01T00:00:05.000Z");
+    unmount();
+  });
+
+  it("reconnects after non-fatal close", () => {
+    const queryClient = new QueryClient();
+    const { unmount } = renderWithQueryClient(queryClient);
+    const ws1 = FakeWebSocket.instances[0];
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    ws1.emitClose(1006);
+    vi.advanceTimersByTime(2000);
+
+    expect(FakeWebSocket.instances.length).toBeGreaterThan(1);
+    unmount();
+  });
+
+  it("halts reconnect after policy close 1008", () => {
+    const queryClient = new QueryClient();
+    const { unmount } = renderWithQueryClient(queryClient);
+    const ws1 = FakeWebSocket.instances[0];
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    ws1.emitClose(1008);
+    vi.advanceTimersByTime(60_000);
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
     unmount();
   });
 });

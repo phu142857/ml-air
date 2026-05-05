@@ -287,7 +287,7 @@ function scheduleInvalidate(
 - `api/tests/test_realtime_events.py`: envelope + publish channel (chạy `cd api && PYTHONPATH=. python -m unittest discover -s tests -v`; stub `redis` trong test nên không bắt buộc cài deps trên máy dev).
 - Publish một event giả → subscriber nhận đúng channel.
 - WS: client hợp lệ nhận JSON; client sai token bị từ chối.
-- Frontend: mock `WebSocket`, assert sau debounce chỉ **một** wave `invalidateQueries` cho nhiều message; assert duplicate `event_id` không gọi refetch hai lần.
+- Frontend (Vitest + jsdom): mock `WebSocket`, assert sau debounce chỉ **một** wave `invalidateQueries` cho nhiều message; assert duplicate `event_id` không gọi refetch hai lần; assert version lạ / ping bị bỏ qua; assert patch cache `dataset.updated` theo `updated_at`; assert reconnect/backoff khi close thường và halt khi WS policy close `1008`.
 
 **Manual smoke**
 
