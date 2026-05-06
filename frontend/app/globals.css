@@ -499,6 +499,19 @@ textarea::placeholder {
   color: var(--text-secondary) !important;
 }
 
+/* Guard against accidental overlay/cascade regressions blocking native dropdowns. */
+select {
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+  -webkit-appearance: menulist !important;
+  appearance: auto !important;
+}
+
+option {
+  pointer-events: auto;
+}
+
 .bg-blue-600 {
   background-color: var(--primary) !important;
 }
