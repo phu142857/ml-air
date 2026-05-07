@@ -32,3 +32,6 @@ frontend/tsconfig.tsbuildinfo
 # Local managed key material (do not commit secrets)
 deploy/security/manifest-keys.local.json
 startUpForRTS.md
+frontend/tsconfig.tsbuildinfo
+ROADMAP.md
+ROADMAP.md

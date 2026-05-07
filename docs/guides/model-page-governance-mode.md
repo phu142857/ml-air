@@ -4,17 +4,9 @@
 
 Keep model detail focused on governance (versions, approvals, trigger policy, serving metadata), and move primary training/readiness UX to Dataset Hub.
 
-## Feature flag
+## Status
 
-Environment variable:
-
-- `NEXT_PUBLIC_MLAIR_MODEL_LIFECYCLE_HUB_UI`
-
-Behavior:
-
-- unset / empty -> enabled (default)
-- `true|1|yes` -> enabled
-- `false|0|no|off` -> disabled (legacy layout)
+Governance mode is now the default and only product path in frontend UX. Legacy on-page training/readiness controls and on-page dataset upload/train actions were removed from model detail.
 
 ## Enabled mode (recommended)
 
@@ -27,12 +19,8 @@ Model page emphasizes:
 
 Training/readiness:
 
-- primary CTA points users to Datasets / Dataset Hub
-- legacy on-page readiness + CSV flow remains available under "Advanced"
-
-## Disabled mode (legacy)
-
-Model page shows full readiness and training forms directly, including pipeline override checks and CSV upload/train controls.
+- run from Dataset Hub (`/datasets/{dataset_id}`)
+- pipeline-level execution controls remain available from Pipeline detail as advanced tooling
 
 ## Why this mode exists
 
@@ -42,7 +30,6 @@ Model page shows full readiness and training forms directly, including pipeline 
 
 ## Operator checklist
 
-1. Set env var in `.env` / deployment config.
-2. Restart frontend runtime.
-3. Verify model page copy and navigation behavior.
-4. Confirm advanced legacy block still works for compatibility.
+1. Restart frontend runtime after deploy.
+2. Verify model page has governance sections only (status, trigger policy, versions, approvals).
+3. Confirm readiness/training operations are performed from Dataset Hub and not from model detail.

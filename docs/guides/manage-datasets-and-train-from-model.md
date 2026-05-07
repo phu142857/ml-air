@@ -296,13 +296,9 @@ The Datasets UI can call **`POST /v1/tenants/{tenant}/projects/{project}/runs/tr
 
 - [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md)
 
-## Model page governance mode flag
+## Model page governance mode
 
-Frontend flag:
-
-- `NEXT_PUBLIC_MLAIR_MODEL_LIFECYCLE_HUB_UI`
-
-Default behavior is enabled (unset -> on). Set `false` to force legacy model-page layout.
+Model detail is governance-only (status, policy, approvals, versions). Dataset upload/readiness/train flows are intentionally owned by Dataset Hub.
 
 See:
 

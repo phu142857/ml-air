@@ -58,9 +58,9 @@ def main() -> int:
     version_payload = {
         "config": {
             "tasks": [
-                {"id": "extract"},
-                {"id": "transform", "depends_on": ["extract"]},
-                {"id": "train", "depends_on": ["transform"]},
+                {"id": "extract", "plugin": "app_etl_adapter"},
+                {"id": "transform", "plugin": "app_etl_adapter", "depends_on": ["extract"]},
+                {"id": "train", "plugin": "echo_tracking", "depends_on": ["transform"]},
             ]
         }
     }

@@ -57,6 +57,14 @@ MLAir resolves:
 
 This keeps UX dataset/model-centric while preserving orchestration internals.
 
+## Execution Gate positioning
+
+Pipeline detail now treats gate controls as advanced execution tooling:
+
+- label: **Execution Gate (Advanced)**
+- default UX: check-oriented and diagnostic
+- primary user path: Dataset Hub for readiness + training intents
+
 ## UI behavior
 
 Dataset Hub shows:
@@ -65,7 +73,7 @@ Dataset Hub shows:
 - dataset versions table
 - train action per version (intent-driven)
 
-Model page should focus on governance and link users to Dataset Hub for primary training.
+Model page is governance-only; readiness and training actions are handled from Dataset Hub.
 
 ## Related guides
 

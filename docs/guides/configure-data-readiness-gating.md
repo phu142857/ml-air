@@ -15,8 +15,9 @@ Use dataset readiness for lifecycle monitoring and user guidance; use pipeline/r
 
 1. Define readiness threshold via `training_mode` (`quick`, `standard`, `full`) or explicit `override_config.inputs[].required_size`.
 2. Check readiness before execution.
-3. Trigger pipeline run with the same config.
-4. Review run readiness snapshot and blocking datasets.
+3. Trigger lifecycle-centric training from Dataset Hub (`POST .../runs/trigger`) for primary UX.
+4. Use direct pipeline run gate only for advanced execution/ops workflows.
+5. Review run readiness snapshot and blocking datasets.
 
 ## Command
 
@@ -34,7 +35,7 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
     }
   }'
 
-# 2) Trigger run with gating
+# 2) Trigger run with gating (advanced / compatibility path)
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/run" \
   -H "Authorization: Bearer admin-token" \
   -H "Content-Type: application/json" \
@@ -77,6 +78,7 @@ You should see:
 - Do not mutate dataset `current_size` manually.
 - Keep overrides in `override_config` to preserve reproducibility.
 - Client may provide `required_size` (minimum), but `current_size` is always server-side source of truth.
+- In current frontend migration state, Pipeline detail uses gate checks as advanced tooling; primary train UX is Dataset Hub.
 
 ## Auto Trigger Policy (Persisted)
 

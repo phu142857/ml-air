@@ -64,6 +64,176 @@
 - [x] Phase 8 - plugin->tracking auto hook baseline (executor plugin result auto logs params/metrics/artifacts)
 - [x] v0.3 / Product Phase 3 - baseline: lineage schema + API + executor ingest, pipeline versions + run bind + diff API, search API + topbar, timeline + partial replay + lineage UI (see `docs/troubleshooting/lineage-replay-v03-reference.md` + `make test-smoke-v03`)
 
+## Frontend Lifecycle-Centric Migration Roadmap (Hub-First, No Runtime Rewrite)
+
+### Why this roadmap exists
+
+Current frontend is in an intentional transition state:
+
+```text
+Pipeline-centric legacy UX
+            +
+Lifecycle-centric emerging UX
+```
+
+This roadmap formalizes the migration so the system does not remain "hybrid forever".
+
+### Canonical ownership (target contract)
+
+| Concern | Canonical owner | Secondary / operational owner |
+| --- | --- | --- |
+| Dataset state (`current_size`, versions) | Dataset domain | — |
+| Dataset readiness | Dataset domain | Pipeline execution gate (runtime-only) |
+| Training eligibility | Dataset + model policy | — |
+| Training policy | Model domain | Scheduler runtime |
+| Pipeline execution | Pipeline domain | — |
+| Run observability | Run domain | Pipeline/Task tooling |
+| Replay/debug | Pipeline + Run domains | — |
+
+### Terminology contract (must be consistent in UI/docs/API)
+
+- `Dataset Readiness`: lifecycle/data readiness (dataset-level).
+- `Execution Gate`: pipeline execution constraints (run-level).
+- `Training Eligibility`: readiness + policy + governance result.
+- `Trigger Policy`: `manual | auto_ready | schedule`.
+- `Run Validation`: pre-execution checks used by runtime.
+
+### Phase 0 — Ownership freeze + naming normalization (DONE/IN PROGRESS)
+
+- [x] Query key factory and cache ownership normalization (`frontend/lib/query-keys.ts`).
+- [x] Training façade baseline (`frontend/lib/training-intent.ts`).
+- [x] Dataset Hub route baseline (`/datasets/[datasetId]`).
+- [x] Model governance mode is now the default path (legacy mode removed).
+- [x] Rename pipeline page wording from `Readiness & Gating` to `Execution Gate (Advanced)` and add primary path hint to Dataset Hub.
+- [x] Remove direct run action from pipeline gate panel in primary UX (check-oriented advanced tool only).
+- [x] Remove model-page legacy readiness/training controls; model page is governance-only.
+
+Exit criteria:
+
+- New UI features use canonical terms and `mlairKeys`.
+- Team docs clearly distinguish dataset readiness vs execution gate.
+
+### Phase 1 — Hub-first primary entrypoints (v0.x, incremental)
+
+- Make Dataset Hub the default path for readiness + train actions.
+- Keep pipeline gate UI as advanced/ops compatibility path.
+- Model page is governance-only (status, policy, approvals, versions); readiness/training actions run from Dataset Hub.
+- Measure adoption:
+  - `% trainings via /runs/trigger`
+  - `% user sessions entering training from Dataset Hub`
+
+Exit criteria:
+
+- Hub-first path is primary for normal users.
+- Legacy pipeline gate still available for ops/debug without regressions.
+
+### Phase 2 — Durable readiness projection (backend + frontend contract)
+
+Introduce readiness as continuously evaluated lifecycle state, not only per-run gate check.
+
+Target artifact examples:
+
+- `dataset_readiness_snapshots` (or `dataset_training_state`) with:
+  - `dataset_id`
+  - `required_size`
+  - `current_size`
+  - `status`
+  - `evaluated_at`
+  - optional `model_id`, `policy_id`, `generated_run_id`
+
+Frontend additions:
+
+- Dataset Hub readiness history/timeline.
+- Explainability ("why blocked / why ready").
+
+Exit criteria:
+
+- Readiness no longer exists only as ephemeral page state.
+- Historical readiness is queryable and auditable.
+
+### Phase 3 — Eligibility domain split (critical)
+
+Formalize:
+
+```text
+Readiness != Eligibility
+Eligibility = readiness + policy + cooldown + approval + schedule + governance
+```
+
+Frontend additions:
+
+- Dataset Hub section: `Eligible models` / `Blocked models` with reasons.
+- Clear status chips for readiness vs eligibility.
+
+API/domain contract additions (target):
+
+- `GET /datasets/{id}/readiness`
+- `GET /datasets/{id}/readiness/history`
+- `GET /datasets/{id}/eligibility`
+
+Exit criteria:
+
+- Users can answer "dataset ready but model not eligible?" directly in UI.
+
+### Phase 4 — Realtime lifecycle events
+
+Add explicit domain events:
+
+- `dataset.readiness.updated`
+- `model.eligibility.updated`
+- `training.policy.updated`
+
+Frontend:
+
+- Map events to canonical query keys.
+- Reduce broad invalidation over time and expand safe patch updates.
+
+Exit criteria:
+
+- Lifecycle state updates in near realtime without cache ambiguity.
+
+### Phase 5 — Pipeline page downgrade (soft deprecation)
+
+- Pipeline page remains execution tooling for power users:
+  - DAG
+  - task/plugin execution view
+  - replay/debug
+  - execution gate checks (advanced)
+- Remove pipeline page as primary training UX for end users.
+
+Exit criteria:
+
+- End-user training docs and product copy are Hub-first.
+- Ops/debug remains fully functional.
+- Pipeline detail does not expose direct lifecycle training CTA by default.
+
+### Phase 6 — Full Hub-first cutover (when telemetry supports)
+
+- Hide legacy pipeline training controls by default (role/advanced toggle only).
+- Keep old APIs for compatibility until explicit deprecation policy is announced.
+
+Exit criteria:
+
+- End-user lifecycle UX is dataset/model-centric by default.
+- No required orchestration rewrite.
+
+### Non-goals (must not be done in this migration)
+
+- Do not rewrite orchestration runtime.
+- Do not remove DAG/run/task observability.
+- Do not hard-cut existing APIs without deprecation window.
+- Do not force one-shot frontend rewrite.
+
+### Governance gates per release
+
+Before each release that advances this roadmap:
+
+- [ ] Terminology consistency check in docs/UI labels.
+- [ ] Query-key consistency check (`mlairKeys` usage for new features).
+- [ ] Realtime invalidation scope review for touched domains.
+- [ ] Backward-compatibility review for pipeline/run APIs.
+- [ ] Telemetry review (Hub-first adoption and operational incident impact).
+
 ## Milestone: v0.2.0 — ML tracking + model registry (MLflow-like layer) — **COMPLETE**
 
 This milestone matches the “Phase 2” product scope: experiment tracking, run compare, model registry, and plugin → tracking integration—not the early roadmap timeslice “Phase 2 (queue + worker)”, which is already delivered above.
