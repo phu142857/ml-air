@@ -1,0 +1,43 @@
+@theme {
+  /* Colors */
+  --color-background-primary: #fafafa;
+  --color-text-primary: #2e2e2e;
+  --color-text-secondary: #898989;
+  --color-text-muted: #b4b4b4;
+  --color-brand-primary: #3ecf8e;
+  --color-brand-dark: #006239;
+  --color-surface-elevated: #171717;
+  --color-background-primary: #121212;
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #898989;
+  --color-text-muted: #4d4d4d;
+  --color-brand-primary: #3ecf8e;
+  --color-brand-dark: #006239;
+  --color-surface-elevated: #242424;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+  --spacing-4xl: 48px;
+  --spacing-5xl: 64px;
+  --spacing-6xl: 80px;
+  --spacing-7xl: 96px;
+  --spacing-8xl: 128px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Fonts */
+  --font-circular: "Circular", sans-serif;
+  --font-source-code-pro: "Source Code Pro", sans-serif;
+
+}

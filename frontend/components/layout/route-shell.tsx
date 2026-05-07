@@ -29,7 +29,7 @@ export function RouteShell({ activeNav, title, subtitle, children }: Props) {
       <Topbar />
 
       <div className="grid min-h-[calc(100vh-64px)] grid-cols-[220px_1fr]">
-        <aside className="border-r border-border bg-muted p-4">
+        <aside className="sticky top-16 h-[calc(100vh-64px)] overflow-y-auto border-r border-border bg-muted p-4">
           <div className="mb-3 text-overline uppercase tracking-wide text-muted-foreground">Navigation</div>
           <div className="space-y-2">
             {navItems.map((item) => (
@@ -50,7 +50,7 @@ export function RouteShell({ activeNav, title, subtitle, children }: Props) {
 
         <main className="p-6">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
-            <div>
+            <div className="sticky top-16 z-20 -mx-2 rounded-xl border border-border bg-background/90 px-2 py-2 backdrop-blur-sm">
               <h1 className="text-page font-semibold tracking-tight text-foreground">{title}</h1>
               <p className="text-body text-muted-foreground">{subtitle}</p>
             </div>

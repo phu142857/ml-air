@@ -3,6 +3,8 @@
 import { RunItem } from "@/lib/api";
 import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
 
 type Props = {
   rows: RunItem[];
@@ -13,9 +15,10 @@ type Props = {
 
 export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [], onToggleCompare }: Props) {
   return (
-    <section className="card p-5 shadow-md">
-      <div className="overflow-auto rounded-xl border border-border">
-        <table className="w-full text-sm">
+    <Card className="p-4">
+      <CardContent className="space-y-0">
+        <DataTableShell>
+          <DataTable className="text-sm">
           <thead className="bg-muted">
             <tr>
               <th className="px-3 py-2 text-left">Compare</th>
@@ -40,7 +43,7 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
                     onChange={() => onToggleCompare?.(row.run_id)}
                   />
                 </td>
-                <td className="px-3 py-2">{row.run_id}</td>
+                <td className="px-3 py-2 font-mono text-xs">{row.run_id}</td>
                 <td className="px-3 py-2">
                   <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(row.status)}`}>
                     {normalizeStatus(row.status)}
@@ -52,8 +55,9 @@ export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [],
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
-    </section>
+          </DataTable>
+        </DataTableShell>
+      </CardContent>
+    </Card>
   );
 }

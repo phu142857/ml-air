@@ -8,10 +8,12 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { getPipelineVersionDiff, listPipelineVersionsApi } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-64 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-slate-200">
+    <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted p-2 font-mono text-xs text-foreground">
       {value === undefined || value === null ? "—" : JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -58,19 +60,23 @@ function DiffPageInner() {
       subtitle="Top-level keys from pipeline config JSONB"
     >
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
-        <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-blue-400 hover:underline">
+        <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-foreground hover:underline">
           ← Versions
         </Link>
-        <span className="text-slate-600">|</span>
-        <Link href={`/pipelines/${encodeURIComponent(pipelineId)}`} className="text-slate-400 hover:underline">
+        <span className="text-muted-foreground">|</span>
+        <Link href={`/pipelines/${encodeURIComponent(pipelineId)}`} className="text-muted-foreground hover:underline">
           DAG
         </Link>
       </div>
-      <div className="mb-6 flex flex-wrap items-end gap-4">
-        <label className="text-sm text-slate-400">
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Version selector</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-4">
+        <label className="text-sm text-muted-foreground">
           Left
           <select
-            className="ml-2 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200"
+            className="ml-2 rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
             value={leftId}
             onChange={(e) => setLeftId(e.target.value)}
           >
@@ -82,10 +88,10 @@ function DiffPageInner() {
             ))}
           </select>
         </label>
-        <label className="text-sm text-slate-400">
+        <label className="text-sm text-muted-foreground">
           Right
           <select
-            className="ml-2 rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 text-slate-200"
+            className="ml-2 rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
             value={rightId}
             onChange={(e) => setRightId(e.target.value)}
           >
@@ -97,16 +103,17 @@ function DiffPageInner() {
             ))}
           </select>
         </label>
-      </div>
+        </CardContent>
+      </Card>
       {canDiff && (
         <p className="mb-2 text-sm text-amber-200/80">
           {diffQuery.isLoading ? "Loading diff…" : diffQuery.isError ? "Failed to load diff" : summary}
         </p>
       )}
-      {!canDiff && <p className="text-sm text-slate-400">Select two different versions to compare.</p>}
+      {!canDiff && <p className="text-sm text-muted-foreground">Select two different versions to compare.</p>}
       {canDiff && !diffQuery.isLoading && details.length > 0 && (
-        <div className="overflow-auto rounded-2xl border border-slate-700">
-          <table className="w-full text-left text-sm">
+        <DataTableShell>
+          <DataTable className="w-full text-left text-sm">
             <thead className="bg-muted">
               <tr>
                 <th className="w-1/4 px-3 py-2">Key</th>
@@ -116,8 +123,8 @@ function DiffPageInner() {
             </thead>
             <tbody>
               {details.map((row) => (
-                <tr key={row.key} className="border-t border-slate-800">
-                  <td className="align-top font-mono text-xs text-blue-300">{row.key}</td>
+                <tr key={row.key} className="border-t border-border">
+                  <td className="align-top font-mono text-xs text-foreground">{row.key}</td>
                   <td className="align-top p-2">
                     <JsonBlock value={row.left} />
                   </td>
@@ -127,8 +134,8 @@ function DiffPageInner() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </DataTable>
+        </DataTableShell>
       )}
     </RouteShell>
   );

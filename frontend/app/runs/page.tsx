@@ -15,6 +15,8 @@ import {
 import { RouteShell } from "@/components/layout/route-shell";
 import { compareRunMetrics, fetchRuns } from "@/lib/api";
 import { RunsHistorySection } from "@/components/sections/runs-history-section";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
@@ -124,11 +126,9 @@ export default function RunsPage() {
       subtitle="Run history and metrics comparison"
     >
       {/* Compare Section */}
-      <section className="card p-5 mb-4 shadow-md">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-section font-semibold text-foreground">
-            Compare Runs (metrics)
-          </h2>
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Compare Runs (metrics)</CardTitle>
 
           <div className="flex items-center gap-2">
             <input
@@ -143,11 +143,10 @@ export default function RunsPage() {
               }}
             />
 
-            <button className="rounded-lg bg-color-primary px-4 py-2 text-sm text-white hover:opacity-80" onClick={runCompare}>
-              Compare
-            </button>
+            <Button onClick={runCompare}>Compare</Button>
           </div>
-        </div>
+        </CardHeader>
+        <CardContent>
 
         <div className="mb-3 rounded-lg border border-border bg-muted p-2 text-xs text-foreground">
           {compareSummary || "Summary will appear after compare."}
@@ -183,10 +182,12 @@ export default function RunsPage() {
             Select 2–4 runs and click Compare Selected.
           </div>
         )}
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Runs History */}
-      <section className="card p-5">
+      <Card>
+        <CardContent className="pt-4">
         {/* Pagination */}
           <div className="mb-4 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
@@ -209,22 +210,22 @@ export default function RunsPage() {
               <option value="standard">mode: standard</option>
               <option value="full">mode: full</option>
             </select>
-            <button
-              className="button-secondary"
+            <Button
+              variant="secondary"
               onClick={() =>
                 setCurrentPage((prev) => Math.max(1, prev - 1))
               }
               disabled={currentPage === 1 || isLoading}
             >
               Previous
-            </button>
+            </Button>
 
             <span className="px-3 text-sm text-foreground">
               Page {currentPage} / {totalPages}
             </span>
 
-            <button
-              className="button-secondary"
+            <Button
+              variant="secondary"
               onClick={() =>
                 setCurrentPage((prev) =>
                   Math.min(totalPages, prev + 1)
@@ -233,7 +234,7 @@ export default function RunsPage() {
               disabled={currentPage === totalPages || isLoading}
             >
               Next
-            </button>
+            </Button>
             </div>
           </div>
 
@@ -243,7 +244,8 @@ export default function RunsPage() {
           selectedForCompare={compareRunIds}
           onToggleCompare={toggleCompare}
         />
-      </section>
+        </CardContent>
+      </Card>
     </RouteShell>
   );
 }

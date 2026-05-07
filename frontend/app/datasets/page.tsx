@@ -5,6 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
 import {
   type DatasetVersionItem,
   deleteDataset,
@@ -195,41 +198,46 @@ export default function DatasetsPage() {
         isLoading={deleteDatasetMutation.isPending || deleteDatasetVersionMutation.isPending}
       />
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-section font-semibold text-slate-200">Upload CSV</h2>
-          <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload CSV</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <div className="space-y-2 rounded-xl border border-border bg-muted p-3">
             <input
               value={datasetName}
               onChange={(e) => setDatasetName(e.target.value)}
               placeholder="dataset name"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
             <input
               type="file"
               accept=".csv,text/csv"
               onChange={(e) => setDatasetFile(e.target.files?.[0] || null)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
             <div className="flex gap-2">
-              <button
-                className="btn-action-cancel rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+              <Button
+                variant="secondary"
+                className="px-3 py-2 text-xs"
                 onClick={() => previewMutation.mutate()}
                 disabled={!datasetFile || previewMutation.isPending}
               >
                 Preview
-              </button>
-              <button
-                className="btn-action-enable rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+              </Button>
+              <Button
+                className="px-3 py-2 text-xs"
                 onClick={() => uploadMutation.mutate()}
                 disabled={!datasetFile || !datasetName.trim() || uploadMutation.isPending}
               >
                 Create Dataset Version
-              </button>
+              </Button>
             </div>
-            {datasetMsg ? <div className="text-xs text-slate-200">{datasetMsg}</div> : null}
+            {datasetMsg ? <div className="text-xs text-foreground">{datasetMsg}</div> : null}
           </div>
-          <div className="mt-3 overflow-auto rounded-xl border border-slate-700">
-            <table className="w-full text-sm">
+          <div className="mt-3">
+            <DataTableShell>
+            <DataTable className="text-sm">
               <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Dataset</th>
@@ -242,7 +250,7 @@ export default function DatasetsPage() {
                 {(datasetsQuery.data?.items || []).map((d) => (
                   <tr
                     key={d.dataset_id}
-                    className={`interactive-row cursor-pointer border-t border-slate-800 ${selectedDatasetId === d.dataset_id ? "bg-blue-900/20" : ""}`}
+                    className={`interactive-row cursor-pointer border-t border-border ${selectedDatasetId === d.dataset_id ? "bg-blue-900/20" : ""}`}
                     onClick={() => setSelectedDatasetId(d.dataset_id)}
                   >
                     <td className="px-3 py-2">{d.name}</td>
@@ -260,18 +268,21 @@ export default function DatasetsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
+            </DataTableShell>
           </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
+        <Card>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-section font-semibold text-slate-200">
+            <h2 className="text-section font-medium text-foreground">
               Dataset Versions {selectedDataset ? `- ${selectedDataset.name}` : ""}
             </h2>
             {selectedDatasetId ? (
-              <button
-                className="btn-action-delete rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+              <Button
+                variant="danger"
+                className="rounded-lg px-3 py-1 text-xs"
                 disabled={!selectedDatasetId || deleteDatasetMutation.isPending}
                 onClick={() =>
                   openConfirm(
@@ -285,7 +296,7 @@ export default function DatasetsPage() {
                 }
               >
                 Delete Dataset
-              </button>
+              </Button>
             ) : null}
           </div>
           {!selectedDatasetId ? (
@@ -372,8 +383,8 @@ export default function DatasetsPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="overflow-auto rounded-xl border border-slate-700">
-                <table className="w-full text-sm">
+              <DataTableShell>
+                <DataTable className="text-sm">
                   <thead className="bg-muted">
                     <tr>
                       <th className="px-3 py-2 text-left">Version</th>
@@ -385,7 +396,7 @@ export default function DatasetsPage() {
                   </thead>
                   <tbody>
                     {(versionsQuery.data?.items || []).map((v) => (
-                      <tr key={v.version_id} className="interactive-row border-t border-slate-800">
+                      <tr key={v.version_id} className="interactive-row border-t border-border">
                         <td className="px-3 py-2">{v.version}</td>
                         <td className="px-3 py-2">
                           <span
@@ -469,11 +480,11 @@ export default function DatasetsPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+                </DataTable>
+              </DataTableShell>
             </>
           )}
-        </section>
+        </Card>
       </div>
       <VersionDetailDialog
         open={detailOpen}

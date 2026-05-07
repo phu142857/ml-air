@@ -1,0 +1,205 @@
+{
+  "color": {
+    "background-primary": {
+      "$type": "color",
+      "$value": "#121212",
+      "$description": "Main page background"
+    },
+    "text-primary": {
+      "$type": "color",
+      "$value": "#fafafa",
+      "$description": "Primary text content"
+    },
+    "text-secondary": {
+      "$type": "color",
+      "$value": "#898989",
+      "$description": "Secondary text and descriptions"
+    },
+    "text-muted": {
+      "$type": "color",
+      "$value": "#4d4d4d",
+      "$description": "Muted text and placeholders"
+    },
+    "brand-primary": {
+      "$type": "color",
+      "$value": "#3ecf8e",
+      "$description": "Primary brand color for CTAs and highlights"
+    },
+    "brand-dark": {
+      "$type": "color",
+      "$value": "#006239",
+      "$description": "Darker brand variant for hover states"
+    },
+    "surface-elevated": {
+      "$type": "color",
+      "$value": "#242424",
+      "$description": "Cards and elevated surfaces"
+    }
+  },
+  "typography": {
+    "heading-xl": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "72px",
+        "fontWeight": 400,
+        "lineHeight": "72px"
+      },
+      "$description": "Hero headlines"
+    },
+    "heading-lg": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "36px",
+        "fontWeight": 400,
+        "lineHeight": "43.2px"
+      },
+      "$description": "Section headings"
+    },
+    "heading-md": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "24px",
+        "fontWeight": 400,
+        "lineHeight": "32px",
+        "letterSpacing": "-0.16px"
+      },
+      "$description": "Subsection headings"
+    },
+    "body-lg": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "18px",
+        "fontWeight": 400,
+        "lineHeight": "28px"
+      },
+      "$description": "Large body text"
+    },
+    "body-base": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "16px",
+        "fontWeight": 400,
+        "lineHeight": "24px"
+      },
+      "$description": "Default body text"
+    },
+    "body-sm": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "14px",
+        "fontWeight": 400,
+        "lineHeight": "20px"
+      },
+      "$description": "Small body text"
+    },
+    "body-sm-medium": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "14px",
+        "fontWeight": 500,
+        "lineHeight": "20px"
+      },
+      "$description": "Medium weight small text"
+    },
+    "caption": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Circular",
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": "16px"
+      },
+      "$description": "Captions and small labels"
+    },
+    "code": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "Source Code Pro",
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": "16px",
+        "letterSpacing": "1.2px"
+      },
+      "$description": "Code snippets and monospace text"
+    }
+  },
+  "spacing": {
+    "xs": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "sm": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "2xl": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "3xl": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "4xl": {
+      "$type": "dimension",
+      "$value": "48px"
+    },
+    "5xl": {
+      "$type": "dimension",
+      "$value": "64px"
+    },
+    "6xl": {
+      "$type": "dimension",
+      "$value": "80px"
+    },
+    "7xl": {
+      "$type": "dimension",
+      "$value": "96px"
+    },
+    "8xl": {
+      "$type": "dimension",
+      "$value": "128px"
+    }
+  },
+  "borderRadius": {
+    "sm": {
+      "$type": "dimension",
+      "$value": "6px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "full": {
+      "$type": "dimension",
+      "$value": "9999px"
+    }
+  }
+}

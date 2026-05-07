@@ -5,6 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
 import {
   deleteModel,
   deleteModelVersion,
@@ -209,14 +212,16 @@ export default function ModelDetailPage() {
       />
       <div className="mb-2">
         <div className="flex items-center gap-2">
-          <button
-            className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
+          <Button
+            variant="secondary"
+            className="rounded-xl px-3 py-2 text-sm"
             onClick={() => router.push("/models")}
           >
             Back to Models
-          </button>
-          <button
-            className="btn-action-delete rounded-xl px-3 py-2 text-sm disabled:opacity-60"
+          </Button>
+          <Button
+            variant="danger"
+            className="rounded-xl px-3 py-2 text-sm"
             onClick={() =>
               openConfirm(
                 "Delete model",
@@ -230,13 +235,14 @@ export default function ModelDetailPage() {
             disabled={deleteModelMutation.isPending}
           >
             Delete model
-          </button>
+          </Button>
         </div>
       </div>
 
-      <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs">
-          <div className="text-slate-200">
+      <Card>
+          <CardContent className="pt-4">
+          <div className="mb-3 rounded-xl border border-border bg-muted p-3 text-xs">
+          <div className="text-foreground">
             Status:{" "}
             <span className={modelStatusQuery.data?.status === "READY" ? "text-emerald-400" : "text-amber-400"}>
               {modelStatusQuery.data?.status || "UNKNOWN"}
@@ -244,10 +250,10 @@ export default function ModelDetailPage() {
           </div>
         </div>
 
-        <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
-          <h3 className="mb-2 text-xs font-semibold text-slate-200">Auto Trigger Config</h3>
+        <div className="mb-4 rounded-xl border border-border bg-muted p-3">
+          <h3 className="mb-2 text-xs font-semibold text-foreground">Auto Trigger Config</h3>
           <div className="grid gap-3 md:grid-cols-3">
-            <label className="flex items-center gap-2 text-xs text-slate-200">
+            <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
                 name="trigger-mode"
@@ -256,7 +262,7 @@ export default function ModelDetailPage() {
               />
               Manual
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-200">
+            <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
                 name="trigger-mode"
@@ -265,7 +271,7 @@ export default function ModelDetailPage() {
               />
               Auto when READY
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-200">
+            <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
                 name="trigger-mode"
@@ -276,58 +282,58 @@ export default function ModelDetailPage() {
             </label>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <label className="text-xs text-slate-400">
+            <label className="text-xs text-muted-foreground">
               Debounce (minutes)
               <input
                 value={debounceMinutes}
                 onChange={(e) => setDebounceMinutes(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-100"
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"
               />
             </label>
-            <label className="text-xs text-slate-400">
+            <label className="text-xs text-muted-foreground">
               Cron
               <input
                 value={scheduleCron}
                 onChange={(e) => setScheduleCron(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-slate-100"
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"
               />
             </label>
           </div>
-          <div className="mt-2 text-caption text-slate-400">
-            Applied mode: <span className="text-slate-200">{effectiveTriggerMode}</span> · debounce:{" "}
-            <span className="text-slate-200">{effectiveDebounce}m</span>
+          <div className="mt-2 text-caption text-muted-foreground">
+            Applied mode: <span className="text-foreground">{effectiveTriggerMode}</span> · debounce:{" "}
+            <span className="text-foreground">{effectiveDebounce}m</span>
             {effectiveTriggerMode === "schedule" ? (
               <>
-                {" · "}cron: <span className="text-slate-200">{effectiveCron}</span>
+                {" · "}cron: <span className="text-foreground">{effectiveCron}</span>
               </>
             ) : null}
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <button
-              className="btn-action-primary rounded-lg px-3 py-1 text-xs disabled:opacity-60"
+            <Button
+              className="rounded-lg px-3 py-1 text-xs"
               onClick={() => triggerPolicyMutation.mutate()}
               disabled={triggerPolicyMutation.isPending}
             >
               Save Trigger Policy
-            </button>
-            {policyMsg ? <span className="text-xs text-slate-200">{policyMsg}</span> : null}
+            </Button>
+            {policyMsg ? <span className="text-xs text-foreground">{policyMsg}</span> : null}
           </div>
         </div>
 
         {!!(recentRunsQuery.data || []).length && (
-          <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <h3 className="mb-2 text-xs font-semibold text-slate-200">Recent Runs</h3>
-            <div className="space-y-1 text-xs text-slate-200">
+          <div className="mb-4 rounded-xl border border-border bg-muted p-3">
+            <h3 className="mb-2 text-xs font-semibold text-foreground">Recent Runs</h3>
+            <div className="space-y-1 text-xs text-foreground">
               {(recentRunsQuery.data || []).map((r) => (
-                <div key={r.run_id} className="flex items-center justify-between rounded border border-slate-700 px-2 py-1">
-                  <span>{r.run_id}</span>
+                <div key={r.run_id} className="flex items-center justify-between rounded border border-border px-2 py-1">
+                  <span className="font-mono">{r.run_id}</span>
                   <span>
                     {r.status} | {r.training_mode || "full"} | {formatDateTimeCompact(r.updated_at)}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-xs text-slate-400">
+            <div className="mt-2 text-xs text-muted-foreground">
               Lineage context: use run detail and model versions for traceability.
             </div>
           </div>
@@ -379,14 +385,14 @@ export default function ModelDetailPage() {
         ) : null}
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-section font-semibold text-slate-200">Versions</h2>
+          <h2 className="text-section font-semibold text-foreground">Versions</h2>
           {versionBanner ? (
             <span className="version-inline-banner">{versionBanner}</span>
           ) : null}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Filter stage</span>
+            <span className="text-xs text-muted-foreground">Filter stage</span>
             <select
-              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+              className="rounded-lg border border-border bg-muted px-2 py-1 text-xs text-foreground"
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
             >
@@ -397,8 +403,8 @@ export default function ModelDetailPage() {
             </select>
           </div>
         </div>
-        <div className="overflow-auto rounded-xl border border-slate-700">
-          <table className="w-full table-fixed text-sm">
+        <DataTableShell>
+          <DataTable className="w-full table-fixed text-sm">
             <thead className="bg-muted">
               <tr>
                 <th className="w-[110px] px-3 py-2 text-left">Version</th>
@@ -410,10 +416,16 @@ export default function ModelDetailPage() {
             </thead>
             <tbody>
               {versions.map((v) => (
-                <tr key={v.version_id} className="interactive-row border-t border-slate-800 transition-colors">
+                <tr key={v.version_id} className="interactive-row border-t border-border transition-colors">
                   <td className="px-3 py-2">v{v.version}</td>
                   <td className="px-3 py-2">
-                    <span className="inline-block w-full truncate">{v.stage}</span>
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+                      v.stage === "production"
+                        ? "border-[#3ecf8e]/40 bg-[#3ecf8e]/15 text-[#3ecf8e]"
+                        : "border-border bg-muted text-foreground"
+                    }`}>
+                      {v.stage === "production" ? "●" : "○"} {v.stage}
+                    </span>
                   </td>
                   <td className="px-3 py-2 align-top">
                     <div className="flex flex-col gap-1">
@@ -452,7 +464,7 @@ export default function ModelDetailPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <span className="inline-block w-full truncate">{v.run_id || "-"}</span>
+                    <span className="inline-block w-full truncate font-mono text-xs">{v.run_id || "-"}</span>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-2">
@@ -498,9 +510,10 @@ export default function ModelDetailPage() {
                 </tr>
               )}
             </tbody>
-          </table>
-        </div>
-      </section>
+          </DataTable>
+        </DataTableShell>
+      </CardContent>
+      </Card>
     </RouteShell>
   );
 }

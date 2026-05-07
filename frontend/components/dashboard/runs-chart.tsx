@@ -16,13 +16,13 @@ export function RunsChart({ success, failed, running }: Props) {
   ];
 
   return (
-    <div className="h-56 w-full rounded-xl border border-slate-700 bg-slate-900 p-3">
+    <div className="h-56 w-full rounded-xl border border-border bg-muted p-3">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
-          <XAxis dataKey="name" stroke="#6B7280" />
-          <YAxis stroke="#6B7280" />
+          <XAxis dataKey="name" stroke="var(--muted-foreground)" />
+          <YAxis stroke="var(--muted-foreground)" />
           <Tooltip />
-          <Bar dataKey="value" fill="#3B82F6" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="value" fill="#3ecf8e" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

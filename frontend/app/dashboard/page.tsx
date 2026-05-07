@@ -28,16 +28,23 @@ export default function DashboardPage() {
 
   return (
     <RouteShell activeNav="Dashboard" title="Dashboard" subtitle="System overview and status distribution">
-      <OverviewSection
-        tenantId={tenantId}
-        projectId={projectId}
-        totalRuns={rows.length}
-        isFetching={isFetching}
-        success={stats.success}
-        failed={stats.failed}
-        running={stats.running}
-        pending={stats.pending}
-      />
+      {isFetching && !rows.length ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="h-40 animate-pulse rounded-2xl border border-border bg-muted" />
+          <div className="h-40 animate-pulse rounded-2xl border border-border bg-muted" />
+        </div>
+      ) : (
+        <OverviewSection
+          tenantId={tenantId}
+          projectId={projectId}
+          totalRuns={rows.length}
+          isFetching={isFetching}
+          success={stats.success}
+          failed={stats.failed}
+          running={stats.running}
+          pending={stats.pending}
+        />
+      )}
     </RouteShell>
   );
 }

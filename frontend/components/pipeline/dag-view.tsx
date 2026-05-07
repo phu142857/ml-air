@@ -23,17 +23,17 @@ export function DagView({ tasks, onClickTask }: Props) {
     const status = normalizeStatus(task.status);
     const style =
       status === "SUCCESS"
-        ? { background: "#DCFCE7", border: "1px solid #16A34A", color: "#166534" }
+        ? { background: "rgba(62,207,142,0.12)", border: "1px solid rgba(62,207,142,0.45)", color: "#3ecf8e" }
         : status === "FAILED"
-          ? { background: "#FEE2E2", border: "2px solid #DC2626", color: "#7F1D1D", boxShadow: "0 0 0 1px rgba(220,38,38,0.18)" }
+          ? { background: "rgba(220,38,38,0.12)", border: "1px solid rgba(220,38,38,0.5)", color: "#fca5a5" }
           : status === "RUNNING"
-            ? { background: "#DBEAFE", border: "1px solid #2563EB", color: "#1E3A8A" }
-            : { background: "#FEF3C7", border: "1px solid #D97706", color: "#78350F" };
+            ? { background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.45)", color: "#93c5fd" }
+            : { background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.45)", color: "#fcd34d" };
     return {
       id: task.task_id,
       data: { label: `${task.task_id} (${status})` },
       position: { x: index * 240 + 10, y: index % 2 === 0 ? 70 : 190 },
-      style
+      style: { ...style, borderRadius: 12, fontSize: 12, padding: "6px 10px" }
     };
   });
 
@@ -50,7 +50,7 @@ export function DagView({ tasks, onClickTask }: Props) {
           </span>
         ))}
       </div>
-      <div className="h-[420px] w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
+      <div className="h-[420px] w-full overflow-hidden rounded-xl border border-border bg-muted">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -59,7 +59,7 @@ export function DagView({ tasks, onClickTask }: Props) {
             if (onClickTask) onClickTask(node.id);
           }}
         >
-          <Background />
+          <Background color="var(--border-default)" gap={16} />
           <Controls />
         </ReactFlow>
       </div>

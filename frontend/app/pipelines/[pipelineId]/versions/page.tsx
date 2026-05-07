@@ -9,6 +9,9 @@ import { createPipelineVersionApi, listPipelineVersionsApi } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
 
 const defaultConfigJson = `{
   "steps": ["fetch", "train", "evaluate"],
@@ -58,13 +61,14 @@ export default function PipelineVersionsPage() {
       subtitle="Immutable config snapshots; use diff to compare"
     >
       <div className="mb-3 flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
-          className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm"
+          variant="secondary"
+          className="px-3 py-1.5 text-sm"
           onClick={() => router.push("/pipelines")}
         >
           Back
-        </button>
+        </Button>
         <Link
           href={`/pipelines/${encodeURIComponent(pipelineId)}`}
           className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm"
@@ -80,31 +84,38 @@ export default function PipelineVersionsPage() {
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
-          <h2 className="mb-2 text-section font-semibold text-slate-200">Create version</h2>
-          <p className="mb-2 text-xs text-slate-400">POST creates the next monotonic version; previous rows are not modified.</p>
+        <Card>
+          <CardHeader>
+            <CardTitle>Create version</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <p className="mb-2 text-xs text-muted-foreground">POST creates the next monotonic version; previous rows are not modified.</p>
           <textarea
-            className="mb-2 h-40 w-full rounded-xl border border-slate-600 bg-slate-950 p-2 font-mono text-xs"
+            className="mb-2 h-40 w-full rounded-xl border border-border bg-background p-2 font-mono text-xs text-foreground"
             value={jsonText}
             onChange={(e) => setJsonText(e.target.value)}
           />
           {err && <p className="mb-2 text-xs text-red-400">{err}</p>}
-          <button
+          <Button
             type="button"
             disabled={createMut.isPending}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+            className="px-4 py-2 text-sm"
             onClick={() => createMut.mutate()}
           >
             {createMut.isPending ? "Creating…" : "Create new version"}
-          </button>
-        </section>
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
-          <h2 className="mb-2 text-section font-semibold text-slate-200">Compare (pick two, then Open diff)</h2>
+          </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Compare (pick two, then Open diff)</CardTitle>
+          </CardHeader>
+          <CardContent>
           <div className="flex flex-col gap-2 text-sm">
-            <label className="text-slate-400">
+            <label className="text-muted-foreground">
               Version A
               <select
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-1"
+                className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
                 value={left}
                 onChange={(e) => setLeft(e.target.value)}
               >
@@ -116,10 +127,10 @@ export default function PipelineVersionsPage() {
                 ))}
               </select>
             </label>
-            <label className="text-slate-400">
+            <label className="text-muted-foreground">
               Version B
               <select
-                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-1"
+                className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
                 value={right}
                 onChange={(e) => setRight(e.target.value)}
               >
@@ -132,14 +143,18 @@ export default function PipelineVersionsPage() {
               </select>
             </label>
           </div>
-        </section>
+          </CardContent>
+        </Card>
       </div>
 
-      <section className="rounded-2xl border border-slate-700 bg-bg-card p-4">
-        <h2 className="mb-3 text-section font-semibold text-slate-200">All versions</h2>
-        {listQuery.isLoading && <p className="text-sm text-slate-400">Loading…</p>}
-        <div className="overflow-auto">
-          <table className="w-full text-left text-sm">
+      <Card>
+        <CardHeader>
+          <CardTitle>All versions</CardTitle>
+        </CardHeader>
+        <CardContent>
+        {listQuery.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        <DataTableShell>
+          <DataTable className="w-full text-left text-sm">
             <thead className="border-b border-border bg-muted">
               <tr>
                 <th className="py-2 pr-2">#</th>
@@ -150,24 +165,25 @@ export default function PipelineVersionsPage() {
             </thead>
             <tbody>
               {items.map((v) => (
-                <tr key={v.version_id} className="border-t border-slate-800">
+                <tr key={v.version_id} className="border-t border-border">
                   <td className="py-2 pr-2 align-top font-mono">{v.version}</td>
-                  <td className="py-2 pr-2 align-top font-mono text-xs text-slate-400">{v.version_id}</td>
-                  <td className="py-2 pr-2 align-top text-xs text-slate-400">{formatDateTimeCompact(v.created_at)}</td>
+                  <td className="py-2 pr-2 align-top font-mono text-xs text-muted-foreground">{v.version_id}</td>
+                  <td className="py-2 pr-2 align-top text-xs text-muted-foreground">{formatDateTimeCompact(v.created_at)}</td>
                   <td className="py-2 align-top">
-                    <pre className="max-h-32 max-w-xl overflow-auto rounded bg-slate-950 p-2 text-xs text-slate-200">
+                    <pre className="max-h-32 max-w-xl overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs text-foreground">
                       {JSON.stringify(v.config, null, 2)}
                     </pre>
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DataTable>
           {items.length === 0 && !listQuery.isLoading && (
-            <p className="py-4 text-sm text-slate-400">No versions yet. Create one on the left.</p>
+            <p className="py-4 text-sm text-muted-foreground">No versions yet. Create one on the left.</p>
           )}
-        </div>
-      </section>
+        </DataTableShell>
+        </CardContent>
+      </Card>
     </RouteShell>
   );
 }

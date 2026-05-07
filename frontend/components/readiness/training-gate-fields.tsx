@@ -18,24 +18,24 @@ export function TrainingGateFields({
 }: Props) {
   return (
     <div className={`grid gap-3 md:grid-cols-4 ${className}`}>
-      <label className="text-xs text-slate-400">
+      <label className="text-xs text-muted-foreground">
         Training mode
         <select
           value={trainingMode}
           onChange={(e) => onTrainingModeChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-200"
+          className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
         >
           <option value="quick">quick</option>
           <option value="standard">standard</option>
           <option value="full">full</option>
         </select>
       </label>
-      <label className="text-xs text-slate-400 md:col-span-2">
+      <label className="text-xs text-muted-foreground md:col-span-2">
         Required rows (input dataset)
         <input
           value={requiredSize}
           onChange={(e) => onRequiredSizeChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-200"
+          className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
         />
       </label>
     </div>

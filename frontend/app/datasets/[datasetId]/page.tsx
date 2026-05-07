@@ -6,6 +6,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
 import {
   fetchDataset,
   fetchDatasetReadiness,
@@ -117,13 +120,13 @@ export default function DatasetHubPage() {
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href="/datasets"
-          className="rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-blue-900/20"
+          className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-secondary"
         >
           ← All datasets
         </Link>
         <Link
           href={`/lineage?datasetVersionId=${encodeURIComponent(versionsQuery.data?.items?.[0]?.version_id || "")}`}
-          className={`rounded-xl border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-blue-900/20 ${!versionsQuery.data?.items?.[0]?.version_id ? "pointer-events-none opacity-50" : ""}`}
+          className={`rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-secondary ${!versionsQuery.data?.items?.[0]?.version_id ? "pointer-events-none opacity-50" : ""}`}
         >
           Lineage (latest version)
         </Link>
@@ -136,50 +139,68 @@ export default function DatasetHubPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-section font-semibold text-slate-200">Readiness (dataset API)</h2>
-          <p className="mb-3 text-xs text-slate-400">
+        <Card>
+          <CardHeader>
+            <CardTitle>Readiness (dataset API)</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
             Evaluates <span className="text-slate-200">current_size</span> vs a threshold for this dataset record (not
             full multi-input pipeline gate). Pipeline gate still runs on train.
           </p>
-          <label className="mb-3 block text-xs text-slate-400">
+          <label className="mb-3 block text-xs text-muted-foreground">
             Threshold (rows)
             <input
               type="number"
               min={1}
               value={readinessThreshold}
               onChange={(e) => setReadinessThreshold(Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-200"
+              className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
             />
           </label>
           {readinessQuery.data ? (
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm">
-              <div className="mb-2 text-slate-200">
+            <div className="rounded-xl border border-border bg-muted p-3 text-sm">
+              <div className="mb-2 text-foreground">
                 Ready:{" "}
                 <span className={readinessQuery.data.ready ? "text-emerald-400" : "text-red-400"}>
                   {String(readinessQuery.data.ready)}
                 </span>
               </div>
-              <div className="text-xs text-slate-400">
+              <div className="mb-2 text-xs text-muted-foreground">
                 Current: {readinessQuery.data.current_size} · Required: {readinessQuery.data.required_size}
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-background">
+                <div
+                  className={`h-full transition-all ${readinessQuery.data.ready ? "bg-[#3ecf8e]" : "bg-amber-400"}`}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((Number(readinessQuery.data.current_size || 0) / Math.max(1, Number(readinessQuery.data.required_size || 1))) * 100)
+                    )}%`
+                  }}
+                />
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-500">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
+            <p className="text-xs text-muted-foreground">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
           )}
-        </section>
+          </CardContent>
+        </Card>
 
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-section font-semibold text-slate-200">Train model (intent)</h2>
-          <p className="mb-3 text-xs text-slate-400">
+        <Card>
+          <CardHeader>
+            <CardTitle>Train model (intent)</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
             Uses <code className="text-slate-300">POST /runs/trigger</code> — resolves pipeline and base weights server-side.
           </p>
           <div className="mb-3">
-            <label className="text-xs text-slate-400">Model</label>
+            <label className="text-xs text-muted-foreground">Model</label>
             <select
               value={selectedModelId}
               onChange={(e) => setSelectedModelId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
             >
               <option value="">— select model —</option>
               {(modelsQuery.data?.items || []).map((m) => (
@@ -189,9 +210,9 @@ export default function DatasetHubPage() {
               ))}
             </select>
           </div>
-          <div className="mb-2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+          <div className="mb-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
             Pipeline:{" "}
-            <span className="font-mono text-slate-100">{effectivePipeline || "—"}</span>
+            <span className="font-mono text-foreground">{effectivePipeline || "—"}</span>
             {resolvedPipelineQuery.data?.source ? (
               <span className="text-slate-500"> ({resolvedPipelineQuery.data.source})</span>
             ) : null}
@@ -203,9 +224,9 @@ export default function DatasetHubPage() {
             onRequiredSizeChange={setRequiredSize}
             className="mb-3"
           />
-          {trainMsg ? <div className="mb-2 text-xs text-amber-200">{trainMsg}</div> : null}
-          <div className="overflow-auto rounded-xl border border-slate-700">
-            <table className="w-full text-sm">
+          {trainMsg ? <div className="mb-2 text-xs text-amber-300">{trainMsg}</div> : null}
+          <DataTableShell>
+            <DataTable className="text-sm">
               <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Version</th>
@@ -215,7 +236,7 @@ export default function DatasetHubPage() {
               </thead>
               <tbody>
                 {(versionsQuery.data?.items || []).map((v) => (
-                  <tr key={v.version_id} className="border-t border-slate-800">
+                  <tr key={v.version_id} className="border-t border-border">
                     <td className="px-3 py-2">{v.version}</td>
                     <td className="px-3 py-2">
                       <span
@@ -225,9 +246,9 @@ export default function DatasetHubPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <button
+                      <Button
                         type="button"
-                        className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-900/40 disabled:opacity-50"
+                        className="px-3 py-1 text-xs"
                         disabled={
                           !selectedModelId ||
                           normalizeDatasetStatus(v.status) === "FAILED" ||
@@ -260,38 +281,43 @@ export default function DatasetHubPage() {
                         }}
                       >
                         Train
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </DataTable>
             {(versionsQuery.data?.items || []).length === 0 && !versionsQuery.isLoading ? (
-              <p className="p-4 text-xs text-slate-500">No versions yet.</p>
+              <p className="p-4 text-xs text-muted-foreground">No versions yet.</p>
             ) : null}
-          </div>
-        </section>
+          </DataTableShell>
+          </CardContent>
+        </Card>
       </div>
 
-      <section className="mt-4 rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-        <h2 className="mb-2 text-section font-semibold text-slate-200">Metadata</h2>
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Metadata</CardTitle>
+        </CardHeader>
+        <CardContent>
         {dataset ? (
-          <dl className="grid gap-2 text-xs text-slate-400 md:grid-cols-2">
+          <dl className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
             <div>
               <dt className="text-slate-500">dataset_id</dt>
-              <dd className="font-mono text-slate-200">{dataset.dataset_id}</dd>
+              <dd className="font-mono text-foreground">{dataset.dataset_id}</dd>
             </div>
             <div>
               <dt className="text-slate-500">current_size</dt>
-              <dd className="text-slate-200">{dataset.current_size ?? 0}</dd>
+              <dd className="text-foreground">{dataset.current_size ?? 0}</dd>
             </div>
             <div>
               <dt className="text-slate-500">updated</dt>
-              <dd className="text-slate-200">{formatDateTimeCompact(dataset.updated_at || dataset.created_at)}</dd>
+              <dd className="text-foreground">{formatDateTimeCompact(dataset.updated_at || dataset.created_at)}</dd>
             </div>
           </dl>
         ) : null}
-      </section>
+        </CardContent>
+      </Card>
     </RouteShell>
   );
 }

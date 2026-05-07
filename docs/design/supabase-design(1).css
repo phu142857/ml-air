@@ -1,0 +1,86 @@
+:root {
+  /* Colors */
+  --color-background-primary: #fafafa;
+  --color-text-primary: #2e2e2e;
+  --color-text-secondary: #898989;
+  --color-text-muted: #b4b4b4;
+  --color-brand-primary: #3ecf8e;
+  --color-brand-dark: #006239;
+  --color-surface-elevated: #171717;
+  --color-background-primary: #121212;
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #898989;
+  --color-text-muted: #4d4d4d;
+  --color-brand-primary: #3ecf8e;
+  --color-brand-dark: #006239;
+  --color-surface-elevated: #242424;
+
+  /* Typography */
+  --font-heading-xl-family: Circular;
+  --font-heading-xl-size: 72px;
+  --font-heading-xl-weight: 400;
+  --font-heading-xl-line-height: 72px;
+  --font-heading-xl-letter-spacing: undefined;
+  --font-heading-lg-family: Circular;
+  --font-heading-lg-size: 36px;
+  --font-heading-lg-weight: 400;
+  --font-heading-lg-line-height: 43.2px;
+  --font-heading-lg-letter-spacing: undefined;
+  --font-heading-md-family: Circular;
+  --font-heading-md-size: 24px;
+  --font-heading-md-weight: 400;
+  --font-heading-md-line-height: 32px;
+  --font-heading-md-letter-spacing: -0.16px;
+  --font-body-lg-family: Circular;
+  --font-body-lg-size: 18px;
+  --font-body-lg-weight: 400;
+  --font-body-lg-line-height: 28px;
+  --font-body-lg-letter-spacing: undefined;
+  --font-body-base-family: Circular;
+  --font-body-base-size: 16px;
+  --font-body-base-weight: 400;
+  --font-body-base-line-height: 24px;
+  --font-body-base-letter-spacing: undefined;
+  --font-body-sm-family: Circular;
+  --font-body-sm-size: 14px;
+  --font-body-sm-weight: 400;
+  --font-body-sm-line-height: 20px;
+  --font-body-sm-letter-spacing: undefined;
+  --font-body-sm-medium-family: Circular;
+  --font-body-sm-medium-size: 14px;
+  --font-body-sm-medium-weight: 500;
+  --font-body-sm-medium-line-height: 20px;
+  --font-body-sm-medium-letter-spacing: undefined;
+  --font-caption-family: Circular;
+  --font-caption-size: 12px;
+  --font-caption-weight: 400;
+  --font-caption-line-height: 16px;
+  --font-caption-letter-spacing: undefined;
+  --font-code-family: Source Code Pro;
+  --font-code-size: 12px;
+  --font-code-weight: 400;
+  --font-code-line-height: 16px;
+  --font-code-letter-spacing: 1.2px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+  --spacing-4xl: 48px;
+  --spacing-5xl: 64px;
+  --spacing-6xl: 80px;
+  --spacing-7xl: 96px;
+  --spacing-8xl: 128px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+}

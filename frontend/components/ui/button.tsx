@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   asChild?: boolean;
-  variant?: "default" | "secondary";
+  variant?: "default" | "secondary" | "ghost" | "danger";
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -16,10 +16,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          "inline-flex items-center rounded-xl px-3 py-2 text-body font-semibold transition-colors",
+          "inline-flex items-center justify-center rounded-xl px-3 py-2 text-body font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
           variant === "default"
-            ? "bg-blue-600 text-white hover:bg-blue-500"
-            : "bg-slate-700 text-slate-100 hover:bg-slate-600",
+            ? "bg-[#3ecf8e] text-[#06281b] hover:bg-[#35b77e]"
+            : variant === "secondary"
+              ? "border border-border bg-card text-foreground hover:bg-secondary"
+              : variant === "danger"
+                ? "border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
           className
         )}
         {...props}

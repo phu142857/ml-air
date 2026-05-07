@@ -5,6 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { DagView } from "@/components/pipeline/dag-view";
 import { RouteShell } from "@/components/layout/route-shell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
 import { fetchPipelineDag, fetchPipelines } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
@@ -32,8 +35,13 @@ export default function PipelinesPage() {
   return (
     <RouteShell activeNav="Pipelines" title="Pipelines" subtitle="Pipeline list and DAG view">
       <div className="grid grid-cols-2 gap-4">
-        <div className="overflow-auto rounded-xl border border-slate-700">
-          <table className="w-full text-sm">
+        <Card>
+          <CardHeader>
+            <CardTitle>Pipelines</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <DataTableShell>
+          <DataTable className="text-sm">
             <thead className="bg-muted">
               <tr>
                 <th className="px-3 py-2 text-left">Pipeline</th>
@@ -46,7 +54,7 @@ export default function PipelinesPage() {
               {(data?.items ?? []).map((item) => (
                 <tr
                   key={item.pipeline_id}
-                  className="interactive-row cursor-pointer border-t border-slate-800"
+                  className="interactive-row cursor-pointer border-t border-border"
                   onClick={() => {
                     setSelectedPipeline(item.pipeline_id);
                     router.push(`/pipelines/${item.pipeline_id}`);
@@ -60,23 +68,29 @@ export default function PipelinesPage() {
                   </td>
                   <td className="px-3 py-2">{item.total_runs}</td>
                   <td
-                    className="px-3 py-2 text-blue-400"
+                    className="px-3 py-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       router.push(`/pipelines/${encodeURIComponent(item.pipeline_id)}/versions`);
                     }}
                   >
-                    open
+                    <Button variant="ghost" className="px-2 py-1 text-xs">open</Button>
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-section font-semibold text-slate-200">DAG: {selectedPipeline}</h2>
+          </DataTable>
+          </DataTableShell>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>DAG: {selectedPipeline}</CardTitle>
+          </CardHeader>
+          <CardContent>
           <DagView tasks={tasks} />
-        </section>
+          </CardContent>
+        </Card>
       </div>
     </RouteShell>
   );

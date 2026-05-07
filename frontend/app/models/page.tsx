@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
 import {
   createModel,
   deleteModel,
@@ -198,31 +201,34 @@ export default function ModelsPage() {
         isLoading={deleteModelMutation.isPending || deleteVersionMutation.isPending}
       />
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <h2 className="mb-3 text-section font-semibold text-slate-200">Model Registry</h2>
-          <div className="mb-3 space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Model Registry</CardTitle>
+          </CardHeader>
+          <CardContent>
+          <div className="mb-3 space-y-2 rounded-xl border border-border bg-muted p-3">
             <input
               value={newModelName}
               onChange={(e) => setNewModelName(e.target.value)}
               placeholder="model name"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
             <input
               value={newModelDesc}
               onChange={(e) => setNewModelDesc(e.target.value)}
               placeholder="description"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             />
-            <button
+            <Button
               onClick={() => createModelMutation.mutate()}
-              className="btn-action-primary rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+              className="px-3 py-2 text-xs"
               disabled={createModelMutation.isPending || !newModelName.trim() || projectId === "all"}
             >
               Create Model
-            </button>
+            </Button>
           </div>
-          <div className="overflow-auto rounded-xl border border-slate-700">
-            <table className="w-full text-sm">
+          <DataTableShell>
+            <DataTable className="text-sm">
               <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Name</th>
@@ -233,24 +239,30 @@ export default function ModelsPage() {
                 {(modelsQuery.data?.items ?? []).map((model) => (
                   <tr
                     key={model.model_id}
-                    className={`interactive-row cursor-pointer border-t border-slate-800 ${selectedModelId === model.model_id ? "bg-blue-900/20" : ""}`}
+                    className={`interactive-row cursor-pointer border-t border-border ${selectedModelId === model.model_id ? "bg-blue-900/20" : ""}`}
                     onClick={() => setSelectedModelId(model.model_id)}
                   >
-                    <td className="px-3 py-2">{model.name}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span>{model.name}</span>
+                      </div>
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <span>{formatDateTimeCompact(model.updated_at)}</span>
-                        <button
-                          className="rounded-md bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-blue-900/20"
+                        <Button
+                          variant="secondary"
+                          className="rounded-md px-2 py-1 text-xs"
                           onClick={(e) => {
                             e.stopPropagation();
                             router.push(`/models/${model.model_id}`);
                           }}
                         >
                           Open
-                        </button>
-                        <button
-                          className="btn-action-delete rounded-md px-2 py-1 text-xs"
+                        </Button>
+                        <Button
+                          variant="danger"
+                          className="rounded-md px-2 py-1 text-xs"
                           onClick={(e) => {
                             e.stopPropagation();
                             openConfirm(
@@ -267,17 +279,19 @@ export default function ModelsPage() {
                           }}
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-        </section>
+            </DataTable>
+          </DataTableShell>
+          </CardContent>
+        </Card>
 
-        <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
+        <Card>
+          <CardContent className="pt-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-section font-semibold text-slate-200">
               Versions {selectedModel ? `- ${selectedModel.name}` : ""}
@@ -294,12 +308,12 @@ export default function ModelsPage() {
             </div>
           ) : (
             <>
-              <div className="mb-3 grid gap-2 rounded-xl border border-slate-700 bg-slate-900 p-3">
+              <div className="mb-3 grid gap-2 rounded-xl border border-border bg-muted p-3">
                 <input
                   value={newVersionRunId}
                   onChange={(e) => setNewVersionRunId(e.target.value)}
                   placeholder="run_id (optional)"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                 />
                 <label className="text-xs text-slate-400">
                   Artifacts (multi-file upload)
@@ -384,13 +398,13 @@ export default function ModelsPage() {
                     Clear selected files
                   </button>
                 ) : null}
-                <button
+                <Button
                   onClick={() => createVersionMutation.mutate()}
-                  className="btn-action-enable rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+                  className="px-3 py-2 text-xs"
                   disabled={createVersionMutation.isPending || newVersionFiles.length === 0 || !hasModelArtifact}
                 >
                   Import model and create version (staging)
-                </button>
+                </Button>
               </div>
               {ENABLE_SERVING_SLOTS_UI ? (
                 <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
@@ -438,8 +452,8 @@ export default function ModelsPage() {
                   </div>
                 </div>
               ) : null}
-              <div className="overflow-auto rounded-xl border border-slate-700">
-                <table className="w-full table-fixed text-sm">
+              <DataTableShell>
+                <DataTable className="w-full table-fixed text-sm">
                   <thead className="bg-muted">
                     <tr>
                       <th className="w-[110px] px-3 py-2 text-left">Version</th>
@@ -450,10 +464,16 @@ export default function ModelsPage() {
                   </thead>
                   <tbody>
                     {(versionsQuery.data?.items ?? []).map((v) => (
-                      <tr key={v.version_id} className="interactive-row border-t border-slate-800 transition-colors">
+                      <tr key={v.version_id} className="interactive-row border-t border-border transition-colors">
                         <td className="px-3 py-2">v{v.version}</td>
                         <td className="px-3 py-2">
-                          <span className="inline-block w-full truncate">{v.stage}</span>
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+                            v.stage === "production"
+                              ? "border-[#3ecf8e]/40 bg-[#3ecf8e]/15 text-[#3ecf8e]"
+                              : "border-border bg-muted text-foreground"
+                          }`}>
+                            {v.stage === "production" ? "●" : "○"} {v.stage}
+                          </span>
                         </td>
                         <td className="px-3 py-2 align-top">
                           <div className="flex flex-col gap-1">
@@ -532,11 +552,12 @@ export default function ModelsPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+                </DataTable>
+              </DataTableShell>
             </>
           )}
-        </section>
+          </CardContent>
+        </Card>
       </div>
     </RouteShell>
   );

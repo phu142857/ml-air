@@ -9,6 +9,7 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { fetchDatasetRuns, fetchDatasetVersion, fetchLineageForRun, fetchLineageNeighborhood } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function LineagePageInner() {
   const { tenantId, projectId, token } = useAppContext();
@@ -128,12 +129,12 @@ function LineagePageInner() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-3">
         <input
-          className="max-w-md rounded-lg border border-slate-600 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-200"
+          className="max-w-md rounded-lg border border-border bg-muted px-2 py-1 font-mono text-xs text-foreground"
           placeholder="dataset version id (neighborhood, no runId)"
           value={center}
           onChange={(e) => setCenter(e.target.value)}
         />
-        <div className="h-[480px] rounded-2xl border border-slate-700 bg-slate-900">
+        <div className="h-[480px] rounded-2xl border border-border bg-muted">
           <ReactFlow
             fitView
             nodes={highlighted.nodes}
@@ -143,44 +144,48 @@ function LineagePageInner() {
             onConnect={onConnect}
             onNodeClick={(_, node) => setSelectedVersionId(node.id)}
           >
-            <Background />
+            <Background color="var(--border-default)" gap={16} />
             <Controls />
           </ReactFlow>
         </div>
-        {runId && <p className="text-xs text-slate-400">Run-scoped: {runId}</p>}
+        {runId && <p className="text-xs text-muted-foreground">Run-scoped: {runId}</p>}
         </div>
-        <aside className="flex h-[480px] flex-col gap-3 rounded-2xl border border-slate-700 bg-slate-900 p-3">
-          <h3 className="text-section font-semibold text-slate-100">Dataset detail</h3>
-          {!selectedVersionId && <p className="text-xs text-slate-400">Click a node to view detail.</p>}
+        <Card className="h-[480px] p-3">
+          <CardHeader className="mb-0">
+            <CardTitle>Dataset detail</CardTitle>
+          </CardHeader>
+          <CardContent className="min-h-0">
+          {!selectedVersionId && <p className="text-xs text-muted-foreground">Click a node to view detail.</p>}
           {selectedVersionId && (
             <>
-              <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs text-slate-200">
-                <p><span className="text-slate-400">version_id:</span> {selectedVersionId}</p>
-                <p><span className="text-slate-400">dataset:</span> {selectedVersion.data?.dataset_name || "-"}</p>
-                <p><span className="text-slate-400">version:</span> {selectedVersion.data?.version || "-"}</p>
-                <p className="truncate"><span className="text-slate-400">uri:</span> {selectedVersion.data?.uri || "-"}</p>
+              <div className="rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
+                <p><span className="text-muted-foreground">version_id:</span> {selectedVersionId}</p>
+                <p><span className="text-muted-foreground">dataset:</span> {selectedVersion.data?.dataset_name || "-"}</p>
+                <p><span className="text-muted-foreground">version:</span> {selectedVersion.data?.version || "-"}</p>
+                <p className="truncate"><span className="text-muted-foreground">uri:</span> {selectedVersion.data?.uri || "-"}</p>
               </div>
-              <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-3">
-                <p className="mb-2 text-xs font-semibold text-slate-200">Run history</p>
+              <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-muted p-3">
+                <p className="mb-2 text-xs font-semibold text-foreground">Run history</p>
                 <div className="space-y-2">
                   {(datasetRuns.data?.items || []).map((r) => (
                     <a
                       key={r.run_id}
                       href={`/runs/${r.run_id}`}
-                      className="block rounded border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:border-slate-500"
+                      className="block rounded border border-border px-2 py-1 text-xs text-foreground hover:border-primary"
                     >
                       <p className="font-mono">{r.run_id.slice(0, 12)}...</p>
-                      <p className="text-slate-400">{r.pipeline_id} • {r.status}</p>
+                      <p className="text-muted-foreground">{r.pipeline_id} • {r.status}</p>
                     </a>
                   ))}
                   {!datasetRuns.data?.items?.length && (
-                    <p className="text-xs text-slate-400">No run history for this dataset.</p>
+                    <p className="text-xs text-muted-foreground">No run history for this dataset.</p>
                   )}
                 </div>
               </div>
             </>
           )}
-        </aside>
+          </CardContent>
+        </Card>
       </div>
     </RouteShell>
   );
