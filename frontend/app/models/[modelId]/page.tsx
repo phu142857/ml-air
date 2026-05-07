@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import {
@@ -25,10 +26,13 @@ import {
   uploadDatasetCsv,
   updateModelTriggerPolicy
 } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
+import { executeTrainingIntent } from "@/lib/training-intent";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
+import { mlairFlagModelLifecycleHubUi } from "@/lib/feature-flags";
 
 /** Set `true` when serving slot routes are re-enabled in `api/app/api/routes/v1.py`. */
 const ENABLE_SERVING_SLOTS_UI = false;
@@ -58,6 +62,7 @@ export default function ModelDetailPage() {
   const [datasetPreview, setDatasetPreview] = useState<any>(null);
   const [datasetMsg, setDatasetMsg] = useState("");
   const [uploadedDatasetVersionId, setUploadedDatasetVersionId] = useState("");
+  const [uploadedDatasetId, setUploadedDatasetId] = useState("");
   const [isTrainingWithDataset, setIsTrainingWithDataset] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
@@ -65,42 +70,48 @@ export default function ModelDetailPage() {
   const [confirmAction, setConfirmAction] = useState<null | (() => Promise<void>)>(null);
   const [versionBanner, setVersionBanner] = useState("");
   const [servingSlotDraft, setServingSlotDraft] = useState<Record<string, string>>({});
+  const lifecycleHubUi = mlairFlagModelLifecycleHubUi();
 
   const modelsQuery = useQuery({
-    queryKey: ["models", tenantId, projectId],
+    queryKey: mlairKeys.models.list(tenantId, projectId),
     queryFn: () => fetchModels(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });
   const versionsQuery = useQuery({
-    queryKey: ["model-versions", tenantId, projectId, modelId],
+    queryKey: mlairKeys.models.versions(tenantId, projectId, modelId),
     queryFn: () => fetchModelVersions(tenantId, projectId, modelId, token),
     ...realtimeFallbackPolling()
   });
   const resolvedPipelineQuery = useQuery({
-    queryKey: ["model-resolved-pipeline-ui", tenantId, projectId, modelId],
+    queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, modelId),
     queryFn: () => fetchModelResolvedPipeline(tenantId, projectId, modelId, token),
     enabled: Boolean(modelId && token),
     ...realtimeFallbackPolling()
   });
   const pipelinesListQuery = useQuery({
-    queryKey: ["pipelines-model-page", tenantId, projectId],
+    queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token),
     enabled: Boolean(token),
     ...realtimeFallbackPolling()
   });
   const modelStatusQuery = useQuery({
-    queryKey: ["model-status", tenantId, projectId, modelId],
+    queryKey: mlairKeys.models.status(tenantId, projectId, modelId),
     queryFn: () => fetchModelStatus(tenantId, projectId, modelId, token),
     ...realtimeFallbackPolling()
   });
   const latestRunQuery = useQuery({
-    queryKey: ["model-status-run", tenantId, projectId, modelStatusQuery.data?.run_id],
+    queryKey: mlairKeys.models.statusRun(tenantId, projectId, modelStatusQuery.data?.run_id ?? undefined),
     queryFn: () => fetchRun(tenantId, projectId, String(modelStatusQuery.data?.run_id), token),
     enabled: !!modelStatusQuery.data?.run_id,
     ...realtimeFallbackPolling()
   });
   const recentRunsQuery = useQuery({
-    queryKey: ["model-recent-runs", tenantId, projectId, modelId, (versionsQuery.data?.items || []).map((v) => v.run_id).join(",")],
+    queryKey: mlairKeys.models.recentRuns(
+      tenantId,
+      projectId,
+      modelId,
+      (versionsQuery.data?.items || []).map((v) => v.run_id).join(",")
+    ),
     queryFn: async () => {
       const ids = (versionsQuery.data?.items || [])
         .map((v) => String(v.run_id || "").trim())
@@ -115,12 +126,16 @@ export default function ModelDetailPage() {
 
   const gateDetails = useMemo(() => (gateResult?.details || []) as Array<any>, [gateResult]);
   const triggerPolicyQuery = useQuery({
-    queryKey: ["model-trigger-policy", tenantId, projectId, modelId],
+    queryKey: mlairKeys.models.triggerPolicy(tenantId, projectId, modelId),
     queryFn: () => fetchModelTriggerPolicy(tenantId, projectId, modelId, token),
     ...realtimeFallbackPolling()
   });
   const freshnessQuery = useQuery({
-    queryKey: ["model-gate-freshness", tenantId, projectId, gateDetails.map((d) => d.dataset_id || d.dataset).join(",")],
+    queryKey: mlairKeys.models.gateFreshness(
+      tenantId,
+      projectId,
+      gateDetails.map((d) => d.dataset_id || d.dataset).join(",")
+    ),
     queryFn: async () => {
       const pairs = await Promise.all(
         gateDetails.map(async (d) => {
@@ -149,6 +164,8 @@ export default function ModelDetailPage() {
   useEffect(() => {
     setServingSlotDraft({});
     setVersionBanner("");
+    setUploadedDatasetId("");
+    setUploadedDatasetVersionId("");
   }, [modelId]);
 
   const model = useMemo(() => modelsQuery.data?.items.find((x) => x.model_id === modelId) ?? null, [modelsQuery.data, modelId]);
@@ -164,13 +181,13 @@ export default function ModelDetailPage() {
       promoteModelVersion(tenantId, projectId, modelId, token, { version, stage }),
     onSuccess: async () => {
       setVersionBanner("");
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, modelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
     onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
 
   const servingQuery = useQuery({
-    queryKey: ["model-serving", tenantId, projectId, modelId],
+    queryKey: mlairKeys.models.serving(tenantId, projectId, modelId),
     queryFn: () => fetchModelServing(tenantId, projectId, modelId, token),
     enabled: ENABLE_SERVING_SLOTS_UI && Boolean(modelId && token && projectId !== "all"),
     ...realtimeFallbackPolling()
@@ -184,7 +201,7 @@ export default function ModelDetailPage() {
       }),
     onSuccess: async () => {
       setVersionBanner("");
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, modelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
     onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
@@ -194,7 +211,7 @@ export default function ModelDetailPage() {
       setModelServingSlot(tenantId, projectId, modelId, p.slot, token, { version: p.version }),
     onSuccess: async () => {
       setVersionBanner("");
-      await queryClient.invalidateQueries({ queryKey: ["model-serving", tenantId, projectId, modelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.serving(tenantId, projectId, modelId) });
     },
     onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
@@ -210,7 +227,7 @@ export default function ModelDetailPage() {
       setTriggerMode(saved.trigger_mode);
       setDebounceMinutes(String(saved.debounce_minutes || 10));
       setScheduleCron(saved.schedule_cron || "0 */6 * * *");
-      await queryClient.invalidateQueries({ queryKey: ["model-trigger-policy", tenantId, projectId, modelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.triggerPolicy(tenantId, projectId, modelId) });
       window.setTimeout(() => setPolicyMsg(""), 1500);
     },
     onError: (e: any) => {
@@ -220,14 +237,14 @@ export default function ModelDetailPage() {
   const deleteModelMutation = useMutation({
     mutationFn: () => deleteModel(tenantId, projectId, modelId, token),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["models", tenantId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.list(tenantId, projectId) });
       router.push("/models");
     }
   });
   const deleteVersionMutation = useMutation({
     mutationFn: (version: number) => deleteModelVersion(tenantId, projectId, modelId, version, token),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, modelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     }
   });
   const previewDatasetMutation = useMutation({
@@ -248,6 +265,7 @@ export default function ModelDetailPage() {
       setDatasetPreview(data);
       setDatasetName(String(data.dataset_name || datasetName));
       setUploadedDatasetVersionId(String(data.version_id || ""));
+      setUploadedDatasetId(String(data.dataset_id || ""));
       setDatasetMsg(`Uploaded ${data.dataset_name} ${data.version}`);
     },
     onError: (e: any) => setDatasetMsg(`Upload failed: ${String(e?.message || e)}`)
@@ -293,56 +311,9 @@ export default function ModelDetailPage() {
   const effectiveDebounce = triggerPolicyQuery.data?.debounce_minutes ?? Math.max(1, Number.parseInt(debounceMinutes || "10", 10) || 10);
   const effectiveCron = triggerPolicyQuery.data?.schedule_cron || scheduleCron || "0 */6 * * *";
 
-  return (
-    <RouteShell activeNav="Models" title={`Model ${model?.name ?? modelId}`} subtitle="Deep-link model versions and stages">
-      <ConfirmDialog
-        open={confirmOpen}
-        title={confirmTitle}
-        body={confirmBody}
-        onCancel={() => setConfirmOpen(false)}
-        onDelete={() => {
-          if (confirmAction) void confirmAction();
-        }}
-        isLoading={deleteModelMutation.isPending || deleteVersionMutation.isPending}
-      />
-      <div className="mb-2">
-        <div className="flex items-center gap-2">
-          <button
-            className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
-            onClick={() => router.push("/models")}
-          >
-            Back to Models
-          </button>
-          <button
-            className="btn-action-delete rounded-xl px-3 py-2 text-sm disabled:opacity-60"
-            onClick={() =>
-              openConfirm(
-                "Delete model",
-                `Delete model "${model?.name || modelId}" and all of its versions?`,
-                async () => {
-                  await deleteModelMutation.mutateAsync();
-                  setConfirmOpen(false);
-                }
-              )
-            }
-            disabled={deleteModelMutation.isPending}
-          >
-            Delete model
-          </button>
-        </div>
-      </div>
-
-      <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
-          <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs">
-          <div className="text-slate-200">
-            Status:{" "}
-            <span className={modelStatusQuery.data?.status === "READY" ? "text-emerald-400" : "text-amber-400"}>
-              {modelStatusQuery.data?.status || "UNKNOWN"}
-            </span>
-            {missingReason ? <span className="text-slate-400"> {" · "}Reason: {missingReason}</span> : null}
-          </div>
-        </div>
-
+  function renderLegacyTrainingPanel() {
+    return (
+      <>
         <div className="mb-4 grid gap-3 rounded-xl border border-slate-700 bg-slate-900 p-3 md:grid-cols-4">
           <label className="text-xs text-slate-400">
             Pipeline
@@ -501,7 +472,7 @@ export default function ModelDetailPage() {
               />
             </label>
           </div>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
               className="btn-action-cancel rounded-lg px-3 py-1 text-xs disabled:opacity-60"
               onClick={() => previewDatasetMutation.mutate()}
@@ -520,12 +491,35 @@ export default function ModelDetailPage() {
               className="btn-action-primary rounded-lg px-3 py-1 text-xs disabled:opacity-60"
               onClick={async () => {
                 setDatasetMsg("");
-                if (!pipelineId) {
-                  setDatasetMsg("No pipeline_id: configure mapping, run history, NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID, or type one.");
-                  return;
-                }
                 setIsTrainingWithDataset(true);
                 try {
+                  if (uploadedDatasetId) {
+                    const res = await executeTrainingIntent(tenantId, projectId, token, {
+                      kind: "model_dataset",
+                      modelId,
+                      datasetId: uploadedDatasetId,
+                      datasetVersionId: uploadedDatasetVersionId || undefined,
+                      idempotencyKey: `dataset-train-${Date.now()}`,
+                      trainingMode,
+                      context: { mlair_model_id: modelId }
+                    });
+                    if (res.run_id) {
+                      router.push(`/runs/${res.run_id}`);
+                      return;
+                    }
+                    setDatasetMsg("Training triggered but run_id was empty.");
+                    return;
+                  }
+                  if (!pipelineId) {
+                    setDatasetMsg(
+                      "Upload CSV first (binds dataset_id) for intent-driven training, or configure pipeline mapping for legacy Run with override."
+                    );
+                    return;
+                  }
+                  if (!datasetName.trim()) {
+                    setDatasetMsg("Enter dataset name or upload CSV.");
+                    return;
+                  }
                   const req = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
                   const res = await triggerPipelineRunWithGating(tenantId, projectId, pipelineId, token, {
                     pipeline_id: pipelineId,
@@ -549,10 +543,20 @@ export default function ModelDetailPage() {
                   setIsTrainingWithDataset(false);
                 }
               }}
-              disabled={!datasetName.trim() || !pipelineId || isTrainingWithDataset}
+              disabled={
+                isTrainingWithDataset || (!uploadedDatasetId && (!pipelineId || !datasetName.trim()))
+              }
             >
               Train with this dataset
             </button>
+            {uploadedDatasetId ? (
+              <Link
+                href={`/datasets/${encodeURIComponent(uploadedDatasetId)}`}
+                className="text-xs text-blue-400 hover:underline"
+              >
+                Dataset hub
+              </Link>
+            ) : null}
             {datasetMsg ? <span className="text-xs text-slate-200">{datasetMsg}</span> : null}
           </div>
           {datasetPreview ? (
@@ -567,6 +571,130 @@ export default function ModelDetailPage() {
             </div>
           ) : null}
         </div>
+      </>
+    );
+  }
+
+  return (
+    <RouteShell
+      activeNav="Models"
+      title={`Model ${model?.name ?? modelId}`}
+      subtitle={
+        lifecycleHubUi
+          ? "Governance, versions, and trigger policy — train from Datasets"
+          : "Deep-link model versions and stages"
+      }
+    >
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        body={confirmBody}
+        onCancel={() => setConfirmOpen(false)}
+        onDelete={() => {
+          if (confirmAction) void confirmAction();
+        }}
+        isLoading={deleteModelMutation.isPending || deleteVersionMutation.isPending}
+      />
+      <div className="mb-2">
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-xl bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-blue-900/20"
+            onClick={() => router.push("/models")}
+          >
+            Back to Models
+          </button>
+          <button
+            className="btn-action-delete rounded-xl px-3 py-2 text-sm disabled:opacity-60"
+            onClick={() =>
+              openConfirm(
+                "Delete model",
+                `Delete model "${model?.name || modelId}" and all of its versions?`,
+                async () => {
+                  await deleteModelMutation.mutateAsync();
+                  setConfirmOpen(false);
+                }
+              )
+            }
+            disabled={deleteModelMutation.isPending}
+          >
+            Delete model
+          </button>
+        </div>
+      </div>
+
+      <section className="rounded-2xl border border-slate-700 bg-bg-card p-5 shadow-lg shadow-black/30">
+          <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs">
+          <div className="text-slate-200">
+            Status:{" "}
+            <span className={modelStatusQuery.data?.status === "READY" ? "text-emerald-400" : "text-amber-400"}>
+              {modelStatusQuery.data?.status || "UNKNOWN"}
+            </span>
+            {!lifecycleHubUi && missingReason ? (
+              <span className="text-slate-400"> {" · "}Reason: {missingReason}</span>
+            ) : null}
+          </div>
+        </div>
+
+        {lifecycleHubUi ? (
+          <div className="mb-4 rounded-xl border border-blue-500/35 bg-slate-900/90 p-4 shadow-inner shadow-blue-950/20">
+            <h3 className="mb-2 text-xs font-semibold text-slate-200">Training &amp; data readiness</h3>
+            <p className="mb-3 text-xs leading-relaxed text-slate-400">
+              Upload data, evaluate readiness, and start intent-driven training from the{" "}
+              <span className="text-slate-200">Dataset hub</span> or the Datasets list (select this model there). This page
+              stays focused on registry and governance.
+            </p>
+            <div className="mb-3 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+              <div>
+                Resolved pipeline:{" "}
+                <code className="text-slate-100">
+                  {resolvedPipelineQuery.data?.pipeline_id || "—"}
+                </code>
+              </div>
+              <div className="mt-1 text-slate-500">
+                Source: {resolvedPipelineQuery.data?.source || "—"}
+                {resolvedPipelineQuery.data?.base_weights_source
+                  ? ` · base weights: ${resolvedPipelineQuery.data.base_weights_source}`
+                  : null}
+              </div>
+              {resolvedPipelineQuery.data?.pipeline_id ? (
+                <Link
+                  href={`/pipelines/${encodeURIComponent(resolvedPipelineQuery.data.pipeline_id)}`}
+                  className="mt-2 inline-block text-blue-400 hover:underline"
+                >
+                  Open pipeline (execution view) →
+                </Link>
+              ) : (
+                <p className="mt-2 text-amber-300/90">
+                  No default pipeline yet. Set{" "}
+                  <code className="text-slate-200">PUT …/models/&#123;id&#125;/pipeline-mapping</code> or train once from a
+                  pipeline run so resolution can infer <code className="text-slate-200">latest_model_run</code>.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/datasets"
+                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700/90"
+              >
+                Go to Datasets
+              </Link>
+              <Link
+                href="/models"
+                className="rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
+              >
+                Other models
+              </Link>
+            </div>
+            <details className="mt-4 rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+              <summary className="cursor-pointer select-none text-xs text-slate-400 hover:text-slate-300">
+                Advanced: legacy on-page pipeline readiness &amp; CSV upload
+              </summary>
+              <div className="mt-3 border-t border-slate-800 pt-3">{renderLegacyTrainingPanel()}</div>
+            </details>
+          </div>
+        ) : (
+          renderLegacyTrainingPanel()
+        )}
 
         <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
           <h3 className="mb-2 text-xs font-semibold text-slate-200">Auto Trigger Config</h3>
@@ -652,7 +780,16 @@ export default function ModelDetailPage() {
               ))}
             </div>
             <div className="mt-2 text-xs text-slate-400">
-              Lineage: {lineageDatasetLabel} → {pipelineId || "—"} → {model?.name ?? modelId}
+              {lifecycleHubUi ? (
+                <>
+                  Lineage context: use <Link href="/datasets" className="text-blue-400 hover:underline">Datasets</Link> hub
+                  or run detail; pipeline: {pipelineId || "—"} · model: {model?.name ?? modelId}
+                </>
+              ) : (
+                <>
+                  Lineage: {lineageDatasetLabel} → {pipelineId || "—"} → {model?.name ?? modelId}
+                </>
+              )}
             </div>
           </div>
         )}

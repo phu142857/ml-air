@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 import type { DatasetItem, ModelItem, RunItem, TaskItem } from "./api";
 import { useAppContext } from "./app-context";
+import { mlairKeys } from "./query-keys";
 
 const DEBOUNCE_MS = 300;
 const MAX_SEEN_IDS = 500;
@@ -72,37 +73,52 @@ function keysForEvent(
   const runId = typeof ev.payload?.run_id === "string" ? ev.payload.run_id : undefined;
 
   if (t === "run.created" || t === "run.updated") {
-    const keys: unknown[][] = [["runs", tenantId, projectId]];
+    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
     if (rid) {
-      keys.push(["run", rid], ["run-tasks", rid], ["run-logs", rid], ["run-tracking", rid], ["run-readiness", rid]);
+      keys.push(
+        [...mlairKeys.run.detail(rid)],
+        [...mlairKeys.run.tasks(rid)],
+        [...mlairKeys.run.logs(rid)],
+        [...mlairKeys.run.tracking(rid)],
+        [...mlairKeys.run.readiness(rid)]
+      );
     }
     return keys;
   }
   if (t === "task.updated") {
     const r = runId || rid;
-    const keys: unknown[][] = [["runs", tenantId, projectId]];
+    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
     if (r) {
-      keys.push(["run-tasks", r], ["run", r], ["run-tracking", r], ["run-readiness", r]);
+      keys.push(
+        [...mlairKeys.run.tasks(r)],
+        [...mlairKeys.run.detail(r)],
+        [...mlairKeys.run.tracking(r)],
+        [...mlairKeys.run.readiness(r)]
+      );
     }
     return keys;
   }
   if (t === "model.promoted") {
-    const keys: unknown[][] = [["models", tenantId, projectId]];
+    const keys: unknown[][] = [[...mlairKeys.models.list(tenantId, projectId)]];
     if (rid) {
       keys.push(
-        ["model-versions", tenantId, projectId, rid],
-        ["model-serving", tenantId, projectId, rid],
-        ["model-status", tenantId, projectId, rid],
+        [...mlairKeys.models.versions(tenantId, projectId, rid)],
+        [...mlairKeys.models.serving(tenantId, projectId, rid)],
+        [...mlairKeys.models.status(tenantId, projectId, rid)],
         ["model-recent-runs", tenantId, projectId, rid]
       );
     }
     return keys;
   }
   if (t === "dataset.updated") {
-    const keys: unknown[][] = [["datasets", tenantId, projectId]];
+    const keys: unknown[][] = [[...mlairKeys.datasets.list(tenantId, projectId)]];
     keys.push(["dataset-versions", tenantId, projectId]);
     if (rid) {
-      keys.push(["dataset-versions", tenantId, projectId, rid]);
+      keys.push(
+        [...mlairKeys.datasets.versions(tenantId, projectId, rid)],
+        [...mlairKeys.datasets.detail(tenantId, projectId, rid)],
+        ["dataset-readiness", tenantId, projectId, rid]
+      );
     }
     return keys;
   }
@@ -135,12 +151,12 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
   if ((typ === "run.updated" || typ === "run.created") && rid && typeof p.status === "string") {
     const status = p.status;
     const iso = isoFromUnix(p.updated_at);
-    queryClient.setQueryData<RunItem | undefined>(["run", rid], (old) => {
+    queryClient.setQueryData<RunItem | undefined>(mlairKeys.run.detail(rid), (old) => {
       if (!old) return old;
       if (updatedAtMs(old.updated_at) > uaMs) return old;
       return { ...old, status, updated_at: iso };
     });
-    queryClient.setQueryData<{ items: RunItem[] } | undefined>(["runs", tenantId, projectId], (old) => {
+    queryClient.setQueryData<{ items: RunItem[] } | undefined>(mlairKeys.runs.list(tenantId, projectId), (old) => {
       if (!old?.items) return old;
       let changed = false;
       const items = old.items.map((row) => {
@@ -156,7 +172,7 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
   if (typ === "task.updated" && runFromPayload && rid && typeof p.status === "string") {
     const status = p.status;
     const iso = isoFromUnix(p.updated_at);
-    queryClient.setQueryData<{ items: TaskItem[] } | undefined>(["run-tasks", runFromPayload], (old) => {
+    queryClient.setQueryData<{ items: TaskItem[] } | undefined>(mlairKeys.run.tasks(runFromPayload), (old) => {
       if (!old?.items) return old;
       let changed = false;
       const items = old.items.map((task) => {
@@ -173,7 +189,9 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
     const mid = typeof p.model_id === "string" ? p.model_id : rid;
     if (!mid) return;
     const iso = isoFromUnix(p.updated_at);
-    queryClient.setQueryData<{ items: ModelItem[] } | undefined>(["models", tenantId, projectId], (old) => {
+    queryClient.setQueryData<{ items: ModelItem[] } | undefined>(
+      mlairKeys.models.list(tenantId, projectId),
+      (old) => {
       if (!old?.items) return old;
       let changed = false;
       const items = old.items.map((row) => {
@@ -183,12 +201,15 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
         return { ...row, updated_at: iso };
       });
       return changed ? { ...old, items } : old;
-    });
+    }
+    );
   }
 
   if (typ === "dataset.updated" && rid) {
     const iso = isoFromUnix(p.updated_at);
-    queryClient.setQueryData<{ items: DatasetItem[] } | undefined>(["datasets", tenantId, projectId], (old) => {
+    queryClient.setQueryData<{ items: DatasetItem[] } | undefined>(
+      mlairKeys.datasets.list(tenantId, projectId),
+      (old) => {
       if (!old?.items) return old;
       let changed = false;
       const items = old.items.map((row) => {
@@ -199,7 +220,8 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
         return { ...row, updated_at: iso };
       });
       return changed ? { ...old, items } : old;
-    });
+    }
+    );
   }
 }
 

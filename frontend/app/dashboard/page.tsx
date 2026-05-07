@@ -5,13 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchRuns } from "@/lib/api";
 import { OverviewSection } from "@/components/sections/overview-section";
 import { RouteShell } from "@/components/layout/route-shell";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 
 export default function DashboardPage() {
   const { tenantId, projectId, token } = useAppContext();
   const { data, isFetching } = useQuery({
-    queryKey: ["runs", tenantId, projectId],
+    queryKey: mlairKeys.runs.list(tenantId, projectId),
     queryFn: () => fetchRuns(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });

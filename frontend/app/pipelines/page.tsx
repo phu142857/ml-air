@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DagView } from "@/components/pipeline/dag-view";
 import { RouteShell } from "@/components/layout/route-shell";
 import { fetchPipelineDag, fetchPipelines } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
 
@@ -15,11 +16,11 @@ export default function PipelinesPage() {
   const [selectedPipeline, setSelectedPipeline] = useState("demo_pipeline");
 
   const { data } = useQuery({
-    queryKey: ["pipelines", tenantId, projectId],
+    queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token)
   });
   const { data: dag } = useQuery({
-    queryKey: ["pipeline-dag", tenantId, projectId, selectedPipeline],
+    queryKey: mlairKeys.pipelines.dag(tenantId, projectId, selectedPipeline),
     queryFn: () => fetchPipelineDag(tenantId, projectId, selectedPipeline, token)
   });
 

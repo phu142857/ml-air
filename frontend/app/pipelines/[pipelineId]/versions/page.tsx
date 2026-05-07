@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { createPipelineVersionApi, listPipelineVersionsApi } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
 
@@ -24,7 +25,7 @@ export default function PipelineVersionsPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const listQuery = useQuery({
-    queryKey: ["pipeline-versions", pipelineId, tenantId, projectId],
+    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId),
     queryFn: () => listPipelineVersionsApi(tenantId, projectId, pipelineId, token),
     enabled: Boolean(token)
   });
@@ -41,7 +42,7 @@ export default function PipelineVersionsPage() {
     },
     onSuccess: () => {
       setErr(null);
-      void qc.invalidateQueries({ queryKey: ["pipeline-versions", pipelineId] });
+      void qc.invalidateQueries({ queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId) });
     },
     onError: (e: Error) => setErr(e.message)
   });

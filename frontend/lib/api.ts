@@ -605,6 +605,30 @@ export async function fetchDataset(tenantId: string, projectId: string, datasetI
   return data as DatasetItem;
 }
 
+export async function fetchDatasetReadiness(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  requiredSize = 1000
+) {
+  const scoped = normalizeProjectId(projectId);
+  const req = Math.max(1, Math.floor(requiredSize));
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scoped}/datasets/${encodeURIComponent(datasetId)}/readiness?required_size=${req}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    dataset_id: string;
+    dataset_name?: string;
+    current_size: number;
+    required_size: number;
+    ready: boolean;
+  };
+}
+
 export async function fetchDatasets(tenantId: string, projectId: string, token: string) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets`, {
     headers: authHeaders(token),

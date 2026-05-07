@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { fetchTask } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 
 export default function TaskDetailPage() {
@@ -13,7 +14,7 @@ export default function TaskDetailPage() {
   const { tenantId, projectId, token } = useAppContext();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["task", taskId],
+    queryKey: mlairKeys.task.detail(taskId),
     queryFn: () => fetchTask(tenantId, projectId, taskId, token)
   });
 

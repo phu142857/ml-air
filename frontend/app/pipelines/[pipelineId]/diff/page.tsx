@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { getPipelineVersionDiff, listPipelineVersionsApi } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 
 function JsonBlock({ value }: { value: unknown }) {
@@ -25,7 +26,7 @@ function DiffPageInner() {
   const qRight = sp.get("right") || "";
 
   const listQuery = useQuery({
-    queryKey: ["pipeline-versions", pipelineId, tenantId, projectId],
+    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId),
     queryFn: () => listPipelineVersionsApi(tenantId, projectId, pipelineId, token),
     enabled: Boolean(token)
   });
@@ -39,7 +40,7 @@ function DiffPageInner() {
 
   const canDiff = leftId && rightId && leftId !== rightId;
   const diffQuery = useQuery({
-    queryKey: ["pipeline-diff", leftId, rightId, tenantId, projectId],
+    queryKey: mlairKeys.pipelines.diff(tenantId, projectId, leftId, rightId),
     queryFn: () => getPipelineVersionDiff(tenantId, projectId, token, leftId, rightId),
     enabled: Boolean(canDiff && token)
   });

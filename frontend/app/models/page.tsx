@@ -17,6 +17,7 @@ import {
   setModelServingSlot,
   updateModelVersionApproval
 } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { modelApprovalPillClass } from "@/lib/model-governance-ui";
@@ -45,7 +46,7 @@ export default function ModelsPage() {
   const [servingSlotDraft, setServingSlotDraft] = useState<Record<string, string>>({});
 
   const modelsQuery = useQuery({
-    queryKey: ["models", tenantId, projectId],
+    queryKey: mlairKeys.models.list(tenantId, projectId),
     queryFn: () => fetchModels(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });
@@ -72,19 +73,19 @@ export default function ModelsPage() {
   }, [newVersionFiles]);
 
   const versionsQuery = useQuery({
-    queryKey: ["model-versions", tenantId, projectId, selectedModelId],
+    queryKey: mlairKeys.models.versions(tenantId, projectId, selectedModelId),
     queryFn: () => fetchModelVersions(tenantId, effectiveProjectId, selectedModelId, token),
     enabled: !!selectedModelId && !!selectedModel && projectId !== "all",
     ...realtimeFallbackPolling()
   });
   const servingQuery = useQuery({
-    queryKey: ["model-serving", tenantId, projectId, selectedModelId],
+    queryKey: mlairKeys.models.serving(tenantId, projectId, selectedModelId),
     queryFn: () => fetchModelServing(tenantId, effectiveProjectId, selectedModelId, token),
     enabled: ENABLE_SERVING_SLOTS_UI && !!selectedModelId && !!selectedModel && projectId !== "all",
     ...realtimeFallbackPolling()
   });
   const previewArtifactQuery = useQuery({
-    queryKey: ["model-next-artifact", tenantId, effectiveProjectId, selectedModelId],
+    queryKey: mlairKeys.models.nextArtifact(tenantId, effectiveProjectId, selectedModelId),
     queryFn: () => fetchNextModelArtifactUri(tenantId, effectiveProjectId, selectedModelId, token),
     enabled: !!selectedModelId && !!selectedModel && projectId !== "all",
     ...realtimeFallbackPolling()
@@ -97,7 +98,7 @@ export default function ModelsPage() {
         description: newModelDesc || null
       }),
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries({ queryKey: ["models", tenantId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.list(tenantId, projectId) });
       setSelectedModelId(created.model_id);
     }
   });
@@ -110,7 +111,7 @@ export default function ModelsPage() {
         stage: "staging"
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, selectedModelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, selectedModelId) });
       setNewVersionRunId("");
       setNewVersionFiles([]);
     }
@@ -121,7 +122,7 @@ export default function ModelsPage() {
       promoteModelVersion(tenantId, effectiveProjectId, selectedModelId, token, { version, stage }),
     onSuccess: async () => {
       setVersionBanner("");
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, selectedModelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, selectedModelId) });
     },
     onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
@@ -134,7 +135,7 @@ export default function ModelsPage() {
       }),
     onSuccess: async () => {
       setVersionBanner("");
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, selectedModelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, selectedModelId) });
     },
     onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
@@ -144,7 +145,7 @@ export default function ModelsPage() {
       setModelServingSlot(tenantId, effectiveProjectId, selectedModelId, p.slot, token, { version: p.version }),
     onSuccess: async () => {
       setVersionBanner("");
-      await queryClient.invalidateQueries({ queryKey: ["model-serving", tenantId, projectId, selectedModelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.serving(tenantId, projectId, selectedModelId) });
     },
     onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
   });
@@ -152,7 +153,7 @@ export default function ModelsPage() {
     mutationFn: async (payload: { modelId: string; projectId: string }) =>
       deleteModel(tenantId, payload.projectId, payload.modelId, token),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["models", tenantId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.list(tenantId, projectId) });
       setSelectedModelId("");
     }
   });
@@ -160,7 +161,7 @@ export default function ModelsPage() {
     mutationFn: async (payload: { modelId: string; version: number; projectId: string }) =>
       deleteModelVersion(tenantId, payload.projectId, payload.modelId, payload.version, token),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["model-versions", tenantId, projectId, selectedModelId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, selectedModelId) });
     }
   });
 

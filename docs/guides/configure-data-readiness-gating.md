@@ -4,6 +4,13 @@
 
 Run pipelines only when required input datasets are ready, while still allowing tracked per-run overrides for controlled experiments.
 
+## Readiness layers (quick distinction)
+
+- **Dataset readiness** (`GET /datasets/{dataset_id}/readiness`): compares server-side `current_size` with requested `required_size`.
+- **Pipeline/run gate readiness** (`POST /pipelines/{pipeline_id}/check-readiness` and `/run`): evaluates readiness in execution context (`training_mode`, `override_config`, run snapshot).
+
+Use dataset readiness for lifecycle monitoring and user guidance; use pipeline/run gate readiness for execution decisions.
+
 ## Steps
 
 1. Define readiness threshold via `training_mode` (`quick`, `standard`, `full`) or explicit `override_config.inputs[].required_size`.
@@ -69,6 +76,7 @@ You should see:
 - `quick` = 50 rows, `standard` = 1000 rows, `full` = 10000 rows (default).
 - Do not mutate dataset `current_size` manually.
 - Keep overrides in `override_config` to preserve reproducibility.
+- Client may provide `required_size` (minimum), but `current_size` is always server-side source of truth.
 
 ## Auto Trigger Policy (Persisted)
 
@@ -110,3 +118,8 @@ Scheduler behavior:
 ## Done
 
 Your project now enforces data-readiness gating with auditable per-run conditions.
+
+## Related
+
+- [Dataset Hub and Readiness](./dataset-hub-and-readiness.md)
+- [Model page governance mode](./model-page-governance-mode.md)

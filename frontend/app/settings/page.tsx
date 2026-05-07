@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RouteShell } from "@/components/layout/route-shell";
 import { fetchPlugins, reloadPlugins, togglePlugin, validatePlugin } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 
 export default function SettingsPage() {
@@ -14,7 +15,7 @@ export default function SettingsPage() {
   const [validateResult, setValidateResult] = useState("");
 
   const pluginsQuery = useQuery({
-    queryKey: ["plugins"],
+    queryKey: mlairKeys.plugins.all(),
     queryFn: () => fetchPlugins(token)
   });
 
@@ -26,14 +27,14 @@ export default function SettingsPage() {
   const reloadMutation = useMutation({
     mutationFn: () => reloadPlugins(token),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.plugins.all() });
     }
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => togglePlugin(name, enabled, token),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["plugins"] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.plugins.all() });
     }
   });
 

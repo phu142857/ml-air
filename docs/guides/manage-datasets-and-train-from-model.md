@@ -8,6 +8,18 @@ Provide a production-ready hybrid workflow where:
 - MLAir owns ML validation, pipeline execution, training, and evaluation.
 - Training lineage remains traceable from dataset version to run to model version.
 
+## Primary UX (lifecycle-centric)
+
+Recommended navigation:
+
+1. Open `Datasets` and select dataset hub (`/datasets/{dataset_id}`).
+2. Check dataset-level readiness (`current_size` vs `required_size`).
+3. Select model + dataset version.
+4. Trigger training via intent-driven endpoint (`POST /runs/trigger`).
+5. Track run and readiness snapshot in run detail.
+
+Model detail remains governance-focused; legacy training forms are compatibility tools.
+
 ## Steps
 
 1. Upload CSV and create a dataset version.
@@ -283,6 +295,19 @@ Using shared helper: `formatDateTimeCompact()` in `frontend/lib/utils.ts`.
 The Datasets UI can call **`POST /v1/tenants/{tenant}/projects/{project}/runs/trigger`** so users pick **model** and **dataset version** only; MLAir resolves **default pipeline** (`model_pipeline_mapping` or latest run linkage) and injects **production / latest `artifact_uri`** into run **`plugin_context`** when available. See:
 
 - [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md)
+
+## Model page governance mode flag
+
+Frontend flag:
+
+- `NEXT_PUBLIC_MLAIR_MODEL_LIFECYCLE_HUB_UI`
+
+Default behavior is enabled (unset -> on). Set `false` to force legacy model-page layout.
+
+See:
+
+- [Model page governance mode](./model-page-governance-mode.md)
+- [Dataset Hub and Readiness](./dataset-hub-and-readiness.md)
 
 ## Deploy and Verification Checklist
 

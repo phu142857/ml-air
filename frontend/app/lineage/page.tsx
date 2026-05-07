@@ -7,6 +7,7 @@ import ReactFlow, { Background, Controls, addEdge, useEdgesState, useNodesState,
 import "reactflow/dist/style.css";
 import { RouteShell } from "@/components/layout/route-shell";
 import { fetchDatasetRuns, fetchDatasetVersion, fetchLineageForRun, fetchLineageNeighborhood } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 
 function LineagePageInner() {
@@ -18,24 +19,25 @@ function LineagePageInner() {
   const [selectedVersionId, setSelectedVersionId] = useState(initialCenter);
 
   const runLineage = useQuery({
-    queryKey: ["lineage-run", runId, tenantId, projectId],
+    queryKey: mlairKeys.lineage.run(tenantId, projectId, runId),
     queryFn: () => fetchLineageForRun(tenantId, projectId, runId, token),
     enabled: Boolean(runId && token)
   });
   const neighborhood = useQuery({
-    queryKey: ["lineage-nb", center, tenantId, projectId],
+    queryKey: mlairKeys.lineage.neighborhood(tenantId, projectId, center),
     queryFn: () => fetchLineageNeighborhood(tenantId, projectId, token, center, 2, "both"),
     enabled: Boolean(center && token && !runId)
   });
   const selectedVersion = useQuery({
-    queryKey: ["dataset-version", selectedVersionId, tenantId, projectId],
+    queryKey: mlairKeys.datasetVersion.detail(tenantId, projectId, selectedVersionId),
     queryFn: () => fetchDatasetVersion(tenantId, projectId, selectedVersionId, token),
     enabled: Boolean(selectedVersionId && token)
   });
+  const datasetIdForRuns = selectedVersion.data?.dataset_id || "";
   const datasetRuns = useQuery({
-    queryKey: ["dataset-runs", selectedVersion.data?.dataset_id, tenantId, projectId],
+    queryKey: mlairKeys.datasetRuns(tenantId, projectId, datasetIdForRuns),
     queryFn: () => fetchDatasetRuns(tenantId, projectId, selectedVersion.data!.dataset_id, token, 20),
-    enabled: Boolean(selectedVersion.data?.dataset_id && token)
+    enabled: Boolean(datasetIdForRuns && token)
   });
 
   const built = useMemo(() => {

@@ -6,7 +6,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { DagView } from "@/components/pipeline/dag-view";
+import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
 import { checkPipelineReadiness, fetchPipelineDag, normalizeProjectId, triggerPipelineRunWithGating } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 
 export default function PipelineDetailPage() {
@@ -24,7 +26,7 @@ export default function PipelineDetailPage() {
   const [readinessDatasetInput, setReadinessDatasetInput] = useState("");
 
   const { data } = useQuery({
-    queryKey: ["pipeline-dag", pipelineId],
+    queryKey: mlairKeys.pipelines.dag(tenantId, projectId, pipelineId),
     queryFn: () => fetchPipelineDag(tenantId, projectId, pipelineId, token)
   });
 
@@ -79,28 +81,14 @@ export default function PipelineDetailPage() {
             />
           </label>
         </div>
-        <div className="grid gap-3 md:grid-cols-4">
-          <label className="text-xs text-slate-400">
-            Training mode
-            <select
-              value={trainingMode}
-              onChange={(e) => setTrainingMode(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-200"
-            >
-              <option value="quick">quick</option>
-              <option value="standard">standard</option>
-              <option value="full">full</option>
-            </select>
-          </label>
-          <label className="text-xs text-slate-400 md:col-span-2">
-            Required rows (input dataset)
-            <input
-              value={requiredSize}
-              onChange={(e) => setRequiredSize(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-200"
-            />
-          </label>
-          <div className="flex items-end gap-2">
+        <TrainingGateFields
+          trainingMode={trainingMode}
+          onTrainingModeChange={setTrainingMode}
+          requiredSize={requiredSize}
+          onRequiredSizeChange={setRequiredSize}
+          className="mb-3"
+        />
+        <div className="flex flex-wrap items-end gap-2">
             <button
               disabled={isChecking || !readinessDatasetInput.trim()}
               onClick={async () => {
@@ -163,7 +151,6 @@ export default function PipelineDetailPage() {
             >
               Run with gate
             </button>
-          </div>
         </div>
         {gateError && (
           <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">{gateError}</div>

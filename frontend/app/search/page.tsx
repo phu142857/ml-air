@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import { searchApi } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 
 function SearchPageInner() {
@@ -14,7 +15,7 @@ function SearchPageInner() {
   const q = sp.get("q") || "";
   const type = (sp.get("type") as "all" | "run" | "task" | "dataset") || "all";
   const query = useQuery({
-    queryKey: ["search", q, type, tenantId, projectId],
+    queryKey: mlairKeys.search(tenantId, projectId, q, type),
     queryFn: () => searchApi(tenantId, projectId, token, q, type),
     enabled: Boolean(q && token)
   });

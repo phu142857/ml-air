@@ -396,6 +396,7 @@ def _project_running_tasks(tenant_id: str, project_id: str) -> int:
                 JOIN runs r ON r.run_id = t.run_id
                 WHERE r.tenant_id = %s
                   AND r.project_id = %s
+                  AND r.status IN ('PENDING', 'RUNNING')
                   AND {status_clause}
                 """,
                 (tenant_id, project_id),

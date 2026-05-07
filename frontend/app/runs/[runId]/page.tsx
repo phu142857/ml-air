@@ -16,6 +16,7 @@ import {
 import { LogsSection } from "@/components/sections/logs-section";
 import { RunTimelineSection } from "@/components/sections/run-timeline-section";
 import { RunTrackingSection } from "@/components/sections/run-tracking-section";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { formatDateTimeCompact } from "@/lib/utils";
@@ -31,27 +32,27 @@ export default function RunDetailPage() {
 
   // Queries
   const runQuery = useQuery({
-    queryKey: ["run", runId],
+    queryKey: mlairKeys.run.detail(runId),
     queryFn: () => fetchRun(tenantId, projectId, runId, token),
     ...realtimeFallbackPolling()
   });
   const tasksQuery = useQuery({
-    queryKey: ["run-tasks", runId],
+    queryKey: mlairKeys.run.tasks(runId),
     queryFn: () => fetchRunTasks(tenantId, projectId, runId, token),
     ...realtimeFallbackPolling()
   });
   const logsQuery = useQuery({
-    queryKey: ["run-logs", runId],
+    queryKey: mlairKeys.run.logs(runId),
     queryFn: () => fetchRunLogs(tenantId, projectId, runId, token),
     ...realtimeFallbackPolling()
   });
   const trackingQuery = useQuery({
-    queryKey: ["run-tracking", runId],
+    queryKey: mlairKeys.run.tracking(runId),
     queryFn: () => fetchRunTracking(tenantId, projectId, runId, token),
     ...realtimeFallbackPolling()
   });
   const readinessQuery = useQuery({
-    queryKey: ["run-readiness", runId],
+    queryKey: mlairKeys.run.readiness(runId),
     queryFn: () => fetchRunReadiness(tenantId, projectId, runId, token),
     ...realtimeFallbackPolling()
   });

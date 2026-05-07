@@ -15,6 +15,7 @@ import {
 import { RouteShell } from "@/components/layout/route-shell";
 import { compareRunMetrics, fetchRuns } from "@/lib/api";
 import { RunsHistorySection } from "@/components/sections/runs-history-section";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 
@@ -31,7 +32,7 @@ export default function RunsPage() {
   const pageSize = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["runs", tenantId, projectId],
+    queryKey: mlairKeys.runs.list(tenantId, projectId),
     queryFn: () => fetchRuns(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });

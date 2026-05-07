@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
 import {
@@ -20,6 +21,7 @@ import {
   triggerRunFromModelDataset,
   uploadDatasetCsv
 } from "@/lib/api";
+import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
@@ -62,7 +64,7 @@ export default function DatasetsPage() {
   const [detailVersion, setDetailVersion] = useState<DatasetVersionItem | null>(null);
 
   const datasetsQuery = useQuery({
-    queryKey: ["datasets", tenantId, projectId],
+    queryKey: mlairKeys.datasets.list(tenantId, projectId),
     queryFn: () => fetchDatasets(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });
@@ -71,13 +73,13 @@ export default function DatasetsPage() {
     [datasetsQuery.data, selectedDatasetId]
   );
   const versionsQuery = useQuery({
-    queryKey: ["dataset-versions", tenantId, projectId, selectedDatasetId],
+    queryKey: mlairKeys.datasets.versions(tenantId, projectId, selectedDatasetId),
     queryFn: () => fetchDatasetVersions(tenantId, projectId, selectedDatasetId, token),
     enabled: !!selectedDatasetId,
     ...realtimeFallbackPolling()
   });
   const modelsQuery = useQuery({
-    queryKey: ["models", tenantId, projectId],
+    queryKey: mlairKeys.models.list(tenantId, projectId),
     queryFn: () => fetchModels(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });
@@ -86,17 +88,17 @@ export default function DatasetsPage() {
     [modelsQuery.data, selectedModelId]
   );
   const modelVersionsQuery = useQuery({
-    queryKey: ["model-versions-for-datasets-page", tenantId, projectId, selectedModelId],
+    queryKey: mlairKeys.models.versions(tenantId, projectId, selectedModelId),
     queryFn: () => fetchModelVersions(tenantId, selectedModel?.project_id || projectId, selectedModelId, token),
     enabled: !!selectedModelId
   });
   const resolvedPipelineQuery = useQuery({
-    queryKey: ["model-resolved-pipeline", tenantId, projectId, selectedModelId],
+    queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, selectedModelId),
     queryFn: () => fetchModelResolvedPipeline(tenantId, selectedModel?.project_id || projectId, selectedModelId, token),
     enabled: !!selectedModelId && !!selectedModel
   });
   const pipelinesQuery = useQuery({
-    queryKey: ["pipelines", tenantId, projectId],
+    queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token)
   });
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function DatasetsPage() {
   const pipelineMissing = !resolvedPipelineId && !(advancedMode && pipelineId);
   const effectivePipeline = advancedMode && pipelineId ? pipelineId : resolvedPipelineId;
   const pipelineVersionsQuery = useQuery({
-    queryKey: ["pipeline-versions", tenantId, projectId, effectivePipeline],
+    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, effectivePipeline),
     queryFn: () => fetchPipelineVersions(tenantId, projectId, effectivePipeline, token),
     enabled: !!effectivePipeline
   });
@@ -149,7 +151,7 @@ export default function DatasetsPage() {
     mutationFn: () => uploadDatasetCsv(tenantId, projectId, token, { dataset_name: datasetName.trim(), file: datasetFile as File }),
     onSuccess: async (res) => {
       setDatasetMsg(`Uploaded ${res.dataset_name} ${res.version}`);
-      await queryClient.invalidateQueries({ queryKey: ["datasets", tenantId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.list(tenantId, projectId) });
       setSelectedDatasetId(res.dataset_id);
     },
     onError: (e: any) => setDatasetMsg(`Upload failed: ${String(e?.message || e)}`)
@@ -159,8 +161,8 @@ export default function DatasetsPage() {
     onSuccess: async () => {
       setDatasetMsg("Dataset deleted");
       setSelectedDatasetId("");
-      await queryClient.invalidateQueries({ queryKey: ["datasets", tenantId, projectId] });
-      await queryClient.invalidateQueries({ queryKey: ["dataset-versions", tenantId, projectId, selectedDatasetId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.list(tenantId, projectId) });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, selectedDatasetId) });
     },
     onError: (e: any) => setDatasetMsg(`Delete dataset failed: ${String(e?.message || e)}`)
   });
@@ -168,8 +170,8 @@ export default function DatasetsPage() {
     mutationFn: (versionId: string) => deleteDatasetVersion(tenantId, projectId, selectedDatasetId, versionId, token),
     onSuccess: async () => {
       setDatasetMsg("Dataset version deleted");
-      await queryClient.invalidateQueries({ queryKey: ["dataset-versions", tenantId, projectId, selectedDatasetId] });
-      await queryClient.invalidateQueries({ queryKey: ["datasets", tenantId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, selectedDatasetId) });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.list(tenantId, projectId) });
     },
     onError: (e: any) => setDatasetMsg(`Delete version failed: ${String(e?.message || e)}`)
   });
@@ -231,6 +233,7 @@ export default function DatasetsPage() {
               <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Dataset</th>
+                  <th className="px-3 py-2 text-left">Hub</th>
                   <th className="px-3 py-2 text-left">Rows</th>
                   <th className="px-3 py-2 text-left">Updated</th>
                 </tr>
@@ -243,6 +246,15 @@ export default function DatasetsPage() {
                     onClick={() => setSelectedDatasetId(d.dataset_id)}
                   >
                     <td className="px-3 py-2">{d.name}</td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/datasets/${encodeURIComponent(d.dataset_id)}`}
+                        className="text-blue-400 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Open
+                      </Link>
+                    </td>
                     <td className="px-3 py-2">{d.current_size || 0}</td>
                     <td className="px-3 py-2">{formatDateTimeCompact(d.updated_at || d.created_at)}</td>
                   </tr>
