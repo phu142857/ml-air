@@ -115,6 +115,11 @@ export default function DatasetHubPage() {
     }
     return items[0]?.version_id;
   }, [versionsQuery.data, selectedVersionId]);
+  const selectedVersionRecordCount = useMemo(() => {
+    const items = versionsQuery.data?.items || [];
+    const picked = items.find((v) => v.version_id === selectedVersionForReadiness);
+    return Number(picked?.record_count || 0);
+  }, [versionsQuery.data, selectedVersionForReadiness]);
 
   const readinessQuery = useQuery({
     queryKey: [
@@ -195,6 +200,27 @@ export default function DatasetHubPage() {
     queryFn: () => fetchModels(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });
+  const trainingEligibilityRows = useMemo(() => {
+    const modelIds = new Set((modelsQuery.data?.items || []).map((m) => String(m.model_id)));
+    return (policiesQuery.data?.items || []).map((p) => {
+      const sizePass = selectedVersionRecordCount >= Number(p.required_size || 0);
+      const modelId = String(p.model_id || "").trim();
+      const compatibilityPass = !modelId || modelIds.has(modelId);
+      const eligible = sizePass && compatibilityPass;
+      return {
+        policyId: p.policy_id,
+        triggerMode: p.trigger_mode,
+        modelId: modelId || null,
+        requiredSize: Number(p.required_size || 0),
+        currentSize: selectedVersionRecordCount,
+        eligible,
+        reasons: [
+          !sizePass ? `size ${selectedVersionRecordCount} < ${Number(p.required_size || 0)}` : null,
+          !compatibilityPass ? `model_id ${modelId} not found` : null
+        ].filter(Boolean) as string[]
+      };
+    });
+  }, [modelsQuery.data, policiesQuery.data, selectedVersionRecordCount]);
 
   const resolvedPipelineQuery = useQuery({
     queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, selectedModelId),
@@ -409,6 +435,46 @@ export default function DatasetHubPage() {
               ) : (
                 <p className="text-xs text-muted-foreground">No eligibility checks yet.</p>
               )}
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Training Eligibility Matrix</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-[11px] text-muted-foreground">
+                Version scope:{" "}
+                <span className="font-mono text-foreground">{selectedVersionForReadiness || "latest"}</span>
+              </div>
+              <div className="mt-2 space-y-2 text-xs">
+                {trainingEligibilityRows.length ? (
+                  trainingEligibilityRows.map((r) => (
+                    <div key={r.policyId} className="rounded-lg border border-border bg-muted px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-foreground">{r.policyId}</span>
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            r.eligible
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                              : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                          }`}
+                        >
+                          {r.eligible ? "ELIGIBLE" : "BLOCKED"}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-muted-foreground">
+                        mode={r.triggerMode} · current={r.currentSize} · required={r.requiredSize}
+                        {r.modelId ? ` · model=${r.modelId}` : " · model=any"}
+                      </div>
+                      {!r.eligible && r.reasons.length ? (
+                        <div className="mt-1 text-amber-300/90">{r.reasons.join(" ; ")}</div>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-muted-foreground">No training policies yet.</div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
