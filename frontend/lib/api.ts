@@ -729,6 +729,33 @@ export async function materializeDatasetBuffer(
   };
 }
 
+export async function materializeScheduledDatasetBuffers(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  limit = 50
+) {
+  const lim = Math.max(1, Math.min(200, Number(limit) || 50));
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/buffer/materialize-scheduled?limit=${lim}`,
+    {
+      method: "POST",
+      headers: authHeaders(token),
+      cache: "no-store"
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    tenant_id: string;
+    project_id: string;
+    checked: number;
+    materialized_count: number;
+    materialized: Array<{ dataset_id: string; dataset_version_id: string; version: string; strategy: string }>;
+    skipped: Array<Record<string, unknown>>;
+  };
+}
+
 export type DatasetTrainingPolicy = {
   policy_id: string;
   model_id?: string | null;

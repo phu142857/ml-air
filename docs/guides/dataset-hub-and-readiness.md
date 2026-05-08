@@ -88,6 +88,7 @@ Dataset Hub shows:
 - readiness summary: eligibility status + criteria checklist
 - policy selector and policy presets
 - accumulation buffer metadata and **editable materialization target** (`target_threshold` via `PATCH .../buffer`; distinct from policy `required_size`)
+- schedule strategy controls in Accumulation tab (`Run schedule tick`, scoped to tenant/project, with materialized/skipped summary)
 - dataset versions table with source badges (`IMPORTED DATASET` vs `RUNTIME ACCUMULATED`)
 - training eligibility matrix by policy/model (eligible vs blocked reasons for selected version scope)
 - train action per version (intent-driven)

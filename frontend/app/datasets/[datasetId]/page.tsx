@@ -18,6 +18,7 @@ import {
   fetchDatasetTrainingPolicies,
   fetchDatasetVersions,
   materializeDatasetBuffer,
+  materializeScheduledDatasetBuffers,
   patchDatasetBuffer,
   fetchModels,
   fetchModelResolvedPipeline,
@@ -91,6 +92,13 @@ export default function DatasetHubPage() {
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
   const [accumulationStrategyDraft, setAccumulationStrategyDraft] = useState("snapshot_on_threshold");
   const [accumulationMsg, setAccumulationMsg] = useState("");
+  const [scheduleTickLimit, setScheduleTickLimit] = useState("50");
+  const [scheduleTickResult, setScheduleTickResult] = useState<{
+    checked: number;
+    materialized_count: number;
+    materialized: Array<{ dataset_id: string; dataset_version_id: string; version: string; strategy: string }>;
+    skipped: Array<Record<string, unknown>>;
+  } | null>(null);
 
   const datasetQuery = useQuery({
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
@@ -173,6 +181,20 @@ export default function DatasetHubPage() {
     mutationFn: async () => materializeDatasetBuffer(tenantId, projectId, datasetId, token),
     onSuccess: async (out) => {
       setAccumulationMsg(`Materialized ${out.version} (${out.dataset_version_id.slice(0, 8)}…).`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId) })
+      ]);
+    },
+    onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
+  });
+  const materializeScheduledMutation = useMutation({
+    mutationFn: async () =>
+      materializeScheduledDatasetBuffers(tenantId, projectId, token, Number.parseInt(scheduleTickLimit, 10) || 50),
+    onSuccess: async (out) => {
+      setScheduleTickResult(out);
+      setAccumulationMsg(`Schedule tick checked=${out.checked}, materialized=${out.materialized_count}.`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
@@ -633,6 +655,12 @@ export default function DatasetHubPage() {
                   can finalize a new dataset version (runtime_feedback lineage path). Separate from training policy{" "}
                   <span className="text-foreground">required_size</span> (readiness).
                 </p>
+                {accumulationStrategyDraft === "snapshot_on_schedule" ? (
+                  <p className="text-[11px] leading-relaxed">
+                    Schedule strategy is project-scoped. Use <span className="text-foreground">Run schedule tick</span> to process
+                    eligible buffers for this project and materialize immutable versions.
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-2">
                     <span className="whitespace-nowrap">Strategy</span>
@@ -681,6 +709,7 @@ export default function DatasetHubPage() {
                     className="px-3 py-1 text-xs"
                     disabled={
                       materializeBufferMutation.isPending ||
+                      materializeScheduledMutation.isPending ||
                       !["manual_materialize_only", "snapshot_on_schedule"].includes(accumulationStrategyDraft)
                     }
                     onClick={() => {
@@ -690,6 +719,37 @@ export default function DatasetHubPage() {
                   >
                     Materialize now
                   </Button>
+                  {accumulationStrategyDraft === "snapshot_on_schedule" ? (
+                    <>
+                      <label className="flex items-center gap-2">
+                        <span className="whitespace-nowrap">Tick limit</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={200}
+                          value={scheduleTickLimit}
+                          onChange={(e) => {
+                            setAccumulationMsg("");
+                            setScheduleTickLimit(e.target.value);
+                          }}
+                          className="w-24 appearance-none rounded-lg border border-border bg-muted px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-1 text-xs"
+                        disabled={materializeScheduledMutation.isPending || materializeBufferMutation.isPending}
+                        onClick={() => {
+                          setAccumulationMsg("");
+                          setScheduleTickResult(null);
+                          materializeScheduledMutation.mutate();
+                        }}
+                      >
+                        Run schedule tick
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
                 {accumulationMsg ? (
                   <p
@@ -697,6 +757,41 @@ export default function DatasetHubPage() {
                   >
                     {accumulationMsg}
                   </p>
+                ) : null}
+                {scheduleTickResult ? (
+                  <div className="space-y-2 rounded-lg border border-border bg-background px-3 py-2 text-[11px]">
+                    <div className="text-muted-foreground">
+                      Last tick: checked={scheduleTickResult.checked}, materialized={scheduleTickResult.materialized_count},
+                      skipped={scheduleTickResult.skipped.length}
+                    </div>
+                    {scheduleTickResult.materialized.length ? (
+                      <div>
+                        <div className="mb-1 font-semibold text-foreground">Materialized</div>
+                        <div className="space-y-1">
+                          {scheduleTickResult.materialized.slice(0, 8).map((row) => (
+                            <div key={`${row.dataset_id}:${row.dataset_version_id}`} className="text-muted-foreground">
+                              <span className="font-mono text-foreground">{row.dataset_id}</span> {"->"}{" "}
+                              <span className="font-mono text-foreground">{row.version}</span>{" "}
+                              (<span className="font-mono">{row.dataset_version_id.slice(0, 8)}…</span>)
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {scheduleTickResult.skipped.length ? (
+                      <div>
+                        <div className="mb-1 font-semibold text-foreground">Skipped</div>
+                        <div className="space-y-1">
+                          {scheduleTickResult.skipped.slice(0, 8).map((row, idx) => (
+                            <div key={`${String(row.dataset_id || "na")}:${idx}`} className="text-muted-foreground">
+                              <span className="font-mono text-foreground">{String(row.dataset_id || "unknown")}</span> ·{" "}
+                              {String(row.reason || "skipped")}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
                 <div className="space-y-2 border-t border-border pt-3">
                 <div>buffer_id: <span className="font-mono text-foreground">{String(bufferQuery.data.buffer_id || "—")}</span></div>
