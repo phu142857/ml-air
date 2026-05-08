@@ -22,6 +22,10 @@ class EventType(str, Enum):
     TASK_UPDATED = "task.updated"
     MODEL_PROMOTED = "model.promoted"
     DATASET_UPDATED = "dataset.updated"
+    DATASET_BUFFER_UPDATED = "dataset.buffer.updated"
+    DATASET_VERSION_CREATED = "dataset.version.created"
+    DATASET_READINESS_UPDATED = "dataset.readiness.updated"
+    TRAINING_ELIGIBILITY_UPDATED = "training.eligibility.updated"
 
 
 def realtime_enabled() -> bool:
@@ -221,5 +225,120 @@ def emit_dataset_updated(
             resource_id=dataset_id,
             trace_id=trace_id,
             payload=payload,
+        )
+    )
+
+
+def emit_dataset_readiness_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    required_size: int,
+    current_size: int,
+    status: str,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.DATASET_READINESS_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=dataset_id,
+            trace_id=trace_id,
+            payload={
+                "required_size": int(required_size),
+                "current_size": int(current_size),
+                "status": str(status),
+                "updated_at": dt_to_unix(updated_at),
+            },
+        )
+    )
+
+
+def emit_dataset_buffer_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    source_type: str,
+    current_size: int,
+    target_threshold: int,
+    window_status: str,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.DATASET_BUFFER_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=dataset_id,
+            trace_id=trace_id,
+            payload={
+                "source_type": source_type,
+                "current_size": int(current_size),
+                "target_threshold": int(target_threshold),
+                "window_status": window_status,
+                "updated_at": dt_to_unix(updated_at),
+            },
+        )
+    )
+
+
+def emit_dataset_version_created(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str,
+    source_type: str,
+    record_count: int,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.DATASET_VERSION_CREATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=dataset_id,
+            trace_id=trace_id,
+            payload={
+                "dataset_version_id": dataset_version_id,
+                "source_type": source_type,
+                "record_count": int(record_count),
+                "updated_at": dt_to_unix(updated_at),
+            },
+        )
+    )
+
+
+def emit_training_eligibility_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    dataset_id: str,
+    status: str,
+    ready: bool,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.TRAINING_ELIGIBILITY_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=run_id,
+            trace_id=trace_id,
+            payload={
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+                "status": status,
+                "ready": bool(ready),
+                "updated_at": dt_to_unix(updated_at),
+            },
         )
     )

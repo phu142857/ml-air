@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -11,11 +11,16 @@ import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import {
   fetchDataset,
+  fetchDatasetBuffer,
+  fetchDatasetReadinessEvaluations,
   fetchDatasetReadiness,
+  createDatasetTrainingPolicy,
+  fetchDatasetTrainingPolicies,
   fetchDatasetVersions,
   fetchModels,
   fetchModelResolvedPipeline,
   fetchPipelineVersions,
+  upsertDatasetTrainingPolicy,
   normalizeProjectId
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
@@ -48,10 +53,18 @@ export default function DatasetHubPage() {
   const router = useRouter();
   const { tenantId, projectId, token } = useAppContext();
   const [selectedModelId, setSelectedModelId] = useState("");
+  const [selectedVersionId, setSelectedVersionId] = useState("");
   const [trainingMode, setTrainingMode] = useState("standard");
   const [requiredSize, setRequiredSize] = useState("1000");
-  const [readinessThreshold, setReadinessThreshold] = useState(1000);
   const [trainMsg, setTrainMsg] = useState("");
+  const [policyMsg, setPolicyMsg] = useState("");
+  const [activeTab, setActiveTab] = useState<"overview" | "versions" | "readiness" | "accumulation" | "training">("overview");
+  const [selectedPolicyId, setSelectedPolicyId] = useState("");
+  const [policyRequiredSizeDraft, setPolicyRequiredSizeDraft] = useState("1000");
+  const [newPolicyTriggerMode, setNewPolicyTriggerMode] = useState("manual");
+  const [evaluationPage, setEvaluationPage] = useState(0);
+  const [maxEvaluationPage, setMaxEvaluationPage] = useState(0);
+  const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
 
   const datasetQuery = useQuery({
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
@@ -67,10 +80,43 @@ export default function DatasetHubPage() {
     enabled: Boolean(datasetId && token),
     ...realtimeFallbackPolling()
   });
+  const selectedVersionForReadiness = useMemo(() => {
+    const items = versionsQuery.data?.items || [];
+    if (!items.length) return undefined;
+    if (selectedVersionId) {
+      const matched = items.find((v) => v.version_id === selectedVersionId);
+      if (matched) return matched.version_id;
+    }
+    return items[0]?.version_id;
+  }, [versionsQuery.data, selectedVersionId]);
 
   const readinessQuery = useQuery({
-    queryKey: mlairKeys.datasets.readiness(tenantId, projectId, datasetId, readinessThreshold),
-    queryFn: () => fetchDatasetReadiness(tenantId, projectId, datasetId, token, readinessThreshold),
+    queryKey: [
+      ...mlairKeys.datasets.readiness(tenantId, projectId, datasetId, 0),
+      selectedVersionForReadiness || "latest",
+      selectedPolicyId || "default-policy"
+    ],
+    queryFn: () =>
+      fetchDatasetReadiness(tenantId, projectId, datasetId, token, 1000, selectedVersionForReadiness, selectedPolicyId || undefined),
+    enabled: Boolean(datasetId && token && dataset && selectedPolicyId),
+    ...realtimeFallbackPolling()
+  });
+  const bufferQuery = useQuery({
+    queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId),
+    queryFn: () => fetchDatasetBuffer(tenantId, projectId, datasetId, token),
+    enabled: Boolean(datasetId && token && dataset),
+    ...realtimeFallbackPolling()
+  });
+  const readinessEvaluationsQuery = useQuery({
+    queryKey: [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId), evaluationPage],
+    queryFn: () =>
+      fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 20, evaluationPage * 20),
+    enabled: Boolean(datasetId && token && dataset),
+    ...realtimeFallbackPolling()
+  });
+  const policiesQuery = useQuery({
+    queryKey: mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId),
+    queryFn: () => fetchDatasetTrainingPolicies(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
   });
@@ -110,12 +156,73 @@ export default function DatasetHubPage() {
     if (!hasPlugin) return { ok: false, reason: "Task plugin is missing in pipeline config" };
     return { ok: true, reason: "" };
   }, [effectivePipeline, pipelineVersionsQuery.data]);
+  const evaluationItems = readinessEvaluationsQuery.data?.items || [];
+  const canLoadOlderEvaluations = evaluationItems.length === 20;
+  const filteredEvaluationItems = useMemo(() => {
+    if (evaluationStatusFilter === "all") return evaluationItems;
+    return evaluationItems.filter((row) => String(row.status || "blocked").toLowerCase() === evaluationStatusFilter);
+  }, [evaluationItems, evaluationStatusFilter]);
+  const policyPresets = [
+    { id: "small", label: "Small incremental training", requiredSize: 100 },
+    { id: "daily", label: "Daily retrain", requiredSize: 1000 },
+    { id: "production", label: "Production promotion gate", requiredSize: 5000 }
+  ] as const;
+  const applyPolicyRequiredSize = async (requiredSizeValue: number) => {
+    const req = Math.max(1, Math.floor(requiredSizeValue));
+    const current = (policiesQuery.data?.items || []).find((p) => p.policy_id === selectedPolicyId);
+    if (!current) return;
+    try {
+      setPolicyMsg("");
+      await upsertDatasetTrainingPolicy(tenantId, projectId, datasetId, token, {
+        policy_id: current.policy_id,
+        model_id: current.model_id || undefined,
+        required_size: req,
+        freshness_hours: current.freshness_hours,
+        trigger_mode: current.trigger_mode,
+        validation_rules: current.validation_rules || []
+      });
+      setPolicyRequiredSizeDraft(String(req));
+      await policiesQuery.refetch();
+      await readinessQuery.refetch();
+      setPolicyMsg(`Policy updated to ${req} rows and re-evaluated.`);
+    } catch (err) {
+      setPolicyMsg(`Policy update failed: ${String((err as Error)?.message || err)}`);
+    }
+  };
+  const createPolicy = async () => {
+    const req = Math.max(1, Number.parseInt(policyRequiredSizeDraft, 10) || 1);
+    try {
+      setPolicyMsg("");
+      const created = await createDatasetTrainingPolicy(tenantId, projectId, datasetId, token, {
+        required_size: req,
+        freshness_hours: 24,
+        trigger_mode: newPolicyTriggerMode,
+        validation_rules: []
+      });
+      await policiesQuery.refetch();
+      setSelectedPolicyId(created.policy_id);
+      setPolicyRequiredSizeDraft(String(created.required_size || req));
+      await readinessQuery.refetch();
+      setPolicyMsg("Policy created and selected.");
+    } catch (err) {
+      setPolicyMsg(`Create policy failed: ${String((err as Error)?.message || err)}`);
+    }
+  };
+  useEffect(() => {
+    const firstPolicy = policiesQuery.data?.items?.[0];
+    if (!firstPolicy) return;
+    setSelectedPolicyId((prev) => prev || firstPolicy.policy_id);
+    setPolicyRequiredSizeDraft(String(firstPolicy.required_size || 1000));
+  }, [policiesQuery.data]);
+  const datasetSubtitle = dataset
+    ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)}`
+    : "Readiness, versions, and intent-driven training (dataset / model lifecycle hub)";
 
   return (
     <RouteShell
       activeNav="Datasets"
       title={dataset ? `Dataset · ${dataset.name}` : `Dataset ${datasetId.slice(0, 8)}…`}
-      subtitle="Readiness, versions, and intent-driven training (dataset / model lifecycle hub)"
+      subtitle={datasetSubtitle}
     >
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
@@ -138,55 +245,276 @@ export default function DatasetHubPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="mb-4 border-b border-border">
+        <div className="flex flex-wrap gap-1">
+          {[
+            { id: "overview", label: "Overview" },
+            { id: "versions", label: "Versions" },
+            { id: "readiness", label: "Readiness" },
+            { id: "accumulation", label: "Accumulation" },
+            { id: "training", label: "Training" }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={`tab-stable px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
+                activeTab === tab.id ? "border-color-primary text-color-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "overview" ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dataset Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <div>Latest version: <span className="font-semibold text-foreground">{versionsQuery.data?.items?.[0]?.version || "—"}</span></div>
+                <div>Total versions: <span className="font-semibold text-foreground">{(versionsQuery.data?.items || []).length}</span></div>
+                <div>Current size: <span className="font-semibold text-foreground">{Number(dataset?.current_size || 0)}</span></div>
+                <div>Readiness status: <span className="font-semibold text-foreground">{String(readinessQuery.data?.status || "pending")}</span></div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Eligibility Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(readinessQuery.data?.eligibility_criteria || []).length ? (
+                <div className="space-y-2 text-xs">
+                  {(readinessQuery.data?.eligibility_criteria || []).map((c) => (
+                    <div key={c.code} className="flex items-center justify-between rounded-lg border border-border bg-muted px-2 py-1">
+                      <span className="text-muted-foreground">{c.label}</span>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                          c.status === "pass"
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        {c.status === "pass" ? "PASS" : "FAIL"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No eligibility checks yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {activeTab === "readiness" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Readiness (dataset API)</CardTitle>
+            <CardTitle>Readiness Policy Evaluation</CardTitle>
           </CardHeader>
           <CardContent>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Evaluates <span className="text-slate-200">current_size</span> vs a threshold for this dataset record (not
-            full multi-input pipeline gate). Pipeline gate still runs on train.
-          </p>
-          <label className="mb-3 block text-xs text-muted-foreground">
-            Threshold (rows)
-            <input
-              type="number"
-              min={1}
-              value={readinessThreshold}
-              onChange={(e) => setReadinessThreshold(Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
-              className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
-            />
-          </label>
-          {readinessQuery.data ? (
-            <div className="rounded-xl border border-border bg-muted p-3 text-sm">
-              <div className="mb-2 text-foreground">
-                Ready:{" "}
-                <span className={readinessQuery.data.ready ? "text-emerald-400" : "text-red-400"}>
-                  {String(readinessQuery.data.ready)}
-                </span>
-              </div>
-              <div className="mb-2 text-xs text-muted-foreground">
-                Current: {readinessQuery.data.current_size} · Required: {readinessQuery.data.required_size}
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-background">
-                <div
-                  className={`h-full transition-all ${readinessQuery.data.ready ? "bg-[#3ecf8e]" : "bg-amber-400"}`}
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round((Number(readinessQuery.data.current_size || 0) / Math.max(1, Number(readinessQuery.data.required_size || 1))) * 100)
-                    )}%`
+            <p className="mb-3 text-xs text-muted-foreground">
+              Enterprise mode: evaluate <span className="text-foreground">dataset_version + policy</span>.
+            </p>
+            <div className="mb-3 grid gap-3 md:grid-cols-2">
+              <label className="text-xs text-muted-foreground">
+                Version for readiness
+                <select
+                  value={selectedVersionForReadiness || ""}
+                  onChange={(e) => setSelectedVersionId(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
+                >
+                  {(versionsQuery.data?.items || []).map((v) => (
+                    <option key={v.version_id} value={v.version_id}>
+                      {v.version}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-muted-foreground">
+                Policy
+                <select
+                  value={selectedPolicyId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedPolicyId(id);
+                    const picked = (policiesQuery.data?.items || []).find((p) => p.policy_id === id);
+                    if (picked) setPolicyRequiredSizeDraft(String(picked.required_size || 1000));
                   }}
-                />
-              </div>
+                  className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
+                >
+                  {(policiesQuery.data?.items || []).map((p) => (
+                    <option key={p.policy_id} value={p.policy_id}>
+                      {p.trigger_mode} · min_rows={p.required_size}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
-          )}
+            <div className="mb-3 flex items-center gap-2">
+              <select
+                value={newPolicyTriggerMode}
+                onChange={(e) => setNewPolicyTriggerMode(e.target.value)}
+                className="w-40 rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
+              >
+                <option value="manual">manual</option>
+                <option value="auto_ready">auto_ready</option>
+                <option value="schedule">schedule</option>
+              </select>
+              <input
+                type="number"
+                min={1}
+                value={policyRequiredSizeDraft}
+                onChange={(e) => setPolicyRequiredSizeDraft(e.target.value)}
+                className="w-48 appearance-none rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="px-3 py-1 text-xs"
+                disabled={!selectedPolicyId}
+                onClick={async () => applyPolicyRequiredSize(Number.parseInt(policyRequiredSizeDraft, 10) || 1)}
+              >
+                Confirm Policy
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="px-3 py-1 text-xs"
+                onClick={createPolicy}
+              >
+                Create Policy
+              </Button>
+              {policyMsg ? <span className="text-xs text-muted-foreground">{policyMsg}</span> : null}
+            </div>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {policyPresets.map((preset) => (
+                <Button
+                  key={preset.id}
+                  type="button"
+                  variant="secondary"
+                  className="px-2 py-1 text-xs"
+                  disabled={!selectedPolicyId}
+                  onClick={async () => applyPolicyRequiredSize(preset.requiredSize)}
+                >
+                  {preset.label} ({preset.requiredSize})
+                </Button>
+              ))}
+            </div>
+            {readinessQuery.data ? (
+              <div className="rounded-xl border border-border bg-muted p-3 text-sm">
+                <div className="mb-2 text-foreground">
+                  Eligibility:{" "}
+                  <span className={readinessQuery.data.ready ? "text-emerald-400" : "text-red-400"}>
+                    {String(readinessQuery.data.eligibility_status || readinessQuery.data.status || "blocked")}
+                  </span>
+                </div>
+                <div className="mb-2 text-xs text-muted-foreground">
+                  Current: {readinessQuery.data.current_size} · Required: {readinessQuery.data.required_size}
+                </div>
+                <div className="mb-2 text-xs text-muted-foreground">
+                  Evaluated version:{" "}
+                  <span className="font-mono text-foreground">{readinessQuery.data.dataset_version_id || "—"}</span>
+                </div>
+                <div className="mb-2 text-xs text-muted-foreground">
+                  Policy: <span className="font-mono text-foreground">{readinessQuery.data.policy_id || "—"}</span>
+                </div>
+                {(readinessQuery.data.eligibility_criteria || []).length ? (
+                  <div className="mt-3 space-y-2">
+                    {(readinessQuery.data.eligibility_criteria || []).map((c) => (
+                      <div key={c.code} className="flex items-center justify-between rounded-lg border border-border bg-background px-2 py-1 text-xs">
+                        <span className="text-muted-foreground">{c.label}</span>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            c.status === "pass"
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                              : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                          }`}
+                        >
+                          {c.status === "pass" ? "PASS" : "FAIL"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
+            )}
           </CardContent>
         </Card>
+      ) : null}
 
+      {activeTab === "accumulation" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Accumulation Buffer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {bufferQuery.data ? (
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <div>buffer_id: <span className="font-mono text-foreground">{String(bufferQuery.data.buffer_id || "—")}</span></div>
+                <div>source_type: <span className="font-semibold text-foreground">{String(bufferQuery.data.source_type || "runtime_feedback")}</span></div>
+                <div>window_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_strategy || "threshold")}</span></div>
+                <div>window_status: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_status || "active")}</span></div>
+                <div>materialization_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.materialization_strategy || "snapshot_on_threshold")}</span></div>
+                <div>record_count: <span className="font-semibold text-foreground">{Number(bufferQuery.data.record_count ?? bufferQuery.data.current_size ?? 0)}</span></div>
+                <div>progress: <span className="font-semibold text-foreground">{Number(bufferQuery.data.current_size || 0)} / {Number(bufferQuery.data.target_threshold || 0)}</span></div>
+                <div>created_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.created_at || bufferQuery.data.started_at || ""))}</span></div>
+                <div>last_ingested_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.last_ingested_at || bufferQuery.data.updated_at || ""))}</span></div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No active accumulation buffer yet.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeTab === "versions" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Dataset Versions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DataTableShell>
+              <DataTable className="text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Version</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                    <th className="px-3 py-2 text-left">Source</th>
+                    <th className="px-3 py-2 text-left">Rows</th>
+                    <th className="px-3 py-2 text-left">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(versionsQuery.data?.items || []).map((v) => (
+                    <tr key={v.version_id} className="border-t border-border">
+                      <td className="px-3 py-2">{v.version}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}>
+                          {normalizeDatasetStatus(v.status)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{String(v.source_type || "manual_upload")}</td>
+                      <td className="px-3 py-2">{Number(v.record_count || 0)}</td>
+                      <td className="px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </DataTableShell>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeTab === "training" ? (
         <Card>
           <CardHeader>
             <CardTitle>Train model (intent)</CardTitle>
@@ -236,7 +564,11 @@ export default function DatasetHubPage() {
               </thead>
               <tbody>
                 {(versionsQuery.data?.items || []).map((v) => (
-                  <tr key={v.version_id} className="border-t border-border">
+                  <tr
+                    key={v.version_id}
+                    className={`border-t border-border ${selectedVersionForReadiness === v.version_id ? "bg-secondary/40" : ""}`}
+                    onClick={() => setSelectedVersionId(v.version_id)}
+                  >
                     <td className="px-3 py-2">{v.version}</td>
                     <td className="px-3 py-2">
                       <span
@@ -258,6 +590,7 @@ export default function DatasetHubPage() {
                         title={pluginPrecheck.ok ? "Train" : pluginPrecheck.reason}
                         onClick={async () => {
                           setTrainMsg("");
+                          setSelectedVersionId(v.version_id);
                           try {
                             const scopedPid = normalizeProjectId(String(projectId || "").trim());
                             const runContext: Record<string, string> = {};
@@ -293,31 +626,103 @@ export default function DatasetHubPage() {
           </DataTableShell>
           </CardContent>
         </Card>
-      </div>
+      ) : null}
 
+      {activeTab === "readiness" ? (
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Metadata</CardTitle>
+          <CardTitle>Readiness evaluations</CardTitle>
         </CardHeader>
         <CardContent>
-        {dataset ? (
-          <dl className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
-            <div>
-              <dt className="text-slate-500">dataset_id</dt>
-              <dd className="font-mono text-foreground">{dataset.dataset_id}</dd>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <span />
+            <div className="flex items-center gap-2">
+              <select
+                className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
+                value={evaluationStatusFilter}
+                onChange={(e) => setEvaluationStatusFilter(e.target.value)}
+              >
+                <option value="all">status: all</option>
+                <option value="eligible">status: eligible</option>
+                <option value="blocked">status: blocked</option>
+              </select>
+              <Button
+                variant="secondary"
+                onClick={() => setEvaluationPage((prev) => Math.max(0, prev - 1))}
+                disabled={evaluationPage === 0 || readinessEvaluationsQuery.isLoading}
+              >
+                {"<<"}
+              </Button>
+              <span className="px-3 text-sm text-foreground">
+                Page {evaluationPage + 1} / {maxEvaluationPage + 1}
+              </span>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (evaluationPage < maxEvaluationPage) {
+                    setEvaluationPage((prev) => prev + 1);
+                    return;
+                  }
+                  if (!canLoadOlderEvaluations || readinessEvaluationsQuery.isLoading) return;
+                  const nextPage = maxEvaluationPage + 1;
+                  setMaxEvaluationPage(nextPage);
+                  setEvaluationPage(nextPage);
+                }}
+                disabled={(!canLoadOlderEvaluations && evaluationPage === maxEvaluationPage) || readinessEvaluationsQuery.isLoading}
+              >
+                {">>"}
+              </Button>
             </div>
-            <div>
-              <dt className="text-slate-500">current_size</dt>
-              <dd className="text-foreground">{dataset.current_size ?? 0}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">updated</dt>
-              <dd className="text-foreground">{formatDateTimeCompact(dataset.updated_at || dataset.created_at)}</dd>
-            </div>
-          </dl>
-        ) : null}
+          </div>
+          <DataTableShell>
+            <DataTable className="text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-left">Current / Required</th>
+                  <th className="px-3 py-2 text-left">Version</th>
+                  <th className="px-3 py-2 text-left">Evaluated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEvaluationItems.map((row) => (
+                  <tr key={row.evaluation_id} className="border-t border-border">
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                          row.status === "eligible"
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        {String(row.status || "blocked").toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {Number(row.current_size || 0)} / {Number(row.required_size || 0)}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      {row.dataset_version_id || "—"}
+                    </td>
+                    <td className="px-3 py-2">{formatDateTimeCompact(row.evaluated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+            {filteredEvaluationItems.length === 0 && !readinessEvaluationsQuery.isLoading ? (
+              <p className="p-4 text-xs text-muted-foreground">
+                {evaluationItems.length === 0
+                  ? evaluationPage === 0
+                    ? "No readiness evaluations yet."
+                    : "No older evaluations in this range."
+                  : "No evaluations match this status filter."}
+              </p>
+            ) : null}
+          </DataTableShell>
         </CardContent>
       </Card>
+      ) : null}
+
     </RouteShell>
   );
 }

@@ -117,10 +117,32 @@ function keysForEvent(
       keys.push(
         [...mlairKeys.datasets.versions(tenantId, projectId, rid)],
         [...mlairKeys.datasets.detail(tenantId, projectId, rid)],
+        [...mlairKeys.datasets.buffer(tenantId, projectId, rid)],
         ["dataset-readiness", tenantId, projectId, rid]
       );
     }
     return keys;
+  }
+  if (t === "dataset.buffer.updated" || t === "dataset.version.created") {
+    if (!rid) return [];
+    return [
+      [...mlairKeys.datasets.buffer(tenantId, projectId, rid)],
+      [...mlairKeys.datasets.versions(tenantId, projectId, rid)],
+      [...mlairKeys.datasets.detail(tenantId, projectId, rid)]
+    ];
+  }
+  if (t === "dataset.readiness.updated") {
+    if (!rid) return [];
+    return [
+      ["dataset-readiness", tenantId, projectId, rid],
+      [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, rid)]
+    ];
+  }
+  if (t === "training.eligibility.updated") {
+    if (!runId && !rid) return [];
+    const targetRunId = runId || rid;
+    if (!targetRunId) return [];
+    return [[...mlairKeys.run.readiness(targetRunId)], [...mlairKeys.run.detail(targetRunId)]];
   }
   return [];
 }

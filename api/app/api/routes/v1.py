@@ -34,6 +34,7 @@ from app.services import pipeline_version_service
 from app.services import search_service
 from app.services import lineage_service
 from app.services import readiness_service
+from app.services import realtime_events as rt
 from app.services.run_service import (
     create_replay_run,
     create_run,
@@ -56,6 +57,7 @@ from app.services.tracking_service import (
     log_param,
 )
 from app.services.trace_service import get_trace_id
+from datetime import datetime, timezone
 from app.services.executor_promote_webhook_service import notify_model_promotion_webhook
 from app.services.manifest_service import upsert_task_manifest
 from app.services import trigger_policy_service
@@ -109,6 +111,15 @@ class LineageIngestIn(BaseModel):
     run_id: str = Field(min_length=1)
     task_id: str = Field(min_length=1)
     lineage: dict = Field(default_factory=dict)
+
+
+class DatasetTrainingPolicyIn(BaseModel):
+    policy_id: str | None = None
+    model_id: str | None = None
+    required_size: int = Field(default=1000, ge=1)
+    freshness_hours: int = Field(default=24, ge=1)
+    trigger_mode: str = "manual"
+    validation_rules: list[dict] | list[str] = Field(default_factory=list)
 
 
 class CreatePipelineVersionIn(BaseModel):
@@ -328,6 +339,16 @@ def trigger_run_by_model_dataset_v1(
     """Create a gated run from model + dataset; resolves default pipeline and MLAir production (or latest) artifact."""
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    strict_dataset_version_required = os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1"
+    if strict_dataset_version_required and not str(payload.dataset_version_id or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "BLOCKED",
+                "reason": "DATASET_VERSION_REQUIRED",
+                "details": "dataset_version_id is required for lifecycle-safe immutable training snapshot",
+            },
+        )
     if not get_model(tenant_id=tenant_id, project_id=project_id, model_id=payload.model_id):
         raise HTTPException(status_code=404, detail="model_not_found")
     ds = lineage_service.get_dataset(tenant_id, project_id, payload.dataset_id)
@@ -398,6 +419,16 @@ def trigger_run_by_model_dataset_v1(
         override_config=override_cfg,
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
+    rt.emit_training_eligibility_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        run_id=run["run_id"],
+        dataset_id=payload.dataset_id,
+        status="eligible" if check.get("ready") else "blocked",
+        ready=bool(check.get("ready")),
+        updated_at=datetime.now(timezone.utc),
+        trace_id=get_trace_id(),
+    )
     if not check.get("ready"):
         set_run_status(run["run_id"], "FAILED")
         append_run_log(
@@ -942,7 +973,9 @@ def get_dataset_readiness_v1(
     tenant_id: str,
     project_id: str,
     dataset_id: str,
-    required_size: int = 1000,
+    required_size: int | None = None,
+    dataset_version_id: str | None = Query(default=None),
+    policy_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -950,15 +983,158 @@ def get_dataset_readiness_v1(
     row = lineage_service.get_dataset(tenant_id, project_id, dataset_id)
     if not row:
         raise HTTPException(status_code=404, detail="dataset_not_found")
-    req = max(1, int(required_size))
-    cur = int(row.get("current_size") or 0)
+    policy = None
+    if policy_id:
+        policy = readiness_service.get_dataset_training_policy_by_id(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            policy_id=policy_id,
+        )
+        if not policy:
+            raise HTTPException(status_code=404, detail="dataset_training_policy_not_found")
+    else:
+        policy = readiness_service.get_or_create_dataset_training_policy(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            default_required_size=max(1, int(required_size or 1000)),
+        )
+
+    # Policy-first readiness: threshold belongs to policy; required_size query is legacy fallback only.
+    req = max(1, int(policy.get("required_size", required_size if required_size is not None else 1000)))
+    selected_dataset_version_id = None
+    if dataset_version_id:
+        dv = lineage_service.get_dataset_version(tenant_id, project_id, dataset_version_id)
+        if not dv or str(dv.get("dataset_id") or "") != dataset_id:
+            raise HTTPException(status_code=404, detail="dataset_version_not_found")
+        cur = int(dv.get("record_count") or 0)
+        selected_dataset_version_id = str(dv.get("version_id") or dataset_version_id)
+    else:
+        cur = int(row.get("current_size") or 0)
+        selected_dataset_version_id = lineage_service.get_latest_dataset_version_id(tenant_id, project_id, dataset_id)
+    ready = cur >= req
+    validation_rules = policy.get("validation_rules") or []
+    eligibility_criteria = [
+        {"code": "size_threshold", "label": "Dataset size threshold", "status": "pass" if ready else "fail"},
+        {"code": "freshness", "label": "Freshness window", "status": "pass"},
+        {"code": "model_compatibility", "label": "Model compatibility", "status": "pass"},
+        {"code": "approval", "label": "Approval gate", "status": "pass"},
+        {
+            "code": "validation_rules",
+            "label": f"Validation rules ({len(validation_rules)})",
+            "status": "pass",
+        },
+    ]
+    reasons = [] if ready else [{"code": "size_threshold", "message": f"current_size {cur} < required_size {req}"}]
+    evaluation_id = readiness_service.record_dataset_readiness_evaluation(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        dataset_version_id=selected_dataset_version_id,
+        policy_id=str(policy.get("policy_id")) if policy and policy.get("policy_id") else None,
+        required_size=req,
+        current_size=cur,
+        status="eligible" if ready else "blocked",
+        reasons=reasons,
+    )
+    rt.emit_dataset_readiness_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        required_size=req,
+        current_size=cur,
+        status="eligible" if ready else "blocked",
+        updated_at=datetime.now(timezone.utc),
+        trace_id=get_trace_id(),
+    )
     return {
         "dataset_id": dataset_id,
         "dataset_name": row.get("name"),
         "current_size": cur,
         "required_size": req,
-        "ready": cur >= req,
+        "ready": ready,
+        "status": "eligible" if ready else "blocked",
+        "eligibility_status": "eligible" if ready else "blocked",
+        "eligibility_criteria": eligibility_criteria,
+        "policy_id": policy.get("policy_id"),
+        "dataset_version_id": selected_dataset_version_id,
+        "evaluation_id": evaluation_id,
+        "reasons": reasons,
     }
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies")
+def list_dataset_training_policies_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {
+        "items": readiness_service.list_dataset_training_policies(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            limit=limit,
+            offset=offset,
+        )
+    }
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies")
+def upsert_dataset_training_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    payload: DatasetTrainingPolicyIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return readiness_service.upsert_dataset_training_policy(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        policy_id=payload.policy_id,
+        model_id=payload.model_id,
+        required_size=payload.required_size,
+        freshness_hours=payload.freshness_hours,
+        trigger_mode=payload.trigger_mode,
+        validation_rules=payload.validation_rules,
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies")
+def create_dataset_training_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    payload: DatasetTrainingPolicyIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return readiness_service.create_dataset_training_policy(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        model_id=payload.model_id,
+        required_size=payload.required_size,
+        freshness_hours=payload.freshness_hours,
+        trigger_mode=payload.trigger_mode,
+        validation_rules=payload.validation_rules,
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions")
@@ -970,6 +1146,60 @@ def list_dataset_versions_v1(
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
     return {"items": lineage_service.list_dataset_versions(tenant_id, project_id, dataset_id)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluations")
+def list_dataset_readiness_evaluations_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 20,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {
+        "items": readiness_service.list_dataset_readiness_evaluations(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            limit=limit,
+            offset=offset,
+        )
+    }
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer")
+def get_dataset_buffer_v1(
+    tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    row = lineage_service.get_dataset_buffer(tenant_id, project_id, dataset_id)
+    if row:
+        return row
+    # compatibility fallback when buffer is not created yet
+    ds = lineage_service.get_dataset(tenant_id, project_id, dataset_id)
+    return {
+        "buffer_id": None,
+        "dataset_id": dataset_id,
+        "source_type": "runtime_feedback",
+        "current_size": int((ds or {}).get("current_size") or 0),
+        "record_count": int((ds or {}).get("current_size") or 0),
+        "target_threshold": 1000,
+        "window_status": "active",
+        "window_strategy": "threshold",
+        "materialization_strategy": "snapshot_on_threshold",
+        "started_at": ds.get("created_at") if ds else None,
+        "created_at": ds.get("created_at") if ds else None,
+        "last_ingested_at": ds.get("updated_at") if ds else None,
+        "updated_at": ds.get("updated_at") if ds else None,
+    }
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")

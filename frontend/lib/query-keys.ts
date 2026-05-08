@@ -24,6 +24,12 @@ export const mlairKeys = {
     list: (tenantId: string, projectId: string) => ["datasets", tenantId, projectId] as const,
     detail: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset", tenantId, projectId, datasetId] as const,
+    buffer: (tenantId: string, projectId: string, datasetId: string) =>
+      ["dataset-buffer", tenantId, projectId, datasetId] as const,
+    readinessEvaluations: (tenantId: string, projectId: string, datasetId: string) =>
+      ["dataset-readiness-evaluations", tenantId, projectId, datasetId] as const,
+    trainingPolicies: (tenantId: string, projectId: string, datasetId: string) =>
+      ["dataset-training-policies", tenantId, projectId, datasetId] as const,
     versions: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-versions", tenantId, projectId, datasetId] as const,
     readiness: (tenantId: string, projectId: string, datasetId: string, requiredSize: number) =>

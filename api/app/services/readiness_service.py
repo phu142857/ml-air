@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+import json
 from typing import Any
 
 from app.services.db_service import db_conn
@@ -179,3 +181,347 @@ def list_run_readiness(tenant_id: str, project_id: str, run_id: str) -> list[dic
         }
         for r in rows
     ]
+
+
+def record_dataset_readiness_evaluation(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str | None,
+    policy_id: str | None,
+    required_size: int,
+    current_size: int,
+    status: str,
+    reasons: list[dict[str, Any]] | list[str] | None = None,
+) -> str:
+    evaluation_id = str(uuid4())
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO dataset_readiness_evaluations(
+                    evaluation_id,
+                    tenant_id,
+                    project_id,
+                    dataset_id,
+                    dataset_version_id,
+                    policy_id,
+                    required_size,
+                    current_size,
+                    status,
+                    reasons
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::json)
+                """,
+                (
+                    evaluation_id,
+                    tenant_id,
+                    project_id,
+                    dataset_id,
+                    dataset_version_id,
+                    policy_id,
+                    int(required_size),
+                    int(current_size),
+                    str(status),
+                    json.dumps(reasons or []),
+                ),
+            )
+    return evaluation_id
+
+
+def list_dataset_readiness_evaluations(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    lim = max(1, min(int(limit), 200))
+    off = max(0, int(offset))
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    evaluation_id,
+                    dataset_version_id,
+                    policy_id,
+                    required_size,
+                    current_size,
+                    status,
+                    evaluated_at,
+                    reasons
+                FROM dataset_readiness_evaluations
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND dataset_id = %s
+                ORDER BY evaluated_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (tenant_id, project_id, dataset_id, lim, off),
+            )
+            rows = cur.fetchall()
+    return [
+        {
+            "evaluation_id": r[0],
+            "dataset_version_id": r[1],
+            "policy_id": r[2],
+            "required_size": int(r[3] or 0),
+            "current_size": int(r[4] or 0),
+            "status": str(r[5] or "blocked"),
+            "evaluated_at": r[6].isoformat(),
+            "reasons": r[7] or [],
+        }
+        for r in rows
+    ]
+
+
+def get_or_create_dataset_training_policy(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    model_id: str | None = None,
+    default_required_size: int = 1000,
+) -> dict[str, Any]:
+    req = max(1, int(default_required_size or 1000))
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            if model_id is None:
+                cur.execute(
+                    """
+                    SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+                    FROM dataset_training_policies
+                    WHERE tenant_id = %s
+                      AND project_id = %s
+                      AND dataset_id = %s
+                      AND model_id IS NULL
+                    LIMIT 1
+                    """,
+                    (tenant_id, project_id, dataset_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+                    FROM dataset_training_policies
+                    WHERE tenant_id = %s
+                      AND project_id = %s
+                      AND dataset_id = %s
+                      AND model_id = %s
+                    LIMIT 1
+                    """,
+                    (tenant_id, project_id, dataset_id, model_id),
+                )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "policy_id": row[0],
+                    "required_size": int(row[1] or req),
+                    "freshness_hours": int(row[2] or 24),
+                    "trigger_mode": str(row[3] or "manual"),
+                    "validation_rules": row[4] or [],
+                    "model_id": row[5],
+                }
+            policy_id = str(uuid4())
+            cur.execute(
+                """
+                INSERT INTO dataset_training_policies(
+                    policy_id, tenant_id, project_id, dataset_id, model_id, required_size, freshness_hours, trigger_mode, validation_rules
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::json)
+                """,
+                (policy_id, tenant_id, project_id, dataset_id, model_id, req, 24, "manual", []),
+            )
+    return {
+        "policy_id": policy_id,
+        "required_size": req,
+        "freshness_hours": 24,
+        "trigger_mode": "manual",
+        "validation_rules": [],
+        "model_id": model_id,
+    }
+
+
+def get_dataset_training_policy_by_id(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    policy_id: str,
+) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+                FROM dataset_training_policies
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND dataset_id = %s
+                  AND policy_id = %s
+                LIMIT 1
+                """,
+                (tenant_id, project_id, dataset_id, policy_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "policy_id": row[0],
+        "required_size": int(row[1] or 1000),
+        "freshness_hours": int(row[2] or 24),
+        "trigger_mode": str(row[3] or "manual"),
+        "validation_rules": row[4] or [],
+        "model_id": row[5],
+    }
+
+
+def list_dataset_training_policies(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    lim = max(1, min(int(limit), 200))
+    off = max(0, int(offset))
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+                FROM dataset_training_policies
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND dataset_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (tenant_id, project_id, dataset_id, lim, off),
+            )
+            rows = cur.fetchall()
+    return [
+        {
+            "policy_id": r[0],
+            "required_size": int(r[1] or 1000),
+            "freshness_hours": int(r[2] or 24),
+            "trigger_mode": str(r[3] or "manual"),
+            "validation_rules": r[4] or [],
+            "model_id": r[5],
+        }
+        for r in rows
+    ]
+
+
+def upsert_dataset_training_policy(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    policy_id: str | None = None,
+    model_id: str | None = None,
+    required_size: int = 1000,
+    freshness_hours: int = 24,
+    trigger_mode: str = "manual",
+    validation_rules: list[dict[str, Any]] | list[str] | None = None,
+) -> dict[str, Any]:
+    req = max(1, int(required_size or 1000))
+    fresh = max(1, int(freshness_hours or 24))
+    mode = str(trigger_mode or "manual").strip() or "manual"
+    rules_json = json.dumps(validation_rules or [])
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            if policy_id:
+                cur.execute(
+                    """
+                    UPDATE dataset_training_policies
+                    SET required_size = %s,
+                        freshness_hours = %s,
+                        trigger_mode = %s,
+                        validation_rules = %s::json,
+                        model_id = %s
+                    WHERE tenant_id = %s
+                      AND project_id = %s
+                      AND dataset_id = %s
+                      AND policy_id = %s
+                    RETURNING policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+                    """,
+                    (req, fresh, mode, rules_json, model_id, tenant_id, project_id, dataset_id, policy_id),
+                )
+                row = cur.fetchone()
+                if row:
+                    return {
+                        "policy_id": row[0],
+                        "required_size": int(row[1] or req),
+                        "freshness_hours": int(row[2] or fresh),
+                        "trigger_mode": str(row[3] or mode),
+                        "validation_rules": row[4] or [],
+                        "model_id": row[5],
+                    }
+
+            created_policy_id = policy_id or str(uuid4())
+            cur.execute(
+                """
+                INSERT INTO dataset_training_policies(
+                    policy_id, tenant_id, project_id, dataset_id, model_id, required_size, freshness_hours, trigger_mode, validation_rules
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::json)
+                ON CONFLICT (policy_id) DO UPDATE
+                SET required_size = EXCLUDED.required_size,
+                    freshness_hours = EXCLUDED.freshness_hours,
+                    trigger_mode = EXCLUDED.trigger_mode,
+                    validation_rules = EXCLUDED.validation_rules,
+                    model_id = EXCLUDED.model_id
+                RETURNING policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+                """,
+                (created_policy_id, tenant_id, project_id, dataset_id, model_id, req, fresh, mode, rules_json),
+            )
+            row = cur.fetchone()
+    return {
+        "policy_id": row[0],
+        "required_size": int(row[1] or req),
+        "freshness_hours": int(row[2] or fresh),
+        "trigger_mode": str(row[3] or mode),
+        "validation_rules": row[4] or [],
+        "model_id": row[5],
+    }
+
+
+def create_dataset_training_policy(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    model_id: str | None = None,
+    required_size: int = 1000,
+    freshness_hours: int = 24,
+    trigger_mode: str = "manual",
+    validation_rules: list[dict[str, Any]] | list[str] | None = None,
+) -> dict[str, Any]:
+    req = max(1, int(required_size or 1000))
+    fresh = max(1, int(freshness_hours or 24))
+    mode = str(trigger_mode or "manual").strip() or "manual"
+    policy_id = str(uuid4())
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO dataset_training_policies(
+                    policy_id, tenant_id, project_id, dataset_id, model_id, required_size, freshness_hours, trigger_mode, validation_rules
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::json)
+                """,
+                (policy_id, tenant_id, project_id, dataset_id, model_id, req, fresh, mode, json.dumps(validation_rules or [])),
+            )
+    return {
+        "policy_id": policy_id,
+        "required_size": req,
+        "freshness_hours": fresh,
+        "trigger_mode": mode,
+        "validation_rules": validation_rules or [],
+        "model_id": model_id,
+    }

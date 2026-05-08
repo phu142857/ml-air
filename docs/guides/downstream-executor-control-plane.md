@@ -16,7 +16,7 @@ Describe a **generic** integration path: MLAir owns runs, tasks, readiness, and 
    `PUT /v1/tenants/{tenant}/projects/{project}/models/{model_id}/pipeline-mapping`  
    Body: `{ "pipeline_id": "<pipeline_id>" }`
 
-2. **Upload or register datasets** so `dataset_id` / versions exist and meet readiness rules.
+2. **Upload or register datasets** so `dataset_id` and immutable **dataset versions** exist, and your chosen version can pass **training eligibility** under the **training policy** you use with `GET .../readiness` (policy + version).
 
 3. **Trigger a gated run** from model + dataset:
 

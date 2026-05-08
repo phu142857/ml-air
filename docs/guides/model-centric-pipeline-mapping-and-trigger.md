@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use **MLAir as the source of truth** for which **pipeline** trains a **model** and which **production (or latest) artifact** the executor should load, without hardcoding a client name in the API. Callers send **`model_id` + `dataset_id`** (and optionally `dataset_version_id`); MLAir resolves the rest and creates a **readiness-gated** run like the explicit pipeline run endpoint.
+Use **MLAir as the source of truth** for which **pipeline** trains a **model** and which **production (or latest) artifact** the executor should load, without hardcoding a client name in the API. Callers send **`model_id` + `dataset_id` + `dataset_version_id`** (version required by default for immutable snapshots); MLAir resolves the rest and creates a run that passes the same **execution gate** (readiness-gated) as the explicit pipeline run endpoint. For lifecycle UX, evaluate **training eligibility** first via `GET .../readiness` with a **training policy** — see [Configure Data Readiness and Gating](./configure-data-readiness-gating.md).
 
 ## When to use this flow
 
@@ -82,7 +82,7 @@ Content-Type: application/json
 {
   "model_id": "<uuid>",
   "dataset_id": "<uuid>",
-  "dataset_version_id": "<optional; default = latest version of dataset>",
+  "dataset_version_id": "<required immutable training snapshot id>",
   "pipeline_id_override": "<optional; advanced>",
   "training_mode": "standard",
   "idempotency_key": "optional-stable-key",
@@ -94,10 +94,11 @@ Content-Type: application/json
 **Behavior**
 
 - Resolves `pipeline_id` (unless `pipeline_id_override` is set).
+- Enforces strict lifecycle contract when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` (default): `dataset_version_id` is required; set the env to `0` only if you accept latest-version fallback.
 - Loads **latest** `pipeline_version_id` for that pipeline and validates plugin contract.
 - Merges **`override_config`** with `dataset_version_id` and readiness **`inputs`** using the dataset’s **logical name** from the `datasets` row.
 - Builds **`plugin_context`** after **pipeline + mapping + dataset** resolution (not from UI alone); see [plugin_context](#plugin_context-for-post-runstrigger) below.
-- Runs the same **readiness gate** as `POST .../pipelines/{pipeline_id}/run`; on failure the run is marked `FAILED` and the response includes `blocked_by_gate` and `readiness`.
+- Runs the same **execution gate** (readiness gate) as `POST .../pipelines/{pipeline_id}/run`; on failure the run is marked `FAILED` and the response includes `blocked_by_gate` and `readiness`.
 
 **Response extras**
 
@@ -123,7 +124,7 @@ Implementation merges **`context`** from the request body first, then sets the k
 | `mlair_model_id` | yes | string | Same as `model_id` (explicit alias for workers). |
 | `model_id` | yes | string | Registry model id from the trigger body. |
 | `dataset_id` | yes | string | Dataset id from the trigger body. |
-| `dataset_version_id` | yes | string | Resolved version id (explicit or latest). |
+| `dataset_version_id` | yes* | string | *From request when strict mode is on (default); otherwise server may resolve latest.* |
 | `artifact_uri` | if resolved | string | Base-weight URI from registry resolution when present (may be `file://`, `s3://`, or another scheme). **MLAir does not guarantee** your executor can read every scheme; that is a downstream capability decision. |
 | `base_weights_source` | if resolved | string | `production` or `latest_artifact` when `artifact_uri` comes from `resolve_model_pipeline`. |
 | `base_version_id` | if resolved | string | Model version row id tied to the chosen artifact. |
@@ -175,6 +176,7 @@ curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_proj
   -d '{
     "model_id": "MODEL_ID",
     "dataset_id": "DATASET_ID",
+    "dataset_version_id": "DATASET_VERSION_ID",
     "training_mode": "standard",
     "idempotency_key": "train-from-ui-001"
   }'

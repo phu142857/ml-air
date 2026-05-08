@@ -62,6 +62,111 @@ def _flush_touched_datasets(tenant_id: str, project_id: str, touched_dataset_ids
         _notify_dataset_updated(tenant_id, project_id, ds_id)
 
 
+def _upsert_dataset_buffer(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    *,
+    source_type: str = "runtime_feedback",
+    current_size: int | None = None,
+    target_threshold: int = 1000,
+    window_status: str = "active",
+) -> None:
+    now_size = max(0, int(current_size or 0))
+    tgt = max(1, int(target_threshold or 1000))
+    src = str(source_type or "runtime_feedback").strip() or "runtime_feedback"
+    win = str(window_status or "active").strip() or "active"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO dataset_accumulation_buffers(
+                    buffer_id, tenant_id, project_id, dataset_id, source_type, current_size, target_threshold, window_status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (tenant_id, project_id, dataset_id)
+                DO UPDATE SET
+                    source_type = EXCLUDED.source_type,
+                    current_size = EXCLUDED.current_size,
+                    target_threshold = EXCLUDED.target_threshold,
+                    window_status = EXCLUDED.window_status,
+                    updated_at = NOW()
+                """,
+                (str(uuid4()), tenant_id, project_id, dataset_id, src, now_size, tgt, win),
+            )
+    rt.emit_dataset_buffer_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        source_type=src,
+        current_size=now_size,
+        target_threshold=tgt,
+        window_status=win,
+        updated_at=datetime.now(timezone.utc),
+        trace_id=get_trace_id(),
+    )
+
+
+def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT buffer_id, source_type, current_size, target_threshold, window_status, started_at, updated_at
+                FROM dataset_accumulation_buffers
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "buffer_id": row[0],
+        "dataset_id": dataset_id,
+        "source_type": row[1],
+        "current_size": int(row[2] or 0),
+        "record_count": int(row[2] or 0),
+        "target_threshold": int(row[3] or 0),
+        "window_status": row[4],
+        "window_strategy": "threshold",
+        "materialization_strategy": "snapshot_on_threshold",
+        "started_at": row[5].isoformat(),
+        "created_at": row[5].isoformat(),
+        "last_ingested_at": row[6].isoformat(),
+        "updated_at": row[6].isoformat(),
+    }
+
+
+def _reset_dataset_buffer(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    *,
+    source_type: str = "runtime_feedback",
+    target_threshold: int = 1000,
+) -> None:
+    _upsert_dataset_buffer(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        source_type=source_type,
+        current_size=0,
+        target_threshold=max(1, int(target_threshold)),
+        window_status="active",
+    )
+
+
+def _dataset_scope(dataset_id: str) -> tuple[str, str]:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT tenant_id, project_id FROM datasets WHERE dataset_id = %s", (dataset_id,))
+            row = cur.fetchone()
+    if not row:
+        return "", ""
+    return str(row[0] or ""), str(row[1] or "")
+
+
 def _upsert_dataset(
     tenant_id: str,
     project_id: str,
@@ -110,6 +215,8 @@ def _upsert_dataset_version(
     version: str,
     uri: str | None,
     checksum: str | None,
+    source_type: str | None = None,
+    record_count: int | None = None,
     status: str = "ready",
     quality_score: int = 100,
     summary: list[str] | None = None,
@@ -126,13 +233,35 @@ def _upsert_dataset_version(
             )
             row = cur.fetchone()
             if row:
+                if source_type is not None or record_count is not None:
+                    cur.execute(
+                        """
+                        UPDATE dataset_versions
+                        SET source_type = COALESCE(source_type, %s),
+                            record_count = COALESCE(%s, record_count)
+                        WHERE version_id = %s
+                        """,
+                        (source_type, record_count, row[0]),
+                    )
                 return row[0]
             version_id = str(uuid4())
             cur.execute(
                 """
                 INSERT INTO dataset_versions
-                    (version_id, dataset_id, version, uri, checksum, status, quality_score, summary, details)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    (
+                        version_id,
+                        dataset_id,
+                        version,
+                        uri,
+                        checksum,
+                        source_type,
+                        record_count,
+                        status,
+                        quality_score,
+                        summary,
+                        details
+                    )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 """,
                 (
                     version_id,
@@ -140,12 +269,26 @@ def _upsert_dataset_version(
                     version,
                     uri,
                     checksum,
+                    source_type,
+                    int(record_count) if record_count is not None else None,
                     status,
                     int(quality_score),
                     summary or [],
                     json.dumps(details or []),
                 ),
             )
+            tenant_id, project_id = _dataset_scope(dataset_id)
+            if tenant_id and project_id:
+                rt.emit_dataset_version_created(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    dataset_id=dataset_id,
+                    dataset_version_id=version_id,
+                    source_type=str(source_type or "manual_upload"),
+                    record_count=int(record_count or 0),
+                    updated_at=datetime.now(timezone.utc),
+                    trace_id=get_trace_id(),
+                )
             return version_id
 
 
@@ -320,11 +463,21 @@ def create_dataset_version_from_csv_upload(
         checksum=checksum,
         current_size=int(analysis["row_count"]),
     )
+    _upsert_dataset_buffer(
+        tenant_id,
+        project_id,
+        dataset_id,
+        source_type="csv_import",
+        current_size=int(analysis["row_count"]),
+        window_status="active",
+    )
     version_id = _upsert_dataset_version(
         dataset_id=dataset_id,
         version=version,
         uri=artifact_uri,
         checksum=checksum,
+        source_type="csv_import",
+        record_count=int(analysis["row_count"]),
         status=str(business_validation.get("status") or "ready"),
         quality_score=int(business_validation.get("quality_score") or 0),
         summary=[str(x) for x in (business_validation.get("summary") or [])],
@@ -336,6 +489,8 @@ def create_dataset_version_from_csv_upload(
         "dataset_name": safe_dataset_name,
         "version_id": version_id,
         "version": version,
+        "source_type": "csv_import",
+        "record_count": int(analysis["row_count"]),
         "uri": artifact_uri,
         "checksum": checksum,
         "status": business_validation.get("status", "ready"),
@@ -408,7 +563,8 @@ def ingest_lineage_from_task(
         name = str(item.get("name", "")).strip()
         if not name:
             continue
-        ver = str(item.get("version", "default")).strip() or "default"
+        ver_raw = item.get("version")
+        ver = str(ver_raw or "default").strip() or "default"
         uri = item.get("uri")
         chk = item.get("checksum")
         size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
@@ -424,8 +580,42 @@ def ingest_lineage_from_task(
             checksum=str(chk) if chk else None,
             current_size=size,
         )
+        _upsert_dataset_buffer(
+            tenant_id,
+            project_id,
+            ds,
+            source_type=str(item.get("source_type") or "api_ingestion"),
+            current_size=size,
+            window_status="active",
+        )
+        buf = get_dataset_buffer(tenant_id, project_id, ds)
+        source_type_for_item = str(item.get("source_type") or "api_ingestion").strip() or "api_ingestion"
+        if (
+            ver_raw in (None, "")
+            and source_type_for_item == "runtime_feedback"
+            and buf
+            and int(buf.get("current_size") or 0) >= int(buf.get("target_threshold") or 1000)
+        ):
+            ver = _next_dataset_version(ds)
+            _reset_dataset_buffer(
+                tenant_id,
+                project_id,
+                ds,
+                source_type=source_type_for_item,
+                target_threshold=int(buf.get("target_threshold") or 1000),
+            )
         touched_dataset_ids.add(str(ds))
-        input_vids.append(_upsert_dataset_version(ds, ver, str(uri) if uri else None, str(chk) if chk else None))
+        item_source_type = source_type_for_item
+        input_vids.append(
+            _upsert_dataset_version(
+                ds,
+                ver,
+                str(uri) if uri else None,
+                str(chk) if chk else None,
+                source_type=item_source_type,
+                record_count=size,
+            )
+        )
 
     if not input_vids and not outs:
         _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)
@@ -438,7 +628,8 @@ def ingest_lineage_from_task(
         name = str(item.get("name", "")).strip()
         if not name:
             continue
-        ver = str(item.get("version", "default")).strip() or "default"
+        ver_raw = item.get("version")
+        ver = str(ver_raw or "default").strip() or "default"
         uri = item.get("uri")
         chk = item.get("checksum")
         size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
@@ -454,8 +645,42 @@ def ingest_lineage_from_task(
             checksum=str(chk) if chk else None,
             current_size=size,
         )
+        _upsert_dataset_buffer(
+            tenant_id,
+            project_id,
+            ds,
+            source_type=str(item.get("source_type") or "etl"),
+            current_size=size,
+            window_status="active",
+        )
+        buf = get_dataset_buffer(tenant_id, project_id, ds)
+        source_type_for_item = str(item.get("source_type") or "etl").strip() or "etl"
+        if (
+            ver_raw in (None, "")
+            and source_type_for_item == "runtime_feedback"
+            and buf
+            and int(buf.get("current_size") or 0) >= int(buf.get("target_threshold") or 1000)
+        ):
+            ver = _next_dataset_version(ds)
+            _reset_dataset_buffer(
+                tenant_id,
+                project_id,
+                ds,
+                source_type=source_type_for_item,
+                target_threshold=int(buf.get("target_threshold") or 1000),
+            )
         touched_dataset_ids.add(str(ds))
-        output_vids.append(_upsert_dataset_version(ds, ver, str(uri) if uri else None, str(chk) if chk else None))
+        item_source_type = source_type_for_item
+        output_vids.append(
+            _upsert_dataset_version(
+                ds,
+                ver,
+                str(uri) if uri else None,
+                str(chk) if chk else None,
+                source_type=item_source_type,
+                record_count=size,
+            )
+        )
 
     if not output_vids:
         _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)
@@ -536,6 +761,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
+                     , dv.source_type, dv.record_count
                      , dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
@@ -552,13 +778,35 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             "uri": r[2],
             "checksum": r[3],
             "created_at": r[4].isoformat(),
-            "status": r[5] or "ready",
-            "quality_score": int(r[6] or 0),
-            "summary": r[7] or [],
-            "details": r[8] or [],
+            "source_type": r[5] or "manual_upload",
+            "record_count": int(r[6] or 0),
+            "status": r[7] or "ready",
+            "quality_score": int(r[8] or 0),
+            "summary": r[9] or [],
+            "details": r[10] or [],
         }
         for r in rows
     ]
+
+
+def get_latest_dataset_version_id(tenant_id: str, project_id: str, dataset_id: str) -> str | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND d.dataset_id = %s
+                ORDER BY dv.created_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+    return str(row[0]) if row and row[0] else None
 
 
 def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dict | None:
@@ -567,6 +815,7 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
+                       dv.source_type, dv.record_count,
                        dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
@@ -585,10 +834,12 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "created_at": row[4].isoformat(),
         "dataset_id": row[5],
         "dataset_name": row[6],
-        "status": row[7] or "ready",
-        "quality_score": int(row[8] or 0),
-        "summary": row[9] or [],
-        "details": row[10] or [],
+        "source_type": row[7] or "manual_upload",
+        "record_count": int(row[8] or 0),
+        "status": row[9] or "ready",
+        "quality_score": int(row[10] or 0),
+        "summary": row[11] or [],
+        "details": row[12] or [],
     }
 
 
@@ -877,6 +1128,7 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
+                       dv.source_type, dv.record_count,
                        dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
@@ -896,10 +1148,12 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
             "created_at": r[4].isoformat(),
             "dataset_id": r[5],
             "dataset_name": r[6],
-            "status": r[7] or "ready",
-            "quality_score": int(r[8] or 0),
-            "summary": r[9] or [],
-            "details": r[10] or [],
+            "source_type": r[7] or "manual_upload",
+            "record_count": int(r[8] or 0),
+            "status": r[9] or "ready",
+            "quality_score": int(r[10] or 0),
+            "summary": r[11] or [],
+            "details": r[12] or [],
         }
         for r in rows
     ]

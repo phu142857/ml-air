@@ -26,11 +26,11 @@ For a single narrative from mapping → trigger → lease → complete → optio
 
    `POST /v1/tenants/<tenant>/projects/<project>/datasets/upload` (multipart form)
 
-4. **Trigger a gated run** from model + dataset.
+4. **Trigger an execution-gated run** from model + dataset (readiness gate same as pipeline run).
 
    `POST /v1/tenants/<tenant>/projects/<project>/runs/trigger`  
-   Body: `{ "model_id": "<model_id>", "dataset_id": "<dataset_id>", "idempotency_key": "..." }`  
-   Optional: `dataset_version_id`, `training_mode`, `override_config`.
+   Body: `{ "model_id": "<model_id>", "dataset_id": "<dataset_id>", "dataset_version_id": "<version_id>", "idempotency_key": "..." }` — `dataset_version_id` is required by default (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`).  
+   Optional: `training_mode`, `override_config`.
 
 5. **Worker loop**
 

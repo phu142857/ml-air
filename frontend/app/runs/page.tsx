@@ -29,6 +29,7 @@ export default function RunsPage() {
   const [selectedMetricKey, setSelectedMetricKey] = useState("accuracy");
   const [compareSummary, setCompareSummary] = useState("");
   const [trainingModeFilter, setTrainingModeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
@@ -107,10 +108,15 @@ export default function RunsPage() {
   }
 
   const allRuns = data?.items ?? [];
-  const filteredRuns =
-    trainingModeFilter === "all"
-      ? allRuns
-      : allRuns.filter((r) => String(r.training_mode || "full").toLowerCase() === trainingModeFilter);
+  const filteredRuns = allRuns.filter((r) => {
+    const modeOk =
+      trainingModeFilter === "all" ||
+      String(r.training_mode || "full").toLowerCase() === trainingModeFilter;
+    const statusOk =
+      statusFilter === "all" ||
+      String(r.status || "").toLowerCase() === statusFilter;
+    return modeOk && statusOk;
+  });
   const totalPages = Math.max(1, Math.ceil(filteredRuns.length / pageSize));
   const paginatedRuns = filteredRuns.slice(
     (currentPage - 1) * pageSize,
@@ -210,6 +216,21 @@ export default function RunsPage() {
               <option value="standard">mode: standard</option>
               <option value="full">mode: full</option>
             </select>
+            <select
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">status: all</option>
+              <option value="queued">status: queued</option>
+              <option value="running">status: running</option>
+              <option value="success">status: success</option>
+              <option value="failed">status: failed</option>
+              <option value="cancelled">status: cancelled</option>
+            </select>
             <Button
               variant="secondary"
               onClick={() =>
@@ -217,7 +238,7 @@ export default function RunsPage() {
               }
               disabled={currentPage === 1 || isLoading}
             >
-              Previous
+              {"<<"}
             </Button>
 
             <span className="px-3 text-sm text-foreground">
@@ -233,7 +254,7 @@ export default function RunsPage() {
               }
               disabled={currentPage === totalPages || isLoading}
             >
-              Next
+              {">>"}
             </Button>
             </div>
           </div>

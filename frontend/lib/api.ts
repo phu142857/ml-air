@@ -610,12 +610,16 @@ export async function fetchDatasetReadiness(
   projectId: string,
   datasetId: string,
   token: string,
-  requiredSize = 1000
+  requiredSize = 1000,
+  datasetVersionId?: string,
+  policyId?: string
 ) {
   const scoped = normalizeProjectId(projectId);
   const req = Math.max(1, Math.floor(requiredSize));
+  const versionQuery = datasetVersionId ? `&dataset_version_id=${encodeURIComponent(datasetVersionId)}` : "";
+  const policyQuery = policyId ? `&policy_id=${encodeURIComponent(policyId)}` : "";
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${scoped}/datasets/${encodeURIComponent(datasetId)}/readiness?required_size=${req}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scoped}/datasets/${encodeURIComponent(datasetId)}/readiness?required_size=${req}${versionQuery}${policyQuery}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
@@ -623,9 +627,16 @@ export async function fetchDatasetReadiness(
   return data as {
     dataset_id: string;
     dataset_name?: string;
+    dataset_version_id?: string | null;
     current_size: number;
     required_size: number;
     ready: boolean;
+    status?: "eligible" | "blocked" | string;
+    eligibility_status?: "eligible" | "blocked" | string;
+    eligibility_criteria?: Array<{ code: string; label: string; status: "pass" | "fail" | string }>;
+    policy_id?: string | null;
+    evaluation_id?: string;
+    reasons?: Array<string | Record<string, unknown>>;
   };
 }
 
@@ -647,6 +658,142 @@ export async function fetchDatasetVersions(tenantId: string, projectId: string, 
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { items: DatasetVersionItem[] };
+}
+
+export async function fetchDatasetBuffer(tenantId: string, projectId: string, datasetId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/buffer`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    buffer_id: string | null;
+    dataset_id: string;
+    source_type: string;
+    current_size: number;
+    record_count?: number;
+    target_threshold: number;
+    window_status: string;
+    window_strategy?: string;
+    materialization_strategy?: string;
+    started_at?: string | null;
+    created_at?: string | null;
+    last_ingested_at?: string | null;
+    updated_at?: string | null;
+  };
+}
+
+export type DatasetTrainingPolicy = {
+  policy_id: string;
+  model_id?: string | null;
+  required_size: number;
+  freshness_hours: number;
+  trigger_mode: string;
+  validation_rules?: Array<Record<string, unknown> | string>;
+};
+
+export async function fetchDatasetTrainingPolicies(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/training-policies?limit=100`,
+    {
+      headers: authHeaders(token),
+      cache: "no-store"
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: DatasetTrainingPolicy[] };
+}
+
+export async function upsertDatasetTrainingPolicy(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  payload: {
+    policy_id?: string;
+    model_id?: string | null;
+    required_size: number;
+    freshness_hours?: number;
+    trigger_mode?: string;
+    validation_rules?: Array<Record<string, unknown> | string>;
+  }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/training-policies`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetTrainingPolicy;
+}
+
+export async function createDatasetTrainingPolicy(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  payload: {
+    model_id?: string | null;
+    required_size: number;
+    freshness_hours?: number;
+    trigger_mode?: string;
+    validation_rules?: Array<Record<string, unknown> | string>;
+  }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/training-policies`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetTrainingPolicy;
+}
+
+export async function fetchDatasetReadinessEvaluations(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  limit = 20,
+  offset = 0
+) {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/readiness/evaluations?limit=${safeLimit}&offset=${safeOffset}`,
+    {
+      headers: authHeaders(token),
+      cache: "no-store"
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    items: Array<{
+      evaluation_id: string;
+      dataset_version_id?: string | null;
+      required_size: number;
+      current_size: number;
+      status: "eligible" | "blocked" | string;
+      evaluated_at: string;
+      reasons?: Array<string | Record<string, unknown>>;
+    }>;
+  };
 }
 
 export async function deleteDataset(tenantId: string, projectId: string, datasetId: string, token: string) {
@@ -1091,6 +1238,8 @@ export type DatasetVersionItem = {
   created_at: string;
   dataset_id: string;
   dataset_name: string;
+  source_type?: string;
+  record_count?: number;
   status?: "ready" | "warning" | "failed";
   quality_score?: number;
   summary?: string[];

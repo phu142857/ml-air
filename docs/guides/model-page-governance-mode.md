@@ -17,10 +17,12 @@ Model page emphasizes:
 - trigger policy (`manual|auto_ready|schedule`)
 - serving slot metadata (when enabled)
 
-Training/readiness:
+Training / **training eligibility**:
 
-- run from Dataset Hub (`/datasets/{dataset_id}`)
-- pipeline-level execution controls remain available from Pipeline detail as advanced tooling
+- evaluate and train from Dataset Hub (`/datasets/{dataset_id}`) using **training policies** and dataset versions
+- pipeline-level **execution gate** controls remain on Pipeline detail as advanced tooling
+
+Model **trigger policy** (`manual` / `auto_ready` / `schedule`) is separate: it decides when the scheduler attempts runs, not the per-version eligibility checklist.
 
 ## Why this mode exists
 

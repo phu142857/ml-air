@@ -2,7 +2,7 @@
 
 ## Goal
 
-Unblock a pipeline run that failed due to data-readiness gating, without losing reproducibility.
+Unblock a pipeline run that failed due to the **execution gate** (data-readiness gating at run time), without losing reproducibility. For lifecycle checks, use **training eligibility** on `GET .../datasets/{dataset_id}/readiness` (`policy_id` + `dataset_version_id`).
 
 ## Symptoms
 
@@ -15,7 +15,7 @@ Unblock a pipeline run that failed due to data-readiness gating, without losing 
 ## Steps
 
 1. Inspect blocking datasets from run readiness snapshot.
-2. Validate dataset `current_size` and expected threshold (`required_size`).
+2. Validate the blocked dataset version against your **training policy** (for example `policy.required_size`, freshness) and the run gate’s `inputs[]` expectations.
 3. Choose one recovery path:
    - ingest more data (preferred),
    - lower threshold via tracked override (controlled),
@@ -29,8 +29,8 @@ Unblock a pipeline run that failed due to data-readiness gating, without losing 
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/readiness" \
   -H "Authorization: Bearer admin-token"
 
-# 2) Check one dataset readiness quickly
-curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness?required_size=1000" \
+# 2) Check dataset readiness by policy + dataset version
+curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness?policy_id=<policy_id>&dataset_version_id=<dataset_version_id>" \
   -H "Authorization: Bearer admin-token"
 
 # 3) Re-run with tracked override (example only)
@@ -51,7 +51,7 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 
 ## Result
 
-- Gate passes if all required inputs satisfy `actual_size >= required_size`.
+- Gate passes if all required inputs satisfy run gate checks and dataset eligibility policy for selected versions.
 - Run proceeds with auditable `training_mode` and `override_config`.
 - Run comparison remains reproducible because exact conditions are stored per run.
 

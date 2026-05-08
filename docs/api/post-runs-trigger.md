@@ -2,7 +2,9 @@
 
 ## Goal
 
-Create a **readiness-gated** run from **`model_id` + `dataset_id`** (and optional `dataset_version_id`). MLAir resolves the default **`pipeline_id`**, pins the **latest pipeline version** for that pipeline, merges **`plugin_context`** from registry resolution + caller `context`, then applies the same readiness checks as pipeline-scoped run APIs.
+Create an **execution-gated** (readiness-gated) run from **`model_id` + `dataset_id` + `dataset_version_id`**. MLAir resolves the default **`pipeline_id`**, pins the **latest pipeline version** for that pipeline, merges **`plugin_context`** from registry resolution + caller `context`, then applies the same readiness checks as pipeline-scoped run APIs.
+
+By default **`dataset_version_id` is required** (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED` defaults to `1`) so training always pins an immutable snapshot. Set `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0` only if you intentionally allow “latest version” fallback.
 
 Downstream is any client (UI, script, or another service)—this page is product-neutral.
 
@@ -18,7 +20,7 @@ Downstream is any client (UI, script, or another service)—this page is product
 |-------|----------|------|--------|
 | `model_id` | yes | string | Must exist in registry for tenant/project. |
 | `dataset_id` | yes | string | Must exist. |
-| `dataset_version_id` | no | string | If omitted, uses **latest** dataset version (first in list). |
+| `dataset_version_id` | yes* | string | *Required when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` (default). If strict mode is off and this is omitted, server uses **latest** dataset version (first in list). |
 | `pipeline_id_override` | no | string | Advanced: force `pipeline_id` while still resolving **base weights** from the model. |
 | `experiment_id` | no | string | Passed through to `create_run`. |
 | `context` | no | object | Merged into **`plugin_context`** (caller extensions). |
@@ -59,7 +61,7 @@ Run is set to **`FAILED`** in MLAir. Response still **200** with:
 | HTTP | Typical `detail` / shape |
 |------|---------------------------|
 | 404 | `model_not_found`, `dataset_not_found`, `dataset_version_not_found` |
-| 422 | `dataset_has_no_versions`, `pipeline_has_no_version_in_project`, or `BLOCKED` object (`MODEL_PIPELINE_UNRESOLVED`, `NO_PLUGIN`, `PLUGIN_NOT_FOUND`, …) |
+| 422 | `DATASET_VERSION_REQUIRED` (strict lifecycle mode), `dataset_has_no_versions`, `pipeline_has_no_version_in_project`, or `BLOCKED` object (`MODEL_PIPELINE_UNRESOLVED`, `NO_PLUGIN`, `PLUGIN_NOT_FOUND`, …) |
 
 ## `pipeline_id_override`
 
@@ -74,6 +76,7 @@ curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_proj
   -d '{
     "model_id": "MODEL_ID",
     "dataset_id": "DATASET_ID",
+    "dataset_version_id": "DATASET_VERSION_ID",
     "training_mode": "standard",
     "idempotency_key": "trigger-neutral-example-001"
   }'

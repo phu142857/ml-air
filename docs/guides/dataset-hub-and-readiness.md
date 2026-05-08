@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use Dataset Hub as the primary entry point for readiness checks and intent-driven training, while keeping pipeline gate flows for advanced execution control.
+Use Dataset Hub as the primary entry point for **training eligibility** (policy + dataset version), readiness evaluation history, and intent-driven training, while keeping **execution gate** flows on pipeline/run APIs for advanced orchestration.
 
 ## Where to open
 
@@ -11,26 +11,33 @@ Use Dataset Hub as the primary entry point for readiness checks and intent-drive
 
 ## Two readiness layers (important)
 
-### 1) Dataset-level readiness
+### 1) Dataset-level readiness (policy-driven eligibility)
 
 Endpoint:
 
-- `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness?required_size=<n>`
+- `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness?policy_id=<id>&dataset_version_id=<id>`
 
 What it means:
 
-- Compares server-side `current_size` vs requested `required_size`.
-- Good for lifecycle UX: "is this dataset big enough yet?"
+- Runs a **training eligibility evaluation** for `(dataset_version + training policy)` — response includes `eligibility_status`, `eligibility_criteria`, and persisted evaluation records.
+- Good for lifecycle UX: “can we train on this snapshot under this policy?”
 
-What client can set:
+Policy lifecycle endpoints:
 
-- `required_size` (minimum threshold)
+- `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies`
+- `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies`
+- `PUT /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies`
+
+Recommended UX:
+
+- User chooses a policy (for example: small, daily, production gate)
+- Readiness evaluates `(dataset_version + policy)` and stores evaluation history
 
 What client cannot set:
 
 - `current_size` (source of truth comes from server-side dataset metadata)
 
-### 2) Run/pipeline gate readiness
+### 2) Execution gate (run/pipeline readiness)
 
 Endpoints:
 
@@ -69,7 +76,9 @@ Pipeline detail now treats gate controls as advanced execution tooling:
 
 Dataset Hub shows:
 
-- readiness summary: `Current` and `Required`
+- readiness summary: eligibility status + criteria checklist
+- policy selector and policy presets
+- accumulation buffer metadata (`buffer_id`, window/materialization strategy, ingest timestamps)
 - dataset versions table
 - train action per version (intent-driven)
 
