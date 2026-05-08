@@ -91,6 +91,19 @@ TRIGGER_POLICY_SKIPPED_TOTAL = Counter(
     "Number of skipped trigger policy evaluations",
     ["mode", "reason"],
 )
+DATASET_MATERIALIZATION_TICK_EVALUATED_TOTAL = Counter(
+    "mlair_scheduler_dataset_materialization_tick_evaluated_total",
+    "Number of tenant/project scopes evaluated for scheduled dataset materialization",
+)
+DATASET_MATERIALIZATION_TICK_TRIGGERED_TOTAL = Counter(
+    "mlair_scheduler_dataset_materialization_tick_triggered_total",
+    "Number of dataset versions materialized by scheduled tick",
+)
+DATASET_MATERIALIZATION_TICK_SKIPPED_TOTAL = Counter(
+    "mlair_scheduler_dataset_materialization_tick_skipped_total",
+    "Number of skipped scheduled materialization evaluations",
+    ["reason"],
+)
 
 
 def _redis() -> Redis:
@@ -353,6 +366,55 @@ def _process_trigger_policies() -> None:
                     TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="api_error").inc()
             else:
                 TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="cron_not_due").inc()
+
+
+def _scheduled_materialization_scopes(limit: int = 200) -> list[tuple[str, str]]:
+    lim = max(1, min(int(limit), 1000))
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT tenant_id, project_id
+                FROM dataset_accumulation_buffers
+                WHERE accumulation_strategy = 'snapshot_on_schedule'
+                GROUP BY tenant_id, project_id
+                ORDER BY tenant_id, project_id
+                LIMIT %s
+                """,
+                (lim,),
+            )
+            rows = cur.fetchall()
+    return [(str(r[0]), str(r[1])) for r in rows]
+
+
+def _process_dataset_materialization_ticks() -> None:
+    per_scope_limit = max(1, min(int(os.getenv("ML_AIR_DATASET_MATERIALIZATION_TICK_LIMIT", "50")), 200))
+    scopes = _scheduled_materialization_scopes(limit=200)
+    if not scopes:
+        DATASET_MATERIALIZATION_TICK_SKIPPED_TOTAL.labels(reason="no_schedule_scopes").inc()
+        return
+    for tenant_id, project_id in scopes:
+        DATASET_MATERIALIZATION_TICK_EVALUATED_TOTAL.inc()
+        out = _api_post(
+            f"/v1/tenants/{tenant_id}/projects/{project_id}/datasets/buffer/materialize-scheduled?limit={per_scope_limit}",
+            {},
+            timeout=20,
+        )
+        if out is None:
+            DATASET_MATERIALIZATION_TICK_SKIPPED_TOTAL.labels(reason="api_error").inc()
+            continue
+        created = int(out.get("materialized_count") or 0)
+        if created <= 0:
+            DATASET_MATERIALIZATION_TICK_SKIPPED_TOTAL.labels(reason="nothing_materialized").inc()
+            continue
+        DATASET_MATERIALIZATION_TICK_TRIGGERED_TOTAL.inc(created)
+        logger.info(
+            "dataset_materialization_tick tenant_id=%s project_id=%s checked=%s materialized=%s",
+            tenant_id,
+            project_id,
+            int(out.get("checked") or 0),
+            created,
+        )
 
 
 def _task_execution_mode() -> str:
@@ -1173,8 +1235,12 @@ def _requeue_expired_leases(client: Redis) -> int:
 def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
     policy_interval_seconds = max(10, int(os.getenv("ML_AIR_TRIGGER_POLICY_TICK_SECONDS", "30")))
+    materialization_interval_seconds = max(
+        10, int(os.getenv("ML_AIR_DATASET_MATERIALIZATION_TICK_SECONDS", str(policy_interval_seconds)))
+    )
     lease_reap_interval_seconds = max(2, int(os.getenv("ML_AIR_LEASE_REAP_INTERVAL_SECONDS", "5")))
     next_policy_tick = 0.0
+    next_materialization_tick = 0.0
     next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
@@ -1195,6 +1261,12 @@ def main() -> None:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("process_trigger_policies_failed err=%s", exc)
             next_policy_tick = loop_started + policy_interval_seconds
+        if loop_started >= next_materialization_tick:
+            try:
+                _process_dataset_materialization_ticks()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("process_dataset_materialization_ticks_failed err=%s", exc)
+            next_materialization_tick = loop_started + materialization_interval_seconds
         run_msg = client.blpop("mlair:runs:new", timeout=1)
         if run_msg:
             _, raw_payload = run_msg

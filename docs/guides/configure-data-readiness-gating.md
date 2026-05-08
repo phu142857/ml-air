@@ -138,6 +138,10 @@ Scheduler behavior:
 - `schedule`: triggers when cron is due and debounce window is open.
 - Debounce is enforced by scanning latest auto-triggered run for the same model.
 - Scheduler tick interval defaults to `30s` (`ML_AIR_TRIGGER_POLICY_TICK_SECONDS`).
+- Scheduled dataset materialization tick can run in parallel for buffers with `snapshot_on_schedule` strategy:
+  - `ML_AIR_DATASET_MATERIALIZATION_TICK_SECONDS` (default: trigger-policy tick interval)
+  - `ML_AIR_DATASET_MATERIALIZATION_TICK_LIMIT` (per tenant/project scope, default `50`)
+  - Scheduler calls `POST /datasets/buffer/materialize-scheduled` per scope.
 
 ## Done
 

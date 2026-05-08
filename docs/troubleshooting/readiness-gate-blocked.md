@@ -68,6 +68,9 @@ If model auto-trigger is configured but no new run appears, inspect scheduler me
 - `mlair_scheduler_trigger_policy_evaluated_total{mode=...}`
 - `mlair_scheduler_trigger_policy_triggered_total{mode=...,reason=...}`
 - `mlair_scheduler_trigger_policy_skipped_total{mode=...,reason=...}`
+- `mlair_scheduler_dataset_materialization_tick_evaluated_total`
+- `mlair_scheduler_dataset_materialization_tick_triggered_total`
+- `mlair_scheduler_dataset_materialization_tick_skipped_total{reason=...}`
 
 Common skip reasons:
 
