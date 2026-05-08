@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { RouteShell } from "@/components/layout/route-shell";
@@ -17,6 +17,7 @@ import {
   createDatasetTrainingPolicy,
   fetchDatasetTrainingPolicies,
   fetchDatasetVersions,
+  patchDatasetBuffer,
   fetchModels,
   fetchModelResolvedPipeline,
   fetchPipelineVersions,
@@ -51,6 +52,7 @@ export default function DatasetHubPage() {
   const params = useParams<{ datasetId: string }>();
   const datasetId = decodeURIComponent(params.datasetId);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { tenantId, projectId, token } = useAppContext();
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("");
@@ -65,6 +67,8 @@ export default function DatasetHubPage() {
   const [evaluationPage, setEvaluationPage] = useState(0);
   const [maxEvaluationPage, setMaxEvaluationPage] = useState(0);
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
+  const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
+  const [accumulationMsg, setAccumulationMsg] = useState("");
 
   const datasetQuery = useQuery({
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
@@ -106,6 +110,28 @@ export default function DatasetHubPage() {
     queryFn: () => fetchDatasetBuffer(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
+  });
+
+  useEffect(() => {
+    const t = bufferQuery.data?.target_threshold;
+    if (t != null && Number.isFinite(Number(t))) {
+      setAccumulationThresholdDraft(String(t));
+    }
+  }, [bufferQuery.data?.target_threshold, datasetId]);
+
+  const patchBufferMutation = useMutation({
+    mutationFn: async () => {
+      const n = Number.parseInt(accumulationThresholdDraft, 10);
+      if (!Number.isFinite(n) || n < 1) throw new Error(JSON.stringify({ detail: "target_threshold must be >= 1" }));
+      return patchDatasetBuffer(tenantId, projectId, datasetId, token, { target_threshold: n });
+    },
+    onSuccess: async () => {
+      setAccumulationMsg("Materialization target saved.");
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) });
+    },
+    onError: (err: unknown) => {
+      setAccumulationMsg(describeTrainError(err));
+    }
   });
   const readinessEvaluationsQuery = useQuery({
     queryKey: [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId), evaluationPage],
@@ -457,8 +483,50 @@ export default function DatasetHubPage() {
             <CardTitle>Active Accumulation Buffer</CardTitle>
           </CardHeader>
           <CardContent>
-            {bufferQuery.data ? (
-              <div className="space-y-2 text-xs text-muted-foreground">
+            {bufferQuery.isLoading && !bufferQuery.data ? (
+              <p className="text-xs text-muted-foreground">Loading buffer…</p>
+            ) : bufferQuery.data ? (
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <p className="text-[11px] leading-relaxed">
+                  <span className="text-foreground">Materialization target</span> is the row count at which runtime accumulation
+                  can finalize a new dataset version (runtime_feedback lineage path). Separate from training policy{" "}
+                  <span className="text-foreground">required_size</span> (readiness).
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2">
+                    <span className="whitespace-nowrap">Target threshold (min)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={accumulationThresholdDraft}
+                      onChange={(e) => {
+                        setAccumulationMsg("");
+                        setAccumulationThresholdDraft(e.target.value);
+                      }}
+                      className="w-32 appearance-none rounded-lg border border-border bg-muted px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="px-3 py-1 text-xs"
+                    disabled={patchBufferMutation.isPending}
+                    onClick={() => {
+                      setAccumulationMsg("");
+                      patchBufferMutation.mutate();
+                    }}
+                  >
+                    Save target
+                  </Button>
+                </div>
+                {accumulationMsg ? (
+                  <p
+                    className={`text-[11px] ${accumulationMsg.includes("saved") ? "text-emerald-400/90" : "text-amber-300/90"}`}
+                  >
+                    {accumulationMsg}
+                  </p>
+                ) : null}
+                <div className="space-y-2 border-t border-border pt-3">
                 <div>buffer_id: <span className="font-mono text-foreground">{String(bufferQuery.data.buffer_id || "—")}</span></div>
                 <div>source_type: <span className="font-semibold text-foreground">{String(bufferQuery.data.source_type || "runtime_feedback")}</span></div>
                 <div>window_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_strategy || "threshold")}</span></div>
@@ -468,6 +536,7 @@ export default function DatasetHubPage() {
                 <div>progress: <span className="font-semibold text-foreground">{Number(bufferQuery.data.current_size || 0)} / {Number(bufferQuery.data.target_threshold || 0)}</span></div>
                 <div>created_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.created_at || bufferQuery.data.started_at || ""))}</span></div>
                 <div>last_ingested_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.last_ingested_at || bufferQuery.data.updated_at || ""))}</span></div>
+                </div>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">No active accumulation buffer yet.</p>

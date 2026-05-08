@@ -8,7 +8,7 @@ Core resources:
 - tasks (including **external worker** lease/complete under `/v1/tasks/…`; see [External worker execution](../guides/external-worker-execution.md))
 - pipelines and pipeline versions (**`POST|GET .../pipelines/{id}/versions`**, **`GET .../pipeline-versions/{id}`**, **`.../diff`**, **`POST .../check-readiness`**, **`POST /v1/pipelines/validate`**)
 - models (registry CRUD, versions, import, promote — see prior list in OpenAPI **Models** tag; narrative [POST /models](./post-models.md), [POST /versions](./post-model-versions.md), [GET /versions](./get-model-versions.md))
-- **datasets** (list, CSV upload/preview, versions, download, policy-driven readiness, training-policies CRUD-lite) and **lineage** (neighborhood query, run slice, ingest)
+- **datasets** (list, CSV upload/preview, versions, download, **`GET|PATCH .../datasets/{id}/buffer`** accumulation / `target_threshold`, policy-driven readiness, training-policies CRUD-lite) and **lineage** (neighborhood query, run slice, ingest)
 - **tracking** (experiments, params/metrics/artifacts, **`GET .../tracking`**, **`POST .../runs/compare`**)
 - **readiness and gating** (run and dataset surfaces above; narrative [readiness and gating](./readiness-and-gating.md))
 - **search** (`GET .../search`), **`GET /v1/auth/whoami`**, **plugins** (`/v1/plugins/...`)
@@ -23,3 +23,4 @@ Current readiness architecture notes:
   - `POST .../datasets/{dataset_id}/training-policies`
   - `PUT .../datasets/{dataset_id}/training-policies`
 - Readiness response includes eligibility fields (`eligibility_status`, `eligibility_criteria`, `reasons`).
+- **Accumulation buffer**: `GET .../datasets/{dataset_id}/buffer` for staging metadata; **`PATCH`** (maintainer) sets `target_threshold` (materialization target). Ingest preserves a stored threshold unless explicitly updated.

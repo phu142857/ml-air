@@ -792,6 +792,56 @@ paths:
         "404":
           description: dataset_not_found
 
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer:
+    get:
+      tags: [Datasets]
+      summary: Get dataset accumulation buffer (materialization staging)
+      description: |
+        Returns `current_size`, `target_threshold`, and buffer metadata. If no row exists in
+        `dataset_accumulation_buffers` yet, the API may return a compatibility shape with
+        `target_threshold` defaulting to 1000 (see running service).
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetBuffer"
+        "404":
+          description: dataset_not_found
+    patch:
+      tags: [Datasets]
+      summary: Set accumulation materialization target (target_threshold)
+      description: |
+        Maintainer role. Updates `dataset_accumulation_buffers.target_threshold`. Creates a buffer row
+        if missing (seeds `current_size` from the dataset row). Ingestion preserves an existing
+        threshold unless explicitly updated server-side.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetBufferPatchRequest"
+      responses:
+        "200":
+          description: Updated buffer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetBuffer"
+        "404":
+          description: dataset_not_found
+        "422":
+          description: Validation error (e.g. invalid target_threshold)
+
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions:
     get:
       tags: [Datasets]
@@ -2564,6 +2614,53 @@ components:
           type: integer
         ready:
           type: boolean
+
+    DatasetBuffer:
+      type: object
+      description: Active accumulation buffer / compatibility fallback for dataset staging.
+      properties:
+        buffer_id:
+          type: string
+          nullable: true
+        dataset_id:
+          type: string
+        source_type:
+          type: string
+        current_size:
+          type: integer
+        record_count:
+          type: integer
+        target_threshold:
+          type: integer
+        window_status:
+          type: string
+        window_strategy:
+          type: string
+        materialization_strategy:
+          type: string
+        started_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+        last_ingested_at:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          nullable: true
+      additionalProperties: true
+
+    DatasetBufferPatchRequest:
+      type: object
+      required: [target_threshold]
+      properties:
+        target_threshold:
+          type: integer
+          minimum: 1
+          maximum: 2000000000
+          description: Row-count target for materialization on supported ingestion paths (not training policy required_size).
 
     DatasetVersionList:
       type: object

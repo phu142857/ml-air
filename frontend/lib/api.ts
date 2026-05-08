@@ -684,6 +684,24 @@ export async function fetchDatasetBuffer(tenantId: string, projectId: string, da
   };
 }
 
+export async function patchDatasetBuffer(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  payload: { target_threshold: number }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/buffer`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as Awaited<ReturnType<typeof fetchDatasetBuffer>>;
+}
+
 export type DatasetTrainingPolicy = {
   policy_id: string;
   model_id?: string | null;

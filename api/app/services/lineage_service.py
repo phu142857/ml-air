@@ -62,6 +62,18 @@ def _flush_touched_datasets(tenant_id: str, project_id: str, touched_dataset_ids
         _notify_dataset_updated(tenant_id, project_id, ds_id)
 
 
+def _resolve_buffer_target_threshold(
+    tenant_id: str, project_id: str, dataset_id: str, target_threshold: int | None
+) -> int:
+    """Preserve stored threshold on ingest when ``target_threshold`` is omitted; default 1000 for new rows."""
+    if target_threshold is not None:
+        return max(1, int(target_threshold))
+    existing = get_dataset_buffer(tenant_id, project_id, dataset_id)
+    if existing:
+        return max(1, int(existing.get("target_threshold") or 1000))
+    return 1000
+
+
 def _upsert_dataset_buffer(
     tenant_id: str,
     project_id: str,
@@ -69,11 +81,11 @@ def _upsert_dataset_buffer(
     *,
     source_type: str = "runtime_feedback",
     current_size: int | None = None,
-    target_threshold: int = 1000,
+    target_threshold: int | None = None,
     window_status: str = "active",
 ) -> None:
     now_size = max(0, int(current_size or 0))
-    tgt = max(1, int(target_threshold or 1000))
+    tgt = _resolve_buffer_target_threshold(tenant_id, project_id, dataset_id, target_threshold)
     src = str(source_type or "runtime_feedback").strip() or "runtime_feedback"
     win = str(window_status or "active").strip() or "active"
     with db_conn() as conn:
@@ -136,6 +148,39 @@ def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict
         "last_ingested_at": row[6].isoformat(),
         "updated_at": row[6].isoformat(),
     }
+
+
+def update_dataset_buffer_threshold(
+    tenant_id: str, project_id: str, dataset_id: str, target_threshold: int
+) -> dict | None:
+    """Set accumulation ``target_threshold``; creates buffer row if missing (mirrors dataset current_size)."""
+    ds = get_dataset(tenant_id, project_id, dataset_id)
+    if not ds:
+        return None
+    tgt = max(1, int(target_threshold))
+    buf = get_dataset_buffer(tenant_id, project_id, dataset_id)
+    if buf:
+        _upsert_dataset_buffer(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            source_type=str(buf.get("source_type") or "runtime_feedback"),
+            current_size=int(buf.get("current_size") or 0),
+            target_threshold=tgt,
+            window_status=str(buf.get("window_status") or "active"),
+        )
+    else:
+        _upsert_dataset_buffer(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            source_type="runtime_feedback",
+            current_size=int(ds.get("current_size") or 0),
+            target_threshold=tgt,
+            window_status="active",
+        )
+    _notify_dataset_updated(tenant_id, project_id, dataset_id, action="buffer_threshold_updated")
+    return get_dataset_buffer(tenant_id, project_id, dataset_id)
 
 
 def _reset_dataset_buffer(

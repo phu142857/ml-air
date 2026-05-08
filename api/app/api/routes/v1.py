@@ -122,6 +122,12 @@ class DatasetTrainingPolicyIn(BaseModel):
     validation_rules: list[dict] | list[str] = Field(default_factory=list)
 
 
+class DatasetBufferPatchIn(BaseModel):
+    """Materialization target for active accumulation (``dataset_accumulation_buffers.target_threshold``)."""
+
+    target_threshold: int = Field(ge=1, le=2_000_000_000)
+
+
 class CreatePipelineVersionIn(BaseModel):
     config: dict = Field(default_factory=dict)
 
@@ -1200,6 +1206,24 @@ def get_dataset_buffer_v1(
         "last_ingested_at": ds.get("updated_at") if ds else None,
         "updated_at": ds.get("updated_at") if ds else None,
     }
+
+
+@router.patch("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer")
+def patch_dataset_buffer_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    payload: DatasetBufferPatchIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = lineage_service.update_dataset_buffer_threshold(
+        tenant_id, project_id, dataset_id, payload.target_threshold
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return row
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")

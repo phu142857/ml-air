@@ -137,6 +137,34 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
   }'
 ```
 
+### 1.3) Dataset accumulation buffer (materialization target)
+
+Separate from **training policy** / eligibility: the buffer holds **mutable accumulation** state before optional **snapshot materialization** (for example the `runtime_feedback` lineage path when no `version` is supplied).
+
+- **`GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer`** (viewer): returns `current_size`, `target_threshold`, `source_type`, window metadata, timestamps. If no DB row exists yet, the API may return a **compatibility** shape with `target_threshold` defaulting to `1000`.
+
+- **`PATCH /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer`** (maintainer): set the materialization target.
+
+  Body:
+
+  ```json
+  { "target_threshold": 2500 }
+  ```
+
+  - `target_threshold` must be ≥ 1 (upper bound enforced server-side).
+  - If no buffer row exists, MLAir **creates** one using the dataset’s current `current_size` and the supplied threshold.
+
+  Ingestion / lineage updates that refresh the buffer **preserve** an existing `target_threshold` unless the server explicitly sets a new value — so operator or UI changes are not reset to `1000` on every ingest.
+
+Example:
+
+```bash
+curl -X PATCH "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/buffer" \
+  -H "Authorization: Bearer maintainer-token" \
+  -H "Content-Type: application/json" \
+  -d '{"target_threshold": 2500}'
+```
+
 ### 2) `POST /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness`
 
 Creates an internal readiness-check run context and evaluates input datasets.

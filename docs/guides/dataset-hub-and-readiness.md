@@ -37,6 +37,13 @@ What client cannot set:
 
 - `current_size` (source of truth comes from server-side dataset metadata)
 
+### 1b) Accumulation buffer (materialization target)
+
+- **`GET .../datasets/{dataset_id}/buffer`**: read active accumulation metadata (`target_threshold`, `current_size`, `source_type`, …).
+- **`PATCH .../datasets/{dataset_id}/buffer`** (maintainer): set **`target_threshold`** — the row count target used for **materialization** on supported ingestion paths (not the same as **`required_size`** on a **training policy**, which drives **eligibility** on an existing `dataset_version`).
+
+Dataset Hub **Accumulation** tab exposes this target for editing (“Save target”). See [Readiness and Gating API](../api/readiness-and-gating.md) (§1.3, accumulation buffer).
+
 ### 2) Execution gate (run/pipeline readiness)
 
 Endpoints:
@@ -78,7 +85,7 @@ Dataset Hub shows:
 
 - readiness summary: eligibility status + criteria checklist
 - policy selector and policy presets
-- accumulation buffer metadata (`buffer_id`, window/materialization strategy, ingest timestamps)
+- accumulation buffer metadata and **editable materialization target** (`target_threshold` via `PATCH .../buffer`; distinct from policy `required_size`)
 - dataset versions table
 - train action per version (intent-driven)
 
