@@ -32,6 +32,26 @@ import { executeTrainingIntent } from "@/lib/training-intent";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
 
+function sourceTypeBadge(sourceType: string | null | undefined): { label: string; className: string } {
+  const raw = String(sourceType || "manual_upload").trim().toLowerCase();
+  if (raw === "csv_import" || raw === "manual_upload") {
+    return {
+      label: "IMPORTED DATASET",
+      className: "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+    };
+  }
+  if (raw === "runtime_feedback" || raw === "runtime_accumulation") {
+    return {
+      label: "RUNTIME ACCUMULATED",
+      className: "border-violet-500/40 bg-violet-500/10 text-violet-300"
+    };
+  }
+  return {
+    label: raw.toUpperCase().replace(/_/g, " "),
+    className: "border-border bg-muted text-muted-foreground"
+  };
+}
+
 function describeTrainError(err: unknown): string {
   const fallback = String((err as { message?: string })?.message || err || "Unknown error");
   try {
@@ -321,11 +341,43 @@ export default function DatasetHubPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
+              <CardTitle>Lifecycle Layers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <div className="rounded-lg border border-border bg-muted px-2 py-1">
+                  <span className="font-semibold text-foreground">Buffer</span>: mutable accumulation state (not trainable snapshot).
+                </div>
+                <div className="rounded-lg border border-border bg-muted px-2 py-1">
+                  <span className="font-semibold text-foreground">Version</span>: immutable dataset snapshot (`vN`) used for training.
+                </div>
+                <div className="rounded-lg border border-border bg-muted px-2 py-1">
+                  <span className="font-semibold text-foreground">Readiness</span>: evaluate (`dataset_version`, `policy`) {"->"} eligible/blocked.
+                </div>
+                <div className="rounded-lg border border-border bg-muted px-2 py-1">
+                  <span className="font-semibold text-foreground">Eligibility</span>: policy decision shown in readiness criteria and run gate.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
               <CardTitle>Dataset Summary</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 text-xs text-muted-foreground">
                 <div>Latest version: <span className="font-semibold text-foreground">{versionsQuery.data?.items?.[0]?.version || "—"}</span></div>
+                <div>
+                  Latest source:{" "}
+                  {(() => {
+                    const b = sourceTypeBadge(versionsQuery.data?.items?.[0]?.source_type);
+                    return (
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
+                        {b.label}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <div>Total versions: <span className="font-semibold text-foreground">{(versionsQuery.data?.items || []).length}</span></div>
                 <div>Current size: <span className="font-semibold text-foreground">{Number(dataset?.current_size || 0)}</span></div>
                 <div>Readiness status: <span className="font-semibold text-foreground">{String(readinessQuery.data?.status || "pending")}</span></div>
@@ -628,7 +680,16 @@ export default function DatasetHubPage() {
                           {normalizeDatasetStatus(v.status)}
                         </span>
                       </td>
-                      <td className="px-3 py-2">{String(v.source_type || "manual_upload")}</td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const b = sourceTypeBadge(v.source_type);
+                          return (
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
+                              {b.label}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2">{Number(v.record_count || 0)}</td>
                       <td className="px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
                     </tr>

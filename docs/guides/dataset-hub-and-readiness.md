@@ -88,7 +88,7 @@ Dataset Hub shows:
 - readiness summary: eligibility status + criteria checklist
 - policy selector and policy presets
 - accumulation buffer metadata and **editable materialization target** (`target_threshold` via `PATCH .../buffer`; distinct from policy `required_size`)
-- dataset versions table
+- dataset versions table with source badges (`IMPORTED DATASET` vs `RUNTIME ACCUMULATED`)
 - train action per version (intent-driven)
 
 Model page is governance-only; readiness and training actions are handled from Dataset Hub.
