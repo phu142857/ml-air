@@ -80,6 +80,18 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertTrue(out["ready"])
         self.assertEqual(out["status"], "eligible")
 
+    @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 999})
+    @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value=None)
+    @patch("app.services.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
+    @patch("app.services.readiness_service._allow_legacy_readiness_fallback", return_value=False)
+    def test_readiness_strict_mode_requires_materialized_version(self, _fb, _policy, _latest, _ds) -> None:
+        with self.assertRaises(ValueError):
+            readiness_service.evaluate_dataset_readiness(
+                tenant_id="t",
+                project_id="p",
+                dataset_id="ds1",
+            )
+
     @patch("app.services.lineage_service._materialize_runtime_feedback_if_needed", return_value=("vid-2", "v13"))
     @patch("app.services.lineage_service.get_dataset", return_value={"dataset_id": "ds2", "source_uri": None, "checksum": None})
     @patch(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,6 +14,11 @@ TRAINING_MODE_MIN_ROWS = {
     "standard": 1000,
     "full": 10000,
 }
+
+
+def _allow_legacy_readiness_fallback() -> bool:
+    # Phase 6 default: strict version-centric readiness; rollback by setting env to 1/true.
+    return str(os.getenv("ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK", "0")).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _parse_inputs(payload: Any) -> list[dict[str, Any]]:
@@ -378,6 +384,8 @@ def evaluate_dataset_readiness(
             selected_version_status = str(latest.get("status") or "ready")
             selected_version_created_at = latest.get("created_at")
         else:
+            if not _allow_legacy_readiness_fallback():
+                raise ValueError("no_materialized_dataset_version")
             used_legacy_fallback = True
             current_size = int(dataset["current_size"])
 

@@ -802,6 +802,8 @@ paths:
                 $ref: "#/components/schemas/DatasetReadiness"
         "404":
           description: dataset_not_found
+        "409":
+          description: no_materialized_dataset_version (strict mode)
 
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness:
     get:
@@ -825,6 +827,8 @@ paths:
                 $ref: "#/components/schemas/DatasetReadiness"
         "404":
           description: dataset_not_found or dataset_version_not_found
+        "409":
+          description: no_materialized_dataset_version (strict mode)
 
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer:
     get:

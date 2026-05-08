@@ -16,6 +16,12 @@ Query:
 - `dataset_version_id` (optional; defaults to latest dataset version)
 - `required_size` (legacy fallback when policy_id is omitted)
 
+Strict cutover note:
+
+- Default behavior is strict (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`): no aggregate fallback when no materialized version exists.
+- Set `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1` only as temporary rollback mode.
+- In strict mode, readiness returns `409 no_materialized_dataset_version` until at least one version is materialized.
+
 Version-centric endpoint:
 
 - `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness?policy_id=<id>`

@@ -101,6 +101,7 @@ You should see:
 - Keep overrides in `override_config` to preserve reproducibility.
 - In lifecycle-centric flow, policy owns threshold (`required_size` in policy), not random per-request input.
 - In current frontend migration state, Pipeline detail uses gate checks as advanced tooling; primary train UX is Dataset Hub.
+- Readiness v2 strict mode is the default (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`); if no version is materialized yet, API returns `409 no_materialized_dataset_version`.
 
 ## Auto Trigger Policy (Persisted)
 
@@ -151,3 +152,4 @@ Your project now enforces data-readiness gating with auditable per-run condition
 
 - [Dataset Hub and Readiness](./dataset-hub-and-readiness.md)
 - [Model page governance mode](./model-page-governance-mode.md)
+- [Runbook: Readiness v2 Cutover](../runbooks/readiness-v2-cutover.md)

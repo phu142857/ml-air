@@ -1003,6 +1003,8 @@ def get_dataset_readiness_v1(
         detail = str(exc)
         if detail in {"dataset_not_found", "dataset_training_policy_not_found", "dataset_version_not_found"}:
             raise HTTPException(status_code=404, detail=detail) from exc
+        if detail == "no_materialized_dataset_version":
+            raise HTTPException(status_code=409, detail=detail) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
     evaluation_id = readiness_service.record_dataset_readiness_evaluation(
         tenant_id=tenant_id,
