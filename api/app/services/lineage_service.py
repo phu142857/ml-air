@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import time
@@ -15,8 +16,68 @@ from uuid import uuid4
 from app.services.db_service import db_conn
 from app.services import realtime_events as rt
 from app.services.trace_service import get_trace_id
+try:
+    from prometheus_client import Counter, Histogram
+except Exception:  # pragma: no cover - optional dependency in tests
+    Counter = None  # type: ignore[assignment]
+    Histogram = None  # type: ignore[assignment]
 
 Direction = Literal["up", "down", "both"]
+logger = logging.getLogger("mlair.api.lineage_service")
+DEFAULT_ACCUMULATION_STRATEGY = "snapshot_on_threshold"
+SUPPORTED_ACCUMULATION_STRATEGIES = {
+    "snapshot_on_threshold",
+    "rolling_accumulate",
+    "snapshot_on_schedule",
+    "manual_materialize_only",
+}
+
+
+class _NoopMetric:
+    def inc(self, _value: float = 1.0) -> None:
+        return
+
+    def observe(self, _value: float) -> None:
+        return
+
+
+MATERIALIZATION_ATTEMPT_TOTAL = (
+    Counter(
+        "mlair_dataset_materialization_attempt_total",
+        "Dataset buffer materialization attempts",
+        ["strategy", "source_type"],
+    )
+    if Counter
+    else _NoopMetric()
+)
+MATERIALIZATION_CREATED_TOTAL = (
+    Counter(
+        "mlair_dataset_materialization_version_created_total",
+        "Dataset versions created via buffer materialization",
+        ["strategy", "source_type"],
+    )
+    if Counter
+    else _NoopMetric()
+)
+MATERIALIZATION_FAILURE_TOTAL = (
+    Counter(
+        "mlair_dataset_materialization_failure_total",
+        "Dataset buffer materialization failures",
+        ["strategy", "reason"],
+    )
+    if Counter
+    else _NoopMetric()
+)
+MATERIALIZATION_LATENCY_SECONDS = (
+    Histogram(
+        "mlair_dataset_materialization_latency_seconds",
+        "Dataset buffer materialization latency seconds",
+        ["strategy"],
+        buckets=(0.001, 0.01, 0.05, 0.1, 0.3, 1, 3, 10),
+    )
+    if Histogram
+    else _NoopMetric()
+)
 
 
 def _dataset_row_updated_at(tenant_id: str, project_id: str, dataset_id: str) -> datetime | None:
@@ -82,29 +143,57 @@ def _upsert_dataset_buffer(
     source_type: str = "runtime_feedback",
     current_size: int | None = None,
     target_threshold: int | None = None,
+    accumulation_strategy: str | None = None,
     window_status: str = "active",
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
+    last_materialized_version_id: str | None = None,
+    last_materialized_at: datetime | None = None,
 ) -> None:
     now_size = max(0, int(current_size or 0))
     tgt = _resolve_buffer_target_threshold(tenant_id, project_id, dataset_id, target_threshold)
     src = str(source_type or "runtime_feedback").strip() or "runtime_feedback"
     win = str(window_status or "active").strip() or "active"
+    strat = str(accumulation_strategy or DEFAULT_ACCUMULATION_STRATEGY).strip() or DEFAULT_ACCUMULATION_STRATEGY
+    if strat not in SUPPORTED_ACCUMULATION_STRATEGIES:
+        strat = DEFAULT_ACCUMULATION_STRATEGY
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO dataset_accumulation_buffers(
-                    buffer_id, tenant_id, project_id, dataset_id, source_type, current_size, target_threshold, window_status
+                    buffer_id, tenant_id, project_id, dataset_id, source_type, current_size, target_threshold, accumulation_strategy,
+                    window_status, window_start, window_end, last_materialized_version_id, last_materialized_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (tenant_id, project_id, dataset_id)
                 DO UPDATE SET
                     source_type = EXCLUDED.source_type,
                     current_size = EXCLUDED.current_size,
                     target_threshold = EXCLUDED.target_threshold,
+                    accumulation_strategy = COALESCE(EXCLUDED.accumulation_strategy, dataset_accumulation_buffers.accumulation_strategy),
                     window_status = EXCLUDED.window_status,
+                    window_start = COALESCE(EXCLUDED.window_start, dataset_accumulation_buffers.window_start),
+                    window_end = COALESCE(EXCLUDED.window_end, dataset_accumulation_buffers.window_end),
+                    last_materialized_version_id = COALESCE(EXCLUDED.last_materialized_version_id, dataset_accumulation_buffers.last_materialized_version_id),
+                    last_materialized_at = COALESCE(EXCLUDED.last_materialized_at, dataset_accumulation_buffers.last_materialized_at),
                     updated_at = NOW()
                 """,
-                (str(uuid4()), tenant_id, project_id, dataset_id, src, now_size, tgt, win),
+                (
+                    str(uuid4()),
+                    tenant_id,
+                    project_id,
+                    dataset_id,
+                    src,
+                    now_size,
+                    tgt,
+                    strat,
+                    win,
+                    window_start,
+                    window_end,
+                    last_materialized_version_id,
+                    last_materialized_at,
+                ),
             )
     rt.emit_dataset_buffer_updated(
         tenant_id=tenant_id,
@@ -125,6 +214,7 @@ def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict
             cur.execute(
                 """
                 SELECT buffer_id, source_type, current_size, target_threshold, window_status, started_at, updated_at
+                     , accumulation_strategy, window_start, window_end, last_materialized_version_id, last_materialized_at
                 FROM dataset_accumulation_buffers
                 WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
                 """,
@@ -142,22 +232,35 @@ def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict
         "target_threshold": int(row[3] or 0),
         "window_status": row[4],
         "window_strategy": "threshold",
-        "materialization_strategy": "snapshot_on_threshold",
+        "materialization_strategy": str(row[7] or DEFAULT_ACCUMULATION_STRATEGY),
+        "accumulation_strategy": str(row[7] or DEFAULT_ACCUMULATION_STRATEGY),
         "started_at": row[5].isoformat(),
         "created_at": row[5].isoformat(),
         "last_ingested_at": row[6].isoformat(),
         "updated_at": row[6].isoformat(),
+        "window_start": row[8].isoformat() if row[8] else None,
+        "window_end": row[9].isoformat() if row[9] else None,
+        "last_materialized_version_id": row[10],
+        "last_materialized_at": row[11].isoformat() if row[11] else None,
     }
 
 
-def update_dataset_buffer_threshold(
-    tenant_id: str, project_id: str, dataset_id: str, target_threshold: int
+def update_dataset_buffer_config(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    *,
+    target_threshold: int,
+    accumulation_strategy: str | None = None,
 ) -> dict | None:
     """Set accumulation ``target_threshold``; creates buffer row if missing (mirrors dataset current_size)."""
     ds = get_dataset(tenant_id, project_id, dataset_id)
     if not ds:
         return None
     tgt = max(1, int(target_threshold))
+    strategy = str(accumulation_strategy or "").strip() or None
+    if strategy and strategy not in SUPPORTED_ACCUMULATION_STRATEGIES:
+        strategy = DEFAULT_ACCUMULATION_STRATEGY
     buf = get_dataset_buffer(tenant_id, project_id, dataset_id)
     if buf:
         _upsert_dataset_buffer(
@@ -167,7 +270,9 @@ def update_dataset_buffer_threshold(
             source_type=str(buf.get("source_type") or "runtime_feedback"),
             current_size=int(buf.get("current_size") or 0),
             target_threshold=tgt,
+            accumulation_strategy=strategy or str(buf.get("accumulation_strategy") or DEFAULT_ACCUMULATION_STRATEGY),
             window_status=str(buf.get("window_status") or "active"),
+            window_start=datetime.now(timezone.utc),
         )
     else:
         _upsert_dataset_buffer(
@@ -177,10 +282,24 @@ def update_dataset_buffer_threshold(
             source_type="runtime_feedback",
             current_size=int(ds.get("current_size") or 0),
             target_threshold=tgt,
+            accumulation_strategy=strategy or DEFAULT_ACCUMULATION_STRATEGY,
             window_status="active",
+            window_start=datetime.now(timezone.utc),
         )
     _notify_dataset_updated(tenant_id, project_id, dataset_id, action="buffer_threshold_updated")
     return get_dataset_buffer(tenant_id, project_id, dataset_id)
+
+
+def update_dataset_buffer_threshold(
+    tenant_id: str, project_id: str, dataset_id: str, target_threshold: int
+) -> dict | None:
+    """Backward-compatible wrapper for threshold-only updates."""
+    return update_dataset_buffer_config(
+        tenant_id,
+        project_id,
+        dataset_id,
+        target_threshold=target_threshold,
+    )
 
 
 def _reset_dataset_buffer(
@@ -374,6 +493,314 @@ def _next_dataset_version(dataset_id: str) -> str:
     if not m:
         return "v1"
     return f"v{int(m.group(1)) + 1}"
+
+
+def _next_dataset_version_locked(cur: Any, dataset_id: str) -> str:
+    """Allocate monotonic `vN` version inside an existing transaction."""
+    cur.execute(
+        """
+        SELECT COALESCE(MAX(CAST(SUBSTRING(version FROM 2) AS INTEGER)), 0)
+        FROM dataset_versions
+        WHERE dataset_id = %s
+          AND version ~ '^v[0-9]+$'
+        """,
+        (dataset_id,),
+    )
+    row = cur.fetchone()
+    n = int((row or [0])[0] or 0)
+    return f"v{n + 1}"
+
+
+def _materialization_idempotency_key(
+    dataset_id: str,
+    strategy: str,
+    target_threshold: int,
+    current_size: int,
+    source_type: str,
+    uri: str | None,
+    checksum: str | None,
+) -> str:
+    raw = "|".join(
+        [
+            str(dataset_id),
+            str(strategy),
+            str(target_threshold),
+            str(current_size),
+            str(source_type),
+            str(uri or ""),
+            str(checksum or ""),
+        ]
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _materialize_runtime_feedback_if_needed(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    source_type: str,
+    uri: str | None,
+    checksum: str | None,
+    size: int | None,
+    force: bool = False,
+) -> tuple[str | None, str | None]:
+    """Atomic materialization: lock dataset scope, create vN once, then reset buffer."""
+    now_size = max(0, int(size or 0))
+    started = time.perf_counter()
+    strategy_for_metrics = DEFAULT_ACCUMULATION_STRATEGY
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"{tenant_id}:{project_id}:{dataset_id}",))
+            cur.execute(
+                """
+                SELECT target_threshold, accumulation_strategy, current_size
+                FROM dataset_accumulation_buffers
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                FOR UPDATE
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None, None
+            target_threshold = max(1, int(row[0] or 1000))
+            strategy = str(row[1] or DEFAULT_ACCUMULATION_STRATEGY)
+            strategy_for_metrics = strategy
+            if Counter:
+                MATERIALIZATION_ATTEMPT_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
+            current_size = max(0, int(row[2] or now_size))
+            if strategy not in SUPPORTED_ACCUMULATION_STRATEGIES:
+                if Counter:
+                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unsupported_strategy").inc()
+                return None, None
+            if not force and strategy != "snapshot_on_threshold":
+                if Counter:
+                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="strategy_not_auto").inc()
+                return None, None
+            if current_size <= 0:
+                if Counter:
+                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="empty_buffer").inc()
+                return None, None
+            if not force and current_size < target_threshold:
+                if Counter:
+                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="below_threshold").inc()
+                return None, None
+            idem_key = _materialization_idempotency_key(
+                dataset_id=dataset_id,
+                strategy=strategy,
+                target_threshold=target_threshold,
+                current_size=current_size,
+                source_type=source_type,
+                uri=uri,
+                checksum=checksum,
+            )
+            cur.execute(
+                "SELECT version_id, version FROM dataset_versions WHERE materialization_idempotency_key = %s",
+                (idem_key,),
+            )
+            existing = cur.fetchone()
+            if existing:
+                logger.info(
+                    "dataset_materialization_idempotent_hit dataset_id=%s strategy=%s idem_key=%s version_id=%s",
+                    dataset_id,
+                    strategy,
+                    idem_key,
+                    existing[0],
+                )
+                return str(existing[0]), str(existing[1])
+            version = _next_dataset_version_locked(cur, dataset_id)
+            version_id = str(uuid4())
+            cur.execute(
+                """
+                INSERT INTO dataset_versions
+                    (
+                        version_id, dataset_id, version, uri, checksum, source_type, record_count,
+                        status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
+                    )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
+                """,
+                (
+                    version_id,
+                    dataset_id,
+                    version,
+                    uri,
+                    checksum,
+                    "runtime_accumulation",
+                    current_size,
+                    [],
+                    json.dumps([]),
+                    idem_key,
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE dataset_accumulation_buffers
+                SET current_size = 0,
+                    window_status = 'active',
+                    window_start = NOW(),
+                    window_end = NULL,
+                    last_materialized_version_id = %s,
+                    last_materialized_at = NOW(),
+                    updated_at = NOW()
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (version_id, tenant_id, project_id, dataset_id),
+            )
+            rt.emit_dataset_version_created(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                dataset_version_id=version_id,
+                source_type="runtime_accumulation",
+                record_count=current_size,
+                updated_at=datetime.now(timezone.utc),
+                trace_id=get_trace_id(),
+            )
+            rt.emit_dataset_buffer_updated(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                source_type=source_type,
+                current_size=0,
+                target_threshold=target_threshold,
+                window_status="active",
+                updated_at=datetime.now(timezone.utc),
+                trace_id=get_trace_id(),
+            )
+            logger.info(
+                "dataset_materialized dataset_id=%s strategy=%s source_type=%s version=%s version_id=%s threshold=%s current_size=%s idem_key=%s",
+                dataset_id,
+                strategy,
+                source_type,
+                version,
+                version_id,
+                target_threshold,
+                current_size,
+                idem_key,
+            )
+            if Counter:
+                MATERIALIZATION_CREATED_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
+            if Histogram:
+                MATERIALIZATION_LATENCY_SECONDS.labels(strategy=strategy).observe(max(0.0, time.perf_counter() - started))
+            return version_id, version
+    if Histogram:
+        MATERIALIZATION_LATENCY_SECONDS.labels(strategy=strategy_for_metrics).observe(max(0.0, time.perf_counter() - started))
+
+
+def materialize_dataset_buffer_now(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+) -> dict[str, Any] | None:
+    """Manual materialization endpoint for operator-driven strategies."""
+    ds = get_dataset(tenant_id, project_id, dataset_id)
+    if not ds:
+        return None
+    buf = get_dataset_buffer(tenant_id, project_id, dataset_id)
+    if not buf:
+        return None
+    strategy = str(buf.get("accumulation_strategy") or DEFAULT_ACCUMULATION_STRATEGY)
+    if strategy not in {"manual_materialize_only", "snapshot_on_schedule"}:
+        raise ValueError("buffer_strategy_not_manual_or_schedule")
+    version_id, version = _materialize_runtime_feedback_if_needed(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        source_type=str(buf.get("source_type") or "runtime_feedback"),
+        uri=str(ds.get("source_uri") or "") or None,
+        checksum=str(ds.get("checksum") or "") or None,
+        size=int(buf.get("current_size") or 0),
+        force=True,
+    )
+    if not version_id or not version:
+        raise ValueError("buffer_not_ready_for_materialization")
+    return {
+        "dataset_id": dataset_id,
+        "dataset_version_id": version_id,
+        "version": version,
+        "strategy": strategy,
+        "materialized": True,
+    }
+
+
+def materialize_scheduled_buffers(
+    *,
+    tenant_id: str,
+    project_id: str,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Materialize buffers with snapshot_on_schedule strategy (with threshold guard)."""
+    lim = max(1, min(int(limit or 50), 200))
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT b.dataset_id, b.source_type, b.current_size, b.target_threshold
+                FROM dataset_accumulation_buffers b
+                JOIN datasets d ON d.dataset_id = b.dataset_id
+                WHERE b.tenant_id = %s
+                  AND b.project_id = %s
+                  AND d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND b.accumulation_strategy = 'snapshot_on_schedule'
+                ORDER BY b.updated_at ASC
+                LIMIT %s
+                """,
+                (tenant_id, project_id, tenant_id, project_id, lim),
+            )
+            rows = cur.fetchall()
+    materialized: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for r in rows:
+        dataset_id = str(r[0] or "")
+        source_type = str(r[1] or "runtime_feedback")
+        current_size = max(0, int(r[2] or 0))
+        target_threshold = max(1, int(r[3] or 1000))
+        if current_size < target_threshold:
+            skipped.append(
+                {
+                    "dataset_id": dataset_id,
+                    "reason": "below_threshold_guard",
+                    "current_size": current_size,
+                    "target_threshold": target_threshold,
+                }
+            )
+            continue
+        ds = get_dataset(tenant_id, project_id, dataset_id)
+        if not ds:
+            skipped.append({"dataset_id": dataset_id, "reason": "dataset_not_found"})
+            continue
+        version_id, version = _materialize_runtime_feedback_if_needed(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            source_type=source_type,
+            uri=str(ds.get("source_uri") or "") or None,
+            checksum=str(ds.get("checksum") or "") or None,
+            size=current_size,
+            force=True,
+        )
+        if version_id and version:
+            materialized.append(
+                {
+                    "dataset_id": dataset_id,
+                    "dataset_version_id": version_id,
+                    "version": version,
+                    "strategy": "snapshot_on_schedule",
+                }
+            )
+        else:
+            skipped.append({"dataset_id": dataset_id, "reason": "materialization_not_created"})
+    return {
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "checked": len(rows),
+        "materialized_count": len(materialized),
+        "materialized": materialized,
+        "skipped": skipped,
+    }
 
 
 def _analyze_csv(csv_bytes: bytes) -> dict[str, Any]:
@@ -633,26 +1060,28 @@ def ingest_lineage_from_task(
             current_size=size,
             window_status="active",
         )
-        buf = get_dataset_buffer(tenant_id, project_id, ds)
         source_type_for_item = str(item.get("source_type") or "api_ingestion").strip() or "api_ingestion"
+        materialized_version_id: str | None = None
         if (
             ver_raw in (None, "")
             and source_type_for_item == "runtime_feedback"
-            and buf
-            and int(buf.get("current_size") or 0) >= int(buf.get("target_threshold") or 1000)
         ):
-            ver = _next_dataset_version(ds)
-            _reset_dataset_buffer(
+            materialized_version_id, materialized_version = _materialize_runtime_feedback_if_needed(
                 tenant_id,
                 project_id,
-                ds,
+                dataset_id=ds,
                 source_type=source_type_for_item,
-                target_threshold=int(buf.get("target_threshold") or 1000),
+                uri=str(uri) if uri else None,
+                checksum=str(chk) if chk else None,
+                size=size,
             )
+            if materialized_version:
+                ver = materialized_version
         touched_dataset_ids.add(str(ds))
         item_source_type = source_type_for_item
         input_vids.append(
-            _upsert_dataset_version(
+            materialized_version_id
+            or _upsert_dataset_version(
                 ds,
                 ver,
                 str(uri) if uri else None,
@@ -698,26 +1127,28 @@ def ingest_lineage_from_task(
             current_size=size,
             window_status="active",
         )
-        buf = get_dataset_buffer(tenant_id, project_id, ds)
         source_type_for_item = str(item.get("source_type") or "etl").strip() or "etl"
+        materialized_version_id = None
         if (
             ver_raw in (None, "")
             and source_type_for_item == "runtime_feedback"
-            and buf
-            and int(buf.get("current_size") or 0) >= int(buf.get("target_threshold") or 1000)
         ):
-            ver = _next_dataset_version(ds)
-            _reset_dataset_buffer(
+            materialized_version_id, materialized_version = _materialize_runtime_feedback_if_needed(
                 tenant_id,
                 project_id,
-                ds,
+                dataset_id=ds,
                 source_type=source_type_for_item,
-                target_threshold=int(buf.get("target_threshold") or 1000),
+                uri=str(uri) if uri else None,
+                checksum=str(chk) if chk else None,
+                size=size,
             )
+            if materialized_version:
+                ver = materialized_version
         touched_dataset_ids.add(str(ds))
         item_source_type = source_type_for_item
         output_vids.append(
-            _upsert_dataset_version(
+            materialized_version_id
+            or _upsert_dataset_version(
                 ds,
                 ver,
                 str(uri) if uri else None,

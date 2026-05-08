@@ -674,6 +674,7 @@ export async function fetchDatasetBuffer(tenantId: string, projectId: string, da
     current_size: number;
     record_count?: number;
     target_threshold: number;
+    accumulation_strategy?: string;
     window_status: string;
     window_strategy?: string;
     materialization_strategy?: string;
@@ -681,6 +682,10 @@ export async function fetchDatasetBuffer(tenantId: string, projectId: string, da
     created_at?: string | null;
     last_ingested_at?: string | null;
     updated_at?: string | null;
+    window_start?: string | null;
+    window_end?: string | null;
+    last_materialized_version_id?: string | null;
+    last_materialized_at?: string | null;
   };
 }
 
@@ -689,7 +694,7 @@ export async function patchDatasetBuffer(
   projectId: string,
   datasetId: string,
   token: string,
-  payload: { target_threshold: number }
+  payload: { target_threshold: number; accumulation_strategy?: string }
 ) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/buffer`, {
     method: "PATCH",
@@ -700,6 +705,28 @@ export async function patchDatasetBuffer(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as Awaited<ReturnType<typeof fetchDatasetBuffer>>;
+}
+
+export async function materializeDatasetBuffer(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/buffer/materialize`, {
+    method: "POST",
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    dataset_id: string;
+    dataset_version_id: string;
+    version: string;
+    strategy: string;
+    materialized: boolean;
+  };
 }
 
 export type DatasetTrainingPolicy = {

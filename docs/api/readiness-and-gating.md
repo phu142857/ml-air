@@ -16,6 +16,10 @@ Query:
 - `dataset_version_id` (optional; defaults to latest dataset version)
 - `required_size` (legacy fallback when policy_id is omitted)
 
+Version-centric endpoint:
+
+- `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness?policy_id=<id>`
+
 Response:
 
 - `dataset_id`
@@ -143,15 +147,18 @@ Separate from **training policy** / eligibility: the buffer holds **mutable accu
 
 - **`GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer`** (viewer): returns `current_size`, `target_threshold`, `source_type`, window metadata, timestamps. If no DB row exists yet, the API may return a **compatibility** shape with `target_threshold` defaulting to `1000`.
 
-- **`PATCH /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer`** (maintainer): set the materialization target.
+- **`PATCH /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer`** (maintainer): set materialization config.
+- **`POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer/materialize`** (maintainer): force materialization now for operator-driven strategies (`manual_materialize_only`, `snapshot_on_schedule`).
+- **`POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/buffer/materialize-scheduled`** (maintainer): schedule tick endpoint for all buffers using `snapshot_on_schedule` in a project scope.
 
   Body:
 
   ```json
-  { "target_threshold": 2500 }
+  { "target_threshold": 2500, "accumulation_strategy": "snapshot_on_threshold" }
   ```
 
   - `target_threshold` must be ≥ 1 (upper bound enforced server-side).
+  - `accumulation_strategy`: `snapshot_on_threshold` | `rolling_accumulate` | `snapshot_on_schedule` | `manual_materialize_only`.
   - If no buffer row exists, MLAir **creates** one using the dataset’s current `current_size` and the supplied threshold.
 
   Ingestion / lineage updates that refresh the buffer **preserve** an existing `target_threshold` unless the server explicitly sets a new value — so operator or UI changes are not reset to `1000` on every ingest.
@@ -162,7 +169,17 @@ Example:
 curl -X PATCH "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/buffer" \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \
-  -d '{"target_threshold": 2500}'
+  -d '{"target_threshold": 2500, "accumulation_strategy": "manual_materialize_only"}'
+```
+
+```bash
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/buffer/materialize" \
+  -H "Authorization: Bearer maintainer-token"
+```
+
+```bash
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/buffer/materialize-scheduled?limit=50" \
+  -H "Authorization: Bearer maintainer-token"
 ```
 
 ### 2) `POST /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness`

@@ -17,6 +17,7 @@ import {
   createDatasetTrainingPolicy,
   fetchDatasetTrainingPolicies,
   fetchDatasetVersions,
+  materializeDatasetBuffer,
   patchDatasetBuffer,
   fetchModels,
   fetchModelResolvedPipeline,
@@ -68,6 +69,7 @@ export default function DatasetHubPage() {
   const [maxEvaluationPage, setMaxEvaluationPage] = useState(0);
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
+  const [accumulationStrategyDraft, setAccumulationStrategyDraft] = useState("snapshot_on_threshold");
   const [accumulationMsg, setAccumulationMsg] = useState("");
 
   const datasetQuery = useQuery({
@@ -117,13 +119,22 @@ export default function DatasetHubPage() {
     if (t != null && Number.isFinite(Number(t))) {
       setAccumulationThresholdDraft(String(t));
     }
-  }, [bufferQuery.data?.target_threshold, datasetId]);
+    const s = String(bufferQuery.data?.accumulation_strategy || "snapshot_on_threshold").trim();
+    setAccumulationStrategyDraft(
+      s === "rolling_accumulate" || s === "snapshot_on_schedule" || s === "manual_materialize_only"
+        ? s
+        : "snapshot_on_threshold"
+    );
+  }, [bufferQuery.data?.target_threshold, bufferQuery.data?.accumulation_strategy, datasetId]);
 
   const patchBufferMutation = useMutation({
     mutationFn: async () => {
       const n = Number.parseInt(accumulationThresholdDraft, 10);
       if (!Number.isFinite(n) || n < 1) throw new Error(JSON.stringify({ detail: "target_threshold must be >= 1" }));
-      return patchDatasetBuffer(tenantId, projectId, datasetId, token, { target_threshold: n });
+      return patchDatasetBuffer(tenantId, projectId, datasetId, token, {
+        target_threshold: n,
+        accumulation_strategy: accumulationStrategyDraft
+      });
     },
     onSuccess: async () => {
       setAccumulationMsg("Materialization target saved.");
@@ -132,6 +143,18 @@ export default function DatasetHubPage() {
     onError: (err: unknown) => {
       setAccumulationMsg(describeTrainError(err));
     }
+  });
+  const materializeBufferMutation = useMutation({
+    mutationFn: async () => materializeDatasetBuffer(tenantId, projectId, datasetId, token),
+    onSuccess: async (out) => {
+      setAccumulationMsg(`Materialized ${out.version} (${out.dataset_version_id.slice(0, 8)}…).`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId) })
+      ]);
+    },
+    onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
   });
   const readinessEvaluationsQuery = useQuery({
     queryKey: [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId), evaluationPage],
@@ -494,6 +517,22 @@ export default function DatasetHubPage() {
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-2">
+                    <span className="whitespace-nowrap">Strategy</span>
+                    <select
+                      value={accumulationStrategyDraft}
+                      onChange={(e) => {
+                        setAccumulationMsg("");
+                        setAccumulationStrategyDraft(e.target.value);
+                      }}
+                      className="rounded-lg border border-border bg-muted px-2 py-2 text-sm text-foreground"
+                    >
+                      <option value="snapshot_on_threshold">snapshot_on_threshold</option>
+                      <option value="rolling_accumulate">rolling_accumulate</option>
+                      <option value="snapshot_on_schedule">snapshot_on_schedule</option>
+                      <option value="manual_materialize_only">manual_materialize_only</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
                     <span className="whitespace-nowrap">Target threshold (min)</span>
                     <input
                       type="number"
@@ -510,13 +549,28 @@ export default function DatasetHubPage() {
                     type="button"
                     variant="secondary"
                     className="px-3 py-1 text-xs"
-                    disabled={patchBufferMutation.isPending}
+                    disabled={patchBufferMutation.isPending || materializeBufferMutation.isPending}
                     onClick={() => {
                       setAccumulationMsg("");
                       patchBufferMutation.mutate();
                     }}
                   >
                     Save target
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="px-3 py-1 text-xs"
+                    disabled={
+                      materializeBufferMutation.isPending ||
+                      !["manual_materialize_only", "snapshot_on_schedule"].includes(accumulationStrategyDraft)
+                    }
+                    onClick={() => {
+                      setAccumulationMsg("");
+                      materializeBufferMutation.mutate();
+                    }}
+                  >
+                    Materialize now
                   </Button>
                 </div>
                 {accumulationMsg ? (
@@ -529,6 +583,7 @@ export default function DatasetHubPage() {
                 <div className="space-y-2 border-t border-border pt-3">
                 <div>buffer_id: <span className="font-mono text-foreground">{String(bufferQuery.data.buffer_id || "—")}</span></div>
                 <div>source_type: <span className="font-semibold text-foreground">{String(bufferQuery.data.source_type || "runtime_feedback")}</span></div>
+                <div>accumulation_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.accumulation_strategy || "snapshot_on_threshold")}</span></div>
                 <div>window_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_strategy || "threshold")}</span></div>
                 <div>window_status: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_status || "active")}</span></div>
                 <div>materialization_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.materialization_strategy || "snapshot_on_threshold")}</span></div>
@@ -536,6 +591,8 @@ export default function DatasetHubPage() {
                 <div>progress: <span className="font-semibold text-foreground">{Number(bufferQuery.data.current_size || 0)} / {Number(bufferQuery.data.target_threshold || 0)}</span></div>
                 <div>created_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.created_at || bufferQuery.data.started_at || ""))}</span></div>
                 <div>last_ingested_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.last_ingested_at || bufferQuery.data.updated_at || ""))}</span></div>
+                <div>last_materialized_version: <span className="font-mono text-foreground">{String(bufferQuery.data.last_materialized_version_id || "—")}</span></div>
+                <div>last_materialized_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.last_materialized_at || ""))}</span></div>
                 </div>
               </div>
             ) : (

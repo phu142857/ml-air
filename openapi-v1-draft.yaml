@@ -771,17 +771,28 @@ paths:
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness:
     get:
       tags: [Datasets]
-      summary: Row-count readiness vs required_size threshold
+      summary: Evaluate dataset-version readiness by policy (legacy-compatible)
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/DatasetId"
+        - name: policy_id
+          in: query
+          schema:
+            type: string
+          description: Preferred policy reference for readiness evaluation.
+        - name: dataset_version_id
+          in: query
+          schema:
+            type: string
+          description: Optional immutable snapshot. If omitted, service resolves latest materialized version.
         - name: required_size
           in: query
           schema:
             type: integer
             minimum: 1
             default: 1000
+          description: Legacy fallback used only when policy_id is omitted.
       responses:
         "200":
           description: Readiness summary
@@ -791,6 +802,29 @@ paths:
                 $ref: "#/components/schemas/DatasetReadiness"
         "404":
           description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness:
+    get:
+      tags: [Datasets]
+      summary: Evaluate readiness for a specific immutable dataset version
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - name: policy_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Readiness summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetReadiness"
+        "404":
+          description: dataset_not_found or dataset_version_not_found
 
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer:
     get:
@@ -815,7 +849,7 @@ paths:
           description: dataset_not_found
     patch:
       tags: [Datasets]
-      summary: Set accumulation materialization target (target_threshold)
+      summary: Set accumulation materialization config (target_threshold + strategy)
       description: |
         Maintainer role. Updates `dataset_accumulation_buffers.target_threshold`. Creates a buffer row
         if missing (seeds `current_size` from the dataset row). Ingestion preserves an existing
@@ -841,6 +875,51 @@ paths:
           description: dataset_not_found
         "422":
           description: Validation error (e.g. invalid target_threshold)
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer/materialize:
+    post:
+      tags: [Datasets]
+      summary: Materialize buffer into a new immutable dataset version
+      description: |
+        Maintainer role. Manual materialization endpoint for operator-driven strategies.
+        Supported strategies: `manual_materialize_only`, `snapshot_on_schedule`.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Materialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterializeBufferResult"
+        "404":
+          description: dataset_or_buffer_not_found
+        "409":
+          description: buffer_strategy_not_manual_or_schedule or buffer_not_ready_for_materialization
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/buffer/materialize-scheduled:
+    post:
+      tags: [Datasets]
+      summary: Materialize all schedule-strategy buffers for tenant/project
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Materialization tick result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterializeScheduledResult"
 
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions:
     get:
@@ -2632,6 +2711,9 @@ components:
           type: integer
         target_threshold:
           type: integer
+        accumulation_strategy:
+          type: string
+          enum: [snapshot_on_threshold, rolling_accumulate, snapshot_on_schedule, manual_materialize_only]
         window_status:
           type: string
         window_strategy:
@@ -2650,6 +2732,18 @@ components:
         updated_at:
           type: string
           nullable: true
+        window_start:
+          type: string
+          nullable: true
+        window_end:
+          type: string
+          nullable: true
+        last_materialized_version_id:
+          type: string
+          nullable: true
+        last_materialized_at:
+          type: string
+          nullable: true
       additionalProperties: true
 
     DatasetBufferPatchRequest:
@@ -2661,6 +2755,46 @@ components:
           minimum: 1
           maximum: 2000000000
           description: Row-count target for materialization on supported ingestion paths (not training policy required_size).
+        accumulation_strategy:
+          type: string
+          enum: [snapshot_on_threshold, rolling_accumulate, snapshot_on_schedule, manual_materialize_only]
+          description: Buffer materialization strategy.
+
+    MaterializeBufferResult:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        dataset_version_id:
+          type: string
+        version:
+          type: string
+        strategy:
+          type: string
+        materialized:
+          type: boolean
+
+    MaterializeScheduledResult:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+        project_id:
+          type: string
+        checked:
+          type: integer
+        materialized_count:
+          type: integer
+        materialized:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        skipped:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
 
     DatasetVersionList:
       type: object

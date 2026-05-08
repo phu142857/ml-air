@@ -23,4 +23,5 @@ Current readiness architecture notes:
   - `POST .../datasets/{dataset_id}/training-policies`
   - `PUT .../datasets/{dataset_id}/training-policies`
 - Readiness response includes eligibility fields (`eligibility_status`, `eligibility_criteria`, `reasons`).
-- **Accumulation buffer**: `GET .../datasets/{dataset_id}/buffer` for staging metadata; **`PATCH`** (maintainer) sets `target_threshold` (materialization target). Ingest preserves a stored threshold unless explicitly updated.
+- **Accumulation buffer**: `GET .../datasets/{dataset_id}/buffer` for staging metadata; **`PATCH`** (maintainer) sets `target_threshold` and optional `accumulation_strategy`. Ingest preserves stored materialization config unless explicitly updated.
+- **Version-centric readiness**: `GET .../datasets/{dataset_id}/versions/{version_id}/readiness` evaluates immutable snapshots directly.

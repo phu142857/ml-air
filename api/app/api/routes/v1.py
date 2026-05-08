@@ -126,6 +126,10 @@ class DatasetBufferPatchIn(BaseModel):
     """Materialization target for active accumulation (``dataset_accumulation_buffers.target_threshold``)."""
 
     target_threshold: int = Field(ge=1, le=2_000_000_000)
+    accumulation_strategy: str | None = Field(
+        default=None,
+        description="snapshot_on_threshold|rolling_accumulate|snapshot_on_schedule|manual_materialize_only",
+    )
 
 
 class CreatePipelineVersionIn(BaseModel):
@@ -986,88 +990,63 @@ def get_dataset_readiness_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    row = lineage_service.get_dataset(tenant_id, project_id, dataset_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="dataset_not_found")
-    policy = None
-    if policy_id:
-        policy = readiness_service.get_dataset_training_policy_by_id(
+    try:
+        result = readiness_service.evaluate_dataset_readiness(
             tenant_id=tenant_id,
             project_id=project_id,
             dataset_id=dataset_id,
+            required_size=required_size,
+            dataset_version_id=dataset_version_id,
             policy_id=policy_id,
         )
-        if not policy:
-            raise HTTPException(status_code=404, detail="dataset_training_policy_not_found")
-    else:
-        policy = readiness_service.get_or_create_dataset_training_policy(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            dataset_id=dataset_id,
-            default_required_size=max(1, int(required_size or 1000)),
-        )
-
-    # Policy-first readiness: threshold belongs to policy; required_size query is legacy fallback only.
-    req = max(1, int(policy.get("required_size", required_size if required_size is not None else 1000)))
-    selected_dataset_version_id = None
-    if dataset_version_id:
-        dv = lineage_service.get_dataset_version(tenant_id, project_id, dataset_version_id)
-        if not dv or str(dv.get("dataset_id") or "") != dataset_id:
-            raise HTTPException(status_code=404, detail="dataset_version_not_found")
-        cur = int(dv.get("record_count") or 0)
-        selected_dataset_version_id = str(dv.get("version_id") or dataset_version_id)
-    else:
-        cur = int(row.get("current_size") or 0)
-        selected_dataset_version_id = lineage_service.get_latest_dataset_version_id(tenant_id, project_id, dataset_id)
-    ready = cur >= req
-    validation_rules = policy.get("validation_rules") or []
-    eligibility_criteria = [
-        {"code": "size_threshold", "label": "Dataset size threshold", "status": "pass" if ready else "fail"},
-        {"code": "freshness", "label": "Freshness window", "status": "pass"},
-        {"code": "model_compatibility", "label": "Model compatibility", "status": "pass"},
-        {"code": "approval", "label": "Approval gate", "status": "pass"},
-        {
-            "code": "validation_rules",
-            "label": f"Validation rules ({len(validation_rules)})",
-            "status": "pass",
-        },
-    ]
-    reasons = [] if ready else [{"code": "size_threshold", "message": f"current_size {cur} < required_size {req}"}]
+    except ValueError as exc:
+        detail = str(exc)
+        if detail in {"dataset_not_found", "dataset_training_policy_not_found", "dataset_version_not_found"}:
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
     evaluation_id = readiness_service.record_dataset_readiness_evaluation(
         tenant_id=tenant_id,
         project_id=project_id,
         dataset_id=dataset_id,
-        dataset_version_id=selected_dataset_version_id,
-        policy_id=str(policy.get("policy_id")) if policy and policy.get("policy_id") else None,
-        required_size=req,
-        current_size=cur,
-        status="eligible" if ready else "blocked",
-        reasons=reasons,
+        dataset_version_id=result.get("dataset_version_id"),
+        policy_id=str(result.get("policy_id") or ""),
+        required_size=int(result.get("required_size") or 0),
+        current_size=int(result.get("current_size") or 0),
+        status=str(result.get("status") or "blocked"),
+        reasons=result.get("reasons") or [],
     )
     rt.emit_dataset_readiness_updated(
         tenant_id=tenant_id,
         project_id=project_id,
         dataset_id=dataset_id,
-        required_size=req,
-        current_size=cur,
-        status="eligible" if ready else "blocked",
+        required_size=int(result.get("required_size") or 0),
+        current_size=int(result.get("current_size") or 0),
+        status=str(result.get("status") or "blocked"),
         updated_at=datetime.now(timezone.utc),
         trace_id=get_trace_id(),
     )
-    return {
-        "dataset_id": dataset_id,
-        "dataset_name": row.get("name"),
-        "current_size": cur,
-        "required_size": req,
-        "ready": ready,
-        "status": "eligible" if ready else "blocked",
-        "eligibility_status": "eligible" if ready else "blocked",
-        "eligibility_criteria": eligibility_criteria,
-        "policy_id": policy.get("policy_id"),
-        "dataset_version_id": selected_dataset_version_id,
-        "evaluation_id": evaluation_id,
-        "reasons": reasons,
-    }
+    return {**result, "evaluation_id": evaluation_id}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness")
+def get_dataset_version_readiness_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    policy_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Version-centric readiness API: evaluate a specific immutable dataset version."""
+    return get_dataset_readiness_v1(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        required_size=None,
+        dataset_version_id=version_id,
+        policy_id=policy_id,
+        authorization=authorization,
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies")
@@ -1198,6 +1177,7 @@ def get_dataset_buffer_v1(
         "current_size": int((ds or {}).get("current_size") or 0),
         "record_count": int((ds or {}).get("current_size") or 0),
         "target_threshold": 1000,
+        "accumulation_strategy": "snapshot_on_threshold",
         "window_status": "active",
         "window_strategy": "threshold",
         "materialization_strategy": "snapshot_on_threshold",
@@ -1205,6 +1185,10 @@ def get_dataset_buffer_v1(
         "created_at": ds.get("created_at") if ds else None,
         "last_ingested_at": ds.get("updated_at") if ds else None,
         "updated_at": ds.get("updated_at") if ds else None,
+        "window_start": ds.get("created_at") if ds else None,
+        "window_end": None,
+        "last_materialized_version_id": None,
+        "last_materialized_at": None,
     }
 
 
@@ -1218,12 +1202,60 @@ def patch_dataset_buffer_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    row = lineage_service.update_dataset_buffer_threshold(
-        tenant_id, project_id, dataset_id, payload.target_threshold
+    row = lineage_service.update_dataset_buffer_config(
+        tenant_id,
+        project_id,
+        dataset_id,
+        target_threshold=payload.target_threshold,
+        accumulation_strategy=payload.accumulation_strategy,
     )
     if not row:
         raise HTTPException(status_code=404, detail="dataset_not_found")
     return row
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer/materialize")
+def materialize_dataset_buffer_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    try:
+        out = lineage_service.materialize_dataset_buffer_now(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "buffer_strategy_not_manual_or_schedule":
+            raise HTTPException(status_code=409, detail=detail) from exc
+        if detail == "buffer_not_ready_for_materialization":
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+    if not out:
+        raise HTTPException(status_code=404, detail="dataset_or_buffer_not_found")
+    return out
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/buffer/materialize-scheduled")
+def materialize_scheduled_buffers_v1(
+    tenant_id: str,
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Tick endpoint for schedule-driven accumulation strategy."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return lineage_service.materialize_scheduled_buffers(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+    )
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")

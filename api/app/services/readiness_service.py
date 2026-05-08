@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from app.services.db_service import db_conn
@@ -228,6 +229,211 @@ def record_dataset_readiness_evaluation(
                 ),
             )
     return evaluation_id
+
+
+def _load_dataset_row(tenant_id: str, project_id: str, dataset_id: str) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dataset_id, name, current_size
+                FROM datasets
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {"dataset_id": row[0], "name": row[1], "current_size": int(row[2] or 0)}
+
+
+def _load_dataset_version_row(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str,
+) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id, dv.record_count, dv.created_at, dv.status
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND d.dataset_id = %s
+                  AND dv.version_id = %s
+                LIMIT 1
+                """,
+                (tenant_id, project_id, dataset_id, dataset_version_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "version_id": row[0],
+        "record_count": int(row[1] or 0),
+        "created_at": row[2],
+        "status": str(row[3] or "ready"),
+    }
+
+
+def _load_latest_dataset_version_row(tenant_id: str, project_id: str, dataset_id: str) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id, dv.record_count, dv.created_at, dv.status
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s
+                  AND d.project_id = %s
+                  AND d.dataset_id = %s
+                ORDER BY dv.created_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "version_id": row[0],
+        "record_count": int(row[1] or 0),
+        "created_at": row[2],
+        "status": str(row[3] or "ready"),
+    }
+
+
+def _model_exists(tenant_id: str, project_id: str, model_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM models
+                WHERE tenant_id = %s AND project_id = %s AND model_id = %s
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            return bool(cur.fetchone())
+
+
+def evaluate_dataset_readiness(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    policy_id: str | None = None,
+    dataset_version_id: str | None = None,
+    required_size: int | None = None,
+) -> dict[str, Any]:
+    dataset = _load_dataset_row(tenant_id, project_id, dataset_id)
+    if not dataset:
+        raise ValueError("dataset_not_found")
+    if policy_id:
+        policy = get_dataset_training_policy_by_id(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            policy_id=policy_id,
+        )
+        if not policy:
+            raise ValueError("dataset_training_policy_not_found")
+    else:
+        policy = get_or_create_dataset_training_policy(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            default_required_size=max(1, int(required_size or 1000)),
+        )
+    req = max(1, int(policy.get("required_size", required_size if required_size is not None else 1000)))
+
+    selected_version_id: str | None = None
+    current_size = 0
+    selected_version_status = "ready"
+    selected_version_created_at = None
+    used_legacy_fallback = False
+    if dataset_version_id:
+        dv = _load_dataset_version_row(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
+        )
+        if not dv:
+            raise ValueError("dataset_version_not_found")
+        selected_version_id = str(dv["version_id"])
+        current_size = int(dv["record_count"])
+        selected_version_status = str(dv.get("status") or "ready")
+        selected_version_created_at = dv.get("created_at")
+    else:
+        latest = _load_latest_dataset_version_row(tenant_id, project_id, dataset_id)
+        if latest:
+            selected_version_id = str(latest["version_id"])
+            current_size = int(latest["record_count"])
+            selected_version_status = str(latest.get("status") or "ready")
+            selected_version_created_at = latest.get("created_at")
+        else:
+            used_legacy_fallback = True
+            current_size = int(dataset["current_size"])
+
+    size_ok = current_size >= req
+    validation_rules = policy.get("validation_rules") or []
+    freshness_hours = max(1, int(policy.get("freshness_hours") or 24))
+    freshness_ok = True
+    if selected_version_created_at is not None:
+        try:
+            age_seconds = max(0.0, (datetime.now(timezone.utc) - selected_version_created_at).total_seconds())
+            freshness_ok = age_seconds <= freshness_hours * 3600
+        except Exception:
+            freshness_ok = True
+    compatibility_ok = True
+    model_id = str(policy.get("model_id") or "").strip()
+    if model_id:
+        compatibility_ok = _model_exists(tenant_id, project_id, model_id)
+    approval_ok = str(selected_version_status).lower() not in {"failed", "blocked"}
+    rules_ok = len(validation_rules) == 0 or approval_ok
+    criteria = [
+        {"code": "size_threshold", "label": "Dataset size threshold", "status": "pass" if size_ok else "fail"},
+        {"code": "freshness", "label": "Freshness window", "status": "pass" if freshness_ok else "fail"},
+        {"code": "model_compatibility", "label": "Model compatibility", "status": "pass" if compatibility_ok else "fail"},
+        {"code": "approval", "label": "Approval gate", "status": "pass" if approval_ok else "fail"},
+        {"code": "validation_rules", "label": f"Validation rules ({len(validation_rules)})", "status": "pass" if rules_ok else "fail"},
+    ]
+    ready = size_ok and freshness_ok and compatibility_ok and approval_ok and rules_ok
+    reasons: list[dict[str, Any]] = []
+    if not size_ok:
+        reasons.append({"code": "size_threshold", "message": f"current_size {current_size} < required_size {req}"})
+    if not freshness_ok:
+        reasons.append({"code": "freshness", "message": f"version older than freshness_hours={freshness_hours}"})
+    if not compatibility_ok:
+        reasons.append({"code": "model_compatibility", "message": f"model_id {model_id} not found in tenant/project"})
+    if not approval_ok:
+        reasons.append({"code": "approval", "message": f"dataset_version status is {selected_version_status}"})
+    if used_legacy_fallback:
+        reasons.append(
+            {
+                "code": "legacy_fallback",
+                "message": "No materialized dataset_version found; used datasets.current_size compatibility fallback",
+            }
+        )
+    return {
+        "dataset_id": dataset_id,
+        "dataset_name": dataset["name"],
+        "current_size": int(current_size),
+        "required_size": int(req),
+        "ready": bool(ready),
+        "status": "eligible" if ready else "blocked",
+        "eligibility_status": "eligible" if ready else "blocked",
+        "eligibility_criteria": criteria,
+        "policy_id": policy.get("policy_id"),
+        "dataset_version_id": selected_version_id,
+        "reasons": reasons,
+    }
 
 
 def list_dataset_readiness_evaluations(

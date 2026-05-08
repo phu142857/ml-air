@@ -40,7 +40,9 @@ What client cannot set:
 ### 1b) Accumulation buffer (materialization target)
 
 - **`GET .../datasets/{dataset_id}/buffer`**: read active accumulation metadata (`target_threshold`, `current_size`, `source_type`, …).
-- **`PATCH .../datasets/{dataset_id}/buffer`** (maintainer): set **`target_threshold`** — the row count target used for **materialization** on supported ingestion paths (not the same as **`required_size`** on a **training policy**, which drives **eligibility** on an existing `dataset_version`).
+- **`PATCH .../datasets/{dataset_id}/buffer`** (maintainer): set **`target_threshold`** and optional **`accumulation_strategy`** (`snapshot_on_threshold|rolling_accumulate|snapshot_on_schedule|manual_materialize_only`) — this controls **materialization** behavior and is separate from policy `required_size` used for **eligibility** on immutable versions.
+- **`POST .../datasets/{dataset_id}/buffer/materialize`** (maintainer): manual materialization for operator-driven strategies (`manual_materialize_only`, `snapshot_on_schedule`).
+- **`POST .../datasets/buffer/materialize-scheduled`** (maintainer): schedule tick to materialize eligible `snapshot_on_schedule` buffers at project scope.
 
 Dataset Hub **Accumulation** tab exposes this target for editing (“Save target”). See [Readiness and Gating API](../api/readiness-and-gating.md) (§1.3, accumulation buffer).
 
