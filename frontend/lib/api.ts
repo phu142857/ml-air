@@ -1,4 +1,23 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+type RuntimeConfigGlobal = {
+  __ML_AIR_RUNTIME_CONFIG__?: { api_base_url?: string | null; realtime_base_url?: string | null } | null;
+};
+
+export function getApiBaseUrl(): string {
+  // Runtime-config first (deploy-time injection), then build-time env, then localhost fallback.
+  if (typeof window !== "undefined") {
+    const g = window as unknown as RuntimeConfigGlobal;
+    const raw = String(g.__ML_AIR_RUNTIME_CONFIG__?.api_base_url || "").trim();
+    if (raw) return raw;
+  }
+  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+}
+
+// Important: keep `API_BASE` usable in template strings without refactoring call sites.
+// `${API_BASE}` will coerce to string at runtime and call `toString()`, which reads the latest runtime config.
+export const API_BASE: string = ({
+  toString: () => getApiBaseUrl(),
+  valueOf: () => getApiBaseUrl()
+} as unknown) as string;
 
 export type RunItem = {
   run_id: string;
@@ -257,8 +276,9 @@ export async function fetchWhoAmI(token: string): Promise<WhoAmIResponse> {
   return data;
 }
 
-export async function fetchRuntimeConfig(): Promise<RuntimeConfigResponse> {
-  const res = await fetch(`${API_BASE}/v1/runtime-config`, { cache: "no-store" });
+export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): Promise<RuntimeConfigResponse> {
+  const url = opts?.preferRelative ? "/v1/runtime-config" : `${API_BASE}/v1/runtime-config`;
+  const res = await fetch(url, { cache: "no-store" });
   const data = (await res.json()) as RuntimeConfigResponse;
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data;
