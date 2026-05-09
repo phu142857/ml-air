@@ -4,61 +4,94 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/lib/app-context";
 import { useTheme } from "@/lib/theme-context";
-import { fetchTenantProjects, fetchTenants, fetchWhoAmI } from "@/lib/api";
+import { clearScopeContext, fetchBootstrapContext, switchScopeContext } from "@/lib/api";
 
 export function Topbar() {
   const router = useRouter();
-  const { tenantId, projectId, token, setTenantId, setProjectId, setToken } = useAppContext();
+  const {
+    tenantId,
+    projectId,
+    token,
+    mappingVersion,
+    isBootstrapped,
+    setTenantId,
+    setProjectId,
+    setToken,
+    setMappingVersion
+  } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const [q, setQ] = useState("");
-  const [tenantOptions, setTenantOptions] = useState<string[]>(tenantId ? [tenantId] : ["all"]);
+  const [tenantOptions, setTenantOptions] = useState<string[]>(tenantId ? [tenantId] : ["default"]);
   const [projectOptions, setProjectOptions] = useState<string[]>([]);
+  const [accessibleScopes, setAccessibleScopes] = useState<
+    Array<{ tenant_id: string; project_id: string; role: string }>
+  >([]);
   const [isLoadingScope, setIsLoadingScope] = useState(false);
   const autoLoadedKeyRef = useRef<string>("");
-  const loadScope = useCallback(
-    async (preferredTenant?: string) => {
+  const loadBootstrap = useCallback(async () => {
+    if (!token.trim()) return;
+    setIsLoadingScope(true);
+    try {
+      const ctx = await fetchBootstrapContext(token);
+      const scopes = ctx.accessible_scopes || [];
+      setAccessibleScopes(scopes);
+      const tenants = Array.from(new Set(scopes.map((s) => String(s.tenant_id || "").trim()).filter(Boolean)));
+      setTenantOptions(tenants.length ? tenants : [ctx.effective_scope.tenant_id]);
+      const effectiveTenant = String(ctx.effective_scope.tenant_id || "").trim();
+      const projectsForTenant = scopes
+        .filter((s) => String(s.tenant_id || "").trim() === effectiveTenant)
+        .map((s) => String(s.project_id || "").trim())
+        .filter(Boolean);
+      setProjectOptions(Array.from(new Set(projectsForTenant)));
+      setTenantId(ctx.effective_scope.tenant_id);
+      setProjectId(ctx.effective_scope.project_id);
+      setMappingVersion(ctx.effective_scope.mapping_version || 1);
+    } finally {
+      setIsLoadingScope(false);
+    }
+  }, [token, setTenantId, setProjectId, setMappingVersion]);
+
+  useEffect(() => {
+    if (!token || isLoadingScope) return;
+    const key = `${token}`;
+    if (autoLoadedKeyRef.current === key) return;
+    autoLoadedKeyRef.current = key;
+    void loadBootstrap();
+  }, [token, isLoadingScope, loadBootstrap]);
+
+  const switchScope = useCallback(
+    async (nextTenantId: string, nextProjectId: string) => {
+      if (!token.trim()) return;
       setIsLoadingScope(true);
       try {
-        let resolvedTenant = String(preferredTenant || tenantId || "default").trim() || "default";
-        let whoamiSkipped = false;
-        const tenants = await fetchTenants(token);
-        const mergedTenants = Array.from(new Set(["all", ...tenants]));
-        setTenantOptions(mergedTenants);
-        if (token) {
-          try {
-            const me = await fetchWhoAmI(token);
-            const candidate = String(me.tenant_id || "").trim();
-            if (candidate && mergedTenants.includes(candidate)) {
-              resolvedTenant = candidate;
-            }
-          } catch {
-            // Fallback: still load tenant projects even if whoami fails.
-            whoamiSkipped = true;
+        try {
+          const out = await switchScopeContext(token, {
+            tenant_id: nextTenantId,
+            project_id: nextProjectId,
+            expected_mapping_version: mappingVersion
+          });
+          setTenantId(out.effective_scope.tenant_id);
+          setProjectId(out.effective_scope.project_id);
+          setMappingVersion(out.effective_scope.mapping_version || 1);
+        } catch (e: any) {
+          const msg = String(e?.message || "");
+          if (msg.includes("mapping_version_stale")) {
+            await loadBootstrap();
+            const out = await switchScopeContext(token, { tenant_id: nextTenantId, project_id: nextProjectId });
+            setTenantId(out.effective_scope.tenant_id);
+            setProjectId(out.effective_scope.project_id);
+            setMappingVersion(out.effective_scope.mapping_version || 1);
+          } else {
+            throw e;
           }
         }
-        const projects = await fetchTenantProjects(resolvedTenant, token);
-        setProjectOptions(projects);
-        setTenantId(resolvedTenant);
-        if (projectId !== "all" && !projects.includes(projectId)) {
-          setProjectId("all");
-        }
-      } catch (e: any) {
-        // Keep UI clean: fail silently here, fallback options remain usable.
-        void e;
+        await loadBootstrap();
       } finally {
         setIsLoadingScope(false);
       }
     },
-    [tenantId, token, projectId, setProjectId, setTenantId]
+    [token, mappingVersion, setTenantId, setProjectId, setMappingVersion, loadBootstrap]
   );
-
-  useEffect(() => {
-    if (!token || isLoadingScope) return;
-    const key = `${tenantId}::${token}`;
-    if (autoLoadedKeyRef.current === key) return;
-    autoLoadedKeyRef.current = key;
-    void loadScope(tenantId);
-  }, [tenantId, token, isLoadingScope, loadScope]);
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card/95 px-6 backdrop-blur-sm">
@@ -91,12 +124,16 @@ export function Topbar() {
         </button>
         <select
           value={tenantId}
-          onChange={(e) => {
-            const t = e.target.value;
-            autoLoadedKeyRef.current = "";
-            setTenantId(t);
-            setProjectId("all");
-            void loadScope(t);
+          disabled={!isBootstrapped || isLoadingScope}
+          onChange={async (e) => {
+            const t = String(e.target.value || "").trim();
+            const nextProjects = accessibleScopes
+              .filter((s) => String(s.tenant_id || "").trim() === t)
+              .map((s) => String(s.project_id || "").trim())
+              .filter(Boolean);
+            const unique = Array.from(new Set(nextProjects));
+            const nextProject = unique.includes(projectId) ? projectId : unique[0] || "default_project";
+            await switchScope(t, nextProject);
           }}
           className="min-w-40 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
         >
@@ -108,13 +145,13 @@ export function Topbar() {
         </select>
         <select
           value={projectId}
-          onChange={(e) => {
-            const raw = e.target.value;
-            setProjectId(raw);
+          disabled={!isBootstrapped || isLoadingScope}
+          onChange={async (e) => {
+            const p = String(e.target.value || "").trim();
+            await switchScope(tenantId, p);
           }}
           className="min-w-44 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
         >
-          <option value="all">all</option>
           {projectOptions.map((x) => (
             <option key={x} value={x}>
               {x}
@@ -129,11 +166,28 @@ export function Topbar() {
         />
         <button
           type="button"
-          onClick={() => void loadScope()}
+          onClick={() => void loadBootstrap()}
           disabled={isLoadingScope}
           className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
         >
-          {isLoadingScope ? "Loading..." : "Load Scope"}
+          {isLoadingScope ? "Loading..." : "Bootstrap"}
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            setIsLoadingScope(true);
+            try {
+              await clearScopeContext(token);
+              await loadBootstrap();
+            } finally {
+              setIsLoadingScope(false);
+            }
+          }}
+          disabled={isLoadingScope}
+          className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
+          title="Clear persisted scope override"
+        >
+          Reset
         </button>
       </div>
     </header>
