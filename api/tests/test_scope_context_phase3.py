@@ -66,6 +66,21 @@ class TestScopeContextPhase3(unittest.TestCase):
         out = v1.clear_context_switch_v1(authorization="Bearer maintainer-token")
         self.assertEqual(out, {"ok": True, "cleared": True})
 
+    @patch("app.api.routes.v1.scope_context_service.get_scope_override", return_value={"subject": "user-3"})
+    @patch("app.api.routes.v1.authenticate_bearer")
+    def test_admin_can_inspect_scope_context(self, mock_auth, _get_override) -> None:
+        mock_auth.return_value = SimpleNamespace(role="admin")
+        out = v1.get_scope_context_by_subject_v1("user-3", authorization="Bearer admin-token")
+        self.assertEqual(out["subject"], "user-3")
+        self.assertTrue(out["override_active"])
+
+    @patch("app.api.routes.v1.authenticate_bearer")
+    def test_non_admin_cannot_inspect_scope_context(self, mock_auth) -> None:
+        mock_auth.return_value = SimpleNamespace(role="maintainer")
+        with self.assertRaises(HTTPException) as ctx:
+            v1.get_scope_context_by_subject_v1("user-3", authorization="Bearer maintainer-token")
+        self.assertEqual(ctx.exception.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

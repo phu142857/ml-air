@@ -120,6 +120,7 @@ Each guide follows:
 - [SLO/SLA Incident Runbook](./troubleshooting/slo-sla-incident.md)
 - [Disaster Recovery](./troubleshooting/disaster-recovery.md)
 - [Backup and Restore](./troubleshooting/backup-restore.md)
+- [Release Notes v0.6.94](./troubleshooting/release-notes-v0.6.94.md)
 
 ## Documentation Rules
 

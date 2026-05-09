@@ -137,6 +137,18 @@ export type ScopeDecisionResponse = {
   sources_checked: string[];
 };
 
+export type ScopeContextInspectResponse = {
+  subject: string;
+  scope_override: {
+    subject: string;
+    tenant_id: string;
+    project_id: string;
+    mapping_version: number;
+    updated_at?: string | null;
+  } | null;
+  override_active: boolean;
+};
+
 export function normalizeProjectId(projectId: string): string {
   const raw = String(projectId || "").trim().toLowerCase();
   if (raw === "global") return "default_project";
@@ -297,6 +309,19 @@ export async function fetchScopeDecision(
     cache: "no-store"
   });
   const data = (await res.json()) as ScopeDecisionResponse;
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function fetchScopeContextBySubject(
+  token: string,
+  subject: string
+): Promise<ScopeContextInspectResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/scope-context/${encodeURIComponent(subject)}`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = (await res.json()) as ScopeContextInspectResponse;
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data;
 }

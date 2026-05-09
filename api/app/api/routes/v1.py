@@ -4,6 +4,7 @@ import logging
 import os
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect
+from prometheus_client import Counter
 from pydantic import BaseModel, Field
 
 from app.services.model_registry_service import (
@@ -66,6 +67,11 @@ from app.services import scope_context_service
 
 router = APIRouter()
 logger = logging.getLogger("mlair.api.scope")
+SCOPE_DECISIONS_TOTAL = Counter(
+    "mlair_scope_decisions_total",
+    "Total scope authorization decisions",
+    ["decision", "reason_code", "tenant_id", "project_id"],
+)
 
 
 class TriggerRunIn(BaseModel):
@@ -888,6 +894,22 @@ def clear_context_switch_v1(authorization: str | None = Header(default=None)) ->
     return {"ok": True, "cleared": bool(deleted)}
 
 
+@router.get("/auth/scope-context/{subject}")
+def get_scope_context_by_subject_v1(subject: str, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    if principal.role != "admin":
+        raise HTTPException(status_code=403, detail="insufficient_role")
+    key = str(subject or "").strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="subject_required")
+    override = scope_context_service.get_scope_override(key)
+    return {
+        "subject": key,
+        "scope_override": override,
+        "override_active": bool(override),
+    }
+
+
 @router.get("/auth/scope-decision")
 def auth_scope_decision_v1(
     tenant_id: str = Query(..., min_length=1),
@@ -903,6 +925,12 @@ def auth_scope_decision_v1(
     except HTTPException as exc:
         decision = "deny"
         reason_code = str(exc.detail)
+    SCOPE_DECISIONS_TOTAL.labels(
+        decision=decision,
+        reason_code=reason_code,
+        tenant_id=tenant_id,
+        project_id=project_id,
+    ).inc()
     logger.info(
         "scope_decision trace_id=%s subject=%s tenant_id=%s project_id=%s scope_source=%s mapping_version=%s decision=%s reason_code=%s token_issuer=%s",
         get_trace_id(),
