@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useAppContext } from "@/lib/app-context";
 import { useTheme } from "@/lib/theme-context";
-import { clearScopeContext, fetchBootstrapContext, switchScopeContext } from "@/lib/api";
+import { clearScopeContext, switchScopeContext } from "@/lib/api";
 
 export function Topbar() {
   const router = useRouter();
@@ -14,55 +14,24 @@ export function Topbar() {
     token,
     mappingVersion,
     isBootstrapped,
+    accessibleScopes,
+    tenantOptions,
+    projectOptions,
+    isScopeLoading,
     setTenantId,
     setProjectId,
     setToken,
-    setMappingVersion
+    setMappingVersion,
+    refreshBootstrap
   } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const [q, setQ] = useState("");
-  const [tenantOptions, setTenantOptions] = useState<string[]>(tenantId ? [tenantId] : ["default"]);
-  const [projectOptions, setProjectOptions] = useState<string[]>([]);
-  const [accessibleScopes, setAccessibleScopes] = useState<
-    Array<{ tenant_id: string; project_id: string; role: string }>
-  >([]);
-  const [isLoadingScope, setIsLoadingScope] = useState(false);
-  const autoLoadedKeyRef = useRef<string>("");
-  const loadBootstrap = useCallback(async () => {
-    if (!token.trim()) return;
-    setIsLoadingScope(true);
-    try {
-      const ctx = await fetchBootstrapContext(token);
-      const scopes = ctx.accessible_scopes || [];
-      setAccessibleScopes(scopes);
-      const tenants = Array.from(new Set(scopes.map((s) => String(s.tenant_id || "").trim()).filter(Boolean)));
-      setTenantOptions(tenants.length ? tenants : [ctx.effective_scope.tenant_id]);
-      const effectiveTenant = String(ctx.effective_scope.tenant_id || "").trim();
-      const projectsForTenant = scopes
-        .filter((s) => String(s.tenant_id || "").trim() === effectiveTenant)
-        .map((s) => String(s.project_id || "").trim())
-        .filter(Boolean);
-      setProjectOptions(Array.from(new Set(projectsForTenant)));
-      setTenantId(ctx.effective_scope.tenant_id);
-      setProjectId(ctx.effective_scope.project_id);
-      setMappingVersion(ctx.effective_scope.mapping_version || 1);
-    } finally {
-      setIsLoadingScope(false);
-    }
-  }, [token, setTenantId, setProjectId, setMappingVersion]);
-
-  useEffect(() => {
-    if (!token || isLoadingScope) return;
-    const key = `${token}`;
-    if (autoLoadedKeyRef.current === key) return;
-    autoLoadedKeyRef.current = key;
-    void loadBootstrap();
-  }, [token, isLoadingScope, loadBootstrap]);
+  const [scopeTransactionLoading, setScopeTransactionLoading] = useState(false);
 
   const switchScope = useCallback(
     async (nextTenantId: string, nextProjectId: string) => {
       if (!token.trim()) return;
-      setIsLoadingScope(true);
+      setScopeTransactionLoading(true);
       try {
         try {
           const out = await switchScopeContext(token, {
@@ -73,10 +42,10 @@ export function Topbar() {
           setTenantId(out.effective_scope.tenant_id);
           setProjectId(out.effective_scope.project_id);
           setMappingVersion(out.effective_scope.mapping_version || 1);
-        } catch (e: any) {
-          const msg = String(e?.message || "");
+        } catch (e: unknown) {
+          const msg = String((e as { message?: string })?.message || "");
           if (msg.includes("mapping_version_stale")) {
-            await loadBootstrap();
+            await refreshBootstrap({ withSpinner: false });
             const out = await switchScopeContext(token, { tenant_id: nextTenantId, project_id: nextProjectId });
             setTenantId(out.effective_scope.tenant_id);
             setProjectId(out.effective_scope.project_id);
@@ -85,13 +54,15 @@ export function Topbar() {
             throw e;
           }
         }
-        await loadBootstrap();
+        await refreshBootstrap({ withSpinner: false });
       } finally {
-        setIsLoadingScope(false);
+        setScopeTransactionLoading(false);
       }
     },
-    [token, mappingVersion, setTenantId, setProjectId, setMappingVersion, loadBootstrap]
+    [token, mappingVersion, setTenantId, setProjectId, setMappingVersion, refreshBootstrap]
   );
+
+  const scopeBusy = isScopeLoading || scopeTransactionLoading;
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card/95 px-6 backdrop-blur-sm">
@@ -124,7 +95,7 @@ export function Topbar() {
         </button>
         <select
           value={tenantId}
-          disabled={!isBootstrapped || isLoadingScope}
+          disabled={!isBootstrapped || scopeBusy}
           onChange={async (e) => {
             const t = String(e.target.value || "").trim();
             const nextProjects = accessibleScopes
@@ -145,7 +116,7 @@ export function Topbar() {
         </select>
         <select
           value={projectId}
-          disabled={!isBootstrapped || isLoadingScope}
+          disabled={!isBootstrapped || scopeBusy}
           onChange={async (e) => {
             const p = String(e.target.value || "").trim();
             await switchScope(tenantId, p);
@@ -166,24 +137,24 @@ export function Topbar() {
         />
         <button
           type="button"
-          onClick={() => void loadBootstrap()}
-          disabled={isLoadingScope}
+          onClick={() => void refreshBootstrap()}
+          disabled={scopeBusy}
           className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
         >
-          {isLoadingScope ? "Loading..." : "Bootstrap"}
+          {scopeBusy ? "Loading..." : "Bootstrap"}
         </button>
         <button
           type="button"
           onClick={async () => {
-            setIsLoadingScope(true);
+            setScopeTransactionLoading(true);
             try {
               await clearScopeContext(token);
-              await loadBootstrap();
+              await refreshBootstrap({ withSpinner: false });
             } finally {
-              setIsLoadingScope(false);
+              setScopeTransactionLoading(false);
             }
           }}
-          disabled={isLoadingScope}
+          disabled={scopeBusy}
           className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
           title="Clear persisted scope override"
         >

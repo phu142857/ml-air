@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { PropsWithChildren } from "react";
-import { Topbar } from "./topbar";
 
 type NavItem = "Dashboard" | "Pipelines" | "Runs" | "Lineage" | "Models" | "Datasets" | "Tasks" | "Settings";
 
@@ -26,8 +25,6 @@ const navItems: Array<{ key: NavItem; href: string }> = [
 export function RouteShell({ activeNav, title, subtitle, children }: Props) {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Topbar />
-
       <div className="grid min-h-[calc(100vh-64px)] grid-cols-[220px_1fr]">
         <aside className="sticky top-16 h-[calc(100vh-64px)] overflow-y-auto border-r border-border bg-muted p-4">
           <div className="mb-3 text-overline uppercase tracking-wide text-muted-foreground">Navigation</div>

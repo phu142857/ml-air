@@ -4,6 +4,7 @@ import { PropsWithChildren, useEffect } from "react";
 import { QueryProvider } from "@/lib/query-provider";
 import { AppContextProvider } from "@/lib/app-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { Topbar } from "@/components/layout/topbar";
 import { useMlairRealtime } from "@/lib/use-mlair-realtime";
 import { fetchRuntimeConfig } from "@/lib/api";
 
@@ -32,6 +33,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <ThemeProvider>
       <AppContextProvider>
+        <Topbar />
         <QueryProvider>
           <MlairRealtimeSubscriber />
           {children}
