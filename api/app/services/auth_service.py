@@ -17,6 +17,9 @@ _JWKS_CACHE_EXPIRES_AT = 0.0
 @dataclass
 class Principal:
     token: str
+    subject: str
+    token_issuer: str
+    scope_mapping_version: int
     role: str
     tenant_id: str
     project_ids: list[str]
@@ -167,7 +170,7 @@ def _decode_jwt_token(token: str) -> dict | None:
     return None
 
 
-def _principal_from_token_data(token: str, token_data: dict) -> Principal:
+def _principal_from_token_data(token: str, token_data: dict, *, token_issuer: str) -> Principal:
     role = str(token_data.get("role", "viewer")).lower()
     if role not in ROLE_WEIGHT:
         raise HTTPException(status_code=403, detail="invalid_role")
@@ -178,8 +181,18 @@ def _principal_from_token_data(token: str, token_data: dict) -> Principal:
         project_ids = [str(x) for x in project_ids_raw]
     else:
         project_ids = []
+    subject = str(token_data.get("sub") or token_data.get("subject") or token).strip() or token
+    issuer = str(token_data.get("iss") or token_issuer).strip() or token_issuer
+    raw_mapping_version = token_data.get("scope_mapping_version", token_data.get("mapping_version", 1))
+    try:
+        scope_mapping_version = max(1, int(raw_mapping_version))
+    except (TypeError, ValueError):
+        scope_mapping_version = 1
     return Principal(
         token=token,
+        subject=subject,
+        token_issuer=issuer,
+        scope_mapping_version=scope_mapping_version,
         role=role,
         tenant_id=str(token_data.get("tenant_id", "")),
         project_ids=project_ids,
@@ -190,10 +203,10 @@ def authenticate_bearer(authorization: str | None) -> Principal:
     token = _extract_bearer_token(authorization)
     jwt_payload = _decode_jwt_token(token)
     if jwt_payload is not None:
-        return _principal_from_token_data(token, jwt_payload)
+        return _principal_from_token_data(token, jwt_payload, token_issuer="jwt")
     token_data = _token_db().get(token)
     if token_data:
-        return _principal_from_token_data(token, token_data)
+        return _principal_from_token_data(token, token_data, token_issuer="static_token")
     raise HTTPException(status_code=401, detail="invalid_token")
 
 

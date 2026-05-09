@@ -104,6 +104,39 @@ export type WhoAmIResponse = {
   project_ids?: string[];
 };
 
+export type RuntimeConfigResponse = {
+  environment: string;
+  api_base_url?: string | null;
+  realtime_base_url?: string | null;
+  default_tenant_hint?: string | null;
+  default_project_hint?: string | null;
+  features?: Record<string, boolean>;
+  build?: { frontend_version?: string | null; frontend_commit?: string | null };
+};
+
+export type BootstrapContextResponse = {
+  user: { subject: string; role: string; tenant_id?: string | null };
+  effective_scope: {
+    tenant_id: string;
+    project_id: string;
+    source: string;
+    mapping_version: number;
+  };
+  defaults: { tenant_id: string; project_id: string };
+  accessible_scopes: Array<{ tenant_id: string; project_id: string; role: string }>;
+  feature_flags?: Record<string, boolean>;
+};
+
+export type ScopeDecisionResponse = {
+  decision: "allow" | "deny";
+  reason_code: string;
+  subject: string;
+  tenant_id: string;
+  project_id: string;
+  mapping_version: number;
+  sources_checked: string[];
+};
+
 export function normalizeProjectId(projectId: string): string {
   const raw = String(projectId || "").trim().toLowerCase();
   if (raw === "global") return "default_project";
@@ -208,6 +241,62 @@ export async function fetchWhoAmI(token: string): Promise<WhoAmIResponse> {
     cache: "no-store"
   });
   const data = (await res.json()) as WhoAmIResponse;
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function fetchRuntimeConfig(): Promise<RuntimeConfigResponse> {
+  const res = await fetch(`${API_BASE}/v1/runtime-config`, { cache: "no-store" });
+  const data = (await res.json()) as RuntimeConfigResponse;
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function fetchBootstrapContext(token: string): Promise<BootstrapContextResponse> {
+  const res = await fetch(`${API_BASE}/v1/bootstrap/context`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = (await res.json()) as BootstrapContextResponse;
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function switchScopeContext(
+  token: string,
+  payload: { tenant_id: string; project_id: string; expected_mapping_version?: number }
+): Promise<{ ok: boolean; effective_scope: BootstrapContextResponse["effective_scope"] }> {
+  const res = await fetch(`${API_BASE}/v1/auth/context/switch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = (await res.json()) as { ok: boolean; effective_scope: BootstrapContextResponse["effective_scope"] };
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function clearScopeContext(token: string): Promise<{ ok: boolean; cleared: boolean }> {
+  const res = await fetch(`${API_BASE}/v1/auth/context/switch`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+  const data = (await res.json()) as { ok: boolean; cleared: boolean };
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function fetchScopeDecision(
+  token: string,
+  tenantId: string,
+  projectId: string
+): Promise<ScopeDecisionResponse> {
+  const q = new URLSearchParams({ tenant_id: tenantId, project_id: projectId });
+  const res = await fetch(`${API_BASE}/v1/auth/scope-decision?${q.toString()}`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = (await res.json()) as ScopeDecisionResponse;
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data;
 }

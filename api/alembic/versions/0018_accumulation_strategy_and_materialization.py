@@ -1,6 +1,6 @@
 """add accumulation strategy and materialization metadata
 
-Revision ID: 0018_accumulation_materialization
+Revision ID: 0018_accum_materialization
 Revises: 0017_dataset_training_policy
 Create Date: 2026-05-08
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0018_accumulation_materialization"
+revision = "0018_accum_materialization"
 down_revision = "0017_dataset_training_policy"
 branch_labels = None
 depends_on = None

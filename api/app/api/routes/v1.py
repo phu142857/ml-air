@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect
@@ -61,8 +62,10 @@ from datetime import datetime, timezone
 from app.services.executor_promote_webhook_service import notify_model_promotion_webhook
 from app.services.manifest_service import upsert_task_manifest
 from app.services import trigger_policy_service
+from app.services import scope_context_service
 
 router = APIRouter()
+logger = logging.getLogger("mlair.api.scope")
 
 
 class TriggerRunIn(BaseModel):
@@ -240,6 +243,12 @@ class TriggerPolicyIn(BaseModel):
     trigger_mode: str = "manual"
     debounce_minutes: int = 10
     schedule_cron: str | None = None
+
+
+class ScopeSwitchIn(BaseModel):
+    tenant_id: str = Field(min_length=1)
+    project_id: str = Field(min_length=1)
+    expected_mapping_version: int | None = Field(default=None, ge=1)
 
 
 class ManifestArtifactIn(BaseModel):
@@ -781,9 +790,139 @@ async def run_logs_ws_v1(websocket: WebSocket, tenant_id: str, project_id: str, 
 def whoami_v1(authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
     return {
+        "subject": principal.subject,
+        "token_issuer": principal.token_issuer,
+        "scope_mapping_version": principal.scope_mapping_version,
         "role": principal.role,
         "tenant_id": principal.tenant_id,
         "project_ids": principal.project_ids,
+    }
+
+
+@router.get("/runtime-config")
+def runtime_config_v1() -> dict:
+    features = {
+        "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
+        "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
+        "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
+    }
+    return {
+        "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
+        "api_base_url": os.getenv("ML_AIR_RUNTIME_API_BASE_URL", "").strip() or None,
+        "realtime_base_url": os.getenv("ML_AIR_RUNTIME_REALTIME_BASE_URL", "").strip() or None,
+        "default_tenant_hint": os.getenv("ML_AIR_DEFAULT_TENANT", "default"),
+        "default_project_hint": os.getenv("ML_AIR_DEFAULT_PROJECT", "default_project"),
+        "features": features,
+        "build": {
+            "frontend_version": os.getenv("ML_AIR_FRONTEND_VERSION", "").strip() or None,
+            "frontend_commit": os.getenv("ML_AIR_FRONTEND_COMMIT", "").strip() or None,
+        },
+    }
+
+
+@router.get("/bootstrap/context")
+def bootstrap_context_v1(authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    default_tenant = principal.tenant_id or os.getenv("ML_AIR_DEFAULT_TENANT", "default")
+    project_ids = scope_context_service.list_accessible_project_ids(principal, default_tenant)
+    selected = scope_context_service.get_scope_override(principal.subject)
+    mapping_version = scope_context_service.resolve_mapping_version(principal, default_tenant)
+    selected_tenant = str((selected or {}).get("tenant_id") or default_tenant)
+    selected_project = str((selected or {}).get("project_id") or project_ids[0])
+    if selected_tenant != default_tenant or selected_project not in project_ids:
+        selected_tenant = default_tenant
+        selected_project = project_ids[0]
+    return {
+        "user": {
+            "subject": principal.subject,
+            "role": principal.role,
+            "tenant_id": principal.tenant_id,
+            "token_issuer": principal.token_issuer,
+        },
+        "effective_scope": {
+            "tenant_id": selected_tenant,
+            "project_id": selected_project,
+            "source": "scope_context_override" if selected else "control_plane_mapping",
+            "mapping_version": mapping_version,
+        },
+        "defaults": {
+            "tenant_id": default_tenant,
+            "project_id": project_ids[0],
+        },
+        "accessible_scopes": [
+            {"tenant_id": default_tenant, "project_id": project_id, "role": principal.role}
+            for project_id in project_ids
+        ],
+        "feature_flags": {"scope_switcher": True},
+    }
+
+
+@router.post("/auth/context/switch")
+def switch_context_v1(payload: ScopeSwitchIn, authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=payload.tenant_id, project_id=payload.project_id, min_role="viewer")
+    mapping_version = scope_context_service.resolve_mapping_version(principal, payload.tenant_id)
+    if payload.expected_mapping_version and int(payload.expected_mapping_version) != int(mapping_version):
+        raise HTTPException(status_code=409, detail="mapping_version_stale")
+    scope_context_service.upsert_scope_override(
+        subject=principal.subject,
+        tenant_id=payload.tenant_id,
+        project_id=payload.project_id,
+        mapping_version=mapping_version,
+    )
+    return {
+        "ok": True,
+        "effective_scope": {
+            "tenant_id": payload.tenant_id,
+            "project_id": payload.project_id,
+            "source": "scope_context_override",
+            "mapping_version": mapping_version,
+        },
+    }
+
+
+@router.delete("/auth/context/switch")
+def clear_context_switch_v1(authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    deleted = scope_context_service.delete_scope_override(principal.subject)
+    return {"ok": True, "cleared": bool(deleted)}
+
+
+@router.get("/auth/scope-decision")
+def auth_scope_decision_v1(
+    tenant_id: str = Query(..., min_length=1),
+    project_id: str = Query(..., min_length=1),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    mapping_version = scope_context_service.resolve_mapping_version(principal, tenant_id)
+    decision = "allow"
+    reason_code = "ok"
+    try:
+        authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    except HTTPException as exc:
+        decision = "deny"
+        reason_code = str(exc.detail)
+    logger.info(
+        "scope_decision trace_id=%s subject=%s tenant_id=%s project_id=%s scope_source=%s mapping_version=%s decision=%s reason_code=%s token_issuer=%s",
+        get_trace_id(),
+        principal.subject,
+        tenant_id,
+        project_id,
+        "control_plane_mapping",
+        mapping_version,
+        decision,
+        reason_code,
+        principal.token_issuer,
+    )
+    return {
+        "decision": decision,
+        "reason_code": reason_code,
+        "subject": principal.subject,
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "mapping_version": mapping_version,
+        "sources_checked": ["token_claims", "control_plane_mapping", "scope_context_override"],
     }
 
 

@@ -85,6 +85,7 @@ Each guide follows:
 - [Explore Lineage in UI](./guides/explore-lineage.md)
 - [Debug Run in UI](./guides/debug-run-ui.md)
 - [Configure Tenant and Project Scope](./guides/configure-tenant-project-scope.md)
+- [Bootstrap and Scope Sync Contract](./guides/bootstrap-and-scope-sync-contract.md)
 - [Manage Datasets and Train from Model](./guides/manage-datasets-and-train-from-model.md)
 
 ## Concepts
