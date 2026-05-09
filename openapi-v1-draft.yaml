@@ -76,6 +76,44 @@ paths:
                     items:
                       $ref: "#/components/schemas/Project"
 
+  /v1/tenants/{tenant_id}/projects/registry:
+    post:
+      tags: [Pipelines]
+      summary: Register project in tenant catalog (before operational activity)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id]
+              properties:
+                project_id:
+                  type: string
+                  minLength: 1
+                name:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Catalog row created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tenant_id, project_id, name]
+                properties:
+                  tenant_id:
+                    type: string
+                  project_id:
+                    type: string
+                  name:
+                    type: string
+        "400":
+          description: Invalid body or reserved project_id
+
   /v1/tenants/{tenant_id}/projects/{project_id}/pipelines:
     get:
       tags: [Pipelines]

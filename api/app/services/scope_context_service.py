@@ -16,6 +16,7 @@ _SCOPE_VERSION_SOURCES = [
     "model_trigger_policies",
     "model_pipeline_mappings",
     "dataset_training_policies",
+    "tenant_projects",
 ]
 
 

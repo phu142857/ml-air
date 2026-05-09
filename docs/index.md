@@ -100,6 +100,7 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md)
+- [POST /tenants/…/projects/registry](./api/post-tenant-projects-registry.md)
 - [POST /runs/trigger](./api/post-runs-trigger.md)
 - [Readiness and Gating API](./api/readiness-and-gating.md)
 - [POST /models](./api/post-models.md)

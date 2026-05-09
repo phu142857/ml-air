@@ -92,6 +92,7 @@ Rules:
 - frontend must treat `effective_scope` as canonical on startup.
 - token claims can inform auth but do not drive UI scope selection directly.
 - response includes `mapping_version` so frontend can invalidate stale local cache.
+- `accessible_scopes` / default project resolution use the same project list as `GET /v1/tenants/{tenant}/projects`: **operational discovery plus** rows from the **`tenant_projects`** catalog (see [Configure Tenant and Project Scope](./configure-tenant-project-scope.md)). Tokens that enumerate explicit `project_ids` are unchanged.
 
 ### `POST /v1/auth/context/switch`
 

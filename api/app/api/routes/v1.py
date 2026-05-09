@@ -30,7 +30,7 @@ from app.services.model_registry_service import (
 from app.plugins.registry import plugin_registry
 from app.services.auth_service import authenticate_bearer, authorize_scope
 from app.services.log_service import append_run_log, read_run_logs
-from app.services.project_service import list_projects, list_tenants
+from app.services.project_service import list_projects, list_tenants, register_project
 from app.services.queue_service import replay_dlq_for_run
 from app.services import pipeline_version_service
 from app.services import search_service
@@ -257,6 +257,11 @@ class ScopeSwitchIn(BaseModel):
     expected_mapping_version: int | None = Field(default=None, ge=1)
 
 
+class RegisterProjectIn(BaseModel):
+    project_id: str = Field(min_length=1)
+    name: str | None = Field(default=None)
+
+
 class ManifestArtifactIn(BaseModel):
     path: str = Field(min_length=1)
     uri: str | None = None
@@ -289,6 +294,24 @@ def list_projects_v1(tenant_id: str, limit: int = 50, authorization: str | None 
         "limit": limit,
         "items": list_projects(tenant_id=tenant_id, limit=limit),
     }
+
+
+@router.post("/tenants/{tenant_id}/projects/registry")
+def register_project_v1(
+    tenant_id: str,
+    payload: RegisterProjectIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id="default_project", min_role="maintainer")
+    try:
+        return register_project(
+            tenant_id=tenant_id,
+            project_id=payload.project_id,
+            name=payload.name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/tenants")
