@@ -64,8 +64,8 @@ Use this as a quick “what exists today” view. Detailed delivery history live
 
 ### In progress / incremental (not a blocker to run the stack)
 
-- [ ] **Hub-first lifecycle UX** (readiness + train from Dataset Hub as primary path; pipeline page stays advanced ops). See **“Frontend Lifecycle-Centric Migration”** in [`ROADMAP.md`](ROADMAP.md).
-- [ ] **Durable readiness projection** (historical / auditable readiness as first-class state—not only page/API at a point in time). Planned in ROADMAP Phase 2 of that section.
+- [x] **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline detail keeps the **execution gate** behind a collapsed advanced panel—see [`ROADMAP.md`](ROADMAP.md). Adoption telemetry from Hub vs pipeline is still optional.)
+- [x] **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback remains in ROADMAP dataset lifecycle section.)
 - [ ] **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
 
 ### Release hygiene (maintainers)

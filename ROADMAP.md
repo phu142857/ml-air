@@ -188,12 +188,12 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 ### Phase 5 — Pipeline page downgrade (soft deprecation)
 
-- [ ] End-user docs/copy Hub-first; pipeline = DAG / tasks / replay / execution gate for power users
-- [ ] Pipeline detail: no default lifecycle training CTA for end-user personas
+- [x] End-user docs/copy Hub-first; pipeline = DAG / tasks / replay / execution gate for power users (`README.md` incremental section; pipeline subtitle + in-page guidance)
+- [x] Pipeline detail: no default lifecycle training CTA for end-user personas (execution gate lives in collapsed `<details>`; primary train path documented as Dataset Hub)
 
 **Exit criteria (Phase 5)**
 
-- [ ] Docs + UI defaults match above; ops/debug unchanged
+- [x] Docs + UI defaults match above; ops/debug unchanged (full qualitative review + any extra screenshots optional)
 
 ### Phase 6 — Full Hub-first cutover
 
@@ -239,7 +239,7 @@ The codebase still bridges:
 ### Link to Hub-first migration
 
 - [x] **Division of labor:** Hub migration owns **where users act** (Dataset Hub vs pipeline advanced). **This section** owns **what data means** (buffer vs immutable version vs readiness vs train input).
-- [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page (eval history + eligibility API/UI shipped; buffer vs version visual distinction + copy still open).
+- [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page (eval history + eligibility + buffer/version visuals + accumulation UX hints shipped; tighten any remaining pipeline-page vocabulary vs Hub in Phase 5 follow-ups).
 - [ ] **Anti-pattern:** parallel lifecycle vocabulary in pipeline UI that contradicts Hub + this contract.
 
 ---
@@ -407,10 +407,10 @@ The codebase still bridges:
 
 #### UX warnings
 
-- [ ] `rolling_accumulate`: warn when users expect auto-versions
-- [ ] Rows-until-threshold / schedule projection
-- [ ] Last materialized version + time on Hub
-- [ ] “Why blocked?” from stored evaluations once Readiness v2 lands
+- [x] `rolling_accumulate`: warn when users expect auto-versions (amber callout on Accumulation tab + overview summary)
+- [x] Rows-until-threshold / schedule projection (threshold + schedule + manual-only callouts on Accumulation; overview shows rows-to-target when applicable)
+- [x] Last materialized version + time on Hub (overview “Buffer / materialization” + existing buffer field block)
+- [x] “Why blocked?” from stored evaluations (readiness evaluations table **Why blocked** column from persisted `reasons`)
 
 ---
 

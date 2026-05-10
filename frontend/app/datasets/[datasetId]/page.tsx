@@ -79,6 +79,24 @@ function sourceTypeBadge(sourceType: string | null | undefined): { label: string
   };
 }
 
+function formatEvaluationReasons(reasons: Array<string | Record<string, unknown>> | undefined): string {
+  if (!reasons?.length) return "";
+  return reasons
+    .map((r) => {
+      if (typeof r === "string") return r;
+      const o = r as Record<string, unknown>;
+      if (typeof o.message === "string") return String(o.message);
+      if (typeof o.code === "string" && typeof o.message === "string") return `${o.code}: ${o.message}`;
+      if (typeof o.code === "string") return String(o.code);
+      try {
+        return JSON.stringify(o);
+      } catch {
+        return "reason";
+      }
+    })
+    .join(" · ");
+}
+
 function describeTrainError(err: unknown): string {
   const fallback = String((err as { message?: string })?.message || err || "Unknown error");
   try {
@@ -326,6 +344,23 @@ export default function DatasetHubPage() {
     }));
   }, [eligibilityQuery.data]);
 
+  const bufferMaterializationHints = useMemo(() => {
+    const buf = bufferQuery.data;
+    if (!buf) return null;
+    const strat = String(buf.accumulation_strategy || "snapshot_on_threshold").trim();
+    const cur = Math.max(0, Math.floor(Number(buf.current_size ?? buf.record_count ?? 0)));
+    const tgt = Math.max(0, Math.floor(Number(buf.target_threshold ?? 0)));
+    const rowsToThreshold = tgt > 0 ? Math.max(0, tgt - cur) : null;
+    const lastVid = buf.last_materialized_version_id ? String(buf.last_materialized_version_id) : "";
+    const lastAt = buf.last_materialized_at ? formatDateTimeCompact(String(buf.last_materialized_at)) : "";
+    const lastVersionLabel = (() => {
+      if (!lastVid) return "";
+      const v = (versionsQuery.data?.items || []).find((x) => x.version_id === lastVid);
+      return v ? `v${v.version}` : `${lastVid.slice(0, 8)}…`;
+    })();
+    return { strat, cur, tgt, rowsToThreshold, lastVid, lastAt, lastVersionLabel };
+  }, [bufferQuery.data, versionsQuery.data?.items]);
+
   const resolvedPipelineQuery = useQuery({
     queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, selectedModelId),
     queryFn: () => fetchModelResolvedPipeline(tenantId, projectId, selectedModelId, token),
@@ -521,6 +556,40 @@ export default function DatasetHubPage() {
                   <DomainChip kind="readiness" />
                   <span className="font-semibold text-foreground">{String(readinessQuery.data?.status || "pending")}</span>
                 </div>
+                {bufferMaterializationHints ? (
+                  <div className="space-y-1 border-t border-border pt-2">
+                    <div className="font-semibold text-foreground">Buffer / materialization</div>
+                    <div>
+                      Strategy:{" "}
+                      <span className="font-mono text-xs text-foreground">{bufferMaterializationHints.strat}</span>
+                    </div>
+                    {bufferMaterializationHints.lastVid ? (
+                      <div>
+                        Last materialized:{" "}
+                        <span className="text-foreground">
+                          {bufferMaterializationHints.lastVersionLabel || bufferMaterializationHints.lastVid.slice(0, 8)}
+                        </span>
+                        {bufferMaterializationHints.lastAt ? (
+                          <span className="text-muted-foreground"> · {bufferMaterializationHints.lastAt}</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">Last materialized: —</div>
+                    )}
+                    {bufferMaterializationHints.strat === "rolling_accumulate" ? (
+                      <p className="text-amber-200/90">
+                        Rolling: buffer grows without auto <span className="font-mono">vN</span> snapshots — see Accumulation.
+                      </p>
+                    ) : bufferMaterializationHints.rowsToThreshold != null ? (
+                      <div>
+                        ~Rows until threshold:{" "}
+                        <span className="font-semibold text-foreground">{bufferMaterializationHints.rowsToThreshold}</span>{" "}
+                        <span className="text-muted-foreground">(buffer {bufferMaterializationHints.cur}</span>
+                        <span className="text-muted-foreground"> / {bufferMaterializationHints.tgt})</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>
@@ -763,6 +832,40 @@ export default function DatasetHubPage() {
                     Schedule strategy is project-scoped. Use <span className="text-foreground">Run schedule tick</span> to process
                     eligible buffers for this project and materialize immutable versions.
                   </p>
+                ) : null}
+                {accumulationStrategyDraft === "rolling_accumulate" ? (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
+                    <span className="font-semibold text-amber-50">Rolling accumulate:</span> the buffer can pass the
+                    materialization target, but MLAir does <span className="font-semibold">not</span> create a new immutable
+                    dataset version automatically. Use <span className="font-semibold">Materialize now</span> or switch to{" "}
+                    <span className="font-mono">snapshot_on_threshold</span> if you expect threshold-driven snapshots.
+                  </div>
+                ) : null}
+                {accumulationStrategyDraft === "snapshot_on_threshold" &&
+                bufferMaterializationHints &&
+                bufferMaterializationHints.rowsToThreshold != null ? (
+                  <div className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="font-semibold text-foreground">Threshold progress:</span> buffer{" "}
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.cur}</span> /{" "}
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.tgt}</span> · about{" "}
+                    <span className="font-semibold text-foreground">{bufferMaterializationHints.rowsToThreshold}</span> rows
+                    until automatic materialization at the current target (depends on ingest rate).
+                  </div>
+                ) : null}
+                {accumulationStrategyDraft === "snapshot_on_schedule" && bufferMaterializationHints ? (
+                  <div className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="font-semibold text-foreground">Schedule projection:</span> buffer{" "}
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.cur}</span> /{" "}
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.tgt}</span> — new{" "}
+                    <span className="font-mono text-foreground">vN</span> rows appear when a project schedule tick
+                    materializes this dataset (not a fixed wall-clock ETA in the UI).
+                  </div>
+                ) : null}
+                {accumulationStrategyDraft === "manual_materialize_only" ? (
+                  <div className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="font-semibold text-foreground">Manual only:</span> no automatic materialization from row
+                    count; use <span className="font-semibold">Materialize now</span> when you want a new immutable version.
+                  </div>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-2">
@@ -1130,6 +1233,7 @@ export default function DatasetHubPage() {
                   <th className="px-3 py-2 text-left">Status</th>
                   <th className="px-3 py-2 text-left">Current / Required</th>
                   <th className="px-3 py-2 text-left">Version</th>
+                  <th className="px-3 py-2 text-left">Why blocked</th>
                   <th className="px-3 py-2 text-left">Evaluated</th>
                 </tr>
               </thead>
@@ -1152,6 +1256,18 @@ export default function DatasetHubPage() {
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                       {row.dataset_version_id || "—"}
+                    </td>
+                    <td
+                      className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground"
+                      title={formatEvaluationReasons(row.reasons)}
+                    >
+                      {String(row.status || "").toLowerCase() === "eligible" ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className="line-clamp-2 text-amber-200/90">
+                          {formatEvaluationReasons(row.reasons) || "—"}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">{formatDateTimeCompact(row.evaluated_at)}</td>
                   </tr>
