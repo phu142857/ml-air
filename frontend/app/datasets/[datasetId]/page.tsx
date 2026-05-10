@@ -17,6 +17,7 @@ import {
   fetchDatasetReadiness,
   createDatasetTrainingPolicy,
   fetchDatasetTrainingPolicies,
+  fetchDatasetTrainingEligibility,
   fetchDatasetVersions,
   materializeDatasetBuffer,
   materializeScheduledDatasetBuffers,
@@ -192,6 +193,10 @@ export default function DatasetHubPage() {
     onSuccess: async () => {
       setAccumulationMsg("Materialization target saved.");
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) });
+      await queryClient.invalidateQueries({
+        queryKey: mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
+        exact: false
+      });
     },
     onError: (err: unknown) => {
       setAccumulationMsg(describeTrainError(err));
@@ -204,7 +209,11 @@ export default function DatasetHubPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
-        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId) })
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId) }),
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
+          exact: false
+        })
       ]);
     },
     onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
@@ -218,7 +227,11 @@ export default function DatasetHubPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
-        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId) })
+        queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId) }),
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
+          exact: false
+        })
       ]);
     },
     onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
@@ -234,6 +247,20 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetTrainingPolicies(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
+    ...realtimeFallbackPolling()
+  });
+  const eligibilityQuery = useQuery({
+    queryKey: [
+      ...mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
+      selectedVersionForReadiness || "latest"
+    ],
+    queryFn: () =>
+      fetchDatasetTrainingEligibility(tenantId, projectId, datasetId, token, {
+        datasetVersionId: selectedVersionForReadiness || undefined
+      }),
+    enabled: Boolean(
+      datasetId && token && dataset && (policiesQuery.data?.items?.length ?? 0) > 0
+    ),
     ...realtimeFallbackPolling()
   });
 
@@ -263,26 +290,17 @@ export default function DatasetHubPage() {
     [modelsQuery.data?.items]
   );
   const trainingEligibilityRows = useMemo(() => {
-    const modelIds = new Set((modelsQuery.data?.items || []).map((m) => String(m.model_id)));
-    return (policiesQuery.data?.items || []).map((p) => {
-      const sizePass = selectedVersionRecordCount >= Number(p.required_size || 0);
-      const modelId = String(p.model_id || "").trim();
-      const compatibilityPass = !modelId || modelIds.has(modelId);
-      const eligible = sizePass && compatibilityPass;
-      return {
-        policyId: p.policy_id,
-        triggerMode: p.trigger_mode,
-        modelId: modelId || null,
-        requiredSize: Number(p.required_size || 0),
-        currentSize: selectedVersionRecordCount,
-        eligible,
-        reasons: [
-          !sizePass ? `size ${selectedVersionRecordCount} < ${Number(p.required_size || 0)}` : null,
-          !compatibilityPass ? `model_id ${modelId} not found` : null
-        ].filter(Boolean) as string[]
-      };
-    });
-  }, [modelsQuery.data, policiesQuery.data, selectedVersionRecordCount]);
+    const items = eligibilityQuery.data?.items ?? [];
+    return items.map((it) => ({
+      policyId: it.policy_id,
+      triggerMode: it.trigger_mode,
+      modelId: it.model_id ? String(it.model_id) : null,
+      requiredSize: it.required_size,
+      currentSize: it.current_size,
+      eligible: it.eligible,
+      reasons: (it.reasons || []).map((r) => (typeof r === "string" ? r : JSON.stringify(r)))
+    }));
+  }, [eligibilityQuery.data]);
 
   const resolvedPipelineQuery = useQuery({
     queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, selectedModelId),

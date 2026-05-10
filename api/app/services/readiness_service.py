@@ -444,6 +444,98 @@ def evaluate_dataset_readiness(
     }
 
 
+def summarize_dataset_training_eligibility(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str | None = None,
+    policy_id: str | None = None,
+) -> dict[str, Any]:
+    """
+    Read-only aggregate: run version-centric readiness for each training policy.
+    Does not persist evaluations (use GET .../readiness for that).
+    """
+    policies = list_dataset_training_policies(
+        tenant_id=tenant_id, project_id=project_id, dataset_id=dataset_id, limit=200, offset=0
+    )
+    if policy_id:
+        policies = [p for p in policies if str(p.get("policy_id") or "") == policy_id]
+    items: list[dict[str, Any]] = []
+    resolved_version: str | None = None
+    for p in policies:
+        pid = str(p.get("policy_id") or "")
+        try:
+            ev = evaluate_dataset_readiness(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                dataset_id=dataset_id,
+                policy_id=pid,
+                dataset_version_id=dataset_version_id,
+                required_size=None,
+            )
+        except ValueError as exc:
+            code = str(exc)
+            items.append(
+                {
+                    "policy_id": pid,
+                    "model_id": p.get("model_id"),
+                    "trigger_mode": p.get("trigger_mode"),
+                    "required_size": int(p.get("required_size") or 0),
+                    "current_size": 0,
+                    "eligible": False,
+                    "status": "blocked",
+                    "dataset_version_id": None,
+                    "reasons": [code],
+                    "error": code,
+                }
+            )
+            continue
+        if resolved_version is None and ev.get("dataset_version_id"):
+            resolved_version = str(ev["dataset_version_id"])
+        reasons: list[str] = []
+        raw_reasons = ev.get("reasons") or []
+        for r in raw_reasons:
+            if isinstance(r, str):
+                reasons.append(r)
+            elif isinstance(r, dict) and r.get("message"):
+                reasons.append(str(r["message"]))
+            elif isinstance(r, dict) and r.get("code"):
+                reasons.append(str(r["code"]))
+        crit = ev.get("eligibility_criteria") or []
+        for c in crit:
+            if isinstance(c, dict) and c.get("status") == "fail" and c.get("label"):
+                reasons.append(str(c["label"]))
+        eligible = bool(ev.get("ready"))
+        items.append(
+            {
+                "policy_id": pid,
+                "model_id": p.get("model_id"),
+                "trigger_mode": str(p.get("trigger_mode") or "manual"),
+                "required_size": int(ev.get("required_size") or 0),
+                "current_size": int(ev.get("current_size") or 0),
+                "eligible": eligible,
+                "status": str(ev.get("status") or ("eligible" if eligible else "blocked")),
+                "dataset_version_id": ev.get("dataset_version_id"),
+                "reasons": reasons or ([] if eligible else ["blocked"]),
+            }
+        )
+    eligible_models: list[dict[str, Any]] = []
+    blocked_models: list[dict[str, Any]] = []
+    for it in items:
+        if it.get("eligible"):
+            eligible_models.append(dict(it))
+        else:
+            blocked_models.append(dict(it))
+    return {
+        "dataset_id": dataset_id,
+        "dataset_version_id": dataset_version_id or resolved_version,
+        "items": items,
+        "eligible": eligible_models,
+        "blocked": blocked_models,
+    }
+
+
 def list_dataset_readiness_evaluations(
     *,
     tenant_id: str,

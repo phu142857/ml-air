@@ -55,6 +55,7 @@ type Envelope = {
   payload?: {
     updated_at?: number;
     run_id?: string;
+    dataset_id?: string;
     status?: string;
     model_id?: string;
     version?: number;
@@ -139,10 +140,16 @@ function keysForEvent(
     ];
   }
   if (t === "training.eligibility.updated") {
-    if (!runId && !rid) return [];
+    const keys: unknown[][] = [];
     const targetRunId = runId || rid;
-    if (!targetRunId) return [];
-    return [[...mlairKeys.run.readiness(targetRunId)], [...mlairKeys.run.detail(targetRunId)]];
+    if (targetRunId) {
+      keys.push([...mlairKeys.run.readiness(targetRunId)], [...mlairKeys.run.detail(targetRunId)]);
+    }
+    const dsid = typeof ev.payload?.dataset_id === "string" ? ev.payload.dataset_id : undefined;
+    if (dsid) {
+      keys.push([...mlairKeys.datasets.trainingEligibility(tenantId, projectId, dsid)]);
+    }
+    return keys;
   }
   return [];
 }

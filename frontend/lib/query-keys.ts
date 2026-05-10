@@ -28,6 +28,9 @@ export const mlairKeys = {
       ["dataset-buffer", tenantId, projectId, datasetId] as const,
     readinessEvaluations: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-readiness-evaluations", tenantId, projectId, datasetId] as const,
+    /** GET .../eligibility (per-policy rows); invalidate with `exact: false` for all version-scoped fetches. */
+    trainingEligibility: (tenantId: string, projectId: string, datasetId: string) =>
+      ["dataset-training-eligibility", tenantId, projectId, datasetId] as const,
     trainingPolicies: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-training-policies", tenantId, projectId, datasetId] as const,
     versions: (tenantId: string, projectId: string, datasetId: string) =>

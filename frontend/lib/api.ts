@@ -985,7 +985,7 @@ export async function fetchDatasetReadinessEvaluations(
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/readiness/evaluations?limit=${safeLimit}&offset=${safeOffset}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?limit=${safeLimit}&offset=${safeOffset}`,
     {
       headers: authHeaders(token),
       cache: "no-store"
@@ -997,12 +997,72 @@ export async function fetchDatasetReadinessEvaluations(
     items: Array<{
       evaluation_id: string;
       dataset_version_id?: string | null;
+      policy_id?: string | null;
       required_size: number;
       current_size: number;
       status: "eligible" | "blocked" | string;
       evaluated_at: string;
       reasons?: Array<string | Record<string, unknown>>;
     }>;
+  };
+}
+
+/** Roadmap alias for `fetchDatasetReadinessEvaluations` (`/readiness/history`). */
+export async function fetchDatasetReadinessHistory(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  limit = 20,
+  offset = 0
+) {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/history?limit=${safeLimit}&offset=${safeOffset}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as Awaited<ReturnType<typeof fetchDatasetReadinessEvaluations>>;
+}
+
+export type DatasetTrainingEligibilityRow = {
+  policy_id: string;
+  model_id?: string | null;
+  trigger_mode: string;
+  required_size: number;
+  current_size: number;
+  eligible: boolean;
+  status: string;
+  dataset_version_id?: string | null;
+  reasons: string[];
+  error?: string;
+};
+
+export async function fetchDatasetTrainingEligibility(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  opts?: { datasetVersionId?: string; policyId?: string }
+) {
+  const sp = new URLSearchParams();
+  if (opts?.datasetVersionId) sp.set("dataset_version_id", opts.datasetVersionId);
+  if (opts?.policyId) sp.set("policy_id", opts.policyId);
+  const qs = sp.toString();
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/eligibility${qs ? `?${qs}` : ""}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    dataset_id: string;
+    dataset_version_id?: string | null;
+    items: DatasetTrainingEligibilityRow[];
+    eligible: DatasetTrainingEligibilityRow[];
+    blocked: DatasetTrainingEligibilityRow[];
   };
 }
 

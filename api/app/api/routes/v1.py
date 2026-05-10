@@ -1349,6 +1349,49 @@ def list_dataset_readiness_evaluations_v1(
     }
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/history")
+def list_dataset_readiness_history_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 20,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Roadmap name: same payload as `/readiness/evaluations` (stored evaluation audit log)."""
+    return list_dataset_readiness_evaluations_v1(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        limit=limit,
+        offset=offset,
+        authorization=authorization,
+    )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility")
+def get_dataset_training_eligibility_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str | None = Query(default=None),
+    policy_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Aggregate per-policy training eligibility from version-centric readiness (no DB writes)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return readiness_service.summarize_dataset_training_eligibility(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        dataset_version_id=dataset_version_id,
+        policy_id=policy_id,
+    )
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer")
 def get_dataset_buffer_v1(
     tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)

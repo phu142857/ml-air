@@ -128,6 +128,49 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["materialized_count"], 1)
         self.assertEqual(out["materialized"][0]["dataset_id"], "ds2")
 
+    @patch(
+        "app.services.readiness_service.list_dataset_training_policies",
+        return_value=[
+            {"policy_id": "p-a", "model_id": "m1", "trigger_mode": "manual", "required_size": 100},
+            {"policy_id": "p-b", "model_id": None, "trigger_mode": "auto_ready", "required_size": 500},
+        ],
+    )
+    @patch("app.services.readiness_service.evaluate_dataset_readiness")
+    def test_summarize_eligibility_per_policy(self, mock_eval, _pols) -> None:
+        def _ev(**kwargs: object) -> dict:
+            pid = kwargs.get("policy_id")
+            if pid == "p-a":
+                return {
+                    "ready": True,
+                    "status": "eligible",
+                    "required_size": 100,
+                    "current_size": 200,
+                    "dataset_version_id": "ver-1",
+                    "reasons": [],
+                    "eligibility_criteria": [],
+                    "policy_id": "p-a",
+                }
+            return {
+                "ready": False,
+                "status": "blocked",
+                "required_size": 500,
+                "current_size": 100,
+                "dataset_version_id": "ver-1",
+                "reasons": [{"code": "size_threshold", "message": "too small"}],
+                "eligibility_criteria": [{"code": "size_threshold", "label": "Dataset size threshold", "status": "fail"}],
+                "policy_id": "p-b",
+            }
+
+        mock_eval.side_effect = _ev
+        out = readiness_service.summarize_dataset_training_eligibility(
+            tenant_id="t", project_id="p", dataset_id="ds1", dataset_version_id="ver-1", policy_id=None
+        )
+        self.assertEqual(len(out["items"]), 2)
+        self.assertEqual(len(out["eligible"]), 1)
+        self.assertEqual(len(out["blocked"]), 1)
+        self.assertEqual(out["eligible"][0]["policy_id"], "p-a")
+        self.assertEqual(out["blocked"][0]["policy_id"], "p-b")
+
 
 if __name__ == "__main__":
     unittest.main()
