@@ -64,6 +64,18 @@ class TestRealtimeEvents(unittest.TestCase):
     def test_realtime_enabled_default(self) -> None:
         self.assertTrue(realtime_enabled())
 
+    def test_build_event_training_policy_updated(self) -> None:
+        ev = build_event(
+            event_type=EventType.TRAINING_POLICY_UPDATED,
+            tenant_id="t1",
+            project_id="p1",
+            resource_id="ds-1",
+            payload={"dataset_id": "ds-1", "policy_id": "pol-9", "action": "create", "updated_at": 3.0},
+            trace_id="tr",
+        )
+        self.assertEqual(ev["type"], "training.policy.updated")
+        self.assertEqual(ev["resource_id"], "ds-1")
+
 
 if __name__ == "__main__":
     unittest.main()

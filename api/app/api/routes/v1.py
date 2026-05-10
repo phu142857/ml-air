@@ -1277,7 +1277,7 @@ def upsert_dataset_training_policy_v1(
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
-    return readiness_service.upsert_dataset_training_policy(
+    out = readiness_service.upsert_dataset_training_policy(
         tenant_id=tenant_id,
         project_id=project_id,
         dataset_id=dataset_id,
@@ -1288,6 +1288,16 @@ def upsert_dataset_training_policy_v1(
         trigger_mode=payload.trigger_mode,
         validation_rules=payload.validation_rules,
     )
+    rt.emit_training_policy_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        policy_id=str(out.get("policy_id") or ""),
+        action="upsert",
+        updated_at=datetime.now(timezone.utc),
+        trace_id=get_trace_id(),
+    )
+    return out
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies")
@@ -1302,7 +1312,7 @@ def create_dataset_training_policy_v1(
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
-    return readiness_service.create_dataset_training_policy(
+    out = readiness_service.create_dataset_training_policy(
         tenant_id=tenant_id,
         project_id=project_id,
         dataset_id=dataset_id,
@@ -1312,6 +1322,16 @@ def create_dataset_training_policy_v1(
         trigger_mode=payload.trigger_mode,
         validation_rules=payload.validation_rules,
     )
+    rt.emit_training_policy_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        policy_id=str(out.get("policy_id") or ""),
+        action="create",
+        updated_at=datetime.now(timezone.utc),
+        trace_id=get_trace_id(),
+    )
+    return out
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions")

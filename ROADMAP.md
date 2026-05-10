@@ -19,10 +19,10 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 
 ### In progress / incremental
 
-- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand
+- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + callout + readiness/eligibility chips on dataset surface; adoption telemetry still open)
 - [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section
 - [x] Durable readiness **evaluations** + eligibility aggregate API + `/readiness/history` — Hub Phase 2–3 baseline shipped (`dataset_readiness_evaluations`, list + Hub); Readiness v2 **default path** (no legacy aggregate fallback) still in dataset lifecycle section
-- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset buffer/version/readiness events in dataset lifecycle section (partial: `training.eligibility.updated` → `mlairKeys.datasets.trainingEligibility`)
+- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (partial: `dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; `model.eligibility.updated` not emitted)
 - [ ] Telemetry: % trainings from Hub vs pipeline — needs product analytics
 - [ ] Serving-slot HTTP (`/v1/models/.../serving`) re-enablement — optional until product turns on
 
@@ -126,7 +126,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 - [x] **Dataset Readiness** — lifecycle/data readiness (dataset-level)
 - [x] **Execution Gate** — pipeline execution constraints (run-level); UI: *Execution Gate (Advanced)*
-- [x] **Training Eligibility** — readiness + policy + governance (`GET /datasets/{id}/eligibility` + Hub table; status chips / full event surface still incremental)
+- [x] **Training Eligibility** — readiness + policy + governance (`GET /datasets/{id}/eligibility` + Hub table + distinct **Training eligibility** chips vs **Dataset readiness**; `training.policy.updated` realtime on policy CRUD)
 - [x] **Trigger Policy** — `manual | auto_ready | schedule`
 - [x] **Run Validation** — pre-execution checks used by runtime
 
@@ -147,7 +147,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 ### Phase 1 — Hub-first primary entrypoints
 
-- [ ] Dataset Hub = default mental model in copy + onboarding for readiness + train
+- [x] Dataset Hub = default mental model in copy + onboarding for readiness + train (per-dataset hub callout + subtitle; list page already Hub-first; product telemetry still open)
 - [x] Pipeline gate UI remains advanced/ops path without regressions
 - [ ] Adoption metrics: % `/runs/trigger` from Hub vs pipeline (needs telemetry)
 
@@ -169,7 +169,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 ### Phase 3 — Eligibility domain split
 
 - [x] Dataset Hub: Eligible models / Blocked models + reasons (driven by `GET .../eligibility` aggregate, not client-only heuristics)
-- [ ] Status chips: readiness vs eligibility (distinct visual language)
+- [x] Status chips: readiness vs eligibility (distinct pill styling + labels: **Dataset readiness** vs **Training eligibility**)
 - [x] APIs: `GET /datasets/{id}/readiness/history` (alias of evaluations list), `GET /datasets/{id}/eligibility` (and existing version-aware `GET /datasets/{id}/readiness`)
 
 **Exit criteria (Phase 3)**
@@ -178,13 +178,13 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 ### Phase 4 — Realtime lifecycle events
 
-- [ ] Domain events (`dataset.readiness.updated`, `model.eligibility.updated`, `training.policy.updated`)
+- [x] Domain events (partial): `dataset.buffer.updated`, `dataset.version.created`, `dataset.readiness.updated` (emit from lineage/readiness); **`training.policy.updated`** (emit on training-policy create/upsert); **`training.eligibility.updated`** (run-scoped emit); **`model.eligibility.updated`** — not emitted (reserved)
 - [x] Frontend: **`training.eligibility.updated`** → `mlairKeys.datasets.trainingEligibility` (narrow invalidation when `dataset_id` present) + existing run readiness/detail invalidation
-- [ ] Frontend: remaining dataset lifecycle events → `mlairKeys` (buffer / versions / readiness panels)
+- [x] Frontend: dataset lifecycle events → shared narrow invalidation (`dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / **`training.policy.updated`** → `mlairKeys.datasets` buffer, versions, detail, readiness prefix, evaluations, eligibility, policies)
 
 **Exit criteria (Phase 4)**
 
-- [ ] Near-realtime lifecycle updates without broad cache ambiguity (eligibility path started; full matrix pending)
+- [ ] Near-realtime lifecycle updates without broad cache ambiguity (Hub dataset keys covered; cross-page model-only lifecycle events still incremental)
 
 ### Phase 5 — Pipeline page downgrade (soft deprecation)
 
@@ -392,7 +392,7 @@ The codebase still bridges:
 
 **Must stay aligned** with Hub migration Phase 1–6.
 
-- [ ] Buffer panel vs versions table: visually **distinct** layers (mutable vs immutable)
+- [x] Buffer panel vs versions table: visually **distinct** layers (mutable vs immutable) — accent border + copy on Accumulation vs Versions tabs
 - [x] Immutable versions listed (baseline)
 - [x] Readiness block (baseline); **evaluation history** from persisted evaluations API + Hub list
 - [x] Eligible / blocked models + structured reasons (`GET .../eligibility` + Hub)
@@ -420,14 +420,15 @@ The codebase still bridges:
 
 #### Required events (indicative names)
 
-- [ ] `dataset.buffer.updated`
-- [ ] `dataset.version.created`
-- [ ] `dataset.readiness.updated`
+- [x] `dataset.buffer.updated`
+- [x] `dataset.version.created`
+- [x] `dataset.readiness.updated`
 - [x] `training.eligibility.updated` (typed constant + emit helper; Hub invalidates eligibility query on event)
+- [x] `training.policy.updated` (emit on policy create/upsert; Hub invalidates policies + eligibility + readiness family)
 
 #### Frontend
 
-- [ ] Map to `mlairKeys`; reduce broad invalidation; enable near-realtime Hub lifecycle panels (partial: **`training.eligibility.updated`** → `mlairKeys.datasets.trainingEligibility`)
+- [x] Map dataset lifecycle + policy + eligibility events → `mlairKeys.datasets.*` with narrow invalidation (shared helper in `use-mlair-realtime.ts`); remaining gaps = non-dataset model-only panels if any
 
 ---
 

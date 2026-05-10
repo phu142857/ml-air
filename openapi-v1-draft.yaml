@@ -868,6 +868,81 @@ paths:
         "409":
           description: no_materialized_dataset_version (strict mode)
 
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluations:
+    get:
+      tags: [Datasets]
+      summary: List persisted readiness evaluations (audit log)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetReadinessEvaluationList"
+        "404":
+          description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/history:
+    get:
+      tags: [Datasets]
+      summary: Readiness history (alias of readiness/evaluations)
+      description: Same payload as `/readiness/evaluations`; roadmap-stable name for audit clients.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetReadinessEvaluationList"
+        "404":
+          description: dataset_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility:
+    get:
+      tags: [Datasets]
+      summary: Aggregate training eligibility for all policies (read-only)
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - name: dataset_version_id
+          in: query
+          schema: { type: string }
+          description: Optional; evaluates against this immutable version when provided.
+        - name: policy_id
+          in: query
+          schema: { type: string }
+          description: Optional; restrict to a single policy.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetTrainingEligibilitySummary"
+        "404":
+          description: dataset_not_found
+
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer:
     get:
       tags: [Datasets]
@@ -2735,6 +2810,39 @@ components:
           type: integer
         ready:
           type: boolean
+
+    DatasetReadinessEvaluationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    DatasetTrainingEligibilitySummary:
+      type: object
+      properties:
+        dataset_id:
+          type: string
+        dataset_version_id:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        eligible:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        blocked:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
 
     DatasetBuffer:
       type: object

@@ -56,6 +56,7 @@ type Envelope = {
     updated_at?: number;
     run_id?: string;
     dataset_id?: string;
+    policy_id?: string;
     status?: string;
     model_id?: string;
     version?: number;
@@ -63,6 +64,19 @@ type Envelope = {
     action?: string;
   };
 };
+
+/** Invalidate Dataset Hub queries (buffer, versions, readiness, policies, eligibility). */
+function keysDatasetHubSurface(tenantId: string, projectId: string, datasetId: string): unknown[][] {
+  return [
+    [...mlairKeys.datasets.buffer(tenantId, projectId, datasetId)],
+    [...mlairKeys.datasets.versions(tenantId, projectId, datasetId)],
+    [...mlairKeys.datasets.detail(tenantId, projectId, datasetId)],
+    [...mlairKeys.datasets.readiness(tenantId, projectId, datasetId, 0)],
+    [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId)],
+    [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId)],
+    [...mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId)]
+  ];
+}
 
 function keysForEvent(
   tenantId: string,
@@ -113,31 +127,29 @@ function keysForEvent(
   }
   if (t === "dataset.updated") {
     const keys: unknown[][] = [[...mlairKeys.datasets.list(tenantId, projectId)]];
-    keys.push(["dataset-versions", tenantId, projectId]);
     if (rid) {
-      keys.push(
-        [...mlairKeys.datasets.versions(tenantId, projectId, rid)],
-        [...mlairKeys.datasets.detail(tenantId, projectId, rid)],
-        [...mlairKeys.datasets.buffer(tenantId, projectId, rid)],
-        ["dataset-readiness", tenantId, projectId, rid]
-      );
+      keys.push(...keysDatasetHubSurface(tenantId, projectId, rid));
     }
     return keys;
   }
   if (t === "dataset.buffer.updated" || t === "dataset.version.created") {
     if (!rid) return [];
-    return [
-      [...mlairKeys.datasets.buffer(tenantId, projectId, rid)],
-      [...mlairKeys.datasets.versions(tenantId, projectId, rid)],
-      [...mlairKeys.datasets.detail(tenantId, projectId, rid)]
-    ];
+    return keysDatasetHubSurface(tenantId, projectId, rid);
   }
   if (t === "dataset.readiness.updated") {
     if (!rid) return [];
     return [
-      ["dataset-readiness", tenantId, projectId, rid],
-      [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, rid)]
+      [...mlairKeys.datasets.readiness(tenantId, projectId, rid, 0)],
+      [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, rid)],
+      [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, rid)]
     ];
+  }
+  if (t === "training.policy.updated") {
+    const dsid =
+      (typeof ev.payload?.dataset_id === "string" ? ev.payload.dataset_id : undefined) ||
+      (typeof rid === "string" ? rid : undefined);
+    if (!dsid) return [];
+    return keysDatasetHubSurface(tenantId, projectId, dsid);
   }
   if (t === "training.eligibility.updated") {
     const keys: unknown[][] = [];

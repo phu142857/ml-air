@@ -35,6 +35,30 @@ import { executeTrainingIntent } from "@/lib/training-intent";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
 
+function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string; className: string } {
+  if (kind === "readiness") {
+    return {
+      label: "Dataset readiness",
+      className: "border-sky-500/45 bg-sky-500/10 text-sky-200"
+    };
+  }
+  return {
+    label: "Training eligibility",
+    className: "border-violet-500/45 bg-violet-500/10 text-violet-200"
+  };
+}
+
+function DomainChip({ kind }: { kind: "readiness" | "eligibility" }) {
+  const c = lifecycleDomainChip(kind);
+  return (
+    <span
+      className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${c.className}`}
+    >
+      {c.label}
+    </span>
+  );
+}
+
 function sourceTypeBadge(sourceType: string | null | undefined): { label: string; className: string } {
   const raw = String(sourceType || "manual_upload").trim().toLowerCase();
   if (raw === "csv_import" || raw === "manual_upload") {
@@ -390,8 +414,8 @@ export default function DatasetHubPage() {
     setPolicyRequiredSizeDraft(String(firstPolicy.required_size || 1000));
   }, [policiesQuery.data]);
   const datasetSubtitle = dataset
-    ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)}`
-    : "Readiness, versions, and intent-driven training (dataset / model lifecycle hub)";
+    ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)} · readiness + eligibility + train live here`
+    : "Primary surface for versions, readiness, eligibility matrix, and intent-driven train (pipeline = advanced execution gate)";
 
   return (
     <RouteShell
@@ -443,6 +467,13 @@ export default function DatasetHubPage() {
         </div>
       </div>
 
+      <div className="mb-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+        <span className="font-semibold text-foreground">Hub-first:</span> use{" "}
+        <DomainChip kind="readiness" /> and <DomainChip kind="eligibility" /> on this page; start runs from the{" "}
+        <span className="text-foreground">Training</span> tab. Pipelines stay for DAG/tasks/replay and the execution gate
+        (advanced).
+      </div>
+
       {activeTab === "overview" ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -486,13 +517,19 @@ export default function DatasetHubPage() {
                 </div>
                 <div>Total versions: <span className="font-semibold text-foreground">{(versionsQuery.data?.items || []).length}</span></div>
                 <div>Current size: <span className="font-semibold text-foreground">{Number(dataset?.current_size || 0)}</span></div>
-                <div>Readiness status: <span className="font-semibold text-foreground">{String(readinessQuery.data?.status || "pending")}</span></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <DomainChip kind="readiness" />
+                  <span className="font-semibold text-foreground">{String(readinessQuery.data?.status || "pending")}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Eligibility Snapshot</CardTitle>
+              <CardTitle className="flex flex-wrap items-center gap-2">
+                Eligibility Snapshot
+                <DomainChip kind="eligibility" />
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {(readinessQuery.data?.eligibility_criteria || []).length ? (
@@ -531,7 +568,10 @@ export default function DatasetHubPage() {
                   trainingEligibilityRows.map((r) => (
                     <div key={r.policyId} className="rounded-lg border border-border bg-muted px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-foreground">{r.policyId}</span>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <DomainChip kind="eligibility" />
+                          <span className="font-mono text-foreground">{r.policyId}</span>
+                        </span>
                         <span
                           className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             r.eligible
@@ -563,7 +603,10 @@ export default function DatasetHubPage() {
       {activeTab === "readiness" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Readiness Policy Evaluation</CardTitle>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Readiness Policy Evaluation
+              <DomainChip kind="readiness" />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-xs text-muted-foreground">
@@ -650,8 +693,9 @@ export default function DatasetHubPage() {
             </div>
             {readinessQuery.data ? (
               <div className="rounded-xl border border-border bg-muted p-3 text-sm">
-                <div className="mb-2 text-foreground">
-                  Eligibility:{" "}
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-foreground">
+                  <DomainChip kind="readiness" />
+                  <span>Result:</span>
                   <span className={readinessQuery.data.ready ? "text-emerald-400" : "text-red-400"}>
                     {String(readinessQuery.data.eligibility_status || readinessQuery.data.status || "blocked")}
                   </span>
@@ -668,6 +712,10 @@ export default function DatasetHubPage() {
                 </div>
                 {(readinessQuery.data.eligibility_criteria || []).length ? (
                   <div className="mt-3 space-y-2">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <DomainChip kind="eligibility" />
+                      <span>Criteria for the selected policy</span>
+                    </div>
                     {(readinessQuery.data.eligibility_criteria || []).map((c) => (
                       <div key={c.code} className="flex items-center justify-between rounded-lg border border-border bg-background px-2 py-1 text-xs">
                         <span className="text-muted-foreground">{c.label}</span>
@@ -693,11 +741,14 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "accumulation" ? (
-        <Card>
+        <Card className="border-l-4 border-l-amber-500/55">
           <CardHeader>
             <CardTitle>Active Accumulation Buffer</CardTitle>
           </CardHeader>
           <CardContent>
+            <p className="text-xs text-muted-foreground">
+              Mutable layer — not an immutable train snapshot until materialized into a version.
+            </p>
             {bufferQuery.isLoading && !bufferQuery.data ? (
               <p className="text-xs text-muted-foreground">Loading buffer…</p>
             ) : bufferQuery.data ? (
@@ -866,11 +917,15 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "versions" ? (
-        <Card>
+        <Card className="border-l-4 border-l-sky-500/55">
           <CardHeader>
             <CardTitle>Dataset Versions</CardTitle>
           </CardHeader>
           <CardContent>
+            <p className="text-xs text-muted-foreground">
+              Immutable snapshots — bind training and audits to explicit{" "}
+              <span className="font-mono text-foreground">version_id</span>.
+            </p>
             <DataTableShell>
               <DataTable className="text-sm">
                 <thead className="bg-muted">

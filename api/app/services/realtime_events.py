@@ -26,6 +26,7 @@ class EventType(str, Enum):
     DATASET_VERSION_CREATED = "dataset.version.created"
     DATASET_READINESS_UPDATED = "dataset.readiness.updated"
     TRAINING_ELIGIBILITY_UPDATED = "training.eligibility.updated"
+    TRAINING_POLICY_UPDATED = "training.policy.updated"
 
 
 def realtime_enabled() -> bool:
@@ -309,6 +310,34 @@ def emit_dataset_version_created(
                 "dataset_version_id": dataset_version_id,
                 "source_type": source_type,
                 "record_count": int(record_count),
+                "updated_at": dt_to_unix(updated_at),
+            },
+        )
+    )
+
+
+def emit_training_policy_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    policy_id: str,
+    action: str,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    """Published when a dataset training policy is created or upserted (Hub cache invalidation)."""
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.TRAINING_POLICY_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=dataset_id,
+            trace_id=trace_id,
+            payload={
+                "dataset_id": dataset_id,
+                "policy_id": str(policy_id),
+                "action": str(action),
                 "updated_at": dt_to_unix(updated_at),
             },
         )
