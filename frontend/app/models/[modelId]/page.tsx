@@ -340,9 +340,9 @@ export default function ModelDetailPage() {
         )}
 
         {projectId !== "all" && ENABLE_SERVING_SLOTS_UI ? (
-          <div className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <h3 className="mb-2 text-xs font-semibold text-slate-200">Serving slots</h3>
-            <p className="mb-2 text-caption text-slate-400">
+          <div className="mb-4 rounded-xl border border-border bg-muted p-3">
+            <h3 className="mb-2 text-xs font-semibold text-foreground">Serving slots</h3>
+            <p className="mb-2 text-caption text-muted-foreground">
               Map a registry version to champion / candidate / challenger / canary for routing metadata.
             </p>
             <div className="grid gap-2 md:grid-cols-2">
@@ -351,10 +351,10 @@ export default function ModelDetailPage() {
                 return (
                   <div
                     key={slot}
-                    className="flex flex-wrap items-center gap-2 rounded border border-slate-700 px-2 py-2 text-xs"
+                    className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-2 text-xs"
                   >
-                    <span className="font-medium capitalize text-slate-200">{slot}</span>
-                    <span className="text-slate-400">{cur ? `v${cur.version}` : "—"}</span>
+                    <span className="font-medium capitalize text-foreground">{slot}</span>
+                    <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
                     <input
                       type="number"
                       min={1}
@@ -363,11 +363,11 @@ export default function ModelDetailPage() {
                         setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
                       }
                       placeholder="ver"
-                      className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+                      className="w-20 rounded border border-border bg-secondary px-2 py-1 text-foreground"
                     />
                     <button
                       type="button"
-                      className="rounded-lg bg-slate-700 px-2 py-1 text-caption text-slate-100 hover:bg-slate-600 disabled:opacity-60"
+                      className="rounded-lg bg-secondary px-2 py-1 text-caption text-foreground hover:bg-muted disabled:opacity-60"
                       disabled={servingAssignMutation.isPending}
                       onClick={() => {
                         const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
@@ -504,7 +504,7 @@ export default function ModelDetailPage() {
               ))}
               {!versions.length && (
                 <tr>
-                  <td className="px-3 py-3 text-slate-400" colSpan={5}>
+                  <td className="px-3 py-3 text-muted-foreground" colSpan={5}>
                     No versions for current filter.
                   </td>
                 </tr>
@@ -537,11 +537,11 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
       <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-2 text-section font-semibold text-slate-200">{title}</h3>
-        <p className="mb-4 text-sm text-slate-400">{body}</p>
+        <h3 className="mb-2 text-section font-semibold text-foreground">{title}</h3>
+        <p className="mb-4 text-sm text-muted-foreground">{body}</p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}

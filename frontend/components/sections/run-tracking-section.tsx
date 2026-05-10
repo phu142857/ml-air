@@ -19,7 +19,6 @@ export function RunTrackingSection({ tracking }: Props) {
     { id: "artifacts" as TabType, label: "Artifacts", icon: Package },
   ];
 
-  // Component hiển thị khi không có data
   const EmptyState = ({ message }: { message: string }) => (
     <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -30,7 +29,7 @@ export function RunTrackingSection({ tracking }: Props) {
   );
 
   return (
-    <section className="card p-5 shadow-md transition-colors">
+    <section className="rounded-lg border border-obs-border bg-obs-surface p-4 transition-colors">
       <h2 className="mb-3 text-section font-semibold text-foreground">Tracking & Metadata</h2>
       
       {/* Tabs Navigation */}
@@ -43,8 +42,8 @@ export function RunTrackingSection({ tracking }: Props) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`tab-stable flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors relative ${
-                  isActive ? "text-color-primary border-color-primary" : "text-muted-foreground hover:text-foreground"
+                className={`tab-stable relative flex items-center gap-2 px-3 py-2 text-caption font-semibold uppercase tracking-wide transition-colors ${
+                  isActive ? "border-primary text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Icon size={14} />

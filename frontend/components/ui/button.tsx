@@ -16,9 +16,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center rounded-xl px-3 py-2 text-body font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
+          "inline-flex items-center justify-center rounded-md px-3 py-2 text-body font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60",
           variant === "default"
-            ? "bg-[#3ecf8e] text-[#06281b] hover:bg-[#35b77e]"
+            ? "bg-[#3ecf8e] text-[#171717] hover:bg-[#24b47e]"
             : variant === "secondary"
               ? "border border-border bg-card text-foreground hover:bg-secondary"
               : variant === "danger"

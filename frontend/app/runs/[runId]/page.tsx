@@ -74,9 +74,8 @@ export default function RunDetailPage() {
   };
 
   return (
-    <RouteShell activeNav="Runs" title="Run Analysis" subtitle={`ID: ${runId}`}>
-      {/* 1. Header Actions */}
-      <div className="flex items-center justify-between mb-8">
+    <RouteShell activeNav="Runs" title="Run analysis" subtitle={`Execution & diagnostics · ${runId}`}>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <button
           className="group flex items-center gap-2 text-section font-semibold text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => router.push("/runs")}
@@ -88,12 +87,12 @@ export default function RunDetailPage() {
         <div className="flex items-center gap-3">
           <a
             href={`/lineage?runId=${encodeURIComponent(runId)}`}
-            className="flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-2 text-section font-semibold text-color-primary transition-colors hover:bg-secondary"
+            className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-section font-semibold text-primary transition-colors hover:bg-secondary"
           >
             <GitBranch size={16} /> Lineage
           </a>
           <button
-            className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-section font-semibold text-foreground transition-colors hover:bg-muted"
+            className="flex items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-section font-semibold text-foreground transition-colors hover:bg-muted"
             onClick={async () => {
               const t = tasks[0]?.task_id;
               if (!t) return;
@@ -109,12 +108,8 @@ export default function RunDetailPage() {
         </div>
       </div>
 
-      <div className="space-y-8">
-        {/* ==========================================
-            PART 1: RUN DETAIL (NẰM TRÊN)
-            ========================================== */}
-        <div className="grid grid-cols-12 gap-6">
-          {/* Timeline - Quan trọng nhất trong phần Detail */}
+      <div className="space-y-6">
+        <div className="grid grid-cols-12 gap-4 md:gap-5">
           <div className="col-span-12 lg:col-span-8">
             <RunTimelineSection
               runId={runId}
@@ -123,9 +118,8 @@ export default function RunDetailPage() {
             />
           </div>
 
-          {/* Properties - Thông tin định danh */}
-          <div className="col-span-12 lg:col-span-4 space-y-6">
-            <section className="card p-5 shadow-md">
+          <div className="col-span-12 space-y-4 lg:col-span-4">
+            <section className="rounded-lg border border-obs-border bg-obs-surface p-4">
               <h2 className="mb-3 text-section font-semibold text-foreground">Run Properties</h2>
               <div className="space-y-3">
                 <DetailRow label="Current Status" value={runQuery.data?.status} highlight />
@@ -138,14 +132,14 @@ export default function RunDetailPage() {
           </div>
         </div>
 
-        {/* Config Snapshot & Tracking Data (Hàng ngang thứ 2 của phần Detail) */}
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-12 gap-4 md:gap-5">
           <div className="col-span-12 lg:col-span-6">
              <RunTrackingSection tracking={trackingQuery.data ?? null} />
           </div>
 
           <div className="col-span-12 lg:col-span-6">
-            <section className="card p-5 shadow-md h-full">
+            <section className="h-full rounded-lg border border-obs-border bg-obs-surface p-4">
+              <h2 className="mb-3 text-section font-semibold text-foreground">Config snapshot</h2>
               {runQuery.data?.config_snapshot ? (
                 <table className="w-full text-sm">
                   <thead className="bg-muted">
@@ -173,8 +167,8 @@ export default function RunDetailPage() {
             </section>
           </div>
           <div className="col-span-12 lg:col-span-6">
-            <section className="card p-5 shadow-md h-full">
-              <h2 className="mb-3 text-section font-semibold text-foreground">Readiness Snapshot</h2>
+            <section className="h-full rounded-lg border border-obs-border bg-obs-surface p-4">
+              <h2 className="mb-3 text-section font-semibold text-foreground">Readiness snapshot</h2>
               {!readinessQuery.data ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">No readiness snapshot.</div>
               ) : (
@@ -182,7 +176,7 @@ export default function RunDetailPage() {
                   <div className="mb-2 text-xs text-muted-foreground">
                     ready={String(readinessQuery.data.ready)} · mode={readinessQuery.data.training_mode}
                   </div>
-                  <div className="max-h-[260px] overflow-auto rounded-xl border border-border">
+                  <div className="max-h-[260px] overflow-auto rounded-md border border-obs-border bg-obs-log">
                     <table className="w-full text-xs">
                       <thead className="bg-muted">
                         <tr>
@@ -210,9 +204,6 @@ export default function RunDetailPage() {
           </div>
         </div>
 
-        {/* ==========================================
-            PART 2: LOGS SECTION (NẰM DƯỚI)
-            ========================================== */}
         <LogsSection
           runId={runId}
           taskId={taskId}
@@ -234,19 +225,18 @@ export default function RunDetailPage() {
   );
 }
 
-// Component hỗ trợ hiển thị dòng thông tin
-function DetailRow({ label, value, highlight = false }: { label: string, value: any, highlight?: boolean }) {
+function DetailRow({ label, value, highlight = false }: { label: string; value: any; highlight?: boolean }) {
   const getStatusStyles = (val: string) => {
     if (val === 'SUCCESS') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
     if (val === 'FAILED' || val === 'ERROR') return 'text-red-400 bg-red-500/10 border-red-500/20';
-    return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+    return 'text-primary bg-primary/10 border-primary/25';
   };
 
   return (
     <div className="flex items-center justify-between border-b border-border py-2 last:border-b-0">
       <span className="text-overline font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       {highlight ? (
-        <span className={`text-xs font-mono px-3 py-1 rounded-lg border shadow-sm ${getStatusStyles(String(value))}`}>
+        <span className={`rounded-md border px-2.5 py-1 font-mono text-xs ${getStatusStyles(String(value))}`}>
           {value?.toString() || "N/A"}
         </span>
       ) : (

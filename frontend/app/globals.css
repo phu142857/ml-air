@@ -89,37 +89,52 @@
   --pill-action-danger-fg: #991b1b;
   --pill-action-danger-hover: #fecaca;
 
-  /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
-  --shadow-md: 0 2px 6px rgba(0,0,0,0.06);
+  /* Elevation — low shadow usage (Supabase / operational calm) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.06);
 
   /* Radius scale (component spacing; --radius is shadcn baseline) */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Light theme observability fallbacks (same structure as dark) */
+  --obs-canvas: #f4f4f5;
+  --obs-surface: #ececf0;
+  --obs-border: #d4d4dd;
+  --obs-muted: #e2e2ea;
+  --obs-log-bg: #fafafa;
 }
 
 .dark {
-  --background: #121212;
-  --foreground: #fafafa;
-  --card: #1a1a1a;
-  --card-foreground: #fafafa;
-  --popover: #1f1f1f;
-  --popover-foreground: #fafafa;
+  /* Supabase-inspired dark product shell: near-black canvas, lifted cards, restrained emerald */
+  --background: #171717;
+  --foreground: #ededed;
+  --card: #1f1f1f;
+  --card-foreground: #ededed;
+  --popover: #202020;
+  --popover-foreground: #ededed;
   --primary: #3ecf8e;
-  --primary-foreground: #06281b;
-  --secondary: #242424;
-  --secondary-foreground: #fafafa;
-  --muted: #202020;
-  --muted-foreground: #898989;
-  --accent: #1d2a24;
-  --accent-foreground: #c6f6de;
-  --destructive: #b94a48;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #ededed;
+  --muted: #212121;
+  --muted-foreground: #9a9a9a;
+  --accent: #1a2e24;
+  --accent-foreground: #b6f0d0;
+  --destructive: #c45c5a;
   --destructive-foreground: oklch(0.99 0.01 85);
   --border: #2f2f2f;
-  --input: #343434;
+  --input: #2c2c2c;
   --ring: #3ecf8e;
+
+  /* Observability layer (Sentry-style density + incident tone; keep separate from hub cards) */
+  --obs-canvas: #141218;
+  --obs-surface: #1a1722;
+  --obs-border: #2e2840;
+  --obs-muted: #221e2e;
+  --obs-log-bg: #0f0e13;
 
   --bg-page: var(--background);
   --bg-surface: var(--card);

@@ -38,7 +38,11 @@ export default function PipelineDetailPage() {
   );
 
   return (
-    <RouteShell activeNav="Pipelines" title={`Pipeline ${pipelineId}`} subtitle="Deep-link pipeline detail">
+    <RouteShell
+      activeNav="Pipelines"
+      title={`Pipeline ${pipelineId}`}
+      subtitle="Orchestration, replay, and debugging — lifecycle trains from Dataset Hub"
+    >
       <div className="mb-2 flex flex-wrap gap-2">
         <Button
           variant="secondary"
@@ -70,12 +74,12 @@ export default function PipelineDetailPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Execution Gate (Advanced)</CardTitle>
+          <CardTitle>Execution gate (advanced / compatibility)</CardTitle>
         </CardHeader>
         <CardContent>
-        <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-500/30 dark:bg-blue-950/20 dark:text-blue-100">
+        <div className="mb-3 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
           Primary training flow is lifecycle-centric: use{" "}
-          <Link href="/datasets" className="underline hover:text-blue-900 dark:hover:text-blue-200">
+          <Link href="/datasets" className="font-medium text-primary underline hover:text-foreground">
             Datasets / Dataset Hub
           </Link>
           . This panel is for execution-level gate checks and debugging.
@@ -143,14 +147,16 @@ export default function PipelineDetailPage() {
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Manual run is deprecated here. Train from{" "}
-            <Link href="/datasets" className="text-blue-400 hover:underline">
+            <Link href="/datasets" className="font-medium text-primary hover:underline">
               Dataset Hub
             </Link>{" "}
             for lifecycle-centric flow.
           </p>
         </details>
         {gateError && (
-          <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">{gateError}</div>
+          <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {gateError}
+          </div>
         )}
         {gateResult && (
           <div className="mt-3 rounded-xl border border-border bg-muted p-3">

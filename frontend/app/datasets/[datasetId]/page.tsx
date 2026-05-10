@@ -38,13 +38,13 @@ function sourceTypeBadge(sourceType: string | null | undefined): { label: string
   if (raw === "csv_import" || raw === "manual_upload") {
     return {
       label: "IMPORTED DATASET",
-      className: "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+      className: "border-primary/40 bg-primary/10 text-primary"
     };
   }
   if (raw === "runtime_feedback" || raw === "runtime_accumulation") {
     return {
       label: "RUNTIME ACCUMULATED",
-      className: "border-violet-500/40 bg-violet-500/10 text-violet-300"
+      className: "border-border bg-secondary text-muted-foreground"
     };
   }
   return {
@@ -869,7 +869,8 @@ export default function DatasetHubPage() {
           </CardHeader>
           <CardContent>
           <p className="mb-3 text-xs text-muted-foreground">
-            Uses <code className="text-slate-300">POST /runs/trigger</code> — resolves pipeline and base weights server-side.
+            Uses <code className="rounded px-1 font-mono text-foreground">POST /runs/trigger</code> — resolves pipeline and
+            base weights server-side.
           </p>
           <div className="mb-3">
             <label className="text-xs text-muted-foreground">Model</label>
@@ -890,7 +891,7 @@ export default function DatasetHubPage() {
             Pipeline:{" "}
             <span className="font-mono text-foreground">{effectivePipeline || "—"}</span>
             {resolvedPipelineQuery.data?.source ? (
-              <span className="text-slate-500"> ({resolvedPipelineQuery.data.source})</span>
+              <span className="text-muted-foreground"> ({resolvedPipelineQuery.data.source})</span>
             ) : null}
           </div>
           <TrainingGateFields

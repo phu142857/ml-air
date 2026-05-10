@@ -91,7 +91,7 @@ export default function SettingsPage() {
                 {items.map((plugin) => (
                   <tr
                     key={plugin.name}
-                    className={`interactive-row cursor-pointer border-t border-border ${selectedPlugin === plugin.name ? "bg-blue-900/20" : ""}`}
+                    className={`interactive-row cursor-pointer border-t border-border ${selectedPlugin === plugin.name ? "bg-primary/10" : ""}`}
                     onClick={() => setSelectedPlugin(plugin.name)}
                   >
                     <td className="px-3 py-2">{plugin.name}</td>

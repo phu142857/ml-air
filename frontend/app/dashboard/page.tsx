@@ -27,7 +27,11 @@ export default function DashboardPage() {
   }, [rows]);
 
   return (
-    <RouteShell activeNav="Dashboard" title="Dashboard" subtitle="System overview and status distribution">
+    <RouteShell
+      activeNav="Dashboard"
+      title="Dashboard"
+      subtitle="High-level ops snapshot — lifecycle detail lives in Dataset Hub and Models"
+    >
       {isFetching && !rows.length ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="h-40 animate-pulse rounded-2xl border border-border bg-muted" />

@@ -129,7 +129,7 @@ export default function RunsPage() {
     <RouteShell
       activeNav="Runs"
       title="Runs"
-      subtitle="Run history and metrics comparison"
+      subtitle="Operational list — dense tables, filters, and compare (Linear-style); open a run for Sentry-style forensics"
     >
       {/* Compare Section */}
       <Card className="mb-4">

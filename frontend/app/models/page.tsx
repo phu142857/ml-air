@@ -189,7 +189,11 @@ export default function ModelsPage() {
   };
 
   return (
-    <RouteShell activeNav="Models" title="Models" subtitle="Model registry and promote workflow">
+    <RouteShell
+      activeNav="Models"
+      title="Models"
+      subtitle="Governance domain: approvals, policies, serving — training intent delegates to Dataset Hub flow"
+    >
       <ConfirmDialog
         open={confirmOpen}
         title={confirmTitle}
@@ -239,7 +243,7 @@ export default function ModelsPage() {
                 {(modelsQuery.data?.items ?? []).map((model) => (
                   <tr
                     key={model.model_id}
-                    className={`interactive-row cursor-pointer border-t border-border ${selectedModelId === model.model_id ? "bg-blue-900/20" : ""}`}
+                    className={`interactive-row cursor-pointer border-t border-border ${selectedModelId === model.model_id ? "bg-primary/10" : ""}`}
                     onClick={() => setSelectedModelId(model.model_id)}
                   >
                     <td className="px-3 py-2">
@@ -293,17 +297,17 @@ export default function ModelsPage() {
         <Card>
           <CardContent className="pt-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-section font-semibold text-slate-200">
+            <h2 className="text-section font-semibold text-foreground">
               Versions {selectedModel ? `- ${selectedModel.name}` : ""}
             </h2>
             {versionBanner ? <span className="version-inline-banner">{versionBanner}</span> : null}
           </div>
           {!selectedModelId ? (
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-400">
+            <div className="rounded-xl border border-border bg-muted p-3 text-sm text-muted-foreground">
               Select a model to manage versions.
             </div>
           ) : projectId === "all" ? (
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-400">
+            <div className="rounded-xl border border-border bg-muted p-3 text-sm text-muted-foreground">
               Scope is <code>all</code>. Select a specific project in the topbar to create or promote versions.
             </div>
           ) : (
@@ -315,7 +319,7 @@ export default function ModelsPage() {
                   placeholder="run_id (optional)"
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                 />
-                <label className="text-xs text-slate-400">
+                <label className="text-xs text-muted-foreground">
                   Artifacts (multi-file upload)
                   <div
                     onDragOver={(e) => {
@@ -330,8 +334,8 @@ export default function ModelsPage() {
                     }}
                     className={`mt-1 rounded-lg border-2 border-dashed px-3 py-3 text-xs transition-colors ${
                       isDragOver
-                        ? "border-blue-500 bg-blue-500/10 text-slate-100"
-                        : "border-slate-700 bg-slate-950 text-slate-300"
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-secondary text-muted-foreground"
                     }`}
                   >
                     Drag and drop files here, or choose from disk
@@ -339,34 +343,34 @@ export default function ModelsPage() {
                       type="file"
                       multiple
                       onChange={(e) => addUniqueFiles(Array.from(e.target.files || []))}
-                      className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      className="mt-2 w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
                       accept=".pkl,.onnx,.pt,.bin,.joblib,.json,.txt,.yaml,.yml"
                     />
                   </div>
                 </label>
-                <div className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-400">
+                <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
                   Upload all artifact files in one shot. Include <code>metadata.json</code> if available; otherwise backend
                   will auto-generate metadata.
                   <br />
-                  Selected files: <span className="text-slate-200">{newVersionFiles.length}</span>
+                  Selected files: <span className="text-foreground">{newVersionFiles.length}</span>
                   {newVersionFiles.length ? (
                     <>
                       {" · "}
-                      <span className="text-slate-200">{newVersionFiles.map((f) => f.name).join(", ")}</span>
+                      <span className="text-foreground">{newVersionFiles.map((f) => f.name).join(", ")}</span>
                     </>
                   ) : null}
                   <br />
                   Resolved artifact URI:{" "}
-                  <span className="text-slate-200">{previewArtifactQuery.data?.artifact_uri || "N/A"}</span>
+                  <span className="text-foreground">{previewArtifactQuery.data?.artifact_uri || "N/A"}</span>
                 </div>
                 {newVersionFiles.length > 0 ? (
-                  <div className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
-                    <div className="mb-2 font-semibold text-slate-200">Selected files</div>
+                  <div className="rounded-lg border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                    <div className="mb-2 font-semibold text-foreground">Selected files</div>
                     <div className="max-h-36 space-y-1 overflow-auto">
                       {newVersionFiles.map((f) => (
                         <div
                           key={`${f.name}:${f.size}:${f.lastModified}`}
-                          className="flex items-center justify-between gap-2 rounded border border-slate-700 px-2 py-1"
+                          className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1"
                         >
                           <span className="truncate">
                             {f.name} ({Math.max(1, Math.round(f.size / 1024))} KB)
@@ -374,7 +378,7 @@ export default function ModelsPage() {
                           <button
                             type="button"
                             onClick={() => removeSelectedFile(f)}
-                            className="rounded bg-slate-700 px-2 py-0.5 text-caption text-slate-100 hover:bg-slate-600"
+                            className="rounded bg-secondary px-2 py-0.5 text-caption text-foreground hover:bg-muted"
                           >
                             Remove
                           </button>
@@ -393,7 +397,7 @@ export default function ModelsPage() {
                   <button
                     type="button"
                     onClick={() => setNewVersionFiles([])}
-                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
+                    className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground hover:bg-muted"
                   >
                     Clear selected files
                   </button>
@@ -407,11 +411,11 @@ export default function ModelsPage() {
                 </Button>
               </div>
               {ENABLE_SERVING_SLOTS_UI ? (
-                <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+                <div className="mb-3 rounded-xl border border-border bg-muted p-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-semibold text-slate-200">Serving slots</h3>
+                    <h3 className="text-xs font-semibold text-foreground">Serving slots</h3>
                   </div>
-                  <p className="mb-2 text-caption text-slate-400">
+                  <p className="mb-2 text-caption text-muted-foreground">
                     Map a registry version to champion / candidate / challenger / canary.
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -420,10 +424,10 @@ export default function ModelsPage() {
                       return (
                         <div
                           key={slot}
-                          className="flex flex-wrap items-center gap-2 rounded border border-slate-700 px-2 py-2 text-xs"
+                          className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-2 text-xs"
                         >
-                          <span className="font-medium capitalize text-slate-200">{slot}</span>
-                          <span className="text-slate-400">{cur ? `v${cur.version}` : "—"}</span>
+                          <span className="font-medium capitalize text-foreground">{slot}</span>
+                          <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
                           <input
                             type="number"
                             min={1}
@@ -432,11 +436,11 @@ export default function ModelsPage() {
                               setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
                             }
                             placeholder="ver"
-                            className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100"
+                            className="w-20 rounded border border-border bg-secondary px-2 py-1 text-foreground"
                           />
                           <button
                             type="button"
-                            className="rounded-lg bg-slate-700 px-2 py-1 text-caption text-slate-100 hover:bg-slate-600 disabled:opacity-60"
+                            className="rounded-lg bg-secondary px-2 py-1 text-caption text-foreground hover:bg-muted disabled:opacity-60"
                             disabled={servingAssignMutation.isPending}
                             onClick={() => {
                               const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
@@ -582,11 +586,11 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
       <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-2 text-section font-semibold text-slate-200">{title}</h3>
-        <p className="mb-4 text-sm text-slate-400">{body}</p>
+        <h3 className="mb-2 text-section font-semibold text-foreground">{title}</h3>
+        <p className="mb-4 text-sm text-muted-foreground">{body}</p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}

@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"]
+      },
       fontSize: {
         /** App chrome / logo (topbar) */
         brand: ["1.125rem", { lineHeight: "1.5rem" }],
@@ -58,6 +61,15 @@ const config: Config = {
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",
+
+        /** Sentry-inspired observability sub-canvases (runs / tasks / logs) */
+        obs: {
+          canvas: "var(--obs-canvas)",
+          surface: "var(--obs-surface)",
+          border: "var(--obs-border)",
+          muted: "var(--obs-muted)",
+          log: "var(--obs-log-bg)"
+        },
 
         // Semantic colors using CSS variables
         "bg-page": "var(--bg-page)",

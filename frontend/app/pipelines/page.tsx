@@ -33,7 +33,11 @@ export default function PipelinesPage() {
   );
 
   return (
-    <RouteShell activeNav="Pipelines" title="Pipelines" subtitle="Pipeline list and DAG view">
+    <RouteShell
+      activeNav="Pipelines"
+      title="Pipelines"
+      subtitle="Orchestration-first: DAG, replay, and advanced execution gate — not the primary lifecycle surface"
+    >
       <div className="grid grid-cols-2 gap-4">
         <Card>
           <CardHeader>

@@ -186,7 +186,11 @@ export default function DatasetsPage() {
   };
 
   return (
-    <RouteShell activeNav="Datasets" title="Datasets" subtitle="Upload CSV, manage versions, and train from dataset">
+    <RouteShell
+      activeNav="Datasets"
+      title="Dataset Hub"
+      subtitle="Primary lifecycle surface: versions, readiness, eligibility, train — pipelines are optional overrides"
+    >
       <ConfirmDialog
         open={confirmOpen}
         title={confirmTitle}
@@ -250,14 +254,14 @@ export default function DatasetsPage() {
                 {(datasetsQuery.data?.items || []).map((d) => (
                   <tr
                     key={d.dataset_id}
-                    className={`interactive-row cursor-pointer border-t border-border ${selectedDatasetId === d.dataset_id ? "bg-blue-900/20" : ""}`}
+                    className={`interactive-row cursor-pointer border-t border-border ${selectedDatasetId === d.dataset_id ? "bg-primary/10" : ""}`}
                     onClick={() => setSelectedDatasetId(d.dataset_id)}
                   >
                     <td className="px-3 py-2">{d.name}</td>
                     <td className="px-3 py-2">
                       <Link
                         href={`/datasets/${encodeURIComponent(d.dataset_id)}`}
-                        className="text-blue-400 hover:underline"
+                        className="text-primary hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         Open
@@ -300,16 +304,16 @@ export default function DatasetsPage() {
             ) : null}
           </div>
           {!selectedDatasetId ? (
-            <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-400">
+            <div className="rounded-xl border border-border bg-muted p-3 text-sm text-muted-foreground">
               Select a dataset to view versions.
             </div>
           ) : (
             <>
-              <div className="mb-3 grid gap-2 rounded-xl border border-slate-700 bg-slate-900 p-3 md:grid-cols-5">
+              <div className="mb-3 grid gap-2 rounded-xl border border-border bg-muted p-3 md:grid-cols-5">
                 <select
                   value={selectedModelId}
                   onChange={(e) => setSelectedModelId(e.target.value)}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 md:col-span-2"
+                  className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground md:col-span-2"
                 >
                   {(modelsQuery.data?.items || []).map((m) => (
                     <option key={m.model_id} value={m.model_id}>
@@ -317,13 +321,13 @@ export default function DatasetsPage() {
                     </option>
                   ))}
                 </select>
-                <div className="flex flex-col justify-center gap-0.5 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 md:col-span-2">
-                  <span className="text-slate-100">
+                <div className="flex flex-col justify-center gap-0.5 rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground md:col-span-2">
+                  <span className="text-foreground">
                     Pipeline:{" "}
-                    <span className="font-mono text-slate-200">
+                    <span className="font-mono text-foreground">
                       {effectivePipeline || "—"}
                     </span>{" "}
-                    <span className="text-slate-500">
+                    <span className="text-muted-foreground">
                       (
                       {advancedMode && pipelineId
                         ? "override"
@@ -333,7 +337,7 @@ export default function DatasetsPage() {
                       )
                     </span>
                   </span>
-                  <span className="text-slate-400">
+                  <span className="text-muted-foreground">
                     Base weights:{" "}
                     {resolvedPipelineQuery.data?.base_weights_source
                       ? `${resolvedPipelineQuery.data.base_weights_source}${
@@ -348,17 +352,17 @@ export default function DatasetsPage() {
                 <select
                   value={trainingMode}
                   onChange={(e) => setTrainingMode(e.target.value)}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground"
                 >
                   <option value="quick">Quick</option>
                   <option value="standard">Standard</option>
                   <option value="full">Full</option>
                 </select>
               </div>
-              <div className="mb-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-                <label className="flex items-center gap-2 text-xs text-slate-200">
+              <div className="mb-3 rounded-xl border border-border bg-muted p-3">
+                <label className="flex items-center gap-2 text-xs text-foreground">
                   <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />
-                  Advanced settings
+                  Advanced / compatibility (pipeline override)
                 </label>
                 {pipelineMissing ? (
                   <div className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
@@ -367,11 +371,11 @@ export default function DatasetsPage() {
                 ) : null}
                 {(advancedMode || pipelineMissing) ? (
                   <div className="mt-2">
-                    <label className="text-xs text-slate-400">Pipeline override</label>
+                    <label className="text-xs text-muted-foreground">Pipeline override</label>
                     <select
                       value={pipelineId}
                       onChange={(e) => setPipelineId(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      className="mt-1 w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground"
                     >
                       <option value="">-- SELECT A PIPELINE --</option>
                       {(pipelinesQuery.data?.items || []).map((p) => (
@@ -510,42 +514,42 @@ function VersionDetailDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+        className="w-full max-w-lg rounded-xl border border-border bg-card p-4 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-3 text-section font-semibold text-slate-200">Dataset Version Detail</h3>
+        <h3 className="mb-3 text-section font-semibold text-foreground">Dataset Version Detail</h3>
         <div className="space-y-1 text-sm">
-          <div className="text-slate-200">
+          <div className="text-foreground">
             Status: <span className="font-semibold">{String(version.status || "ready")}</span>
           </div>
-          <div className="text-slate-200">
+          <div className="text-foreground">
             Score: <span className="font-semibold">{Number(version.quality_score ?? 0)}</span>
           </div>
         </div>
         <div className="mt-3">
-          <div className="text-xs font-semibold text-slate-300">Summary</div>
+          <div className="text-xs font-semibold text-muted-foreground">Summary</div>
           {summary.length ? (
-            <ul className="mt-1 list-inside list-disc text-sm text-slate-200">
+            <ul className="mt-1 list-inside list-disc text-sm text-foreground">
               {summary.map((item: string, idx: number) => (
                 <li key={`${item}-${idx}`}>{item}</li>
               ))}
             </ul>
           ) : (
-            <div className="mt-1 text-sm text-slate-400">No summary</div>
+            <div className="mt-1 text-sm text-muted-foreground">No summary</div>
           )}
         </div>
         <div className="mt-3">
-          <div className="text-xs font-semibold text-slate-300">Details</div>
+          <div className="text-xs font-semibold text-muted-foreground">Details</div>
           {details.length ? (
-            <ul className="mt-1 max-h-52 space-y-1 overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-300">
+            <ul className="mt-1 max-h-52 space-y-1 overflow-auto rounded-lg border border-border bg-secondary p-2 text-xs text-muted-foreground">
               {details.map((item: Record<string, unknown>, idx: number) => (
-                <li key={idx} className="rounded border border-slate-800 bg-slate-900/70 px-2 py-1">
+                <li key={idx} className="rounded border border-border bg-muted/80 px-2 py-1">
                   <span className={detailSeverityClass(item)}>{formatDetailItem(item)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="mt-1 text-sm text-slate-400">No details</div>
+            <div className="mt-1 text-sm text-muted-foreground">No details</div>
           )}
         </div>
         <div className="mt-4 flex justify-end">
@@ -580,9 +584,9 @@ function formatDetailItem(item: Record<string, unknown>): string {
 
 function detailSeverityClass(item: Record<string, unknown>): string {
   const severity = String(item.severity || "").toLowerCase();
-  if (severity === "failed" || severity === "error" || severity === "critical") return "text-red-300";
+  if (severity === "failed" || severity === "error" || severity === "critical") return "text-destructive";
   if (severity === "warning" || severity === "warn") return "text-amber-300";
-  return "text-blue-300";
+  return "text-primary";
 }
 
 function IconInfo() {
@@ -632,11 +636,11 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
       <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-2 text-section font-semibold text-slate-200">{title}</h3>
-        <p className="mb-4 text-sm text-slate-400">{body}</p>
+        <h3 className="mb-2 text-section font-semibold text-foreground">{title}</h3>
+        <p className="mb-4 text-sm text-muted-foreground">{body}</p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}

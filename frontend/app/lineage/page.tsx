@@ -193,7 +193,7 @@ function LineagePageInner() {
 
 export default function LineagePage() {
   return (
-    <Suspense fallback={<div className="p-6 text-slate-400">Loading lineage…</div>}>
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading lineage…</div>}>
       <LineagePageInner />
     </Suspense>
   );

@@ -71,7 +71,7 @@ export default function PipelineVersionsPage() {
         </Button>
         <Link
           href={`/pipelines/${encodeURIComponent(pipelineId)}`}
-          className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm"
         >
           DAG
         </Link>

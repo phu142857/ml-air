@@ -52,8 +52,9 @@ export function LogsSection({
   );
 
   return (
-    <section className="card p-5 shadow-md transition-colors">
-      <h2 className="mb-3 text-section font-semibold text-foreground">Live System Output</h2>
+    <section className="rounded-lg border border-obs-border bg-obs-surface p-4 transition-colors">
+      <h2 className="mb-2 text-section font-semibold text-foreground">Execution output</h2>
+      <p className="mb-3 text-caption text-muted-foreground">Logs, retries, and DLQ actions — observability-focused surface.</p>
       
       {/* Tabs Navigation */}
       <div className="mb-4 border-b border-border">
@@ -65,8 +66,8 @@ export function LogsSection({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`tab-stable flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors relative ${
-                  isActive ? "text-color-primary border-color-primary" : "text-muted-foreground hover:text-foreground"
+                className={`tab-stable relative flex items-center gap-2 px-3 py-2 text-caption font-semibold uppercase tracking-wide transition-colors ${
+                  isActive ? "border-primary text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Icon size={14} />
@@ -101,7 +102,7 @@ export function LogsSection({
                 {streaming ? "Stop" : "Start"}
               </Button>
             </div>
-            <div className="h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted p-4 font-mono text-xs text-foreground">
+            <div className="h-96 overflow-y-auto whitespace-pre-wrap rounded-md border border-obs-border bg-obs-log p-3 font-mono text-xs text-foreground">
               {logs.length ? logs.join("\n") : "No logs available"}
             </div>
           </div>

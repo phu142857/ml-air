@@ -143,7 +143,7 @@ function DiffPageInner() {
 
 export default function PipelineDiffPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-slate-400">Loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading…</div>}>
       <DiffPageInner />
     </Suspense>
   );

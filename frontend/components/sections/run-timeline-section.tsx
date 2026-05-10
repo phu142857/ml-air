@@ -32,7 +32,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
 
   if (!tasks.length) {
     return (
-      <div className="rounded-2xl border border-border bg-muted p-4 text-body text-muted-foreground">
+      <div className="rounded-lg border border-obs-border bg-obs-surface p-4 text-body text-muted-foreground">
         No tasks yet
       </div>
     );
@@ -43,7 +43,7 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
   const span = Math.max(1, t1 - t0);
 
   return (
-    <div className="card p-5 shadow-md">
+    <div className="rounded-lg border border-obs-border bg-obs-surface p-4">
       <div className="space-y-3">
         {tasks.map((t, i) => {
           const a = parseTs(t.started_at || t.created_at);
