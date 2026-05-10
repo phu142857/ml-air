@@ -8,6 +8,7 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   deleteModel,
   deleteModelVersion,
@@ -32,6 +33,13 @@ import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 const ENABLE_SERVING_SLOTS_UI = false;
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
+
+const MODEL_STAGE_FILTER_OPTIONS = [
+  { value: "all", label: "all" },
+  { value: "production", label: "production" },
+  { value: "staging", label: "staging" },
+  { value: "archived", label: "archived" }
+];
 
 export default function ModelDetailPage() {
   const params = useParams<{ modelId: string }>();
@@ -391,16 +399,14 @@ export default function ModelDetailPage() {
           ) : null}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Filter stage</span>
-            <select
-              className="rounded-lg border border-border bg-muted px-2 py-1 text-xs text-foreground"
+            <SelectDropdown
               value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
-            >
-              <option value="all">all</option>
-              <option value="production">production</option>
-              <option value="staging">staging</option>
-              <option value="archived">archived</option>
-            </select>
+              onChange={setStageFilter}
+              options={MODEL_STAGE_FILTER_OPTIONS}
+              buttonClassName="rounded-lg border border-border bg-muted px-2 py-1 text-xs"
+              className="min-w-[7.5rem]"
+              aria-label="Filter versions by stage"
+            />
           </div>
         </div>
         <DataTableShell>

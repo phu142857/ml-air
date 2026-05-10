@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import { formatDateTimeCompact } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 const defaultConfigJson = `{
   "steps": ["fetch", "train", "evaluate"],
@@ -53,6 +54,16 @@ export default function PipelineVersionsPage() {
   const items = listQuery.data?.items ?? [];
   const [left, setLeft] = useState("");
   const [right, setRight] = useState("");
+  const versionPickOptions = useMemo(
+    () => [
+      { value: "", label: "—" },
+      ...items.map((v) => ({
+        value: v.version_id,
+        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`
+      }))
+    ],
+    [items]
+  );
 
   return (
     <RouteShell
@@ -114,33 +125,25 @@ export default function PipelineVersionsPage() {
           <div className="flex flex-col gap-2 text-sm">
             <label className="text-muted-foreground">
               Version A
-              <select
-                className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
+              <SelectDropdown
                 value={left}
-                onChange={(e) => setLeft(e.target.value)}
-              >
-                <option value="">—</option>
-                {items.map((v) => (
-                  <option key={v.version_id} value={v.version_id}>
-                    v{v.version} · {v.version_id.slice(0, 8)}…
-                  </option>
-                ))}
-              </select>
+                onChange={setLeft}
+                options={versionPickOptions}
+                className="mt-1"
+                buttonClassName="rounded-lg border border-border bg-muted px-2 py-1 text-sm"
+                aria-label="Version A for diff"
+              />
             </label>
             <label className="text-muted-foreground">
               Version B
-              <select
-                className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
+              <SelectDropdown
                 value={right}
-                onChange={(e) => setRight(e.target.value)}
-              >
-                <option value="">—</option>
-                {items.map((v) => (
-                  <option key={v.version_id} value={v.version_id}>
-                    v{v.version} · {v.version_id.slice(0, 8)}…
-                  </option>
-                ))}
-              </select>
+                onChange={setRight}
+                options={versionPickOptions}
+                className="mt-1"
+                buttonClassName="rounded-lg border border-border bg-muted px-2 py-1 text-sm"
+                aria-label="Version B for diff"
+              />
             </label>
           </div>
           </CardContent>

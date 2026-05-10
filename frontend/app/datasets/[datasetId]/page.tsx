@@ -9,6 +9,7 @@ import { TrainingGateFields } from "@/components/readiness/training-gate-fields"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   fetchDataset,
   fetchDatasetBuffer,
@@ -69,6 +70,25 @@ function describeTrainError(err: unknown): string {
   }
   return `Train failed: ${fallback}`;
 }
+
+const POLICY_TRIGGER_MODE_OPTIONS = [
+  { value: "manual", label: "manual" },
+  { value: "auto_ready", label: "auto_ready" },
+  { value: "schedule", label: "schedule" }
+];
+
+const ACCUMULATION_STRATEGY_OPTIONS = [
+  { value: "snapshot_on_threshold", label: "snapshot_on_threshold" },
+  { value: "rolling_accumulate", label: "rolling_accumulate" },
+  { value: "snapshot_on_schedule", label: "snapshot_on_schedule" },
+  { value: "manual_materialize_only", label: "manual_materialize_only" }
+];
+
+const READINESS_EVAL_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "status: all" },
+  { value: "eligible", label: "status: eligible" },
+  { value: "blocked", label: "status: blocked" }
+];
 
 export default function DatasetHubPage() {
   const params = useParams<{ datasetId: string }>();
@@ -217,11 +237,31 @@ export default function DatasetHubPage() {
     ...realtimeFallbackPolling()
   });
 
+  const readinessVersionSelectOptions = useMemo(
+    () => (versionsQuery.data?.items || []).map((v) => ({ value: v.version_id, label: String(v.version) })),
+    [versionsQuery.data?.items]
+  );
+  const policySelectOptions = useMemo(
+    () =>
+      (policiesQuery.data?.items || []).map((p) => ({
+        value: p.policy_id,
+        label: `${p.trigger_mode} · min_rows=${p.required_size}`
+      })),
+    [policiesQuery.data?.items]
+  );
+
   const modelsQuery = useQuery({
     queryKey: mlairKeys.models.list(tenantId, projectId),
     queryFn: () => fetchModels(tenantId, projectId, token),
     ...realtimeFallbackPolling()
   });
+  const trainingModelSelectOptions = useMemo(
+    () => [
+      { value: "", label: "— select model —" },
+      ...(modelsQuery.data?.items || []).map((m) => ({ value: m.model_id, label: m.name }))
+    ],
+    [modelsQuery.data?.items]
+  );
   const trainingEligibilityRows = useMemo(() => {
     const modelIds = new Set((modelsQuery.data?.items || []).map((m) => String(m.model_id)));
     return (policiesQuery.data?.items || []).map((p) => {
@@ -514,48 +554,42 @@ export default function DatasetHubPage() {
             <div className="mb-3 grid gap-3 md:grid-cols-2">
               <label className="text-xs text-muted-foreground">
                 Version for readiness
-                <select
+                <SelectDropdown
                   value={selectedVersionForReadiness || ""}
-                  onChange={(e) => setSelectedVersionId(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
-                >
-                  {(versionsQuery.data?.items || []).map((v) => (
-                    <option key={v.version_id} value={v.version_id}>
-                      {v.version}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedVersionId}
+                  options={readinessVersionSelectOptions}
+                  className="mt-1"
+                  buttonClassName="rounded-lg border border-border bg-muted px-3 py-2 text-sm"
+                  disabled={readinessVersionSelectOptions.length === 0}
+                  aria-label="Dataset version for readiness"
+                />
               </label>
               <label className="text-xs text-muted-foreground">
                 Policy
-                <select
+                <SelectDropdown
                   value={selectedPolicyId}
-                  onChange={(e) => {
-                    const id = e.target.value;
+                  onChange={(id) => {
                     setSelectedPolicyId(id);
                     const picked = (policiesQuery.data?.items || []).find((p) => p.policy_id === id);
                     if (picked) setPolicyRequiredSizeDraft(String(picked.required_size || 1000));
                   }}
-                  className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
-                >
-                  {(policiesQuery.data?.items || []).map((p) => (
-                    <option key={p.policy_id} value={p.policy_id}>
-                      {p.trigger_mode} · min_rows={p.required_size}
-                    </option>
-                  ))}
-                </select>
+                  options={policySelectOptions}
+                  className="mt-1"
+                  buttonClassName="rounded-lg border border-border bg-muted px-3 py-2 text-sm"
+                  disabled={policySelectOptions.length === 0}
+                  aria-label="Training policy for readiness"
+                />
               </label>
             </div>
             <div className="mb-3 flex items-center gap-2">
-              <select
+              <SelectDropdown
                 value={newPolicyTriggerMode}
-                onChange={(e) => setNewPolicyTriggerMode(e.target.value)}
-                className="w-40 rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
-              >
-                <option value="manual">manual</option>
-                <option value="auto_ready">auto_ready</option>
-                <option value="schedule">schedule</option>
-              </select>
+                onChange={setNewPolicyTriggerMode}
+                options={POLICY_TRIGGER_MODE_OPTIONS}
+                className="w-40 shrink-0"
+                buttonClassName="rounded-lg border border-border bg-muted px-2 py-2 text-xs"
+                aria-label="Trigger mode for new policy"
+              />
               <input
                 type="number"
                 min={1}
@@ -664,19 +698,17 @@ export default function DatasetHubPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-2">
                     <span className="whitespace-nowrap">Strategy</span>
-                    <select
+                    <SelectDropdown
                       value={accumulationStrategyDraft}
-                      onChange={(e) => {
+                      onChange={(v) => {
                         setAccumulationMsg("");
-                        setAccumulationStrategyDraft(e.target.value);
+                        setAccumulationStrategyDraft(v);
                       }}
-                      className="rounded-lg border border-border bg-muted px-2 py-2 text-sm text-foreground"
-                    >
-                      <option value="snapshot_on_threshold">snapshot_on_threshold</option>
-                      <option value="rolling_accumulate">rolling_accumulate</option>
-                      <option value="snapshot_on_schedule">snapshot_on_schedule</option>
-                      <option value="manual_materialize_only">manual_materialize_only</option>
-                    </select>
+                      options={ACCUMULATION_STRATEGY_OPTIONS}
+                      className="min-w-[12rem]"
+                      buttonClassName="rounded-lg border border-border bg-muted px-2 py-2 text-sm"
+                      aria-label="Accumulation strategy"
+                    />
                   </label>
                   <label className="flex items-center gap-2">
                     <span className="whitespace-nowrap">Target threshold (min)</span>
@@ -874,18 +906,14 @@ export default function DatasetHubPage() {
           </p>
           <div className="mb-3">
             <label className="text-xs text-muted-foreground">Model</label>
-            <select
+            <SelectDropdown
               value={selectedModelId}
-              onChange={(e) => setSelectedModelId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
-            >
-              <option value="">— select model —</option>
-              {(modelsQuery.data?.items || []).map((m) => (
-                <option key={m.model_id} value={m.model_id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedModelId}
+              options={trainingModelSelectOptions}
+              className="mt-1"
+              buttonClassName="rounded-lg border border-border bg-muted px-3 py-2 text-sm"
+              aria-label="Model to train"
+            />
           </div>
           <div className="mb-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
             Pipeline:{" "}
@@ -986,15 +1014,14 @@ export default function DatasetHubPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <span />
             <div className="flex items-center gap-2">
-              <select
-                className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
+              <SelectDropdown
                 value={evaluationStatusFilter}
-                onChange={(e) => setEvaluationStatusFilter(e.target.value)}
-              >
-                <option value="all">status: all</option>
-                <option value="eligible">status: eligible</option>
-                <option value="blocked">status: blocked</option>
-              </select>
+                onChange={setEvaluationStatusFilter}
+                options={READINESS_EVAL_STATUS_FILTER_OPTIONS}
+                buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                className="min-w-[9rem]"
+                aria-label="Filter evaluations by status"
+              />
               <Button
                 variant="secondary"
                 onClick={() => setEvaluationPage((prev) => Math.max(0, prev - 1))}

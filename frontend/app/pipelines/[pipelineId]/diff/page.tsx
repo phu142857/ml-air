@@ -10,6 +10,7 @@ import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
@@ -33,6 +34,16 @@ function DiffPageInner() {
     enabled: Boolean(token)
   });
   const items = listQuery.data?.items ?? [];
+  const versionPickOptions = useMemo(
+    () => [
+      { value: "", label: "—" },
+      ...items.map((v) => ({
+        value: v.version_id,
+        label: `v${v.version} ${v.version_id.slice(0, 8)}…`
+      }))
+    ],
+    [items]
+  );
   const [leftId, setLeftId] = useState(qLeft);
   const [rightId, setRightId] = useState(qRight);
   useEffect(() => {
@@ -73,35 +84,25 @@ function DiffPageInner() {
           <CardTitle>Version selector</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-4">
-        <label className="text-sm text-muted-foreground">
+        <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           Left
-          <select
-            className="ml-2 rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
+          <SelectDropdown
             value={leftId}
-            onChange={(e) => setLeftId(e.target.value)}
-          >
-            <option value="">—</option>
-            {items.map((v) => (
-              <option key={v.version_id} value={v.version_id}>
-                v{v.version} {v.version_id.slice(0, 8)}…
-              </option>
-            ))}
-          </select>
+            onChange={setLeftId}
+            options={versionPickOptions}
+            buttonClassName="rounded-lg border border-border bg-muted px-2 py-1 text-sm"
+            aria-label="Left version for diff"
+          />
         </label>
-        <label className="text-sm text-muted-foreground">
+        <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           Right
-          <select
-            className="ml-2 rounded-lg border border-border bg-muted px-2 py-1 text-foreground"
+          <SelectDropdown
             value={rightId}
-            onChange={(e) => setRightId(e.target.value)}
-          >
-            <option value="">—</option>
-            {items.map((v) => (
-              <option key={v.version_id} value={v.version_id}>
-                v{v.version} {v.version_id.slice(0, 8)}…
-              </option>
-            ))}
-          </select>
+            onChange={setRightId}
+            options={versionPickOptions}
+            buttonClassName="rounded-lg border border-border bg-muted px-2 py-1 text-sm"
+            aria-label="Right version for diff"
+          />
         </label>
         </CardContent>
       </Card>

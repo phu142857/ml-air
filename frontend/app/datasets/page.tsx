@@ -8,6 +8,7 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   type DatasetVersionItem,
   deleteDataset,
@@ -29,6 +30,12 @@ import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
 import { formatDateTimeCompact } from "@/lib/utils";
+
+const TRAINING_MODE_OPTIONS = [
+  { value: "quick", label: "Quick" },
+  { value: "standard", label: "Standard" },
+  { value: "full", label: "Full" }
+];
 
 function describeRunBlockError(err: unknown): string {
   const fallback = String((err as any)?.message || err || "Unknown error");
@@ -116,6 +123,20 @@ export default function DatasetsPage() {
     const latest = items[0];
     return latest ? `v${latest.version}` : "v1";
   }, [modelVersionsQuery.data]);
+  const modelSelectOptions = useMemo(
+    () => (modelsQuery.data?.items || []).map((m) => ({ value: m.model_id, label: m.name })),
+    [modelsQuery.data]
+  );
+  const pipelineSelectOptions = useMemo(
+    () => [
+      { value: "", label: "-- SELECT A PIPELINE --" },
+      ...(pipelinesQuery.data?.items || []).map((p) => ({
+        value: p.pipeline_id,
+        label: `${p.pipeline_id}-${modelVersionToken}`
+      }))
+    ],
+    [pipelinesQuery.data, modelVersionToken]
+  );
   const resolvedPipelineId = useMemo(
     () => resolvedPipelineQuery.data?.pipeline_id || "",
     [resolvedPipelineQuery.data]
@@ -310,17 +331,15 @@ export default function DatasetsPage() {
           ) : (
             <>
               <div className="mb-3 grid gap-2 rounded-xl border border-border bg-muted p-3 md:grid-cols-5">
-                <select
+                <SelectDropdown
                   value={selectedModelId}
-                  onChange={(e) => setSelectedModelId(e.target.value)}
-                  className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground md:col-span-2"
-                >
-                  {(modelsQuery.data?.items || []).map((m) => (
-                    <option key={m.model_id} value={m.model_id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedModelId}
+                  options={modelSelectOptions}
+                  placeholder="Model"
+                  className="md:col-span-2"
+                  buttonClassName="rounded-md border border-border bg-secondary px-3 py-2 text-sm md:col-span-2"
+                  aria-label="Model for training"
+                />
                 <div className="flex flex-col justify-center gap-0.5 rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground md:col-span-2">
                   <span className="text-foreground">
                     Pipeline:{" "}
@@ -349,15 +368,14 @@ export default function DatasetsPage() {
                       : "none (cold start / upload a version)"}
                   </span>
                 </div>
-                <select
+                <SelectDropdown
                   value={trainingMode}
-                  onChange={(e) => setTrainingMode(e.target.value)}
-                  className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-                >
-                  <option value="quick">Quick</option>
-                  <option value="standard">Standard</option>
-                  <option value="full">Full</option>
-                </select>
+                  onChange={setTrainingMode}
+                  options={TRAINING_MODE_OPTIONS}
+                  className="min-w-0"
+                  buttonClassName="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+                  aria-label="Training mode"
+                />
               </div>
               <div className="mb-3 rounded-xl border border-border bg-muted p-3">
                 <label className="flex items-center gap-2 text-xs text-foreground">
@@ -372,18 +390,14 @@ export default function DatasetsPage() {
                 {(advancedMode || pipelineMissing) ? (
                   <div className="mt-2">
                     <label className="text-xs text-muted-foreground">Pipeline override</label>
-                    <select
+                    <SelectDropdown
                       value={pipelineId}
-                      onChange={(e) => setPipelineId(e.target.value)}
-                      className="mt-1 w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-                    >
-                      <option value="">-- SELECT A PIPELINE --</option>
-                      {(pipelinesQuery.data?.items || []).map((p) => (
-                        <option key={p.pipeline_id} value={p.pipeline_id}>
-                          {`${p.pipeline_id}-${modelVersionToken}`}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setPipelineId}
+                      options={pipelineSelectOptions}
+                      className="mt-1"
+                      buttonClassName="rounded-md border border-border bg-secondary px-3 py-2 text-sm"
+                      aria-label="Pipeline override"
+                    />
                   </div>
                 ) : null}
               </div>

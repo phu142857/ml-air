@@ -17,7 +17,24 @@ import { compareRunMetrics, fetchRuns } from "@/lib/api";
 import { RunsHistorySection } from "@/components/sections/runs-history-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { mlairKeys } from "@/lib/query-keys";
+
+const RUN_MODE_FILTER_OPTIONS = [
+  { value: "all", label: "mode: all" },
+  { value: "quick", label: "mode: quick" },
+  { value: "standard", label: "mode: standard" },
+  { value: "full", label: "mode: full" }
+];
+
+const RUN_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "status: all" },
+  { value: "queued", label: "status: queued" },
+  { value: "running", label: "status: running" },
+  { value: "success", label: "status: success" },
+  { value: "failed", label: "status: failed" },
+  { value: "cancelled", label: "status: cancelled" }
+];
 import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 
@@ -203,34 +220,28 @@ export default function RunsPage() {
             </span>
 
             <div className="flex items-center gap-2">
-            <select
-              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
+            <SelectDropdown
               value={trainingModeFilter}
-              onChange={(e) => {
-                setTrainingModeFilter(e.target.value);
+              onChange={(v) => {
+                setTrainingModeFilter(v);
                 setCurrentPage(1);
               }}
-            >
-              <option value="all">mode: all</option>
-              <option value="quick">mode: quick</option>
-              <option value="standard">mode: standard</option>
-              <option value="full">mode: full</option>
-            </select>
-            <select
-              className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
+              options={RUN_MODE_FILTER_OPTIONS}
+              buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+              className="min-w-[8.5rem]"
+              aria-label="Filter by training mode"
+            />
+            <SelectDropdown
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
+              onChange={(v) => {
+                setStatusFilter(v);
                 setCurrentPage(1);
               }}
-            >
-              <option value="all">status: all</option>
-              <option value="queued">status: queued</option>
-              <option value="running">status: running</option>
-              <option value="success">status: success</option>
-              <option value="failed">status: failed</option>
-              <option value="cancelled">status: cancelled</option>
-            </select>
+              options={RUN_STATUS_FILTER_OPTIONS}
+              buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+              className="min-w-[9.5rem]"
+              aria-label="Filter by run status"
+            />
             <Button
               variant="secondary"
               onClick={() =>
