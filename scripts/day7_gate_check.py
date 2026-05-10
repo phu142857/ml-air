@@ -5,12 +5,18 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
+_scripts = Path(__file__).resolve().parent
+if str(_scripts) not in sys.path:
+    sys.path.insert(0, str(_scripts))
+from smoke_common import require_api_reachable  # noqa: E402
 
-BASE = "http://localhost:8080"
+BASE = os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
 TENANT = "default"
 PROJECT = "default_project"
 
@@ -47,6 +53,7 @@ def wait_terminal(run_id: str, timeout: int = 120) -> str:
 
 
 def main() -> int:
+    require_api_reachable(BASE)
     run_tag = str(int(time.time() * 1000))
     env = dict(os.environ)
     env["ML_AIR_TENANT_ID"] = TENANT

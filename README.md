@@ -1,16 +1,76 @@
 # MLAir
 
-Multi-tenant control plane for **pipeline runs**, **model registry**, **datasets / lineage**, **readiness gating**, and **observability**—API-first, with a Next.js operator UI.
+Multi-tenant control plane for **pipeline runs**, **model registry**, **datasets / lineage**, **readiness & execution gates**, and **observability**—API-first, with a Next.js operator UI.
 
 ---
 
-## Overview
+## What it is
 
-**Problem:** Teams need a single place to register models, version pipelines, trigger runs with guardrails (readiness, replay policy), and audit what happened—without baking domain training logic into the orchestrator.
+**Problem:** Teams need a single place to register models, version pipelines, trigger runs with guardrails (dataset readiness, execution-time checks, replay policy), and audit what happened—without baking domain training logic into the orchestrator.
 
-**Who uses it:** Platform / MLOps engineers and product teams that integrate their training or ETL via **plugins** and HTTP contracts.
+**Who uses it:** Platform / MLOps engineers and product teams that integrate training or ETL via **plugins** and HTTP contracts.
 
 **How it fits:** MLAir owns **orchestration, persistence, auth scope, and audit**. Your application (or a separate worker package) owns **business logic**; plugins are the **adapter boundary** between the two.
+
+---
+
+## Current status (checklist)
+
+Use this as a quick “what exists today” view. Detailed delivery history lives in [`ROADMAP.md`](ROADMAP.md).
+
+### Core platform
+
+- [x] Monorepo: `api/`, `scheduler/`, `executor/`, `frontend/`, `sdk/`, `deploy/`, `charts/ml-air/`, `docs/`
+- [x] PostgreSQL system of record (runs, tasks, registry, pipeline versions, lineage, migrations via Alembic)
+- [x] Redis-backed queues; stateless executor; dedicated scheduler
+- [x] Run/task lifecycle with retries, DLQ replay, transition guards
+- [x] Tenant / project scoping on APIs and stored entities
+- [x] Auth: dev bearer tokens, JWT (HS256), OAuth2 issuer / JWKS (RS256) where configured
+- [x] RBAC enforcement on sensitive paths
+
+### ML tracking & registry
+
+- [x] Experiments, params, metrics, artifacts APIs + SDK helpers
+- [x] Model registry (models, versions, promote, rollback flows)
+- [x] Plugin → tracking auto-hook after successful plugin runs
+- [x] Run compare (API + UI)
+
+### Datasets, lineage, pipelines
+
+- [x] Datasets and `dataset_versions`; lineage ingest and APIs
+- [x] `pipeline_versions`, run binding to snapshots, diff API
+- [x] Readiness APIs; training policies; Dataset Hub route `/datasets/[datasetId]`
+- [x] Search API (`GET /v1/search`) + topbar + `/search` page
+- [x] Lineage UI `/lineage` (React Flow; deep-link with run / dataset context)
+
+### Operator UI (Next.js)
+
+- [x] Scope context: tenant / project / token + env-based API base URL
+- [x] Routes: `/dashboard`, `/runs`, `/runs/[runId]`, `/pipelines`, `/pipelines/[pipelineId]`, `/pipelines/.../versions`, `/pipelines/.../diff`, `/tasks/[taskId]`, `/models`, `/models/[modelId]`, `/datasets`, `/datasets/[datasetId]`, `/lineage`, `/search`, `/settings`
+- [x] DAG visualization, run detail, logs / timeline, error handling patterns
+- [x] Custom **SelectDropdown** controls where native `<select>` broke under layout (overflow / sticky / blur); topbar tenant/project pickers use the same pattern
+
+### Observability & ops
+
+- [x] Prometheus metrics on API, scheduler, executor (`/metrics`)
+- [x] Grafana dashboards + alert rules in repo (`deploy/monitoring/`)
+- [x] Request correlation id (`X-Trace-Id`) through the stack
+- [x] Makefile: `make test-observability`, `make incident-drill`, `make backup-db` / `make restore-db`
+
+### Packaging & CI
+
+- [x] Helm chart `charts/ml-air/`
+- [x] CI: build, env sync guard, manifest key rotation guard, smokes, Helm lint (`make test-all` is the local mirror)
+
+### In progress / incremental (not a blocker to run the stack)
+
+- [ ] **Hub-first lifecycle UX** (readiness + train from Dataset Hub as primary path; pipeline page stays advanced ops). See **“Frontend Lifecycle-Centric Migration”** in [`ROADMAP.md`](ROADMAP.md).
+- [ ] **Durable readiness projection** (historical / auditable readiness as first-class state—not only page/API at a point in time). Planned in ROADMAP Phase 2 of that section.
+- [ ] **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
+
+### Release hygiene (maintainers)
+
+- [ ] Before tagging a milestone: run `make up` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see checklists inside [`ROADMAP.md`](ROADMAP.md) for v0.2.0 / governance gates).
 
 ---
 
@@ -18,10 +78,10 @@ Multi-tenant control plane for **pipeline runs**, **model registry**, **datasets
 
 | Component | Role |
 |-----------|------|
-| **api** (`api/`) | FastAPI control plane: `/v1` REST, auth, runs, models, datasets, readiness, plugins. |
+| **api** (`api/`) | FastAPI control plane: `/v1` REST, auth, runs, models, datasets, readiness, plugins, lineage, search. |
 | **scheduler** (`scheduler/`) | Consumes run events from Redis, plans tasks from `config_snapshot`, enforces parallelism / replay gating, publishes work queues. |
-| **executor** (`executor/`) | Pulls tasks from Redis, executes **optional** subprocess plugins (`mlair_runner`), posts manifests / tracking callbacks. Reference image is **stub-oriented** for demos unless you ship real plugins. |
-| **frontend** (`frontend/`) | Next.js UI: scope (tenant/project), runs, pipelines, models, datasets. |
+| **executor** (`executor/`) | Pulls tasks from Redis, runs **optional** subprocess plugins (`mlair_runner`), posts manifests / tracking callbacks. Reference image is **stub-oriented** for demos unless you ship real plugins. |
+| **frontend** (`frontend/`) | Next.js UI: scope (tenant/project), runs, pipelines, models, datasets, lineage, search. |
 | **PostgreSQL** | System of record (runs, tasks, registry, pipeline versions, lineage, etc.). |
 | **Redis** | Queues and run/task coordination. |
 
@@ -51,80 +111,69 @@ flowchart LR
   EXE --> API
 ```
 
+**Terminology (UI / docs):**
+
+- **Dataset readiness** — lifecycle / data readiness at the dataset (and policy) level.
+- **Execution gate** — pipeline-side checks and advanced ops (see pipeline **Execution Gate (Advanced)** in UI; narrative: `docs/api/readiness-and-gating.md`).
+- **Training eligibility** — combination of readiness, policy, and governance; surfaced in Hub-oriented flows where implemented.
+
 **Design choices (production-minded):**
 
-- **Tenant / project** scoping on APIs and stored entities.
 - **Pipeline versions** with immutable `config` snapshots on runs.
-- **Readiness & gating** before expensive work (see `docs/api/readiness-and-gating.md`).
 - **Plugin contract validation** on sensitive paths (invalid config → **BLOCKED**, auditable).
 - **Manifest / replay** controls for safer re-execution (see `docs/troubleshooting/`).
 
 ---
 
-## Features
+## Feature checklist (capabilities)
 
-- Multi-tenant **runs**, **tasks**, **pipelines** & **pipeline versions**
-- **Model registry** (create model, versions, promote, delete)
-- **Datasets** & **lineage** APIs + UI flows
-- **Readiness checks** and **run gating** (`training_mode`, `override_config`)
-- **Plugin registry** (entry-point discovery) + validate / reload endpoints
-- **Prometheus metrics** (API, scheduler, executor) + **Grafana** assets in `deploy/monitoring/`
-- **Helm chart** for Kubernetes (`charts/ml-air/`)
-- **CI**: syntax, env sync guard, manifest key checks, smoke tests, Helm lint
+- [x] Multi-tenant **runs**, **tasks**, **pipelines** and **pipeline versions** (create, list, diff)
+- [x] **Model registry** (create model, versions, promote, delete) + per-version approval where exposed
+- [x] **Datasets** and **lineage** APIs + UI (hub page, detail, lineage graph)
+- [x] **Readiness** and **run trigger** guardrails (`training_mode`, pipeline overrides, policy hooks)
+- [x] **Plugin registry** (entry-point discovery) + validate / reload / toggle endpoints
+- [x] **Prometheus** metrics (API, scheduler, executor) + **Grafana** assets in `deploy/monitoring/`
+- [x] **Helm** chart for Kubernetes (`charts/ml-air/`)
+- [x] **CI / local gates**: env sync, manifest key rotation, smokes, Helm (`make test-all`)
 
 ---
 
-## Getting Started
+## Getting started (checklist)
 
-**Goal:** API + UI up locally in a few minutes.
+**Prerequisites**
 
-### Prerequisites
+- [ ] Docker with Compose v2
+- [ ] (Optional) Node 18+ and Python 3.11+ for development outside containers
 
-- Docker with Compose v2
-- (Optional) Node 18+ and Python 3.11+ if you develop outside containers
+**Install**
 
-### Installation
+- [ ] `git clone <your-fork-or-mirror>/ml-air.git && cd ml-air`
+- [ ] `cp .env.example .env` and adjust ports if they conflict on your machine
 
-```bash
-git clone <your-fork-or-mirror>/ml-air.git
-cd ml-air
-cp .env.example .env
-# Edit .env if ports conflict with other stacks on your machine
-```
+**Run (recommended)**
 
-### Run (recommended)
+- [ ] `docker compose -f deploy/docker-compose.quickstart.yml up -d --build`
 
-```bash
-docker compose -f deploy/docker-compose.quickstart.yml up -d --build
-```
+**Verify**
 
-### Verify
+- [ ] API: `curl -sS http://localhost:8080/health`
+- [ ] UI (default from `.env.example`): open `http://localhost:38080`
+- [ ] Example API (token from docs / `.env.example`):  
+  `curl -sS "http://localhost:8080/v1/tenants/default/projects?limit=10" -H "Authorization: Bearer maintainer-token"`
 
-```bash
-# API
-curl -sS http://localhost:8080/health
+**Defaults (`.env.example`):** API **8080**, UI **38080**, Postgres / Redis / MinIO / Prometheus / Grafana wired in the quickstart compose file.
 
-# UI (default from .env.example)
-open http://localhost:38080   # or visit in browser
-
-# Example: list projects (use a token from docs / .env.example)
-curl -sS "http://localhost:8080/v1/tenants/default/projects?limit=10" \
-  -H "Authorization: Bearer maintainer-token"
-```
-
-**Defaults (from `.env.example`):** API on host port **8080**, UI on **38080**, Postgres/Redis/MinIO/Prometheus/Grafana wired in the quickstart compose file.
-
-**Full operator docs:** start at [`docs/index.md`](docs/index.md) (installation, guides, troubleshooting, API pages).
+**Full operator docs:** [`docs/index.md`](docs/index.md)
 
 ---
 
 ## Configuration
 
-Copy `.env.example` → `.env` and keep them in sync when adding variables (CI enforces via `make test-env-sync`).
+Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI enforces** via `make test-env-sync`).
 
 | Variable | Purpose | Typical local value |
 |----------|---------|---------------------|
-| `ML_AIR_DATABASE_URL` | Postgres DSN for API / workers | `postgresql://mlair:mlair@postgres:5432/mlair` (in compose network) |
+| `ML_AIR_DATABASE_URL` | Postgres DSN for API / workers | `postgresql://mlair:mlair@postgres:5432/mlair` (compose network) |
 | `ML_AIR_REDIS_URL` | Redis for queues | `redis://redis:6379/0` |
 | `ML_AIR_JWT_HS256_SECRET` | HS256 JWT for API auth | dev secret in `.env.example` |
 | `ML_AIR_TRACKING_TOKEN` | Service token for scheduler/executor → API | `maintainer-token` (example) |
@@ -138,37 +187,34 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 
 ## API
 
-- **Base path:** `/v1`
-- **Contract draft:** [`openapi-v1-draft.yaml`](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (e.g. model **stages** `staging` / `production` / `archived`, **per-version approval** `GET|PUT .../versions/{v}/approval`, **promote**). **Serving-slot** paths remain in the draft and **`model_serving_slots`** exists after migration `0013`, but the **`GET|PUT .../models/{id}/serving`** HTTP handlers are **commented out in `v1.py`** until the feature is turned back on; the product UI gates the same (`ENABLE_SERVING_SLOTS_UI` in the models pages).
-- **Narrative API docs:** [`docs/api/`](docs/api/)
+- [x] **Base path:** `/v1`
+- [x] **Contract draft:** [`openapi-v1-draft.yaml`](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** paths may remain in the draft while **`GET|PUT .../models/{id}/serving`** is disabled in `v1.py` until re-enabled; UI mirrors this (`ENABLE_SERVING_SLOTS_UI` on model pages).
+- [x] **Narrative API docs:** [`docs/api/`](docs/api/)
 
-**Examples:**
+**Examples**
 
 ```bash
-# Health (no auth)
 curl -sS http://localhost:8080/health
 
-# Plugins (requires bearer token)
 curl -sS http://localhost:8080/v1/plugins \
   -H "Authorization: Bearer maintainer-token"
 
-# Validate pipeline task plugins exist in registry
 curl -sS -X POST http://localhost:8080/v1/pipelines/validate \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \
   -d '{"config":{"tasks":[{"id":"train","plugin":"your_plugin_name"}]}}'
 ```
 
-Token model and roles are documented under **Security** in [`docs/index.md`](docs/index.md).
+Token model and roles: **Security** section in [`docs/index.md`](docs/index.md).
 
 ---
 
 ## Plugin system
 
-- Plugins are discovered via Python **`importlib.metadata` entry points** in group **`mlair.plugins`** (see [`docs/guides/create-plugin.md`](docs/guides/create-plugin.md)).
-- **Pipeline version `config.tasks[]`** should declare a **`plugin`** per task; the API validates this on run trigger (and related paths) so misconfigured pipelines fail fast with **`BLOCKED` / `PLUGIN_NOT_FOUND`** instead of silent bad runs.
-- The **API image** installs **`mlair-reference-plugins`** from `api/builtin_reference_plugins/`, which registers **`app_etl_adapter`**, **`app_train_adapter`**, and **`echo_tracking`** for a **reference demo DAG** and other built-in examples. Replace or extend with your own installable plugin packages in production.
-- The **executor** runs optional subprocess plugins (`ML_AIR_PLUGIN_RUNNER_MODULE`, default `mlair_runner`). The shipped reference executor is suitable for **orchestration demos**; **real training** belongs in your service or a dedicated plugin package you install into the executor image.
+- [x] Plugins discovered via Python **`importlib.metadata` entry points** in group **`mlair.plugins`** ([`docs/guides/create-plugin.md`](docs/guides/create-plugin.md))
+- [x] **Pipeline version `config.tasks[]`** should declare a **`plugin`** per task; API validates on run trigger so misconfiguration fails with **`BLOCKED` / `PLUGIN_NOT_FOUND`**
+- [x] **API image** installs **`mlair-reference-plugins`** from `api/builtin_reference_plugins/` (`app_etl_adapter`, `app_train_adapter`, `echo_tracking`, …). Replace or extend in production with your own packages.
+- [x] **Executor** runs optional subprocess plugins (`ML_AIR_PLUGIN_RUNNER_MODULE`, default `mlair_runner`). The reference executor suits **orchestration demos**; **real training** belongs in your service or a dedicated plugin package in the executor image.
 
 ---
 
@@ -184,7 +230,7 @@ ml-air/
 ├── charts/ml-air/       # Helm chart
 ├── docs/                # Task-oriented guides & API reference
 ├── scripts/             # Smoke tests, gates, maintenance
-├── sdk/                 # Small helpers: tracking + model-centric trigger / pipeline-mapping
+├── sdk/                 # Tracking helpers + model-centric trigger / pipeline mapping
 ├── openapi-v1-draft.yaml
 ├── Makefile
 ├── ROADMAP.md
@@ -193,51 +239,54 @@ ml-air/
 
 ---
 
-## Testing
+## Quality gates & testing (checklist)
 
-From repo root (with stack up or as documented per target):
+From repo root (stack up where a target requires a live API):
 
-```bash
-make health                 # quick compose health probe
-make test-smoke-mlair       # API smoke
-make test-smoke-model-registry
-make test-smoke-phase2
-make test-smoke-v03
-make test-observability     # if wired in your Makefile target list
-make test-helm
-make test-all               # env sync + manifest rotation + smokes + observability + helm
-```
+- [ ] `make health` — quick compose health probe  
+- [ ] `make doctor` — diagnostics  
+- [ ] `make test-env-sync` — `.env` / `.env.example` drift  
+- [ ] `make test-manifest-key-rotation` — manifest key rotation guard  
+- [ ] `make test-smoke-mlair` — API smoke  
+- [ ] `make test-smoke-model-registry`  
+- [ ] `make test-smoke-phase2`  
+- [ ] `make test-smoke-v03` — lineage / versioning / replay smoke  
+- [ ] `make test-observability`  
+- [ ] `make test-helm`  
+- [ ] **`make test-all`** — runs the full set above (maintainer bar before release)
 
-Use `make doctor` for diagnostics. See `Makefile` for additional targets (`day6-check`, `seed-demo`, etc.).
-
----
-
-## Deployment
-
-**Local / demo:** `deploy/docker-compose.quickstart.yml` (builds from this repo).
-
-**Production-style:**
-
-1. **Build & publish images** via GitHub Actions (`.github/workflows/publish-images.yml`)—typically on SemVer tags `v*.*.*`.
-2. **Frontend bundle URL:** set the repository variable **`NEXT_PUBLIC_API_BASE_URL`** in GitHub (Settings → Secrets and variables → Actions → Variables) to the browser-reachable API base (for example `https://api.example.com`). It is passed as a Docker build-arg so the Next.js client is not stuck on `localhost:8080` in published images.
-3. **Pull by tag** in your environment compose or Kubernetes (e.g. consumer stack pins `MLAIR_IMAGE_TAG`).
-4. **Helm:** `charts/ml-air/` — see [`charts/ml-air/README.md`](charts/ml-air/README.md) and workflow `.github/workflows/deploy-helm-staging.yml` as a reference pattern.
-
-Operational runbooks live under [`docs/troubleshooting/`](docs/troubleshooting/).
+Other useful targets: `make seed-demo`, `make backfill-lineage*`, `make enable-ed25519-dev`, `make backup-db` / `make restore-db`. See the [`Makefile`](Makefile) for the complete list.
 
 ---
 
-## Observability
+## Deployment (checklist)
 
-- **Metrics:** `/metrics` on API, scheduler, executor (Prometheus scrape configs in `deploy/monitoring/`).
-- **Dashboards / alerts:** Grafana dashboard JSON and alert rules under `deploy/monitoring/`.
-- **Guides:** [`docs/guides/view-metrics.md`](docs/guides/view-metrics.md), [`docs/guides/setup-prometheus.md`](docs/guides/setup-prometheus.md).
+**Local / demo**
+
+- [ ] `deploy/docker-compose.quickstart.yml` (build from this repo)
+
+**Production-style**
+
+- [ ] Build and publish images (e.g. GitHub Actions `.github/workflows/publish-images.yml` on SemVer tags `v*.*.*`)
+- [ ] Set **`NEXT_PUBLIC_API_BASE_URL`** for published frontend builds (repository variable / build-arg) to the browser-reachable API URL
+- [ ] Pin image tag in consumer compose or Kubernetes (e.g. `MLAIR_IMAGE_TAG`)
+- [ ] Helm: [`charts/ml-air/README.md`](charts/ml-air/README.md); reference workflow `.github/workflows/deploy-helm-staging.yml`
+
+Operational runbooks: [`docs/troubleshooting/`](docs/troubleshooting/)
+
+---
+
+## Observability (checklist)
+
+- [ ] **Metrics:** scrape `/metrics` on API, scheduler, executor (configs under `deploy/monitoring/`)
+- [ ] **Dashboards / alerts:** Grafana JSON + alert rules in `deploy/monitoring/`
+- [ ] **Guides:** [`docs/guides/view-metrics.md`](docs/guides/view-metrics.md), [`docs/guides/setup-prometheus.md`](docs/guides/setup-prometheus.md)
 
 ---
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). In short: focused PRs, `make test-env-sync` when env vars change, and smoke/Helm checks when touching runtime services.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). In short: focused PRs, `make test-env-sync` when env vars change, and smoke / Helm when touching runtime services.
 
 ---
 
@@ -254,5 +303,5 @@ Released under the **MIT License** — see [`LICENSE`](LICENSE). API contract dr
 | [`docs/index.md`](docs/index.md) | All guides (run, gating, plugins, UI, DR) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Notable API and env changes for integrators |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Target enterprise architecture |
-| [`ROADMAP.md`](ROADMAP.md) | Delivery milestones |
+| [`ROADMAP.md`](ROADMAP.md) | Delivery milestones + Hub-first migration plan |
 | [`docs/plugin-development-guide.md`](docs/plugin-development-guide.md) | Plugin packaging & contract |

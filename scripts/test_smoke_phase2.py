@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
+_scripts = Path(__file__).resolve().parent
+if str(_scripts) not in sys.path:
+    sys.path.insert(0, str(_scripts))
+from smoke_common import require_api_reachable  # noqa: E402
 
 BASE = os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
 TENANT = os.getenv("ML_AIR_TENANT_ID", "default")
@@ -47,6 +53,7 @@ def wait_run_status(run_id: str, expected: str, timeout_s: int = 20) -> bool:
 
 
 def main() -> int:
+    require_api_reachable(BASE)
     tag = str(int(time.time() * 1000))
     results: list[tuple[str, bool, str]] = []
 

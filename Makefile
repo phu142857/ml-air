@@ -67,9 +67,18 @@ test-smoke-mlair:
 	python scripts/test_smoke_mlair.py
 
 .PHONY: test-helm
+# Use host `helm` when installed; otherwise `docker run` so `make test-all` works on dev machines without Helm CLI.
 test-helm:
-	helm lint charts/ml-air
-	helm template ml-air charts/ml-air -f charts/ml-air/values-staging.yaml >/tmp/mlair-rendered.yaml
+	@bash -c 'set -euo pipefail; \
+	if command -v helm >/dev/null 2>&1; then \
+		helm lint charts/ml-air; \
+		helm template ml-air charts/ml-air -f charts/ml-air/values-staging.yaml >/tmp/mlair-rendered.yaml; \
+	else \
+		_img="$${MLAIR_HELM_DOCKER_IMAGE:-docker.io/alpine/helm:3.15.4}"; \
+		echo "[INFO] helm not in PATH; using container image $${_img} (override with MLAIR_HELM_DOCKER_IMAGE)"; \
+		docker run --rm -v "$$(pwd):/charts:ro" -w /charts "$${_img}" lint charts/ml-air; \
+		docker run --rm -v "$$(pwd):/charts:ro" -w /charts "$${_img}" template ml-air charts/ml-air -f charts/ml-air/values-staging.yaml >/tmp/mlair-rendered.yaml; \
+	fi'
 	python scripts/check_deploy_config.py
 
 .PHONY: test-env-sync

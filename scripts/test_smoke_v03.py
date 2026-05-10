@@ -4,9 +4,16 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+_scripts = Path(__file__).resolve().parent
+if str(_scripts) not in sys.path:
+    sys.path.insert(0, str(_scripts))
+from smoke_common import require_api_reachable  # noqa: E402
 
 BASE = os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
 TENANT = os.getenv("ML_AIR_TENANT", "default")
@@ -34,6 +41,7 @@ def req(method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
 
 
 def main() -> None:
+    require_api_reachable(BASE)
     tag = str(int(time.time()))
     _st, v = req(
         "POST",

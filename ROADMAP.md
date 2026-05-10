@@ -1,6 +1,46 @@
 # MLAir Roadmap (Production-Ready)
 
-## Progress Tracking (live)
+Markdown **task lists** only: **`[x]`** = shipped or satisfied, **`[ ]`** = not done, optional, or maintainer gate.
+
+Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). **Data-plane counterpart to Hub-first UX:** [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) (version-centric accumulation + readiness v2).
+
+---
+
+## Current snapshot
+
+### Shipped (high level)
+
+- [x] Control plane: API + scheduler + executor + Redis queues + Postgres + Alembic
+- [x] UI: Next.js with tenant/project scope, runs, pipelines, DAG, models, datasets (`/datasets`, `/datasets/[datasetId]`), lineage (`/lineage`), search (`/search`), settings, plugins
+- [x] Auth: bearer dev tokens, JWT HS256, OAuth2 / JWKS (RS256); RBAC on sensitive routes
+- [x] Tracking + model registry + run compare + plugin → tracking hook
+- [x] Product Phase 3 core: lineage schema/API/ingest, pipeline versions + diff, replay/manifest hardening, search, `make test-smoke-v03`, env sync + manifest rotation in `make test-all`
+- [x] UI: shared `SelectDropdown` + topbar custom menus where native `<select>` failed (overflow / sticky / backdrop-blur)
+
+### In progress / incremental
+
+- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand
+- [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section
+- [ ] Durable readiness projection + eligibility APIs/history — Hub Phase 2–3 **plus** Readiness v2 in dataset lifecycle section
+- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset buffer/version/readiness events in dataset lifecycle section
+- [ ] Telemetry: % trainings from Hub vs pipeline — needs product analytics
+- [ ] Serving-slot HTTP (`/v1/models/.../serving`) re-enablement — optional until product turns on
+
+### Maintainer gates (each release that changes UX or API)
+
+- [ ] Terminology: readiness vs execution gate vs eligibility (docs + UI)
+- [ ] New features use `mlairKeys` consistently
+- [ ] TanStack invalidation scope reviewed for touched domains
+- [ ] Backward compatibility for pipeline/run APIs reviewed
+- [ ] `make up` (or full quickstart) then `make test-all` on release commit
+- [ ] Fresh DB: Alembic head; migrations called out in release notes
+- [ ] Tag + push; `CHANGELOG.md`; optional README “current tag” one-liner
+
+---
+
+## Progress tracking — delivery slices (Phase 1–8 + v0.3 baseline)
+
+Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 - [x] Phase 1 - monorepo skeleton (`frontend/api/executor/sdk/deploy/docs`)
 - [x] Phase 1 - API v1 skeleton and tenant/project scoped run APIs
@@ -62,396 +102,534 @@
 - [x] Phase 8 - model registry smoke automation (`make test-smoke-model-registry`) + quickstart flow docs
 - [x] Phase 8 - full phase2 smoke automation (`make test-smoke-phase2`) wired into `make test-all`
 - [x] Phase 8 - plugin->tracking auto hook baseline (executor plugin result auto logs params/metrics/artifacts)
-- [x] v0.3 / Product Phase 3 - baseline: lineage schema + API + executor ingest, pipeline versions + run bind + diff API, search API + topbar, timeline + partial replay + lineage UI (see `docs/troubleshooting/lineage-replay-v03-reference.md` + `make test-smoke-v03`)
+- [x] v0.3 / Product Phase 3 baseline: lineage + pipeline versions + diff + search + timeline + partial replay + lineage UI (`docs/troubleshooting/lineage-replay-v03-reference.md`, `make test-smoke-v03`)
 
-## Frontend Lifecycle-Centric Migration Roadmap (Hub-First, No Runtime Rewrite)
+---
 
-### Why this roadmap exists
+## Frontend lifecycle-centric migration (Hub-first, no runtime rewrite)
 
-Current frontend is in an intentional transition state:
+### Context
 
-```text
-Pipeline-centric legacy UX
-            +
-Lifecycle-centric emerging UX
-```
+> Pipeline-centric and lifecycle-centric UX coexist on purpose; this plan prevents the product staying **hybrid forever** without a runtime rewrite.
 
-This roadmap formalizes the migration so the system does not remain "hybrid forever".
+### Canonical ownership (checklist form)
 
-### Canonical ownership (target contract)
+- [x] **Dataset state** (`current_size`, versions): Dataset domain
+- [x] **Dataset readiness**: Dataset domain (secondary: pipeline execution gate, runtime-only)
+- [x] **Training eligibility**: Dataset + model policy
+- [x] **Training policy**: Model domain (secondary: scheduler runtime)
+- [x] **Pipeline execution**: Pipeline domain
+- [x] **Run observability**: Run domain (secondary: pipeline/task tooling)
+- [x] **Replay/debug**: Pipeline + Run domains
 
-| Concern | Canonical owner | Secondary / operational owner |
-| --- | --- | --- |
-| Dataset state (`current_size`, versions) | Dataset domain | — |
-| Dataset readiness | Dataset domain | Pipeline execution gate (runtime-only) |
-| Training eligibility | Dataset + model policy | — |
-| Training policy | Model domain | Scheduler runtime |
-| Pipeline execution | Pipeline domain | — |
-| Run observability | Run domain | Pipeline/Task tooling |
-| Replay/debug | Pipeline + Run domains | — |
+### Terminology contract (use consistently in UI/docs/API)
 
-### Terminology contract (must be consistent in UI/docs/API)
+- [x] **Dataset Readiness** — lifecycle/data readiness (dataset-level)
+- [x] **Execution Gate** — pipeline execution constraints (run-level); UI: *Execution Gate (Advanced)*
+- [x] **Training Eligibility** — readiness + policy + governance (dedicated API/UI split still roadmap)
+- [x] **Trigger Policy** — `manual | auto_ready | schedule`
+- [x] **Run Validation** — pre-execution checks used by runtime
 
-- `Dataset Readiness`: lifecycle/data readiness (dataset-level).
-- `Execution Gate`: pipeline execution constraints (run-level).
-- `Training Eligibility`: readiness + policy + governance result.
-- `Trigger Policy`: `manual | auto_ready | schedule`.
-- `Run Validation`: pre-execution checks used by runtime.
+### Phase 0 — Ownership freeze + naming normalization
 
-### Phase 0 — Ownership freeze + naming normalization (DONE/IN PROGRESS)
+- [x] Query key factory + cache ownership (`frontend/lib/query-keys.ts`)
+- [x] Training façade (`frontend/lib/training-intent.ts`)
+- [x] Dataset Hub (`/datasets/[datasetId]`)
+- [x] Model governance default path (legacy mode removed)
+- [x] Pipeline wording: *Readiness & Gating* → *Execution Gate (Advanced)* + Hub hint
+- [x] Remove direct run action from pipeline gate panel (check-only advanced tool)
+- [x] Model page governance-only (no legacy readiness/training controls)
 
-- [x] Query key factory and cache ownership normalization (`frontend/lib/query-keys.ts`).
-- [x] Training façade baseline (`frontend/lib/training-intent.ts`).
-- [x] Dataset Hub route baseline (`/datasets/[datasetId]`).
-- [x] Model governance mode is now the default path (legacy mode removed).
-- [x] Rename pipeline page wording from `Readiness & Gating` to `Execution Gate (Advanced)` and add primary path hint to Dataset Hub.
-- [x] Remove direct run action from pipeline gate panel in primary UX (check-oriented advanced tool only).
-- [x] Remove model-page legacy readiness/training controls; model page is governance-only.
+**Exit criteria (Phase 0)**
 
-Exit criteria:
+- [x] Canonical terms + `mlairKeys` for new UI (ongoing PR discipline)
+- [x] Docs distinguish readiness vs execution gate (`README`, this file, `docs/api/readiness-and-gating.md`)
 
-- New UI features use canonical terms and `mlairKeys`.
-- Team docs clearly distinguish dataset readiness vs execution gate.
+### Phase 1 — Hub-first primary entrypoints
 
-### Phase 1 — Hub-first primary entrypoints (v0.x, incremental)
+- [ ] Dataset Hub = default mental model in copy + onboarding for readiness + train
+- [x] Pipeline gate UI remains advanced/ops path without regressions
+- [ ] Adoption metrics: % `/runs/trigger` from Hub vs pipeline (needs telemetry)
 
-- Make Dataset Hub the default path for readiness + train actions.
-- Keep pipeline gate UI as advanced/ops compatibility path.
-- Model page is governance-only (status, policy, approvals, versions); readiness/training actions run from Dataset Hub.
-- Measure adoption:
-  - `% trainings via /runs/trigger`
-  - `% user sessions entering training from Dataset Hub`
+**Exit criteria (Phase 1)**
 
-Exit criteria:
+- [ ] Hub-first primary for normal users (telemetry or qualitative sign-off)
+- [x] Legacy pipeline gate available for ops/debug
 
-- Hub-first path is primary for normal users.
-- Legacy pipeline gate still available for ops/debug without regressions.
+### Phase 2 — Durable readiness projection
 
-### Phase 2 — Durable readiness projection (backend + frontend contract)
+- [ ] Projection/table (e.g. `dataset_readiness_snapshots`): `dataset_id`, `required_size`, `current_size`, `status`, `evaluated_at`, optional `model_id`, `policy_id`, `generated_run_id`
+- [ ] Dataset Hub: readiness history / timeline
+- [ ] Explainability from stored evaluations (“why blocked / why ready”)
 
-Introduce readiness as continuously evaluated lifecycle state, not only per-run gate check.
+**Exit criteria (Phase 2)**
 
-Target artifact examples:
+- [ ] Readiness history queryable and auditable (not only ephemeral page state)
 
-- `dataset_readiness_snapshots` (or `dataset_training_state`) with:
-  - `dataset_id`
-  - `required_size`
-  - `current_size`
-  - `status`
-  - `evaluated_at`
-  - optional `model_id`, `policy_id`, `generated_run_id`
+### Phase 3 — Eligibility domain split
 
-Frontend additions:
+- [ ] Dataset Hub: Eligible models / Blocked models + reasons
+- [ ] Status chips: readiness vs eligibility
+- [ ] APIs: `GET .../readiness/history`, `GET .../eligibility` (and full split vs single readiness call)
 
-- Dataset Hub readiness history/timeline.
-- Explainability ("why blocked / why ready").
+**Exit criteria (Phase 3)**
 
-Exit criteria:
-
-- Readiness no longer exists only as ephemeral page state.
-- Historical readiness is queryable and auditable.
-
-### Phase 3 — Eligibility domain split (critical)
-
-Formalize:
-
-```text
-Readiness != Eligibility
-Eligibility = readiness + policy + cooldown + approval + schedule + governance
-```
-
-Frontend additions:
-
-- Dataset Hub section: `Eligible models` / `Blocked models` with reasons.
-- Clear status chips for readiness vs eligibility.
-
-API/domain contract additions (target):
-
-- `GET /datasets/{id}/readiness`
-- `GET /datasets/{id}/readiness/history`
-- `GET /datasets/{id}/eligibility`
-
-Exit criteria:
-
-- Users can answer "dataset ready but model not eligible?" directly in UI.
+- [ ] UI answers “dataset ready but model not eligible?” without inference
 
 ### Phase 4 — Realtime lifecycle events
 
-Add explicit domain events:
+- [ ] Domain events (`dataset.readiness.updated`, `model.eligibility.updated`, `training.policy.updated`)
+- [ ] Frontend: map events → `mlairKeys`; narrow invalidation
 
-- `dataset.readiness.updated`
-- `model.eligibility.updated`
-- `training.policy.updated`
+**Exit criteria (Phase 4)**
 
-Frontend:
-
-- Map events to canonical query keys.
-- Reduce broad invalidation over time and expand safe patch updates.
-
-Exit criteria:
-
-- Lifecycle state updates in near realtime without cache ambiguity.
+- [ ] Near-realtime lifecycle updates without broad cache ambiguity
 
 ### Phase 5 — Pipeline page downgrade (soft deprecation)
 
-- Pipeline page remains execution tooling for power users:
-  - DAG
-  - task/plugin execution view
-  - replay/debug
-  - execution gate checks (advanced)
-- Remove pipeline page as primary training UX for end users.
+- [ ] End-user docs/copy Hub-first; pipeline = DAG / tasks / replay / execution gate for power users
+- [ ] Pipeline detail: no default lifecycle training CTA for end-user personas
 
-Exit criteria:
+**Exit criteria (Phase 5)**
 
-- End-user training docs and product copy are Hub-first.
-- Ops/debug remains fully functional.
-- Pipeline detail does not expose direct lifecycle training CTA by default.
+- [ ] Docs + UI defaults match above; ops/debug unchanged
 
-### Phase 6 — Full Hub-first cutover (when telemetry supports)
+### Phase 6 — Full Hub-first cutover
 
-- Hide legacy pipeline training controls by default (role/advanced toggle only).
-- Keep old APIs for compatibility until explicit deprecation policy is announced.
+- [ ] Hide legacy pipeline training controls by default (role or advanced toggle)
+- [ ] Deprecation policy if any API/UI surface removed
 
-Exit criteria:
+**Exit criteria (Phase 6)**
 
-- End-user lifecycle UX is dataset/model-centric by default.
-- No required orchestration rewrite.
+- [ ] Default UX dataset/model-centric; no orchestration rewrite
 
-### Non-goals (must not be done in this migration)
+### Non-goals (constraints)
 
-- Do not rewrite orchestration runtime.
-- Do not remove DAG/run/task observability.
-- Do not hard-cut existing APIs without deprecation window.
-- Do not force one-shot frontend rewrite.
+- Do **not** rewrite orchestration runtime.
+- Do **not** remove DAG/run/task observability.
+- Do **not** hard-cut APIs without a deprecation window.
+- Do **not** force a one-shot frontend rewrite.
 
-### Governance gates per release
+> **Data-plane complement:** [Dataset Lifecycle & Accumulation Architecture (version-centric)](#dataset-lifecycle--accumulation-architecture-version-centric) is the **master contract** for accumulation, immutable versions, and readiness v2. It feeds the Hub-first plan so UX and schema stay one story (no unbounded hybrid).
 
-Before each release that advances this roadmap:
+### Deferred beyond v0.3 (explicit future work)
 
-- [ ] Terminology consistency check in docs/UI labels.
-- [ ] Query-key consistency check (`mlairKeys` usage for new features).
-- [ ] Realtime invalidation scope review for touched domains.
-- [ ] Backward-compatibility review for pipeline/run APIs.
-- [ ] Telemetry review (Hub-first adoption and operational incident impact).
+- [ ] Plugin marketplace
+- [ ] SaaS billing
+- [ ] Multi-region active/active
 
-## Milestone: v0.2.0 — ML tracking + model registry (MLflow-like layer) — **COMPLETE**
+---
 
-This milestone matches the “Phase 2” product scope: experiment tracking, run compare, model registry, and plugin → tracking integration—not the early roadmap timeslice “Phase 2 (queue + worker)”, which is already delivered above.
+## Dataset Lifecycle & Accumulation Architecture (version-centric)
 
-### Exit criteria (all satisfied for v0.2.0)
+**Master roadmap domain** — data lifecycle foundation, training reproducibility foundation, readiness normalization foundation. **Not** a small feature list. It **locks together** with [Frontend lifecycle-centric migration (Hub-first, no runtime rewrite)](#frontend-lifecycle-centric-migration-hub-first-no-runtime-rewrite) so Hub UX and backend semantics stay one story (hybrid cannot keep expanding).
 
-- [x] **Schema + migrations**: `experiments`, `run_params`, `run_metrics` (incl. step), `run_artifacts`, `models`, `model_versions`, `runs.experiment_id` applied via Alembic.
-- [x] **Tracking APIs**: create/list experiments; log param/metric/artifact; `GET .../tracking`; `POST .../runs/compare`.
-- [x] **Model registry APIs**: create model; create/list versions; promote with stage rules (`staging` / `production` / `archived`).
-- [x] **SDK**: `mlair` helpers read `ML_AIR_TENANT_ID` / `ML_AIR_PROJECT_ID` / `ML_AIR_RUN_ID` and call the tracking API.
-- [x] **UI**: run compare (metric key + chart + last/best summary); run detail panel for params/metrics/artifacts; models list, version create/promote/rollback, `/models/[modelId]` deep link.
-- [x] **Plugin → tracking**: executor posts plugin JSON result (params/metrics/artifacts) to tracking after successful plugin runs.
-- [x] **Quality gate**: `make test-smoke-model-registry` and `make test-smoke-phase2` pass; both wired into `make test-all`.
+### Context
+
+The codebase still bridges:
+
+- [x] Mutable dataset aggregate (`datasets.current_size`) for compatibility / legacy readiness
+- [x] **`dataset_accumulation_buffers`** — mutable runtime ingestion (`0015` + `0018`: strategy, windows, last materialized pointer)
+- [x] **Immutable `dataset_versions`** (+ `source_type`, `record_count`, materialization idempotency fields)
+- [x] Readiness APIs + Hub evaluations UI (often version-aware; still **partially** tied to aggregate / fallback flags)
+
+**Product risk** if unresolved: ambiguity between **imported snapshots**, **runtime-ingested data**, **readiness thresholds**, and **reproducible training** unless **every train path** resolves an explicit **`dataset_version_id`** with **auditable** readiness history.
+
+### Link to Hub-first migration
+
+- [x] **Division of labor:** Hub migration owns **where users act** (Dataset Hub vs pipeline advanced). **This section** owns **what data means** (buffer vs immutable version vs readiness vs train input).
+- [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page.
+- [ ] **Anti-pattern:** parallel lifecycle vocabulary in pipeline UI that contradicts Hub + this contract.
+
+---
+
+### Canonical architecture contract
+
+#### Ownership model (target)
+
+- [x] **Dataset version** = immutable training snapshot (`dataset_versions`; monotonic integer `version` scoped per dataset)
+- [x] **Readiness** = evaluation on **dataset version + policy** (persisted history = **Readiness v2** backlog)
+- [ ] **Training** always consumes explicit **`dataset_version_id`** on every supported path (including compat shims — no silent “train on mutable head”)
+- [x] **Accumulation buffer** = mutable runtime ingestion (`dataset_accumulation_buffers`)
+- [x] **Runtime ingestion** does not rewrite historical version rows; materialization **adds** a new `dataset_versions` row
+- [x] **Imported** and **runtime-accumulated** datasets share the **same versioning model** (`source_type` + buffer lineage)
+
+#### Domain separation
+
+| Domain | Responsibility |
+| --- | --- |
+| Accumulation buffer | Mutable realtime ingestion |
+| Dataset version | Immutable snapshot |
+| Readiness | Eligibility evaluation on version + policy |
+| Training | Bind runs to immutable `dataset_version_id` |
+| Pipeline | Execution / orchestration / execution gate — **not** lifecycle owner |
+
+---
+
+### Accumulation strategy standardization
+
+#### Goals
+
+- [ ] No **implicit** materialization; triggers (threshold / schedule / manual) are explicit in API + UI
+- [ ] Remove “default / sticky version” confusion in product defaults
+- [ ] Deterministic version allocation under concurrency (see **Concurrency & transaction safety**)
+- [ ] Enterprise ingestion strategies documented and tested per enum value
+
+#### Buffer strategy enum
+
+**Baseline in repo** (API + Dataset Hub); items below track **hardening** to the full contract.
+
+**Required strategies**
+
+- [x] `snapshot_on_threshold` — accumulate to `target_threshold`, materialize `vN`, advance buffer (tighten invariants + docs — [ ])
+- [x] `rolling_accumulate` — grow buffer without auto version (UX warnings + monitoring — [ ])
+
+**Optional / enterprise**
+
+- [x] `snapshot_on_schedule` — scheduler tick path (`ML_AIR_DATASET_MATERIALIZATION_*`)
+- [x] `manual_materialize_only` — explicit materialize only
+
+---
+
+### Dataset version contract
+
+#### Rules
+
+- [x] Monotonic `version` per dataset (`uq_dataset_versions_dataset_version`)
+- [ ] Product/API never encourages a fuzzy **`default`** train target when a materialized version should exist
+- [ ] Materialize + buffer transition **atomic** under contention (audit `test_materialization_concurrency_db` vs production paths)
+- [x] Historical version rows immutable in service code
+- [x] Buffer state stored separately from version rows; linkage via materialization metadata / lineage
+
+#### Metadata on `dataset_versions`
+
+**Shipped (`0014`, `0018`):**
+
+- [x] `source_type`, `record_count`
+- [x] `materialized_from_buffer`, `materialization_idempotency_key` (unique when set)
+
+**Contract completion**
+
+- [ ] Normalize `source_type` to a small documented enum in API + UI (`import` / `runtime_accumulated` / `manual` / `generated` — map from current literals)
+- [ ] Add `materialized_at` (or document canonical timestamp) if `created_at` is insufficient for audit
+
+---
+
+### Accumulation buffer domain
+
+#### Table `dataset_accumulation_buffers`
+
+**Shipped:** `buffer_id`, `tenant_id`, `project_id`, `dataset_id`, `source_type`, `current_size`, `target_threshold`, `window_status`, timestamps, `accumulation_strategy`, `window_start`, `window_end`, `last_materialized_version_id`, `last_materialized_at`.
+
+**Gaps vs full contract**
+
+- [ ] Column naming / docs: `window_*` vs “strategy window” language in Hub
+- [ ] Buffer row metrics + alerts (see **Observability & SRE**)
+
+#### Ingestion pipeline split
+
+**Step A — Ingest**
+
+- [x] Update mutable buffer on runtime ingest (lineage + buffer services)
+- [ ] Append audit-grade runtime metadata consistently
+- [ ] Buffer-specific metrics (counters/histograms) beyond generic API metrics
+
+**Step B — Materialization**
+
+- [ ] Single decision module: strategy evaluation → atomic **new `dataset_version`** + buffer reset/advance
+- [x] Idempotency key on version insert (`materialization_idempotency_key`)
+- [ ] Emit lifecycle events (see **Realtime lifecycle events**)
+
+---
+
+### Readiness architecture v2
+
+#### Current limitation
+
+- [x] Readiness can still use **mutable** `datasets.current_size` / `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` when no materialized version exists
+- [ ] **Default path:** evaluation keyed on **`dataset_version_id` + policy** with stored rows for audit
+
+#### Target model
+
+- Readiness evaluates **version + policy (+ optional model scope)** and **never mutates** training data.
+
+#### Projection table `dataset_readiness_evaluations` (target)
+
+- [ ] `dataset_id`, `dataset_version_id`, `policy_id`, `required_size`, `current_size`, `status`, `evaluated_at`, optional `generated_run_id` / correlation fields
+
+*(Hub already surfaces evaluation lists from API; durable table = historical audit + diff-friendly ops.)*
+
+#### APIs
+
+**Required**
+
+- [ ] `GET /datasets/{id}/readiness` — version-centric contract (evolve existing)
+- [ ] `GET /datasets/{id}/readiness/history`
+- [ ] `GET /datasets/{id}/eligibility`
+
+**Optional**
+
+- [ ] `POST /datasets/{id}/materialize` if not fully expressed by buffer `PATCH` + schedule tick
+
+---
+
+### Training contract hardening
+
+- [ ] All training triggers accept or resolve explicit **`dataset_version_id`**
+- [ ] No hidden mutable-base training in defaults or docs
+- [ ] Reproducibility: runs reference immutable snapshot IDs end-to-end
+
+#### Compatibility
+
+- [x] Pipeline execution APIs remain for orchestration
+- [ ] Legacy readiness / aggregate fallbacks **explicitly** flagged and phased down
+- [ ] Compat layer may resolve “latest materialized” **only** when policy allows — documented
+
+---
+
+### Dataset Hub UX (canonical lifecycle surface)
+
+**Must stay aligned** with Hub migration Phase 1–6.
+
+- [ ] Buffer panel vs versions table: visually **distinct** layers (mutable vs immutable)
+- [x] Immutable versions listed (baseline)
+- [x] Readiness block (baseline); **evaluation history** from projection — [ ]
+- [ ] Eligible / blocked models + structured reasons (needs eligibility API)
+- [x] Train from explicit version (Hub; expand coverage + guardrails)
+- [x] Links to lineage / runs (baseline; tighten copy)
+
+#### UI clarity
+
+- **Imported snapshots** — CSV / manual upload → immutable version; map `source_type` clearly in UI
+- **Runtime materialized** — from buffer threshold/schedule; distinguish from import
+- **Active accumulation** — buffer only; **not** a train snapshot until materialized; block or warn mistaken “train”
+
+#### UX warnings
+
+- [ ] `rolling_accumulate`: warn when users expect auto-versions
+- [ ] Rows-until-threshold / schedule projection
+- [ ] Last materialized version + time on Hub
+- [ ] “Why blocked?” from stored evaluations once Readiness v2 lands
+
+---
+
+### Realtime lifecycle events
+
+**Extends** Hub migration “Realtime lifecycle events” phase with **dataset** events.
+
+#### Required events (indicative names)
+
+- [ ] `dataset.buffer.updated`
+- [ ] `dataset.version.created`
+- [ ] `dataset.readiness.updated`
+- [ ] `training.eligibility.updated`
+
+#### Frontend
+
+- [ ] Map to `mlairKeys`; reduce broad invalidation; enable near-realtime Hub lifecycle panels
+
+---
+
+### Concurrency & transaction safety
+
+- [ ] Advisory lock / `SELECT FOR UPDATE` on hot materialization path (verify overlap with DB tests)
+- [x] Materialization idempotency key (partial guarantee)
+- [ ] Metrics + logs for duplicate / retry outcomes
+
+---
+
+### Observability & SRE
+
+#### Metrics (target)
+
+- [ ] `accumulation_current_size` / gauge family per dataset or buffer id (cardinality-aware)
+- [ ] `accumulation_target_threshold`
+- [ ] `materialization_attempt_total`
+- [ ] `materialization_version_created_total`
+- [ ] `materialization_failure_total`
+
+#### Structured logs
+
+- [ ] Include `dataset_id`, `strategy`, `threshold`, `current_size` before/after, `version`, `idempotency_key`, `trace_id`
+
+#### Alerts
+
+- [ ] Buffer not reset after successful materialization
+- [ ] Repeated materialization failure burst
+- [ ] Version allocator / uniqueness collision
+
+---
+
+### Migration plan (schema → Hub)
+
+#### Phase A — Schema expansion
+
+- [x] Buffer + strategy + materialization metadata (through migration `0018` baseline)
+- [ ] Readiness evaluation projection + indexes
+- [ ] `source_type` enum normalization + any missing audit columns
+
+#### Phase B — Dual-write / compatibility
+
+- [x] Runtime ingest → buffer (baseline)
+- [ ] Documented dual-read / fallback period; reduce aggregate reliance
+
+#### Phase C — Readiness v2
+
+- [ ] Version-centric readiness default + Hub history backed by table
+
+#### Phase D — Full Hub-first lifecycle
+
+- [ ] Hub = canonical lifecycle; pipeline = orchestration/debug only for lifecycle actions
+
+---
+
+### Non-goals (dataset program)
+
+- Do **not** rewrite orchestration runtime (queue/DAG executor).
+- Do **not** remove DAG / task / run observability.
+- Do **not** hard-remove pipeline `/v1` triggers without deprecation + compat.
+- Do **not** introduce mutable “training snapshots” as a first-class artifact.
+
+---
+
+### Success criteria
+
+- [ ] Every production training path tied to **immutable `dataset_version_id`**
+- [ ] Readiness **historically auditable** (stored evaluations + APIs)
+- [ ] Imported + runtime datasets: **one lifecycle model** in UI + docs
+- [ ] Dataset Hub = **single lifecycle source of truth**; pipeline pages orchestration-focused for lifecycle
+- [ ] No default UX ambiguity between **mutable aggregate head** and **immutable version**
+
+---
+
+## Milestone: v0.2.0 — ML tracking + model registry — COMPLETE
+
+Product “Phase 2” (tracking/registry), not engineering Phase 2 (queue/worker).
+
+### Exit criteria
+
+- [x] Schema + migrations: experiments, params, metrics, artifacts, models, versions, `runs.experiment_id`
+- [x] Tracking APIs + `GET .../tracking` + `POST .../runs/compare`
+- [x] Model registry APIs + promote stage rules
+- [x] SDK env-driven tracking calls
+- [x] UI: run compare, tracking panel, models, `/models/[modelId]`
+- [x] Plugin → tracking after successful plugin runs
+- [x] `make test-smoke-model-registry` + `make test-smoke-phase2` in `make test-all`
 
 ### Release checklist (tag `v0.2.0`)
 
-Use this when cutting the Git tag so artifacts and docs stay aligned.
+- [ ] `make up` then `make test-all`
+- [ ] Alembic head on fresh DB = same commit as tag
+- [ ] Release notes: breaking changes, env vars, migration `0003` if upgrading
+- [ ] `git tag -a v0.2.0 -m "..."` + push (GHCR if configured)
+- [ ] Optional: pin quickstart/README one-liner to `v0.2.0`
 
-- [ ] `make up` (or full quickstart) then `make test-all` (includes smoke, phase2, observability, Helm).
-- [ ] Confirm Alembic head applies on a fresh database (`api` against same image/commit as tag).
-- [ ] Document breaking changes (if any) in release notes; v0.2.0 is the first tagged milestone for the tracking/registry surface—call out new env vars and migration `0003` if upgrading from an older checkout.
-- [ ] Tag: `git tag -a v0.2.0 -m "v0.2.0: ML tracking, model registry, plugin→tracking hook"`; push tag to trigger `publish-images.yml` if using GHCR.
-- [ ] Optional: pin `docs/quickstart.md` / README “current release” one-liner to v0.2.0 after tag.
+---
 
-## Milestone: v0.3.0 — Product Phase 3 (lineage + pipeline versioning + debug UX) — **IN PROGRESS (core shipped)**
+## Milestone: v0.3.0 — Product Phase 3 — CORE COMPLETE
 
-**Naming note:** Roadmap items above use historical “Phase 1–8” delivery slices. **Product Phase 3** here is the *next product milestone* after v0.2.0 (Airflow-lite + MLflow-lite usable). Target tag: **v0.3.0**.
+Lineage + pipeline versioning + debug UX. Target tag **`v0.3.0`**.
 
-### Why this bundle (not random features)
+### Why
 
-Orchestration (run → task → plugin) and ML tracking/registry are in place, but operators still lack **“what happened to the data”**: dataset identity, **versioned** pipeline definitions, and **debuggability** at run/task granularity. This milestone closes that gap before investing in marketplace/SaaS/multi-region.
+- [x] Operators get “what happened to the data” before marketplace/SaaS/multi-region
 
 ### Core — data lineage
 
-- [x] **Datasets + `dataset_versions` + `lineage_edges`** (tenant/project scoped, Alembic `0004_v03_lineage`); idempotent `idempotency_key` on edges.
-- [x] **Plugin / runtime**: `PluginMeta.lineage` (optional) + result `lineage: { inputs, outputs }` → `POST .../lineage/ingest` (executor after success).
-- [x] **Loader** strict validation of lineage slot names (`PluginMeta.lineage` shape + slot naming constraints in plugin loader).
-- [x] **Backfill job** for historical lineage from manifest payload (`scripts/backfill_lineage_from_manifests.py`, `make backfill-lineage`).
-- [x] **Backfill DX utilities**: dry-run + tenant/project scoped make targets (`make backfill-lineage-dry-run`, `BACKFILL_TENANT_ID`, `BACKFILL_PROJECT_ID`).
-- [x] **Backfill pagination utilities**: auto-batch loop for full dataset (`make backfill-lineage-all`, `make backfill-lineage-all-dry-run`).
-- [x] **Backfill report utilities**: aggregated totals across all batches (`make backfill-lineage-report`, `make backfill-lineage-report-dry-run`).
-- [x] **Backfill report export utility**: optional JSON summary output file (`BACKFILL_REPORT_PATH=...`).
+- [x] Datasets + `dataset_versions` + `lineage_edges` + idempotent `idempotency_key`
+- [x] `PluginMeta.lineage` + executor `POST .../lineage/ingest`
+- [x] Loader strict lineage slot validation
+- [x] Backfill job + DX + pagination + report + `BACKFILL_REPORT_PATH`
 
 ### UI — lineage
 
-- [x] **Lineage** route `/lineage` (React Flow; `?runId=` or dataset version for neighborhood). Sidebar link **Lineage**.
-- [x] **Dataset detail** card + upstream/downstream highlight (1-hop) + **run history** per dataset.
+- [x] `/lineage` (React Flow; `?runId=` / dataset version); sidebar Lineage
+- [x] Dataset detail: 1-hop highlight + run history
 
 ### Versioning — pipelines
 
-- [x] **`pipeline_versions`**, `runs.pipeline_version_id` + `config_snapshot`, `use_latest_pipeline_version` / `pipeline_version_id` on trigger, scheduler/executor pass `config_snapshot` in task events, diff API `.../pipeline-versions/{id}/diff?other=`.
-- [x] **UI**: `/pipelines/[pipelineId]/versions` (create + list), `/pipelines/[pipelineId]/diff` (side-by-side key diff), links from pipeline list/detail.
+- [x] `pipeline_versions`, `runs.pipeline_version_id`, `config_snapshot`, diff API, UI versions + diff
 
 ### Debug UX
 
-- [x] **Timeline** on run detail, **error_message** on tasks (scheduler/executor), scroll to last failed; **partial replay** `POST .../runs/{id}/replay` + shortcut on run page.
-- [x] **Multi-task DAG scheduler baseline** from `config_snapshot` (`tasks[]` with `depends_on` or sequential `steps[]`), including replay downstream from `replay_from_task_id`.
-- [x] **Replay from true mid-DAG with baseline gating**: scheduler skips upstream only if parent run task already `SUCCESS`; otherwise replay is blocked/fails fast.
-- [x] **Artifact-level gating baseline**: replay skip requires parent task `SUCCESS` **and** artifact evidence (`lineage_edges` or `run_artifacts` match). Configurable via `ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE` (default on).
-- [x] **Artifact-level checksum hardening (toggle)**: replay skip can require lineage-output checksum evidence via `ML_AIR_REPLAY_REQUIRE_CHECKSUM=1`.
-- [x] **Manifest policy baseline**: signed task manifest (`hmac-sha256`) stored server-side; replay skip can require valid signature (`ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST=1`) and match `required_artifacts` policy from task config.
-- [x] **Manifest key rotation baseline**: `key_id` persisted with manifest; executor signs with active `kid`; scheduler verifies using keyset (`ML_AIR_MANIFEST_SIGNING_KEYS_JSON` + active fallback).
-- [x] **Manifest payload schema hardening**: API enforces typed payload shape; scheduler verifies payload consistency (`run_id/task_id/status/artifacts/lineage`) before replay skip.
-- [x] **Asymmetric signature baseline**: manifest signing/verifying supports `ed25519` (alongside HMAC) with `kid` keyset envs.
-- [x] **Ed25519 DX utility**: keypair env snippet generator (`scripts/generate_ed25519_env.py`, `make gen-ed25519-env`) + escaped-newline key support.
-- [x] **One-command local enable**: `make enable-ed25519-dev` auto-updates `.env` with generated Ed25519 keyset.
-- [x] **Security observability baseline**: manifest sign/post and verify failure metrics + alert rules.
-- [x] **Security dashboard visibility**: Grafana panels for manifest verify/post outcomes.
-- [x] **Security incident runbook (manifest/replay)**: reason-based triage/mitigation playbook for verify/post failures (`docs/troubleshooting/manifest-security.md`).
-- [x] **Manifest policy hardening (baseline)**: managed key provider integration (`env|file` compatible with KMS/Vault sidecar sync) + strict key lifecycle/allowlist policy (`kid` allowlist + strict active key checks).
-- [x] **Manifest key rotation ops DX**: sample managed key file + rotation guard script/target (`deploy/security/manifest-keys.sample.json`, `scripts/check_manifest_key_rotation.py`, `make test-manifest-key-rotation`).
-- [x] **Rotation policy CI gate**: manifest key rotation guard enforced in CI and `make test-all`.
-- [x] **Local managed-key workflow**: ignored local key file bootstrap + guard fallback to local file when present (`make init-manifest-keys-local`, `MANIFEST_KEYS_FILE` resolution).
+- [x] Timeline, `error_message`, replay shortcut + `POST .../runs/{id}/replay`
+- [x] Multi-task DAG from snapshot; `replay_from_task_id`
+- [x] Mid-DAG gating; artifact gating; checksum toggle; signed manifest; `key_id` keyset
+- [x] Payload schema hardening; Ed25519 + DX targets; security metrics + Grafana; manifest runbook
+- [x] Managed keys, rotation guard, CI, local keys workflow
 
 ### Search
 
-- [x] **`GET .../search`**, `pg_trgm` indexes, rate limit (MVP), **topbar** + `/search` page.
+- [x] `GET .../search`, `pg_trgm`, rate limit, topbar + `/search`
 
-### Optional (nice to have in v0.3.x)
+### Optional (v0.3.x — done in tree)
 
-- [x] **Cost / resource** per task: CPU/RAM if available from runtime, wall duration (already partially observable — unify in API + UI table).
-- [x] **Env hygiene rule**: any new environment variable must be added to both `.env` and `.env.example` in the same change.
-- [x] **Env sync guard automation**: `scripts/check_env_sync.py` + `make test-env-sync` + CI gate (`env-sync-guard` job).
+- [x] Cost/resource per task in API + UI where available
+- [x] Env sync guard + `make test-env-sync` + CI
 
-### Explicitly out of scope for v0.3.0
+### Release checklist (tag `v0.3.0`)
 
-- Plugin marketplace, SaaS billing, multi-region active/active — **defer** until lineage + versioning + debug are solid.
+- [ ] `make up` then `make test-all` (incl. `test-smoke-v03`, observability, Helm, env sync, manifest rotation)
+- [ ] Alembic from zero on tag commit
+- [ ] `CHANGELOG.md` + release notes (manifest/replay toggles, lineage, breaking changes)
+- [ ] `git tag -a v0.3.0 -m "..."` + push
+- [ ] Optional: README/quickstart one-liner → `v0.3.0`
 
-## Definition of Production-Ready
+---
 
-- Reliability: restart service does not lose queued/running jobs.
-- Scalability: scheduler is separated, workers are stateless, horizontal scaling works.
-- Observability: logs, metrics, and tracing are available end-to-end.
-- Multi-user: authentication, authorization, and tenant/project isolation are enforced.
-- Upgrade-safe: DB schema migration/versioning and API backward compatibility are guaranteed.
+## Definition of production-ready (target bar)
 
-## Phase 1 (Day 0-20): Control Plane Foundation
+- [x] Reliability: restart does not lose queued/running jobs (design + tests; env validates)
+- [x] Scalability: scheduler separated; stateless workers; horizontal scale path
+- [x] Observability: logs, metrics, correlation in repo defaults
+- [x] Multi-user: auth, RBAC, tenant/project isolation on `/v1`
+- [x] Upgrade-safe: Alembic + backward-compatible `/v1` discipline
 
-- Monorepo baseline:
-  - `frontend/`, `api/`, `executor/`, `sdk/`, `deploy/`, `docs/`
-- API v1 baseline:
-  - tenant/project scoping in request context
-  - pipeline CRUD, run trigger
-  - run/task/log read APIs
-- Metadata layer:
-  - PostgreSQL schema for `pipelines`, `runs`, `tasks`, `task_attempts`
-  - Alembic migrations initialized
-- Artifact layer:
-  - MinIO/S3 integration for model artifacts and task outputs
-- Deliverables:
-  - local quickstart via docker compose (dev-only)
-  - OpenAPI v1 contract in repository
-  - basic smoke test for API health + run creation
-- Definition of Done:
-  - all writes include tenant/project scope
-  - migration can bootstrap a clean database from zero
+---
 
-## Phase 2 (Day 21-40): Queue + Stateless Worker
+## Reference — original day-range plan (retrospective)
 
-- Queue system (required):
-  - Redis-based queue (start simple, Kafka-ready abstraction)
-  - durable message contract (`run_id`, `task_id`, `attempt`)
-- Worker execution runtime:
-  - worker process is stateless
-  - scale-out by increasing worker replicas
-  - task output/log/artifact written to DB + object storage
-- Concurrency control:
-  - max parallel tasks per run/project
-  - queue priority support
-- Deliverables:
-  - worker service executable
-  - queue-backed task consumption flow
-- Definition of Done:
-  - killing worker does not lose task permanently
-  - same image can run as multiple workers without code changes
+### Phase 1 (Day 0–20): control plane foundation
 
-## Phase 3 (Day 41-60): Scheduler + Reliability Core
+- [x] Monorepo layout
+- [x] API v1 + Postgres + Alembic + MinIO/S3 path
+- [x] Quickstart + OpenAPI draft + smoke
 
-- Dedicated scheduler service (required):
-  - parse DAG definition
-  - evaluate dependencies and release ready tasks
-  - trigger tasks to queue
-- Retry and idempotency:
-  - retry policy per task (`retries`, `backoff`, `max_delay`)
-  - idempotency key for run trigger and task callback
-  - dead-letter queue + replay endpoint
-- Task state machine:
-  - `PENDING -> RUNNING -> SUCCESS`
-  - `RUNNING -> FAILED -> RETRY -> RUNNING`
-- Deliverables:
-  - scheduler executable independent from API process
-  - state transition guard tests
-- Definition of Done:
-  - restart API/scheduler/worker does not corrupt state
-  - invalid transition is blocked and audited
+### Phase 2 (Day 21–40): queue + worker
 
-## Phase 4 (Day 61-75): UI + Runtime Observability
+- [x] Redis queue + durable messages
+- [x] Stateless worker + concurrency + priority
 
-- UI capabilities:
-  - pipeline dashboard
-  - DAG visualization and failed-node highlight
-  - run detail with task timeline
-  - real-time log viewer via WebSocket
-- Observability stack:
-  - logs pipeline (stdout to collector)
-  - Prometheus metrics for API/scheduler/worker
-  - Grafana dashboards and alert rules
-  - tracing with request correlation id
-- Deliverables:
-  - operational dashboard for run health and queue backlog
-  - on-call alerts for failed runs and stalled queue
-- Definition of Done:
-  - user can trace from run -> task -> log -> artifact in one flow
+### Phase 3 (Day 41–60): scheduler + reliability
 
-## Phase 5 (Day 76-90): Auth, Multi-Tenant, Governance
+- [x] Dedicated scheduler + retry/DLQ + state machine + guards
 
-- Authentication and authorization:
-  - JWT/OAuth2
-  - RBAC roles (admin, maintainer, viewer)
-- Multi-tenant guardrails:
-  - enforced tenant/project filters in all queries
-  - quota/rate limits by tenant/project
-- Model governance (partially shipped in `/v1`; see `ARCHITECTURE.md` §7):
-  - approval lifecycle (`pending_manual_approval -> approved/rejected`) — **API + DB**
-  - serving slots (`candidate/challenger/champion/canary`) — **DB + service**; **HTTP routes may be disabled** in `v1.py` (see `ARCHITECTURE.md` §7 / README)
-  - promotion policy gate + rollback audit trail — **promote gate shipped**; unified audit timeline API still roadmap
-- Deliverables:
-  - secure APIs with role checks
-  - governance endpoints (approval + production promote gate shipped; serving-slot **HTTP** optional/disabled in default tree; audit timeline API still roadmap — see `ARCHITECTURE.md` §7)
-- Definition of Done:
-  - cross-tenant data access is blocked by design and tested
+### Phase 4 (Day 61–75): UI + observability
 
-## Phase 6 (Day 91-120): Production Deployment + CI/CD
+- [x] Dashboard, DAG, run detail, WebSocket logs, Prometheus, Grafana, correlation id
 
-- Kubernetes and Helm (required for production):
-  - Deployment: `api`, `scheduler`, `worker`
-  - StatefulSet: `postgres`, `minio` (or managed services)
-  - Service + Ingress
-  - Helm chart in `charts/ml-air`
-- CI/CD:
-  - build and test on push
-  - image publish to GHCR
-  - deploy via Helm/ArgoCD pipeline
-- Operations:
-  - backup/restore runbook
-  - disaster recovery checklist
-  - SLO/SLA + incident runbook
-- Definition of Done:
-  - one-command Helm install to staging works
-  - rollback to previous chart version is verified
+### Phase 5 (Day 76–90): auth + governance
 
-## Exit Criteria v1.0.0
+- [x] JWT/OAuth2 + RBAC + tenant/project filters
+- [x] Model governance: approval, promote gate, rollback in UI
+- [x] Serving slots: DB + service layer
+- [ ] Serving slots: HTTP routes enabled by default in `v1.py` (optional; may stay commented)
+- [ ] Unified audit timeline API (`ARCHITECTURE.md` §7)
 
-- Scheduler, queue, and worker are independent services in production.
-- Worker is stateless and horizontally scalable.
-- Task execution is idempotent and retry-safe with audited transitions.
-- Metadata and artifacts are stored in Postgres + S3/MinIO (no local-only dependency).
-- Auth/RBAC and strict tenant/project isolation are enforced system-wide.
-- Logs, metrics, and traces are available with actionable alerts.
-- Upgrade-safe delivery exists: Alembic migrations + backward-compatible `/v1` APIs.
-- Kubernetes/Helm deployment and CI/CD pipeline are fully operational.
+### Phase 6 (Day 91–120): K8s + CI/CD
+
+- [x] Helm chart + CI + GHCR + deploy reference + runbooks + staging/rollback story
+
+---
+
+## Exit criteria — v1.0.0 (aspirational)
+
+- [x] Independent deployable scheduler, queue, worker services in repo
+- [x] Stateless horizontally scalable worker contract
+- [x] Idempotent retry-safe execution + audited transitions
+- [x] Postgres + S3/MinIO design (no local-only requirement)
+- [x] Auth/RBAC + isolation on control-plane APIs
+- [x] Logs, metrics, traces + alerts in `deploy/monitoring/`
+- [x] Alembic + backward-compatible `/v1` policy
+- [x] Kubernetes/Helm + CI/CD in repository defaults
+- [ ] Formal **`v1.0.0`** tag + external adoption/support stance (maintainer decision)

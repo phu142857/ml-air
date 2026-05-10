@@ -68,6 +68,8 @@ def main() -> int:
     minio_console_port = int(os.getenv("ML_AIR_MINIO_CONSOLE_PORT", "9001"))
     prometheus_port = int(os.getenv("ML_AIR_PROMETHEUS_PORT", "39090"))
     grafana_port = int(os.getenv("ML_AIR_GRAFANA_PORT", "33000"))
+    realtime_port = int(os.getenv("MLAIR_REALTIME_PORT", "8001"))
+    realtime_metrics_port = int(os.getenv("ML_AIR_REALTIME_METRICS_PORT", "9104"))
 
     checks = [
         ("frontend", lambda: _http_ok(f"http://localhost:{frontend_port}")),
@@ -80,6 +82,8 @@ def main() -> int:
         ("postgres-tcp", lambda: _tcp_ok("127.0.0.1", postgres_port)),
         ("minio-api-tcp", lambda: _tcp_ok("127.0.0.1", minio_api_port)),
         ("minio-console", lambda: _http_ok(f"http://localhost:{minio_console_port}")),
+        ("realtime-health", lambda: _http_ok(f"http://localhost:{realtime_port}/healthz")),
+        ("realtime-metrics", lambda: _http_ok(f"http://localhost:{realtime_metrics_port}/metrics")),
     ]
 
     deadline = time.time() + args.wait_seconds

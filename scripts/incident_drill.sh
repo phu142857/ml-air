@@ -6,6 +6,11 @@ PROM_URL="${ML_AIR_PROMETHEUS_URL:-http://localhost:39090}"
 TENANT_ID="${ML_AIR_TENANT_ID:-default}"
 PROJECT_ID="${ML_AIR_PROJECT_ID:-default_project}"
 
+if ! curl -fsS --connect-timeout 2 --max-time 5 "${API_BASE_URL}/health" >/dev/null 2>&1; then
+  echo "[FAIL] API not reachable at ${API_BASE_URL} — start quickstart (make rebuild) before incident drill." >&2
+  exit 1
+fi
+
 echo "[1/5] Trigger failure run (always_fail_pipeline)"
 RUN_RESP="$(curl -fsS -X POST \
   "${API_BASE_URL}/v1/tenants/${TENANT_ID}/projects/${PROJECT_ID}/runs" \
@@ -41,13 +46,13 @@ echo "[3/5] Validate DLQ replay path still works"
 REPLAY_RESP="$(curl -fsS -X POST \
   "${API_BASE_URL}/v1/tenants/${TENANT_ID}/projects/${PROJECT_ID}/runs/${RUN_ID}/dlq/replay" \
   -H "Authorization: Bearer maintainer-token")"
-echo "${REPLAY_RESP}" | rg -q "\"replayed\""
+echo "${REPLAY_RESP}" | grep -q '"replayed"'
 
 echo "[4/5] Wait for Prometheus alert visibility"
 ALERT_FOUND="0"
 for i in $(seq 1 75); do
   ALERTS_JSON="$(curl -fsS "${PROM_URL}/api/v1/alerts")"
-  if echo "${ALERTS_JSON}" | rg -q "MlAirTaskFailuresDetected"; then
+  if echo "${ALERTS_JSON}" | grep -q "MlAirTaskFailuresDetected"; then
     ALERT_FOUND="1"
     break
   fi

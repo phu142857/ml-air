@@ -21,7 +21,13 @@ def main() -> int:
         run(["python", "./mlair", "--help"])
         run(["python", "./mlair", "run", "examples/pipeline.demo.yaml"])
     except RuntimeError as exc:
-        print(f"[FAIL] docs smoke failed: {exc}")
+        msg = str(exc)
+        print(f"[FAIL] docs smoke failed: {msg}")
+        if "TLS handshake timeout" in msg or "timeout" in msg.lower():
+            print(
+                "[HINT] Image pull or registry failed — check network/VPN/firewall, then retry "
+                "`make up` or `make rebuild` before `python scripts/docs_smoke.py`."
+            )
         return 1
     print(
         json.dumps(
