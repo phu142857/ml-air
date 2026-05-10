@@ -21,8 +21,8 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 
 - [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand
 - [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section
-- [ ] Durable readiness projection + eligibility APIs/history — Hub Phase 2–3 **plus** Readiness v2 in dataset lifecycle section
-- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset buffer/version/readiness events in dataset lifecycle section
+- [x] Durable readiness **evaluations** + eligibility aggregate API + `/readiness/history` — Hub Phase 2–3 baseline shipped (`dataset_readiness_evaluations`, list + Hub); Readiness v2 **default path** (no legacy aggregate fallback) still in dataset lifecycle section
+- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset buffer/version/readiness events in dataset lifecycle section (partial: `training.eligibility.updated` → `mlairKeys.datasets.trainingEligibility`)
 - [ ] Telemetry: % trainings from Hub vs pipeline — needs product analytics
 - [ ] Serving-slot HTTP (`/v1/models/.../serving`) re-enablement — optional until product turns on
 
@@ -126,7 +126,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 - [x] **Dataset Readiness** — lifecycle/data readiness (dataset-level)
 - [x] **Execution Gate** — pipeline execution constraints (run-level); UI: *Execution Gate (Advanced)*
-- [x] **Training Eligibility** — readiness + policy + governance (dedicated API/UI split still roadmap)
+- [x] **Training Eligibility** — readiness + policy + governance (`GET /datasets/{id}/eligibility` + Hub table; status chips / full event surface still incremental)
 - [x] **Trigger Policy** — `manual | auto_ready | schedule`
 - [x] **Run Validation** — pre-execution checks used by runtime
 
@@ -158,32 +158,33 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 ### Phase 2 — Durable readiness projection
 
-- [ ] Projection/table (e.g. `dataset_readiness_snapshots`): `dataset_id`, `required_size`, `current_size`, `status`, `evaluated_at`, optional `model_id`, `policy_id`, `generated_run_id`
-- [ ] Dataset Hub: readiness history / timeline
-- [ ] Explainability from stored evaluations (“why blocked / why ready”)
+- [x] Persisted evaluations table **`dataset_readiness_evaluations`** (`dataset_id`, `dataset_version_id`, `policy_id`, sizes, `status`, `evaluated_at`, `reasons`; optional correlation fields backlog vs roadmap “snapshots” naming)
+- [x] Dataset Hub: readiness evaluation history (paginated list from API)
+- [x] Explainability from stored evaluations (reasons / status in API + Hub; richer “why” UX still Phase 3 polish)
 
 **Exit criteria (Phase 2)**
 
-- [ ] Readiness history queryable and auditable (not only ephemeral page state)
+- [x] Readiness history queryable and auditable (API + Hub; not only ephemeral page state)
 
 ### Phase 3 — Eligibility domain split
 
-- [ ] Dataset Hub: Eligible models / Blocked models + reasons
-- [ ] Status chips: readiness vs eligibility
-- [ ] APIs: `GET .../readiness/history`, `GET .../eligibility` (and full split vs single readiness call)
+- [x] Dataset Hub: Eligible models / Blocked models + reasons (driven by `GET .../eligibility` aggregate, not client-only heuristics)
+- [ ] Status chips: readiness vs eligibility (distinct visual language)
+- [x] APIs: `GET /datasets/{id}/readiness/history` (alias of evaluations list), `GET /datasets/{id}/eligibility` (and existing version-aware `GET /datasets/{id}/readiness`)
 
 **Exit criteria (Phase 3)**
 
-- [ ] UI answers “dataset ready but model not eligible?” without inference
+- [x] UI answers “dataset ready but model not eligible?” without client-side inference (per-policy rows from eligibility API)
 
 ### Phase 4 — Realtime lifecycle events
 
 - [ ] Domain events (`dataset.readiness.updated`, `model.eligibility.updated`, `training.policy.updated`)
-- [ ] Frontend: map events → `mlairKeys`; narrow invalidation
+- [x] Frontend: **`training.eligibility.updated`** → `mlairKeys.datasets.trainingEligibility` (narrow invalidation when `dataset_id` present) + existing run readiness/detail invalidation
+- [ ] Frontend: remaining dataset lifecycle events → `mlairKeys` (buffer / versions / readiness panels)
 
 **Exit criteria (Phase 4)**
 
-- [ ] Near-realtime lifecycle updates without broad cache ambiguity
+- [ ] Near-realtime lifecycle updates without broad cache ambiguity (eligibility path started; full matrix pending)
 
 ### Phase 5 — Pipeline page downgrade (soft deprecation)
 
@@ -238,7 +239,7 @@ The codebase still bridges:
 ### Link to Hub-first migration
 
 - [x] **Division of labor:** Hub migration owns **where users act** (Dataset Hub vs pipeline advanced). **This section** owns **what data means** (buffer vs immutable version vs readiness vs train input).
-- [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page.
+- [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page (eval history + eligibility API/UI shipped; buffer vs version visual distinction + copy still open).
 - [ ] **Anti-pattern:** parallel lifecycle vocabulary in pipeline UI that contradicts Hub + this contract.
 
 ---
@@ -355,17 +356,17 @@ The codebase still bridges:
 
 #### Projection table `dataset_readiness_evaluations` (target)
 
-- [ ] `dataset_id`, `dataset_version_id`, `policy_id`, `required_size`, `current_size`, `status`, `evaluated_at`, optional `generated_run_id` / correlation fields
+- [x] `dataset_id`, `dataset_version_id`, `policy_id`, `required_size`, `current_size`, `status`, `evaluated_at`, `reasons` (shipped; optional `generated_run_id` / correlation fields backlog)
 
-*(Hub already surfaces evaluation lists from API; durable table = historical audit + diff-friendly ops.)*
+*(Hub surfaces evaluation lists from API; durable rows = historical audit + diff-friendly ops.)*
 
 #### APIs
 
 **Required**
 
-- [ ] `GET /datasets/{id}/readiness` — version-centric contract (evolve existing)
-- [ ] `GET /datasets/{id}/readiness/history`
-- [ ] `GET /datasets/{id}/eligibility`
+- [x] `GET /datasets/{id}/readiness` — version-centric MVP (evolve contract / default path without legacy fallback — still open above)
+- [x] `GET /datasets/{id}/readiness/history` — alias of evaluations list
+- [x] `GET /datasets/{id}/eligibility` — aggregate per training policy (`summarize_dataset_training_eligibility`)
 
 **Optional**
 
@@ -393,8 +394,8 @@ The codebase still bridges:
 
 - [ ] Buffer panel vs versions table: visually **distinct** layers (mutable vs immutable)
 - [x] Immutable versions listed (baseline)
-- [x] Readiness block (baseline); **evaluation history** from projection — [ ]
-- [ ] Eligible / blocked models + structured reasons (needs eligibility API)
+- [x] Readiness block (baseline); **evaluation history** from persisted evaluations API + Hub list
+- [x] Eligible / blocked models + structured reasons (`GET .../eligibility` + Hub)
 - [x] Train from explicit version (Hub; expand coverage + guardrails)
 - [x] Links to lineage / runs (baseline; tighten copy)
 
@@ -422,11 +423,11 @@ The codebase still bridges:
 - [ ] `dataset.buffer.updated`
 - [ ] `dataset.version.created`
 - [ ] `dataset.readiness.updated`
-- [ ] `training.eligibility.updated`
+- [x] `training.eligibility.updated` (typed constant + emit helper; Hub invalidates eligibility query on event)
 
 #### Frontend
 
-- [ ] Map to `mlairKeys`; reduce broad invalidation; enable near-realtime Hub lifecycle panels
+- [ ] Map to `mlairKeys`; reduce broad invalidation; enable near-realtime Hub lifecycle panels (partial: **`training.eligibility.updated`** → `mlairKeys.datasets.trainingEligibility`)
 
 ---
 
