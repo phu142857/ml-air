@@ -1067,8 +1067,8 @@ def ingest_lineage_from_task(
             and source_type_for_item == "runtime_feedback"
         ):
             materialized_version_id, materialized_version = _materialize_runtime_feedback_if_needed(
-                tenant_id,
-                project_id,
+                tenant_id=tenant_id,
+                project_id=project_id,
                 dataset_id=ds,
                 source_type=source_type_for_item,
                 uri=str(uri) if uri else None,
@@ -1134,8 +1134,8 @@ def ingest_lineage_from_task(
             and source_type_for_item == "runtime_feedback"
         ):
             materialized_version_id, materialized_version = _materialize_runtime_feedback_if_needed(
-                tenant_id,
-                project_id,
+                tenant_id=tenant_id,
+                project_id=project_id,
                 dataset_id=ds,
                 source_type=source_type_for_item,
                 uri=str(uri) if uri else None,
