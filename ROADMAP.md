@@ -19,7 +19,7 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 
 ### In progress / incremental
 
-- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + callout + readiness/eligibility chips on dataset surface; adoption telemetry still open)
+- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + chips + accumulation hints; pipeline execution gate default-hidden + terminology; adoption telemetry still open)
 - [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section
 - [x] Durable readiness **evaluations** + eligibility aggregate API + `/readiness/history` — Hub Phase 2–3 baseline shipped (`dataset_readiness_evaluations`, list + Hub); Readiness v2 **default path** (no legacy aggregate fallback) still in dataset lifecycle section
 - [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (partial: `dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; `model.eligibility.updated` not emitted)
@@ -28,7 +28,7 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 
 ### Maintainer gates (each release that changes UX or API)
 
-- [ ] Terminology: readiness vs execution gate vs eligibility (docs + UI)
+- [x] Terminology: readiness vs execution gate vs eligibility (docs + UI) — `docs/api/readiness-and-gating.md` table + pipeline execution gate card + Dataset Hub chips
 - [ ] New features use `mlairKeys` consistently
 - [ ] TanStack invalidation scope reviewed for touched domains
 - [ ] Backward compatibility for pipeline/run APIs reviewed
@@ -197,12 +197,12 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 ### Phase 6 — Full Hub-first cutover
 
-- [ ] Hide legacy pipeline training controls by default (role or advanced toggle)
-- [ ] Deprecation policy if any API/UI surface removed
+- [x] Hide legacy pipeline training controls by default (role or advanced toggle) — pipeline **Execution gate** tools hidden until maintainer clicks **Show**; preference `localStorage` key `mlair:pipeline-execution-gate-tools`; optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` for always-on dev UX
+- [x] Deprecation policy if any API/UI surface removed — documented: `POST .../pipelines/{id}/check-readiness` remains supported (maintainer); UI is opt-in; primary train path stays Dataset Hub (`docs/api/readiness-and-gating.md` + this checklist)
 
 **Exit criteria (Phase 6)**
 
-- [ ] Default UX dataset/model-centric; no orchestration rewrite
+- [x] Default UX dataset/model-centric for non-maintainers (no orchestration rewrite); maintainers retain explicit opt-in to execution gate tools
 
 ### Non-goals (constraints)
 
@@ -240,7 +240,7 @@ The codebase still bridges:
 
 - [x] **Division of labor:** Hub migration owns **where users act** (Dataset Hub vs pipeline advanced). **This section** owns **what data means** (buffer vs immutable version vs readiness vs train input).
 - [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page (eval history + eligibility + buffer/version visuals + accumulation UX hints shipped; tighten any remaining pipeline-page vocabulary vs Hub in Phase 5 follow-ups).
-- [ ] **Anti-pattern:** parallel lifecycle vocabulary in pipeline UI that contradicts Hub + this contract.
+- [x] **Anti-pattern:** parallel lifecycle vocabulary in pipeline UI that contradicts Hub + this contract (pipeline list/detail subtitles + execution gate card terminology aligned with Hub-first ROADMAP; maintainer-only gate tools default-hidden)
 
 ---
 

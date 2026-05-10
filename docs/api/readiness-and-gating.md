@@ -4,6 +4,18 @@
 
 Use MLAir readiness endpoints to evaluate **training eligibility** for a dataset version under a **training policy**, to **gate pipeline execution**, and to inspect run-level readiness snapshots after the **execution gate** runs.
 
+## UI terminology (Hub vs pipeline)
+
+Keep these names aligned with the operator UI and [`ROADMAP.md`](../../ROADMAP.md):
+
+| Term | Meaning | Primary surface |
+| --- | --- | --- |
+| **Dataset Readiness** | Lifecycle evaluation on `dataset_version` + training policy (sizes, criteria, persisted evaluations). | Dataset Hub **Readiness** tab + `GET .../readiness` |
+| **Training Eligibility** | Per-policy aggregate “can train?” view (readiness outcome matrix). | Dataset Hub + `GET .../eligibility` |
+| **Execution Gate** | Pipeline/run-level check that mirrors orchestration inputs (synthetic run + `check-readiness`). | Pipeline detail — **advanced**, maintainer opt-in in UI |
+
+Training from immutable versions is initiated from **Dataset Hub**; the pipeline page remains orchestration, replay, and execution-gate debugging.
+
 ## Endpoints
 
 ### 1) `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness`

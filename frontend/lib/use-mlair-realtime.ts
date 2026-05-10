@@ -74,7 +74,8 @@ function keysDatasetHubSurface(tenantId: string, projectId: string, datasetId: s
     [...mlairKeys.datasets.readiness(tenantId, projectId, datasetId, 0)],
     [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId)],
     [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId)],
-    [...mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId)]
+    [...mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId)],
+    [...mlairKeys.datasetRuns(tenantId, projectId, datasetId)]
   ];
 }
 
@@ -141,7 +142,8 @@ function keysForEvent(
     return [
       [...mlairKeys.datasets.readiness(tenantId, projectId, rid, 0)],
       [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, rid)],
-      [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, rid)]
+      [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, rid)],
+      [...mlairKeys.datasetRuns(tenantId, projectId, rid)]
     ];
   }
   if (t === "training.policy.updated") {
@@ -159,7 +161,10 @@ function keysForEvent(
     }
     const dsid = typeof ev.payload?.dataset_id === "string" ? ev.payload.dataset_id : undefined;
     if (dsid) {
-      keys.push([...mlairKeys.datasets.trainingEligibility(tenantId, projectId, dsid)]);
+      keys.push(
+        [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, dsid)],
+        [...mlairKeys.datasetRuns(tenantId, projectId, dsid)]
+      );
     }
     return keys;
   }
