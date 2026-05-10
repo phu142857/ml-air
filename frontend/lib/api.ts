@@ -284,10 +284,14 @@ export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): P
   return data;
 }
 
-export async function fetchBootstrapContext(token: string): Promise<BootstrapContextResponse> {
+export async function fetchBootstrapContext(
+  token: string,
+  opts?: { signal?: AbortSignal }
+): Promise<BootstrapContextResponse> {
   const res = await fetch(`${API_BASE}/v1/bootstrap/context`, {
     headers: authHeaders(token),
-    cache: "no-store"
+    cache: "no-store",
+    signal: opts?.signal
   });
   const data = (await res.json()) as BootstrapContextResponse;
   if (!res.ok) throw new Error(JSON.stringify(data));

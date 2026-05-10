@@ -38,14 +38,23 @@ function deriveScopeLists(ctx: BootstrapContextResponse): {
     project_id: String(s.project_id || "").trim(),
     role: String(s.role || "").trim()
   })) as AccessibleScopeRow[];
-  const tenants = Array.from(new Set(scopes.map((s) => s.tenant_id).filter(Boolean)));
-  const tenantOptions = tenants.length ? tenants : [String(ctx.effective_scope.tenant_id || "").trim() || "default"];
-  const effectiveTenant = String(ctx.effective_scope.tenant_id || "").trim();
+  const tenantsFromScopes = Array.from(new Set(scopes.map((s) => s.tenant_id).filter(Boolean)));
+  const effTenant = String(ctx.effective_scope.tenant_id || "").trim();
+  const defTenant = String(ctx.defaults?.tenant_id || "").trim();
+  const tenantSet = new Set<string>([...tenantsFromScopes, effTenant, defTenant].filter(Boolean));
+  const tenantOptions = tenantSet.size ? Array.from(tenantSet).sort() : ["default"];
+
+  const effectiveTenant = effTenant || "default";
   const projectsForTenant = scopes
     .filter((s) => s.tenant_id === effectiveTenant)
     .map((s) => s.project_id)
     .filter(Boolean);
-  const projectOptions = Array.from(new Set(projectsForTenant));
+  const projectSet = new Set(projectsForTenant);
+  const effProject = String(ctx.effective_scope.project_id || "").trim();
+  const defProject = String(ctx.defaults?.project_id || "").trim();
+  if (effProject) projectSet.add(effProject);
+  if (defProject) projectSet.add(defProject);
+  const projectOptions = projectSet.size ? Array.from(projectSet).sort() : ["default_project"];
   return { accessibleScopes: scopes, tenantOptions, projectOptions };
 }
 
@@ -90,8 +99,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
     if (bootstrapKeyRef.current === key) return;
     bootstrapKeyRef.current = key;
     (async () => {
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 30_000);
       try {
-        const ctx = await fetchBootstrapContext(token);
+        const ctx = await fetchBootstrapContext(token, { signal: ac.signal });
         applyBootstrapState(ctx);
         setIsBootstrapped(true);
       } catch {
@@ -101,8 +112,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         setBootstrapSource("client_fallback");
         setAccessibleScopes([]);
         setTenantOptions((prev) => (prev.length ? prev : ["default"]));
-        setProjectOptions([]);
+        setProjectOptions((prev) => (prev.length ? prev : ["default_project"]));
         setIsBootstrapped(true);
+      } finally {
+        clearTimeout(tid);
       }
     })();
   }, [token, applyBootstrapState]);
@@ -113,12 +126,15 @@ export function AppContextProvider({ children }: PropsWithChildren) {
       if (!t) return;
       const showSpinner = opts?.withSpinner !== false;
       if (showSpinner) setIsScopeLoading(true);
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 30_000);
       try {
-        const ctx = await fetchBootstrapContext(t);
+        const ctx = await fetchBootstrapContext(t, { signal: ac.signal });
         applyBootstrapState(ctx);
       } catch {
         // keep prior state on failure
       } finally {
+        clearTimeout(tid);
         if (showSpinner) setIsScopeLoading(false);
       }
     },
