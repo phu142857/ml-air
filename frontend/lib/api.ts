@@ -809,6 +809,7 @@ export async function fetchDatasetBuffer(tenantId: string, projectId: string, da
     buffer_id: string | null;
     dataset_id: string;
     source_type: string;
+    canonical_source_type?: string;
     current_size: number;
     record_count?: number;
     target_threshold: number;
@@ -1509,6 +1510,8 @@ export type DatasetVersionItem = {
   dataset_id: string;
   dataset_name: string;
   source_type?: string;
+  /** From API: import | runtime_accumulated | manual | generated | unknown */
+  canonical_source_type?: string;
   record_count?: number;
   status?: "ready" | "warning" | "failed";
   quality_score?: number;

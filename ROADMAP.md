@@ -29,7 +29,7 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 ### Maintainer gates (each release that changes UX or API)
 
 - [x] Terminology: readiness vs execution gate vs eligibility (docs + UI) — `docs/api/readiness-and-gating.md` table + pipeline execution gate card + Dataset Hub chips
-- [ ] New features use `mlairKeys` consistently
+- [x] New features use `mlairKeys` consistently (dataset lifecycle realtime paths use `keysDatasetHubSurface`; no stray `["dataset-…"]` invalidation keys in app code)
 - [ ] TanStack invalidation scope reviewed for touched domains
 - [ ] Backward compatibility for pipeline/run APIs reviewed
 - [ ] `make up` (or full quickstart) then `make test-all` on release commit
@@ -271,7 +271,7 @@ The codebase still bridges:
 
 #### Goals
 
-- [ ] No **implicit** materialization; triggers (threshold / schedule / manual) are explicit in API + UI
+- [x] No **implicit** materialization; triggers (threshold / schedule / manual) are explicit in API + UI (buffer PATCH + schedule tick + manual materialize + Hub copy; further contract tests still welcome)
 - [ ] Remove “default / sticky version” confusion in product defaults
 - [ ] Deterministic version allocation under concurrency (see **Concurrency & transaction safety**)
 - [ ] Enterprise ingestion strategies documented and tested per enum value
@@ -311,7 +311,7 @@ The codebase still bridges:
 
 **Contract completion**
 
-- [ ] Normalize `source_type` to a small documented enum in API + UI (`import` / `runtime_accumulated` / `manual` / `generated` — map from current literals)
+- [x] Normalize `source_type` to a small documented enum in API + UI (`import` / `runtime_accumulated` / `manual` / `generated` — map from current literals) — additive **`canonical_source_type`** on version list/detail + buffer `GET` (`app/dataset_source_type.py`), UI + OpenAPI + `docs/api/readiness-and-gating.md`; **DB column literals unchanged** until a migration
 - [ ] Add `materialized_at` (or document canonical timestamp) if `created_at` is insufficient for audit
 
 ---
@@ -324,7 +324,7 @@ The codebase still bridges:
 
 **Gaps vs full contract**
 
-- [ ] Column naming / docs: `window_*` vs “strategy window” language in Hub
+- [x] Column naming / docs: `window_*` vs “strategy window” language in Hub (Accumulation tab explains `window_start` / `window_end` vs schedule tick)
 - [ ] Buffer row metrics + alerts (see **Observability & SRE**)
 
 #### Ingestion pipeline split

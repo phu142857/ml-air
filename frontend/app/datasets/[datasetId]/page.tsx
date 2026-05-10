@@ -30,6 +30,7 @@ import {
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
+import { datasetSourceTypeBadge, datasetVersionSourceBadge } from "@/lib/dataset-source-type";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
 import { executeTrainingIntent } from "@/lib/training-intent";
 import { useAppContext } from "@/lib/app-context";
@@ -57,26 +58,6 @@ function DomainChip({ kind }: { kind: "readiness" | "eligibility" }) {
       {c.label}
     </span>
   );
-}
-
-function sourceTypeBadge(sourceType: string | null | undefined): { label: string; className: string } {
-  const raw = String(sourceType || "manual_upload").trim().toLowerCase();
-  if (raw === "csv_import" || raw === "manual_upload") {
-    return {
-      label: "IMPORTED DATASET",
-      className: "border-primary/40 bg-primary/10 text-primary"
-    };
-  }
-  if (raw === "runtime_feedback" || raw === "runtime_accumulation") {
-    return {
-      label: "RUNTIME ACCUMULATED",
-      className: "border-border bg-secondary text-muted-foreground"
-    };
-  }
-  return {
-    label: raw.toUpperCase().replace(/_/g, " "),
-    className: "border-border bg-muted text-muted-foreground"
-  };
 }
 
 function formatEvaluationReasons(reasons: Array<string | Record<string, unknown>> | undefined): string {
@@ -542,7 +523,7 @@ export default function DatasetHubPage() {
                 <div>
                   Latest source:{" "}
                   {(() => {
-                    const b = sourceTypeBadge(versionsQuery.data?.items?.[0]?.source_type);
+                    const b = datasetVersionSourceBadge(versionsQuery.data?.items?.[0] || {});
                     return (
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
                         {b.label}
@@ -999,7 +980,28 @@ export default function DatasetHubPage() {
                 ) : null}
                 <div className="space-y-2 border-t border-border pt-3">
                 <div>buffer_id: <span className="font-mono text-foreground">{String(bufferQuery.data.buffer_id || "—")}</span></div>
-                <div>source_type: <span className="font-semibold text-foreground">{String(bufferQuery.data.source_type || "runtime_feedback")}</span></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>source_type (stored):</span>
+                  <span className="font-mono text-xs text-foreground">
+                    {String(bufferQuery.data.source_type || "runtime_feedback")}
+                  </span>
+                  {(() => {
+                    const b = datasetSourceTypeBadge(
+                      bufferQuery.data.canonical_source_type || bufferQuery.data.source_type
+                    );
+                    return (
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
+                        {b.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <span className="font-semibold text-foreground">window_start</span> /{" "}
+                  <span className="font-semibold text-foreground">window_end</span> describe the buffer strategy window from
+                  ingestion/materialization services (not the same as a calendar schedule tick — see schedule strategy notes
+                  above).
+                </p>
                 <div>accumulation_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.accumulation_strategy || "snapshot_on_threshold")}</span></div>
                 <div>window_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_strategy || "threshold")}</span></div>
                 <div>window_status: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_status || "active")}</span></div>
@@ -1051,7 +1053,7 @@ export default function DatasetHubPage() {
                       </td>
                       <td className="px-3 py-2">
                         {(() => {
-                          const b = sourceTypeBadge(v.source_type);
+                          const b = datasetVersionSourceBadge(v);
                           return (
                             <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
                               {b.label}

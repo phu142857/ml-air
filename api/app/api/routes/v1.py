@@ -34,6 +34,7 @@ from app.services.project_service import list_projects, list_tenants, register_p
 from app.services.queue_service import replay_dlq_for_run
 from app.services import pipeline_version_service
 from app.services import search_service
+from app.dataset_source_type import canonical_dataset_source_type
 from app.services import lineage_service
 from app.services import readiness_service
 from app.services import realtime_events as rt
@@ -1429,6 +1430,7 @@ def get_dataset_buffer_v1(
         "buffer_id": None,
         "dataset_id": dataset_id,
         "source_type": "runtime_feedback",
+        "canonical_source_type": canonical_dataset_source_type("runtime_feedback"),
         "current_size": int((ds or {}).get("current_size") or 0),
         "record_count": int((ds or {}).get("current_size") or 0),
         "target_threshold": 1000,

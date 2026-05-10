@@ -2855,6 +2855,14 @@ components:
           type: string
         source_type:
           type: string
+          description: |
+            Buffer lineage literal (often mirrors dataset ingest path). Typical values include `runtime_feedback`,
+            `csv_import`, `manual_upload`. Operator UIs map these to canonical categories (import / runtime_accumulated / …);
+            see `frontend/lib/dataset-source-type.ts`.
+        canonical_source_type:
+          type: string
+          enum: [import, runtime_accumulated, manual, generated, unknown]
+          description: Derived category for clients (additive; storage literal remains in `source_type`).
         current_size:
           type: integer
         record_count:
@@ -2956,6 +2964,17 @@ components:
 
     DatasetVersionRow:
       type: object
+      properties:
+        source_type:
+          type: string
+          description: |
+            Immutable version lineage literal (e.g. `csv_import`, `manual_upload`, `runtime_feedback`, `runtime_accumulation`,
+            `manual`, `generated`). UIs SHOULD map literals to canonical import / runtime_accumulated / manual / generated
+            buckets for consistent copy (see `frontend/lib/dataset-source-type.ts`).
+        canonical_source_type:
+          type: string
+          enum: [import, runtime_accumulated, manual, generated, unknown]
+          description: Server-derived category (mirrors `app/dataset_source_type.py`).
       additionalProperties: true
 
     DatasetVersionDeleteResult:

@@ -277,6 +277,10 @@ Response:
 - `{"status":"VALID"}` on success
 - `BLOCKED` error payload on failure
 
+## Dataset / buffer `source_type` literals
+
+APIs persist **storage literals** on `dataset_versions.source_type` and buffer rows (for example `csv_import`, `manual_upload`, `runtime_feedback`, `runtime_accumulation`). List/detail version responses and buffer `GET` now include additive **`canonical_source_type`** (`import` \| `runtime_accumulated` \| `manual` \| `generated` \| `unknown`) from `app/dataset_source_type.py`, while the column literals stay unchanged. The Dataset Hub uses the same categories client-side — see `frontend/lib/dataset-source-type.ts`.
+
 ## Command
 
 ```bash

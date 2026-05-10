@@ -13,6 +13,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from app.dataset_source_type import canonical_dataset_source_type
 from app.services.db_service import db_conn
 from app.services import realtime_events as rt
 from app.services.trace_service import get_trace_id
@@ -223,10 +224,12 @@ def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict
             row = cur.fetchone()
     if not row:
         return None
+    st = row[1]
     return {
         "buffer_id": row[0],
         "dataset_id": dataset_id,
-        "source_type": row[1],
+        "source_type": st,
+        "canonical_source_type": canonical_dataset_source_type(str(st) if st is not None else None),
         "current_size": int(row[2] or 0),
         "record_count": int(row[2] or 0),
         "target_threshold": int(row[3] or 0),
@@ -1255,6 +1258,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             "checksum": r[3],
             "created_at": r[4].isoformat(),
             "source_type": r[5] or "manual_upload",
+            "canonical_source_type": canonical_dataset_source_type(str(r[5]) if r[5] is not None else "manual_upload"),
             "record_count": int(r[6] or 0),
             "status": r[7] or "ready",
             "quality_score": int(r[8] or 0),
@@ -1302,6 +1306,7 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
             row = cur.fetchone()
     if not row:
         return None
+    st = row[7] or "manual_upload"
     return {
         "version_id": row[0],
         "version": row[1],
@@ -1310,7 +1315,8 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "created_at": row[4].isoformat(),
         "dataset_id": row[5],
         "dataset_name": row[6],
-        "source_type": row[7] or "manual_upload",
+        "source_type": st,
+        "canonical_source_type": canonical_dataset_source_type(str(st)),
         "record_count": int(row[8] or 0),
         "status": row[9] or "ready",
         "quality_score": int(row[10] or 0),
