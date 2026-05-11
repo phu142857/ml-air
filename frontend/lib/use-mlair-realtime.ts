@@ -141,7 +141,7 @@ function keysForEvent(
         ["model-recent-runs", tenantId, projectId, mid]
       );
     }
-    keys.push(["dataset-training-eligibility", tenantId, projectId]);
+    keys.push([...mlairKeys.datasets.trainingEligibilityProjectPrefix(tenantId, projectId)]);
     return keys;
   }
   if (t === "dataset.updated") {

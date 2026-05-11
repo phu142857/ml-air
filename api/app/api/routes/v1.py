@@ -17,13 +17,13 @@ from app.services.model_registry_service import (
     get_model,
     get_model_status,
     get_model_version_approval,
-    # list_model_serving_slots,  # serving slots API temporarily disabled
+    list_model_serving_slots,
     list_model_versions,
     list_models,
     preview_next_model_artifact_uri,
     promote_model_version,
     resolve_model_pipeline,
-    # set_model_serving_slot,
+    set_model_serving_slot,
     update_model_version_approval,
     upsert_model_pipeline_mapping,
 )
@@ -119,6 +119,10 @@ class ModelPipelineMappingIn(BaseModel):
 class CheckReadinessIn(BaseModel):
     training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
+    dataset_version_id: str | None = Field(
+        default=None,
+        description="Optional: validated and merged into override_config and plugin_context for version-aware check run.",
+    )
 
 
 class LineageIngestIn(BaseModel):
@@ -197,6 +201,34 @@ def _blocked(detail_reason: str, details: str, *, status_code: int = 422) -> HTT
     )
 
 
+def _serving_slots_http_enabled() -> bool:
+    return os.getenv("ML_AIR_ENABLE_SERVING_SLOTS_HTTP", "0").strip() == "1"
+
+
+def _require_declared_dataset_inputs_enabled() -> bool:
+    return os.getenv("ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS", "0").strip() == "1"
+
+
+def _ensure_declared_readiness_inputs(merged_override: dict, pipeline_version_config: dict) -> None:
+    if not _require_declared_dataset_inputs_enabled():
+        return
+    rows = readiness_service.effective_declared_readiness_inputs(merged_override, pipeline_version_config)
+    if rows:
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "status": "BLOCKED",
+            "reason": "NO_DECLARED_DATASET_INPUTS",
+            "details": (
+                "No dataset readiness inputs: set override_config.inputs or pipeline version config.inputs, "
+                "or use POST .../runs/trigger. Default ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=0 keeps legacy "
+                "vacuous-ready behavior; set to 1 to enforce."
+            ),
+        },
+    )
+
+
 def _merge_pinned_dataset_version_for_run(
     tenant_id: str,
     project_id: str,
@@ -208,13 +240,24 @@ def _merge_pinned_dataset_version_for_run(
     """If ``dataset_version_id`` is set, validate and pin it into override_config and plugin_context."""
     ov = dict(override_config or {})
     ctx = dict(plugin_context or {})
-    vid = str(dataset_version_id or "").strip() or None
+    top = str(dataset_version_id or "").strip() or None
+    nested = str(ov.get("dataset_version_id") or "").strip() or None
+    if top and nested and top != nested:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "BLOCKED",
+                "reason": "DATASET_VERSION_PIN_CONFLICT",
+                "details": "dataset_version_id conflicts with override_config.dataset_version_id",
+            },
+        )
+    vid = top or nested
     if not vid:
         return ov, ctx
     dv = lineage_service.get_dataset_version(tenant_id, project_id, vid)
     if not dv:
         raise HTTPException(status_code=404, detail="dataset_version_not_found")
-    ov.setdefault("dataset_version_id", vid)
+    ov["dataset_version_id"] = vid
     ctx.setdefault("dataset_version_id", vid)
     return ov, ctx
 
@@ -268,8 +311,8 @@ class ModelApprovalUpdateIn(BaseModel):
     reason: str | None = None
 
 
-# class SetServingSlotIn(BaseModel):
-#     version: int = Field(ge=1)
+class SetServingSlotIn(BaseModel):
+    version: int = Field(ge=1)
 
 
 class TriggerPolicyIn(BaseModel):
@@ -361,9 +404,9 @@ def trigger_run_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    pipeline_cfg: dict = {}
     if payload.pipeline_version_id or payload.use_latest_pipeline_version:
         selected_pv = payload.pipeline_version_id
-        pipeline_cfg: dict = {}
         if selected_pv:
             pv_row = pipeline_version_service.get_pipeline_version(selected_pv)
             if not pv_row or pv_row.get("tenant_id") != tenant_id or pv_row.get("project_id") != project_id:
@@ -392,6 +435,7 @@ def trigger_run_v1(
         plugin_context=payload.context,
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -598,6 +642,20 @@ def check_pipeline_readiness_v1(
     latest = get_latest_run_for_pipeline(tenant_id, project_id, pipeline_id)
     if not latest:
         raise HTTPException(status_code=404, detail="pipeline_has_no_runs")
+    pipeline_cfg: dict = {}
+    lpv = latest.get("pipeline_version_id")
+    if lpv:
+        pv_row = pipeline_version_service.get_pipeline_version(lpv)
+        if pv_row and isinstance(pv_row.get("config"), dict):
+            pipeline_cfg = pv_row.get("config") or {}
+    merged_ov, merged_ctx = _merge_pinned_dataset_version_for_run(
+        tenant_id,
+        project_id,
+        override_config=payload.override_config,
+        plugin_context={},
+        dataset_version_id=payload.dataset_version_id,
+    )
+    _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -607,7 +665,8 @@ def check_pipeline_readiness_v1(
         max_parallel_tasks=1,
         trace_id=get_trace_id(),
         training_mode=payload.training_mode,
-        override_config=payload.override_config,
+        plugin_context=merged_ctx or None,
+        override_config=merged_ov,
         pipeline_version_id=latest.get("pipeline_version_id"),
     )
     result = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
@@ -660,6 +719,7 @@ def run_pipeline_with_gating_v1(
         plugin_context=payload.context,
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -875,6 +935,7 @@ def runtime_config_v1() -> dict:
         "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
         "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
         "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
+        "serving_slots_http": _serving_slots_http_enabled(),
     }
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
@@ -2106,45 +2167,45 @@ def put_model_version_approval_v1(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-# --- Serving slots API temporarily disabled (restore imports + SetServingSlotIn + handlers) ---
-# @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving")
-# def get_model_serving_v1(
-#     tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
-# ) -> dict:
-#     principal = authenticate_bearer(authorization)
-#     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-#     row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
-#     if not row:
-#         raise HTTPException(status_code=404, detail="model_not_found")
-#     return list_model_serving_slots(model_id)
-#
-#
-# @router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}")
-# def put_model_serving_slot_v1(
-#     tenant_id: str,
-#     project_id: str,
-#     model_id: str,
-#     slot: str,
-#     payload: SetServingSlotIn,
-#     authorization: str | None = Header(default=None),
-# ) -> dict:
-#     principal = authenticate_bearer(authorization)
-#     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-#     row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
-#     if not row:
-#         raise HTTPException(status_code=404, detail="model_not_found")
-#     try:
-#         return set_model_serving_slot(
-#             tenant_id=tenant_id,
-#             project_id=project_id,
-#             model_id=model_id,
-#             slot=slot,
-#             version=payload.version,
-#         )
-#     except ValueError as exc:
-#         if str(exc) == "invalid_serving_slot":
-#             raise HTTPException(status_code=422, detail=str(exc)) from exc
-#         raise HTTPException(status_code=404, detail=str(exc)) from exc
+if _serving_slots_http_enabled():
+
+    @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving")
+    def get_model_serving_v1(
+        tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+    ) -> dict:
+        principal = authenticate_bearer(authorization)
+        authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+        row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="model_not_found")
+        return list_model_serving_slots(model_id)
+
+    @router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}")
+    def put_model_serving_slot_v1(
+        tenant_id: str,
+        project_id: str,
+        model_id: str,
+        slot: str,
+        payload: SetServingSlotIn,
+        authorization: str | None = Header(default=None),
+    ) -> dict:
+        principal = authenticate_bearer(authorization)
+        authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+        row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="model_not_found")
+        try:
+            return set_model_serving_slot(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                model_id=model_id,
+                slot=slot,
+                version=payload.version,
+            )
+        except ValueError as exc:
+            if str(exc) == "invalid_serving_slot":
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")

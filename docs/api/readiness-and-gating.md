@@ -209,8 +209,8 @@ Body:
 ```json
 {
   "training_mode": "quick|standard|full",
+  "dataset_version_id": "<optional_version_id>",
   "override_config": {
-    "dataset_version_id": "<optional_version_id>",
     "inputs": [
       { "dataset": "user_events", "required_size": 50 }
     ]
@@ -218,7 +218,11 @@ Body:
 }
 ```
 
-Put `dataset_version_id` under `override_config` (as above) for this endpoint. When it is present and the resolved input row matches that version’s `dataset_id`, the gate uses **`dataset_versions.record_count`** for that input instead of mutable **`datasets.current_size`** (same pin semantics as `POST .../runs/trigger`).
+Top-level **`dataset_version_id`** is optional; when set, the API validates it and merges the pin into **`override_config`** and **`plugin_context`** on the synthetic check run (same helper as gated **`POST .../pipelines/.../run`**). You may instead nest **`dataset_version_id`** only under **`override_config`**; behavior is equivalent unless both differ (nested value wins for `override_config`; prefer one source).
+
+When a pin is present and the resolved input row matches that version’s `dataset_id`, the gate uses **`dataset_versions.record_count`** for that input instead of mutable **`datasets.current_size`**.
+
+The scheduler **`auto_ready`** probe forwards **`dataset_version_id`** the same way when the cloned **`override_config`** from the latest model-version run includes it.
 
 Response includes:
 
@@ -284,6 +288,39 @@ Request body:
 Response:
 - `{"status":"VALID"}` on success
 - `BLOCKED` error payload on failure
+
+## Pipeline and run API compatibility (backward compatibility)
+
+Review snapshot for operators integrating **pipeline execution** and **run triggers** without silent semantic drift.
+
+### Additive request fields (no breaking JSON shape)
+
+- **`POST .../runs`** and **`POST .../pipelines/{pipeline_id}/run`** (`TriggerRunRequest`): optional top-level **`dataset_version_id`**. When omitted, behavior matches pre-pin deployments (readiness still uses `override_config.inputs` and mutable `datasets.current_size` unless callers nest a pin under `override_config`).
+- **`POST .../pipelines/{pipeline_id}/check-readiness`** (`CheckReadinessRequest`): same optional top-level **`dataset_version_id`**, merged like gated runs.
+
+### Pin consistency
+
+- If both top-level **`dataset_version_id`** and **`override_config.dataset_version_id`** are present and **differ**, the API returns **422** with `reason: DATASET_VERSION_PIN_CONFLICT` (see [`post-runs-trigger.md`](./post-runs-trigger.md) error table for `/runs/trigger` and the same guard on shared merge paths).
+
+### Environment toggles (rollback levers)
+
+- **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED`** (default **`1`**): `POST .../runs/trigger` requires an explicit dataset version id; set **`0`** only to allow implicit “latest version” fallback (documented in [`post-runs-trigger.md`](./post-runs-trigger.md)).
+- **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`**: dataset **`GET .../readiness`** aggregate fallback when no materialized version exists (strict default **`0`** in this roadmap; see strict-mode notes in §1 above).
+- **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS`** (default **`0`**): when **`1`**, **`POST .../runs`**, **`POST .../pipelines/{pipeline_id}/run`**, and **`POST .../pipelines/{pipeline_id}/check-readiness`** return **422** `reason: NO_DECLARED_DATASET_INPUTS` unless **`override_config.inputs`** or the resolved pipeline version **`config.inputs`** declares at least one dataset name (same precedence as **`check_run_readiness`**). Use **`POST .../runs/trigger`** for model+dataset-first training without hand-building `inputs`.
+
+### Readiness gate semantics (non-breaking enhancement)
+
+- **`check_run_readiness`** uses **`dataset_versions.record_count`** for an input row when a pin is present in **`override_config`** or **`plugin_context`**, instead of always using **`datasets.current_size`** for that row. Callers who do not send a pin see the legacy aggregate path unchanged.
+
+### Scheduler auto-trigger
+
+- Reuses **`override_config`** cloned from the model’s latest version run; forwards **`dataset_version_id`** to **`check-readiness`** and **`POST .../pipelines/.../run`** when present so pins align with interactive runs.
+
+No stable URL paths or HTTP verbs were removed in these slices; changes are **optional fields**, **stricter validation when conflicting pins are sent**, and **clearer readiness math** when a pin exists.
+
+### Optional train-intent telemetry (browser)
+
+For adoption metrics (“Hub **`POST .../runs/trigger`**” vs “pipeline **`POST .../pipelines/.../run`**”), the Next.js client can **opt in** to a JSON beacon via **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL`** (and optional **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`**). Implementation: `frontend/lib/train-intent-telemetry.ts`, invoked from `triggerRunFromModelDataset` / `triggerPipelineRunWithGating` in `frontend/lib/api.ts`. The endpoint must accept anonymous `POST` + CORS from the UI origin if used cross-origin.
 
 ## Dataset / buffer `source_type` literals
 

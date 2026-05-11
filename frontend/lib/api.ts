@@ -1,3 +1,5 @@
+import { recordTrainIntentTelemetry } from "./train-intent-telemetry";
+
 type RuntimeConfigGlobal = {
   __ML_AIR_RUNTIME_CONFIG__?: { api_base_url?: string | null; realtime_base_url?: string | null } | null;
 };
@@ -557,7 +559,12 @@ export async function checkPipelineReadiness(
   projectId: string,
   pipelineId: string,
   token: string,
-  payload: { training_mode: string; override_config?: Record<string, unknown> }
+  payload: {
+    training_mode: string;
+    override_config?: Record<string, unknown>;
+    /** Optional; when set, gate uses dataset_versions.record_count for that snapshot. */
+    dataset_version_id?: string;
+  }
 ) {
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${normalizeProjectId(projectId)}/pipelines/${encodeURIComponent(pipelineId)}/check-readiness`,
@@ -586,12 +593,21 @@ export async function triggerPipelineRunWithGating(
     pipeline_version_id?: string;
     use_latest_pipeline_version?: boolean;
     override_config?: Record<string, unknown>;
+    /** When set, validated server-side and merged into override_config + context (immutable snapshot gate). */
+    dataset_version_id?: string;
     /** Passed to MLAir as run plugin_context (e.g. mlair_model_id for post-train registry update). */
     context?: Record<string, unknown>;
   }
 ) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  recordTrainIntentTelemetry({
+    intent: "pipeline_gated_run",
+    tenant_id: tenantId,
+    project_id: scopedProjectId,
+    pipeline_id: pipelineId
+  });
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${normalizeProjectId(projectId)}/pipelines/${encodeURIComponent(pipelineId)}/run`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/pipelines/${encodeURIComponent(pipelineId)}/run`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(token) },
@@ -1194,6 +1210,13 @@ export async function triggerRunFromModelDataset(
   }
 ) {
   const scopedProjectId = normalizeProjectId(projectId);
+  recordTrainIntentTelemetry({
+    intent: "hub_runs_trigger",
+    tenant_id: tenantId,
+    project_id: scopedProjectId,
+    dataset_id: payload.dataset_id,
+    model_id: payload.model_id
+  });
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/trigger`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
@@ -1441,7 +1464,7 @@ export async function updateModelVersionApproval(
   return data as ModelVersionItem;
 }
 
-/** Requires `GET .../serving` — route commented out in `api/app/api/routes/v1.py` until serving slots ship again. */
+/** Requires API `ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1` (GET .../serving mounted at process start). */
 export async function fetchModelServing(tenantId: string, projectId: string, modelId: string, token: string) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/serving`, {
     headers: authHeaders(token),
@@ -1452,7 +1475,7 @@ export async function fetchModelServing(tenantId: string, projectId: string, mod
   return data as ModelServingMatrix;
 }
 
-/** Requires `PUT .../serving/{slot}` — route commented out in `api/app/api/routes/v1.py` until serving slots ship again. */
+/** Requires API `ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1` (PUT .../serving/{slot}). */
 export async function setModelServingSlot(
   tenantId: string,
   projectId: string,

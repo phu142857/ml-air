@@ -11,9 +11,8 @@ info:
     unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`), optional **serving slot** assignments
     (`candidate` | `challenger` | `champion` | `canary`), plus optional promote webhooks for downstream systems.
 
-    **Note:** The **serving** HTTP paths below match the intended contract; in the default repo tree their
-    FastAPI handlers may be **commented out** in `api/app/api/routes/v1.py` (DB table `model_serving_slots` and
-    service code may still exist). Prefer the running OpenAPI doc from the server or `v1.py` when integrating.
+    **Serving slots:** `GET|PUT .../models/{model_id}/serving` are mounted when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**
+    at API process start (default `0`). **`GET /v1/runtime-config`** exposes `features.serving_slots_http` for UIs.
 
     **Runs, readiness, datasets, lineage, pipeline versions, tracking, search, and plugins** sections
     in this file are kept aligned with `api/app/api/routes/v1.py` (draft; prefer the running service
@@ -179,6 +178,11 @@ paths:
                 $ref: "#/components/schemas/CheckReadinessResponse"
         "404":
           description: pipeline_has_no_runs
+        "422":
+          description: |
+            Validation or BLOCKED payload. When API env `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`,
+            missing `override_config.inputs` and missing pipeline-version `config.inputs` yields
+            `reason: NO_DECLARED_DATASET_INPUTS`.
 
   /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run:
     post:
@@ -201,6 +205,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GatedRunResponse"
+        "422":
+          description: |
+            Validation or BLOCKED (missing plugin, pin conflict, etc.). When API env
+            `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`, missing declared readiness `inputs` yields
+            `reason: NO_DECLARED_DATASET_INPUTS`.
 
   /v1/tenants/{tenant_id}/projects/{project_id}/runs:
     post:
@@ -222,6 +231,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RunRow"
+        "422":
+          description: |
+            Validation or BLOCKED (missing plugin, pin conflict, etc.). When API env
+            `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`, missing declared readiness `inputs` on the
+            request and on the resolved pipeline version config yields `reason: NO_DECLARED_DATASET_INPUTS`.
     get:
       tags: [Runs]
       summary: List runs in project
@@ -1816,7 +1830,7 @@ paths:
       tags: [Models]
       summary: List serving slot assignments for a model
       description: |
-        Contract path; may be **unmounted** in `v1.py` until serving slots are re-shipped (see repo root README / ARCHITECTURE §7).
+        Mounted only when API env **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at startup (otherwise route absent / 404 from router).
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
@@ -1836,7 +1850,7 @@ paths:
       tags: [Models]
       summary: Assign a model version to a serving slot
       description: |
-        Contract path; may be **unmounted** in `v1.py` until serving slots are re-shipped (see repo root README / ARCHITECTURE §7).
+        Mounted only when API env **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at startup.
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
@@ -2490,6 +2504,10 @@ components:
 
     TriggerRunRequest:
       type: object
+      description: >
+        Shared body for POST .../runs and POST .../pipelines/{pipeline_id}/run. When API env
+        ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1, callers must supply readiness dataset rows via
+        override_config.inputs and/or the resolved pipeline version config.inputs (see readiness-and-gating.md).
       required: [pipeline_id]
       properties:
         pipeline_id:
@@ -2543,6 +2561,10 @@ components:
         override_config:
           type: object
           additionalProperties: true
+        dataset_version_id:
+          type: string
+          nullable: true
+          description: Optional pin; merged into override_config and plugin_context (same as TriggerRunRequest).
 
     CheckReadinessResponse:
       type: object

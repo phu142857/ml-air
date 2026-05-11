@@ -159,6 +159,22 @@ export default function DatasetHubPage() {
     enabled: Boolean(datasetId && token),
     ...realtimeFallbackPolling()
   });
+
+  useEffect(() => {
+    setSelectedVersionId("");
+    setEvaluationPage(0);
+    setMaxEvaluationPage(0);
+  }, [datasetId]);
+
+  useEffect(() => {
+    const items = versionsQuery.data?.items || [];
+    if (!items.length) return;
+    if (!selectedVersionId) return;
+    if (!items.some((v) => v.version_id === selectedVersionId)) {
+      setSelectedVersionId("");
+    }
+  }, [versionsQuery.data?.items, selectedVersionId]);
+
   const selectedVersionForReadiness = useMemo(() => {
     const items = versionsQuery.data?.items || [];
     if (!items.length) return undefined;
@@ -305,10 +321,19 @@ export default function DatasetHubPage() {
     ...realtimeFallbackPolling()
   });
 
-  const readinessVersionSelectOptions = useMemo(
-    () => (versionsQuery.data?.items || []).map((v) => ({ value: v.version_id, label: String(v.version) })),
-    [versionsQuery.data?.items]
-  );
+  const readinessVersionSelectOptions = useMemo(() => {
+    const items = versionsQuery.data?.items || [];
+    if (!items.length) return [];
+    const head = items[0];
+    const older =
+      items.length <= 1
+        ? []
+        : items.slice(1).map((v) => ({
+            value: v.version_id,
+            label: `v${v.version}`
+          }));
+    return [{ value: "", label: `Latest (v${head.version})` }, ...older];
+  }, [versionsQuery.data?.items]);
   const policySelectOptions = useMemo(
     () =>
       (policiesQuery.data?.items || []).map((p) => ({
@@ -451,6 +476,13 @@ export default function DatasetHubPage() {
     ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)} · readiness + eligibility + train live here`
     : "Primary surface for versions, readiness, eligibility matrix, and intent-driven train (pipeline = advanced execution gate)";
 
+  const lineageVersionRow = useMemo(() => {
+    const items = versionsQuery.data?.items || [];
+    const vid = selectedVersionForReadiness;
+    if (!vid) return null;
+    return items.find((v) => v.version_id === vid) ?? null;
+  }, [versionsQuery.data?.items, selectedVersionForReadiness]);
+
   return (
     <RouteShell
       activeNav="Datasets"
@@ -465,10 +497,17 @@ export default function DatasetHubPage() {
           ← All datasets
         </Link>
         <Link
-          href={`/lineage?datasetVersionId=${encodeURIComponent(versionsQuery.data?.items?.[0]?.version_id || "")}`}
-          className={`rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-secondary ${!versionsQuery.data?.items?.[0]?.version_id ? "pointer-events-none opacity-50" : ""}`}
+          href={`/lineage?datasetVersionId=${encodeURIComponent(selectedVersionForReadiness || "")}`}
+          className={`rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-secondary ${!selectedVersionForReadiness ? "pointer-events-none opacity-50" : ""}`}
+          title={
+            lineageVersionRow
+              ? `Open lineage for v${lineageVersionRow.version}${selectedVersionId ? " (explicit)" : " (latest default)"}`
+              : undefined
+          }
         >
-          Lineage (latest version)
+          {lineageVersionRow
+            ? `Lineage (v${lineageVersionRow.version}${selectedVersionId ? "" : " · latest"})`
+            : "Lineage"}
         </Link>
       </div>
 
@@ -629,7 +668,10 @@ export default function DatasetHubPage() {
             <CardContent>
               <div className="text-[11px] text-muted-foreground">
                 Version scope:{" "}
-                <span className="font-mono text-foreground">{selectedVersionForReadiness || "latest"}</span>
+                <span className="font-mono text-foreground">{selectedVersionForReadiness || "—"}</span>
+                {!selectedVersionId && selectedVersionForReadiness ? (
+                  <span className="text-muted-foreground"> (default: newest version)</span>
+                ) : null}
               </div>
               <div className="mt-2 space-y-2 text-xs">
                 {trainingEligibilityRows.length ? (
@@ -684,7 +726,7 @@ export default function DatasetHubPage() {
               <label className="text-xs text-muted-foreground">
                 Version for readiness
                 <SelectDropdown
-                  value={selectedVersionForReadiness || ""}
+                  value={selectedVersionId}
                   onChange={setSelectedVersionId}
                   options={readinessVersionSelectOptions}
                   className="mt-1"

@@ -19,19 +19,19 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 
 ### In progress / incremental
 
-- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + chips + accumulation hints; pipeline execution gate default-hidden + terminology; adoption telemetry still open)
-- [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section
+- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + chips + accumulation hints; pipeline execution gate default-hidden + terminology + optional **dataset_version_id** pin; **opt-in** train-intent browser beacon for Hub vs pipeline — operator dashboards / hosted analytics still product-owned)
+- [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section (progress: strict `/runs/trigger`, pin merge on **`POST /runs`** / **`pipelines/.../run`** / **`check-readiness`**, **`check_run_readiness`** uses **`record_count`** when pinned, scheduler forwards pin, **`DATASET_VERSION_PIN_CONFLICT`** guard; opt-in **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`** rejects **`POST /runs`** / gated run / **`check-readiness`** when neither override nor pipeline version declares **`inputs`** — default **`0`** keeps legacy vacuous-ready runs)
 - [x] Durable readiness **evaluations** + eligibility aggregate API + `/readiness/history` — Hub Phase 2–3 baseline shipped (`dataset_readiness_evaluations`, list + Hub); Readiness v2 **default path** (no legacy aggregate fallback) still in dataset lifecycle section
-- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (partial: `dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; **`model.eligibility.updated`** emitted on model governance/registry changes → model keys + project-wide `dataset-training-eligibility` invalidation)
-- [ ] Telemetry: % trainings from Hub vs pipeline — needs product analytics
-- [ ] Serving-slot HTTP (`/v1/models/.../serving`) re-enablement — optional until product turns on
+- [x] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (`dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; **`model.eligibility.updated`** emit + invalidate model keys + **`mlairKeys.datasets.trainingEligibilityProjectPrefix`**); product “freshness telemetry” remains under snapshot **Telemetry** row
+- [x] Telemetry: % trainings from Hub vs pipeline — **opt-in client beacon** (`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` + `frontend/lib/train-intent-telemetry.ts`; intents `hub_runs_trigger` vs `pipeline_gated_run`); product dashboards / server aggregation still external
+- [x] Serving-slot HTTP (`/v1/models/.../serving`) — behind **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (mount at API startup); UI uses **`runtime-config.features.serving_slots_http`** (`frontend/lib/use-serving-slots-http-feature.ts`)
 
 ### Maintainer gates (each release that changes UX or API)
 
 - [x] Terminology: readiness vs execution gate vs eligibility (docs + UI) — `docs/api/readiness-and-gating.md` table + pipeline execution gate card + Dataset Hub chips
 - [x] New features use `mlairKeys` consistently (dataset lifecycle realtime paths use `keysDatasetHubSurface`; no stray `["dataset-…"]` invalidation keys in app code)
-- [ ] TanStack invalidation scope reviewed for touched domains
-- [ ] Backward compatibility for pipeline/run APIs reviewed
+- [x] TanStack invalidation scope reviewed for touched domains — dataset lifecycle + `model.eligibility.updated` use `mlairKeys` / `keysDatasetHubSurface`; project-wide eligibility invalidation uses **`mlairKeys.datasets.trainingEligibilityProjectPrefix`** (no ad-hoc key drift)
+- [x] Backward compatibility for pipeline/run APIs reviewed — [`docs/api/readiness-and-gating.md`](docs/api/readiness-and-gating.md) § **Pipeline and run API compatibility (backward compatibility)** (additive fields, env rollback levers, pin conflict 422, scheduler alignment)
 - [ ] `make up` (or full quickstart) then `make test-all` on release commit
 - [ ] Fresh DB: Alembic head; migrations called out in release notes
 - [ ] Tag + push; `CHANGELOG.md`; optional README “current tag” one-liner
@@ -149,7 +149,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 - [x] Dataset Hub = default mental model in copy + onboarding for readiness + train (per-dataset hub callout + subtitle; list page already Hub-first; product telemetry still open)
 - [x] Pipeline gate UI remains advanced/ops path without regressions
-- [ ] Adoption metrics: % `/runs/trigger` from Hub vs pipeline (needs telemetry)
+- [x] Adoption metrics: % `/runs/trigger` from Hub vs pipeline — **opt-in** client beacon (`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL`; server aggregation / dashboards still external)
 
 **Exit criteria (Phase 1)**
 
@@ -181,12 +181,12 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 - [x] Domain events (partial): `dataset.buffer.updated`, `dataset.version.created`, `dataset.readiness.updated` (emit from lineage/readiness); **`training.policy.updated`** (emit on training-policy create/upsert); **`training.eligibility.updated`** (run-scoped emit); **`model.eligibility.updated`** (emit from model registry on promote, approval, version create/delete, serving slot updates, model delete)
 - [x] Frontend: **`training.eligibility.updated`** → `mlairKeys.datasets.trainingEligibility` (narrow invalidation when `dataset_id` present) + existing run readiness/detail invalidation
-- [x] Frontend: **`model.eligibility.updated`** → `mlairKeys.models.*` for the affected model + project prefix `["dataset-training-eligibility", tenant, project]` (invalidates all per-dataset eligibility queries)
+- [x] Frontend: **`model.eligibility.updated`** → `mlairKeys.models.*` for the affected model + **`mlairKeys.datasets.trainingEligibilityProjectPrefix`** (invalidates all per-dataset eligibility queries in the project)
 - [x] Frontend: dataset lifecycle events → shared narrow invalidation (`dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / **`training.policy.updated`** → `mlairKeys.datasets` buffer, versions, detail, readiness prefix, evaluations, eligibility, policies)
 
 **Exit criteria (Phase 4)**
 
-- [ ] Near-realtime lifecycle updates without broad cache ambiguity (Hub dataset keys covered; cross-page model-only lifecycle events still incremental)
+- [x] Near-realtime lifecycle updates without broad cache ambiguity (Hub dataset keys + **`model.eligibility.updated`** project eligibility prefix; remaining gap is optional product-wide “model page” subscriptions beyond registry list)
 
 ### Phase 5 — Pipeline page downgrade (soft deprecation)
 
@@ -252,7 +252,7 @@ The codebase still bridges:
 
 - [x] **Dataset version** = immutable training snapshot (`dataset_versions`; monotonic integer `version` scoped per dataset)
 - [x] **Readiness** = evaluation on **dataset version + policy** (persisted history = **Readiness v2** backlog)
-- [ ] **Training** always consumes explicit **`dataset_version_id`** on every supported path (including compat shims — no silent “train on mutable head”) — **partial:** `POST .../runs/trigger` defaults to strict (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`, opt-out `=0`); **`check_run_readiness`** uses pinned version **`record_count`** when `dataset_version_id` is present in `override_config` or `plugin_context` (gate no longer compares mutable `datasets.current_size` for that input); **`POST .../runs`** and **`POST .../pipelines/{pipeline_id}/run`** accept optional top-level **`dataset_version_id`** (validated, merged into override + context); model **auto-trigger** (`POST .../pipelines/.../run` from scheduler) remains pipeline-only / legacy-capable unless policy payload is extended
+- [ ] **Training** always consumes explicit **`dataset_version_id`** on every supported path (including compat shims — no silent “train on mutable head”) — **partial:** `POST .../runs/trigger` defaults to strict (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`, opt-out `=0`); **`check_run_readiness`** uses pinned version **`record_count`** when `dataset_version_id` is present in `override_config` or `plugin_context` (gate no longer compares mutable `datasets.current_size` for that input); **`POST .../runs`** and **`POST .../pipelines/{pipeline_id}/run`** accept optional top-level **`dataset_version_id`** (validated, merged into override + context); model **auto-trigger** reuses latest model version’s run **`override_config`** (including optional **`dataset_version_id`**) and forwards that id as top-level on **`POST .../pipelines/.../run`** so **`plugin_context`** is pinned consistently
 - [x] **Accumulation buffer** = mutable runtime ingestion (`dataset_accumulation_buffers`)
 - [x] **Runtime ingestion** does not rewrite historical version rows; materialization **adds** a new `dataset_versions` row
 - [x] **Imported** and **runtime-accumulated** datasets share the **same versioning model** (`source_type` + buffer lineage)
@@ -274,7 +274,7 @@ The codebase still bridges:
 #### Goals
 
 - [x] No **implicit** materialization; triggers (threshold / schedule / manual) are explicit in API + UI (buffer PATCH + schedule tick + manual materialize + Hub copy; further contract tests still welcome)
-- [ ] Remove “default / sticky version” confusion in product defaults
+- [x] Remove “default / sticky version” confusion in product defaults — Hub: explicit **Latest (vN)** row in readiness version `SelectDropdown` (value `""` = newest list head, not a hidden second selection); **Lineage** link follows resolved version; **invalid/stale** `version_id` cleared when versions refetch; **dataset change** resets version selection + eval pagination
 - [ ] Deterministic version allocation under concurrency (see **Concurrency & transaction safety**)
 - [ ] Enterprise ingestion strategies documented and tested per enum value
 

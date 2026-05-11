@@ -307,9 +307,14 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
     override_config = policy.get("override_config") or {}
     context = {"auto_trigger": {"model_id": model_id, "reason": reason}}
     if reason == "auto_ready":
+        check_body: dict = {"training_mode": mode, "override_config": override_config}
+        if isinstance(override_config, dict):
+            _vid = str(override_config.get("dataset_version_id") or "").strip()
+            if _vid:
+                check_body["dataset_version_id"] = _vid
         check = _api_post(
             f"/v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness",
-            {"training_mode": mode, "override_config": override_config},
+            check_body,
             timeout=15,
         )
         if not check or not bool(check.get("ready")):
@@ -324,6 +329,10 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
         "override_config": override_config,
         "context": context,
     }
+    if isinstance(override_config, dict):
+        vid = str(override_config.get("dataset_version_id") or "").strip()
+        if vid:
+            payload["dataset_version_id"] = vid
     out = _api_post(
         f"/v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run",
         payload,

@@ -64,7 +64,7 @@ Use this as a quick “what exists today” view. Detailed delivery history live
 
 ### In progress / incremental (not a blocker to run the stack)
 
-- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — see `[ROADMAP.md](ROADMAP.md)`. Adoption telemetry from Hub vs pipeline is still optional.)
+- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — see `[ROADMAP.md](ROADMAP.md)`. **Optional** Hub vs pipeline train-intent beacon: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (+ debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`); see `docs/api/readiness-and-gating.md` § *Optional train-intent telemetry*.)
 - **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback remains in ROADMAP dataset lifecycle section.)
 - **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
 
@@ -183,7 +183,11 @@ Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI
 | `ML_AIR_JWT_HS256_SECRET`  | HS256 JWT for API auth                     | dev secret in `.env.example`                                     |
 | `ML_AIR_TRACKING_TOKEN`    | Service token for scheduler/executor → API | `maintainer-token` (example)                                     |
 | `ML_AIR_MANIFEST_*`        | Replay / manifest signing policy           | see `.env.example`                                               |
+| `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS` | When `1`, `POST .../runs`, gated pipeline run, and pipeline `check-readiness` require `override_config.inputs` or version `config.inputs` | `0` (see `docs/api/readiness-and-gating.md`) |
+| `ML_AIR_ENABLE_SERVING_SLOTS_HTTP` | When `1`, mount model **serving slot** routes (`GET|PUT .../serving`); `runtime-config.features.serving_slots_http` mirrors for the UI | `0` |
 | `NEXT_PUBLIC_API_BASE_URL` | Browser → API base URL                     | `http://localhost:8080`                                          |
+| `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` | Optional JSON `POST` beacon for train intent (Hub vs pipeline) | empty (disabled) |
+| `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG` | Log train-intent payloads to browser console (`1` = on) | empty |
 | `COMPOSE_FILE`             | Makefile / scripts default compose         | `deploy/docker-compose.quickstart.yml`                           |
 
 
@@ -194,7 +198,7 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 ## API
 
 - **Base path:** `/v1`
-- **Contract draft:** `[openapi-v1-draft.yaml](openapi-v1-draft.yaml)` — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** paths may remain in the draft while `**GET|PUT .../models/{id}/serving`** is disabled in `v1.py` until re-enabled; UI mirrors this (`ENABLE_SERVING_SLOTS_UI` on model pages).
+- **Contract draft:** `[openapi-v1-draft.yaml](openapi-v1-draft.yaml)` — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls.
 - **Narrative API docs:** `[docs/api/](docs/api/)`
 
 **Examples**

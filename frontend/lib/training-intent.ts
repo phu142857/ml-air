@@ -21,6 +21,7 @@ export type TrainingIntentPipelineCompat = {
   kind: "pipeline_compat";
   pipelineId: string;
   trainingMode: string;
+  datasetVersionId?: string;
   overrideConfig?: Record<string, unknown>;
   idempotencyKey?: string | null;
   priority?: string;
@@ -58,6 +59,7 @@ export async function executeTrainingIntent(
     priority: intent.priority ?? "normal",
     max_parallel_tasks: intent.maxParallelTasks ?? 1,
     training_mode: intent.trainingMode,
+    dataset_version_id: intent.datasetVersionId,
     override_config: intent.overrideConfig,
     pipeline_version_id: intent.pipelineVersionId,
     use_latest_pipeline_version: intent.useLatestPipelineVersion,

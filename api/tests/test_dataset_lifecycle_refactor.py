@@ -197,6 +197,19 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["details"][0]["actual_size"], 200)
         self.assertEqual(out["details"][0].get("dataset_version_id"), "ver-pin-1")
 
+    def test_effective_declared_readiness_inputs_override_over_snapshot(self) -> None:
+        snap = {"inputs": [{"dataset": "from-snap", "required_size": 1}]}
+        ovr = {"inputs": [{"dataset": "from-ovr", "required_size": 2}]}
+        rows = readiness_service.effective_declared_readiness_inputs(ovr, snap)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["dataset"], "from-ovr")
+
+    def test_effective_declared_readiness_inputs_empty_override_uses_snapshot(self) -> None:
+        snap = {"inputs": [{"dataset": "only-snap", "required_size": 5}]}
+        rows = readiness_service.effective_declared_readiness_inputs({"inputs": []}, snap)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["dataset"], "only-snap")
+
 
 if __name__ == "__main__":
     unittest.main()

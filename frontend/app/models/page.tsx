@@ -25,15 +25,14 @@ import { useAppContext } from "@/lib/app-context";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
-
-/** Set `true` when serving slot routes are re-enabled in `api/app/api/routes/v1.py`. */
-const ENABLE_SERVING_SLOTS_UI = false;
+import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
 export default function ModelsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const servingSlotsUi = useServingSlotsHttpFeature();
   const { tenantId, projectId, token } = useAppContext();
   const [selectedModelId, setSelectedModelId] = useState("");
   const [newModelName, setNewModelName] = useState("demo-model");
@@ -84,7 +83,7 @@ export default function ModelsPage() {
   const servingQuery = useQuery({
     queryKey: mlairKeys.models.serving(tenantId, projectId, selectedModelId),
     queryFn: () => fetchModelServing(tenantId, effectiveProjectId, selectedModelId, token),
-    enabled: ENABLE_SERVING_SLOTS_UI && !!selectedModelId && !!selectedModel && projectId !== "all",
+    enabled: servingSlotsUi && !!selectedModelId && !!selectedModel && projectId !== "all",
     ...realtimeFallbackPolling()
   });
   const previewArtifactQuery = useQuery({
@@ -410,7 +409,7 @@ export default function ModelsPage() {
                   Import model and create version (staging)
                 </Button>
               </div>
-              {ENABLE_SERVING_SLOTS_UI ? (
+              {servingSlotsUi ? (
                 <div className="mb-3 rounded-xl border border-border bg-muted p-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-xs font-semibold text-foreground">Serving slots</h3>

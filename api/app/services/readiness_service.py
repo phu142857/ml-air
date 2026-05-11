@@ -40,6 +40,14 @@ def _parse_inputs(payload: Any) -> list[dict[str, Any]]:
     return out
 
 
+def effective_declared_readiness_inputs(override_config: Any, snapshot_config: Any) -> list[dict[str, Any]]:
+    """Same precedence as ``check_run_readiness``: use ``override_config.inputs`` when non-empty, else snapshot ``inputs``."""
+    o = _parse_inputs(override_config)
+    if o:
+        return o
+    return _parse_inputs(snapshot_config)
+
+
 def _to_required_size(raw: Any, fallback: int) -> int:
     try:
         val = int(raw)

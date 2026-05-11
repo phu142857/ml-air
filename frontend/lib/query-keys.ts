@@ -31,6 +31,9 @@ export const mlairKeys = {
     /** GET .../eligibility (per-policy rows); invalidate with `exact: false` for all version-scoped fetches. */
     trainingEligibility: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-training-eligibility", tenantId, projectId, datasetId] as const,
+    /** Prefix for all eligibility rows in a project (use with `exact: false`, e.g. `model.eligibility.updated`). */
+    trainingEligibilityProjectPrefix: (tenantId: string, projectId: string) =>
+      ["dataset-training-eligibility", tenantId, projectId] as const,
     trainingPolicies: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-training-policies", tenantId, projectId, datasetId] as const,
     versions: (tenantId: string, projectId: string, datasetId: string) =>

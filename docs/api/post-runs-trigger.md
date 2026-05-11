@@ -61,7 +61,7 @@ Run is set to **`FAILED`** in MLAir. Response still **200** with:
 | HTTP | Typical `detail` / shape |
 |------|---------------------------|
 | 404 | `model_not_found`, `dataset_not_found`, `dataset_version_not_found` |
-| 422 | `DATASET_VERSION_REQUIRED` (strict lifecycle mode), `dataset_has_no_versions`, `pipeline_has_no_version_in_project`, or `BLOCKED` object (`MODEL_PIPELINE_UNRESOLVED`, `NO_PLUGIN`, `PLUGIN_NOT_FOUND`, …) |
+| 422 | `DATASET_VERSION_REQUIRED` (strict lifecycle mode), `DATASET_VERSION_PIN_CONFLICT` (top-level `dataset_version_id` disagrees with `override_config.dataset_version_id`), `dataset_has_no_versions`, `pipeline_has_no_version_in_project`, or `BLOCKED` object (`MODEL_PIPELINE_UNRESOLVED`, `NO_PLUGIN`, `PLUGIN_NOT_FOUND`, …) |
 
 ## `pipeline_id_override`
 
@@ -85,7 +85,8 @@ curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_proj
 ## Related
 
 - [Model-centric pipeline mapping and run trigger](../guides/model-centric-pipeline-mapping-and-trigger.md) — mapping table and `resolved-pipeline`.
-- [Readiness and Gating API](./readiness-and-gating.md) — how `inputs` and `training_mode` interact; pipeline **`POST .../pipelines/{pipeline_id}/run`** and **`POST .../runs`** share **`TriggerRunRequest`**, including optional top-level **`dataset_version_id`** (same pin semantics for the execution gate).
+- [Readiness and Gating API](./readiness-and-gating.md) — how `inputs` and `training_mode` interact; pipeline **`POST .../pipelines/{pipeline_id}/run`** and **`POST .../runs`** share **`TriggerRunRequest`**, including optional top-level **`dataset_version_id`** (same pin semantics for the execution gate). **Backward-compatibility review** for run/pipeline payloads: same doc, section *Pipeline and run API compatibility*.
+- **Train-intent telemetry (browser, opt-in):** same doc, section *Optional train-intent telemetry* — `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` distinguishes **`hub_runs_trigger`** vs **`pipeline_gated_run`** from the Next client (`frontend/lib/train-intent-telemetry.ts`).
 - OpenAPI: [`openapi-v1-draft.yaml`](../../openapi-v1-draft.yaml) (`TriggerRunByModelRequest`).
 
 ## Done

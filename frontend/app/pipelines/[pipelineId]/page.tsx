@@ -28,6 +28,8 @@ export default function PipelineDetailPage() {
   const [isChecking, setIsChecking] = useState(false);
   /** Must match the `dataset` string in this pipeline's readiness inputs (pipeline version config). */
   const [readinessDatasetInput, setReadinessDatasetInput] = useState("");
+  /** Optional `dataset_versions.version_id` — pins execution gate to immutable row count. */
+  const [readinessDatasetVersionId, setReadinessDatasetVersionId] = useState("");
 
   const { data } = useQuery({
     queryKey: mlairKeys.pipelines.dag(tenantId, projectId, pipelineId),
@@ -166,6 +168,17 @@ export default function PipelineDetailPage() {
                   />
                 </label>
               </div>
+              <div className="mb-3">
+                <label className="text-xs text-muted-foreground">
+                  Optional dataset version id (immutable snapshot)
+                  <input
+                    value={readinessDatasetVersionId}
+                    onChange={(e) => setReadinessDatasetVersionId(e.target.value)}
+                    placeholder="dataset_versions.version_id — leave empty to use mutable aggregate size"
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2 font-mono text-xs text-foreground"
+                  />
+                </label>
+              </div>
               <TrainingGateFields
                 trainingMode={trainingMode}
                 onTrainingModeChange={setTrainingMode}
@@ -186,8 +199,10 @@ export default function PipelineDetailPage() {
                     setIsChecking(true);
                     try {
                       const required = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
+                      const vid = readinessDatasetVersionId.trim();
                       const res = await checkPipelineReadiness(tenantId, projectId, pipelineId, token, {
                         training_mode: trainingMode,
+                        ...(vid ? { dataset_version_id: vid } : {}),
                         override_config: {
                           inputs: [{ dataset: datasetName, required_size: required }]
                         }
