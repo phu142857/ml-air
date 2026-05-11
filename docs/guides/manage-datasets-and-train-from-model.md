@@ -24,7 +24,7 @@ Strategy reference: [Dataset accumulation strategies](./dataset-accumulation-str
 Recommended navigation:
 
 1. Open `Datasets` and select dataset hub (`/datasets/{dataset_id}`).
-2. Evaluate **training eligibility**: `GET .../datasets/{dataset_id}/readiness` with a chosen `policy_id` and `dataset_version_id` (policy owns thresholds such as `required_size`; the response includes `eligibility_status` and `eligibility_criteria`).
+2. Check **training eligibility**: `GET .../datasets/{dataset_id}/readiness` with a chosen `policy_id` and `dataset_version_id` (read-only derived state). Use `POST .../readiness/evaluate` when you need a persisted audit row in evaluation history.
 3. Select model + dataset version.
 4. Trigger training via intent-driven endpoint (`POST /runs/trigger`).
 5. Track run and readiness snapshot in run detail.
