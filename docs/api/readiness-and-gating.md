@@ -210,12 +210,15 @@ Body:
 {
   "training_mode": "quick|standard|full",
   "override_config": {
+    "dataset_version_id": "<optional_version_id>",
     "inputs": [
       { "dataset": "user_events", "required_size": 50 }
     ]
   }
 }
 ```
+
+Put `dataset_version_id` under `override_config` (as above) for this endpoint. When it is present and the resolved input row matches that version’s `dataset_id`, the gate uses **`dataset_versions.record_count`** for that input instead of mutable **`datasets.current_size`** (same pin semantics as `POST .../runs/trigger`).
 
 Response includes:
 
@@ -235,6 +238,7 @@ Body:
   "pipeline_id": "<pipeline_id>",
   "idempotency_key": "my-run-key",
   "training_mode": "standard",
+  "dataset_version_id": "<optional_version_id>",
   "override_config": {
     "inputs": [
       { "dataset": "user_events", "required_size": 1000 }
@@ -242,6 +246,10 @@ Body:
   }
 }
 ```
+
+Top-level `dataset_version_id` is optional; when set, the API validates it and merges the same pin into `override_config` and `context` before gating (equivalent to nesting it under `override_config` only).
+
+`POST /v1/tenants/{tenant_id}/projects/{project_id}/runs` accepts the same optional top-level `dataset_version_id` on the shared **TriggerRun** body.
 
 Response adds:
 

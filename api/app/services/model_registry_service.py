@@ -160,6 +160,33 @@ def _model_scope_for_id(model_id: str) -> tuple[str, str, str] | None:
     return str(row[0]), str(row[1]), str(row[2])
 
 
+def _notify_model_eligibility_updated(
+    model_id: str,
+    action: str,
+    *,
+    updated_at: datetime | None = None,
+    version: int | None = None,
+    stage: str | None = None,
+    approval_status: str | None = None,
+) -> None:
+    scope = _model_scope_for_id(model_id)
+    if not scope:
+        return
+    tenant_id, project_id, _ = scope
+    ua = updated_at if isinstance(updated_at, datetime) else datetime.now(timezone.utc)
+    rt.emit_model_eligibility_updated(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        action=str(action),
+        updated_at=ua,
+        trace_id=get_trace_id(),
+        version=version,
+        stage=stage,
+        approval_status=approval_status,
+    )
+
+
 def _default_artifact_uri(model_id: str, version_num: int) -> str | None:
     scope = _model_scope_for_id(model_id)
     if not scope:
@@ -213,7 +240,15 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
                 ),
             )
             row = cur.fetchone()
-    return _version_row_to_dict(row)
+    out = _version_row_to_dict(row)
+    _notify_model_eligibility_updated(
+        model_id,
+        "version_created",
+        updated_at=now,
+        version=int(out.get("version") or version_num),
+        stage=str(out.get("stage") or stage) if (out.get("stage") or stage) else None,
+    )
+    return out
 
 
 def _safe_filename(name: str) -> str:
@@ -305,6 +340,13 @@ def create_model_version_from_upload(
             row = cur.fetchone()
     out = _version_row_to_dict(row)
     out["metadata_generated"] = metadata_generated
+    _notify_model_eligibility_updated(
+        model_id,
+        "version_created",
+        updated_at=now,
+        version=int(out.get("version") or version_num),
+        stage=str(out.get("stage") or stage) if (out.get("stage") or stage) else None,
+    )
     return out
 
 
@@ -389,6 +431,13 @@ def create_model_version_from_uploads(
     out = _version_row_to_dict(row)
     out["metadata_generated"] = metadata_generated
     out["uploaded_files"] = safe_saved_names
+    _notify_model_eligibility_updated(
+        model_id,
+        "version_created",
+        updated_at=now,
+        version=int(out.get("version") or version_num),
+        stage=str(out.get("stage") or stage) if (out.get("stage") or stage) else None,
+    )
     return out
 
 
@@ -410,14 +459,19 @@ def list_model_versions(model_id: str) -> list[dict]:
 
 
 def delete_model(model_id: str) -> bool:
+    scope = _model_scope_for_id(model_id)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM models WHERE model_id = %s", (model_id,))
             deleted = cur.rowcount
-    return bool(deleted)
+    ok = bool(deleted)
+    if ok and scope:
+        _notify_model_eligibility_updated(model_id, "model_deleted", updated_at=datetime.now(timezone.utc))
+    return ok
 
 
 def delete_model_version(model_id: str, version: int) -> bool:
+    scope = _model_scope_for_id(model_id)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -425,7 +479,15 @@ def delete_model_version(model_id: str, version: int) -> bool:
                 (model_id, int(version)),
             )
             deleted = cur.rowcount
-    return bool(deleted)
+    ok = bool(deleted)
+    if ok and scope:
+        _notify_model_eligibility_updated(
+            model_id,
+            "version_deleted",
+            updated_at=datetime.now(timezone.utc),
+            version=int(version),
+        )
+    return ok
 
 
 def promote_model_version(model_id: str, version: int, stage: str = "production") -> dict:
@@ -478,6 +540,13 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
             stage=str(out.get("stage") or stage_norm),
             updated_at=ua,
             trace_id=get_trace_id(),
+        )
+        _notify_model_eligibility_updated(
+            model_id,
+            "promote",
+            updated_at=ua,
+            version=int(version),
+            stage=str(out.get("stage") or stage_norm),
         )
     return out
 
@@ -777,7 +846,16 @@ def update_model_version_approval(
             row = cur.fetchone()
     if not row:
         raise ValueError("model_version_not_found")
-    return _version_row_to_dict(row)
+    out = _version_row_to_dict(row)
+    _notify_model_eligibility_updated(
+        model_id,
+        "approval_updated",
+        updated_at=now,
+        version=int(version),
+        stage=str(out.get("stage") or "") or None,
+        approval_status=str(out.get("approval_status") or "") or None,
+    )
+    return out
 
 
 def list_model_serving_slots(model_id: str) -> dict:
@@ -837,4 +915,11 @@ def set_model_serving_slot(
                 """,
                 (model_id, sl, version_id),
             )
+    _notify_model_eligibility_updated(
+        model_id,
+        "serving_slot_updated",
+        updated_at=datetime.now(timezone.utc),
+        version=int(version),
+        stage=None,
+    )
     return list_model_serving_slots(model_id)

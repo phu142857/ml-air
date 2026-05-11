@@ -85,7 +85,7 @@ curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_proj
 ## Related
 
 - [Model-centric pipeline mapping and run trigger](../guides/model-centric-pipeline-mapping-and-trigger.md) — mapping table and `resolved-pipeline`.
-- [Readiness and Gating API](./readiness-and-gating.md) — how `inputs` and `training_mode` interact.
+- [Readiness and Gating API](./readiness-and-gating.md) — how `inputs` and `training_mode` interact; pipeline **`POST .../pipelines/{pipeline_id}/run`** and **`POST .../runs`** share **`TriggerRunRequest`**, including optional top-level **`dataset_version_id`** (same pin semantics for the execution gate).
 - OpenAPI: [`openapi-v1-draft.yaml`](../../openapi-v1-draft.yaml) (`TriggerRunByModelRequest`).
 
 ## Done

@@ -21,6 +21,7 @@ class EventType(str, Enum):
     RUN_UPDATED = "run.updated"
     TASK_UPDATED = "task.updated"
     MODEL_PROMOTED = "model.promoted"
+    MODEL_ELIGIBILITY_UPDATED = "model.eligibility.updated"
     DATASET_UPDATED = "dataset.updated"
     DATASET_BUFFER_UPDATED = "dataset.buffer.updated"
     DATASET_VERSION_CREATED = "dataset.version.created"
@@ -202,6 +203,42 @@ def emit_model_promoted(
                 "stage": stage,
                 "updated_at": dt_to_unix(updated_at),
             },
+        )
+    )
+
+
+def emit_model_eligibility_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    action: str,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+    version: int | None = None,
+    stage: str | None = None,
+    approval_status: str | None = None,
+) -> None:
+    """Model governance / registry change that may affect training eligibility or Hub model surfaces."""
+    payload: dict[str, Any] = {
+        "model_id": model_id,
+        "action": str(action),
+        "updated_at": dt_to_unix(updated_at),
+    }
+    if version is not None:
+        payload["version"] = int(version)
+    if stage is not None:
+        payload["stage"] = str(stage)
+    if approval_status is not None:
+        payload["approval_status"] = str(approval_status)
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.MODEL_ELIGIBILITY_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=model_id,
+            trace_id=trace_id,
+            payload=payload,
         )
     )
 

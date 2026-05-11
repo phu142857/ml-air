@@ -22,7 +22,7 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 - [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + chips + accumulation hints; pipeline execution gate default-hidden + terminology; adoption telemetry still open)
 - [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section
 - [x] Durable readiness **evaluations** + eligibility aggregate API + `/readiness/history` — Hub Phase 2–3 baseline shipped (`dataset_readiness_evaluations`, list + Hub); Readiness v2 **default path** (no legacy aggregate fallback) still in dataset lifecycle section
-- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (partial: `dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; `model.eligibility.updated` not emitted)
+- [ ] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (partial: `dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; **`model.eligibility.updated`** emitted on model governance/registry changes → model keys + project-wide `dataset-training-eligibility` invalidation)
 - [ ] Telemetry: % trainings from Hub vs pipeline — needs product analytics
 - [ ] Serving-slot HTTP (`/v1/models/.../serving`) re-enablement — optional until product turns on
 
@@ -161,6 +161,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 - [x] Persisted evaluations table **`dataset_readiness_evaluations`** (`dataset_id`, `dataset_version_id`, `policy_id`, sizes, `status`, `evaluated_at`, `reasons`; optional correlation fields backlog vs roadmap “snapshots” naming)
 - [x] Dataset Hub: readiness evaluation history (paginated list from API)
 - [x] Explainability from stored evaluations (reasons / status in API + Hub; richer “why” UX still Phase 3 polish)
+- [x] Evaluation history query tuning: indexes on `(tenant, project, dataset, status, evaluated_at desc)` + partial index for `policy_id IS NOT NULL`; **`GET .../readiness/evaluations`** and **`/readiness/history`** accept optional **`status`** and **`policy_id`** (Hub passes **`status`** for paginated filter)
 
 **Exit criteria (Phase 2)**
 
@@ -178,8 +179,9 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 ### Phase 4 — Realtime lifecycle events
 
-- [x] Domain events (partial): `dataset.buffer.updated`, `dataset.version.created`, `dataset.readiness.updated` (emit from lineage/readiness); **`training.policy.updated`** (emit on training-policy create/upsert); **`training.eligibility.updated`** (run-scoped emit); **`model.eligibility.updated`** — not emitted (reserved)
+- [x] Domain events (partial): `dataset.buffer.updated`, `dataset.version.created`, `dataset.readiness.updated` (emit from lineage/readiness); **`training.policy.updated`** (emit on training-policy create/upsert); **`training.eligibility.updated`** (run-scoped emit); **`model.eligibility.updated`** (emit from model registry on promote, approval, version create/delete, serving slot updates, model delete)
 - [x] Frontend: **`training.eligibility.updated`** → `mlairKeys.datasets.trainingEligibility` (narrow invalidation when `dataset_id` present) + existing run readiness/detail invalidation
+- [x] Frontend: **`model.eligibility.updated`** → `mlairKeys.models.*` for the affected model + project prefix `["dataset-training-eligibility", tenant, project]` (invalidates all per-dataset eligibility queries)
 - [x] Frontend: dataset lifecycle events → shared narrow invalidation (`dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / **`training.policy.updated`** → `mlairKeys.datasets` buffer, versions, detail, readiness prefix, evaluations, eligibility, policies)
 
 **Exit criteria (Phase 4)**
@@ -250,7 +252,7 @@ The codebase still bridges:
 
 - [x] **Dataset version** = immutable training snapshot (`dataset_versions`; monotonic integer `version` scoped per dataset)
 - [x] **Readiness** = evaluation on **dataset version + policy** (persisted history = **Readiness v2** backlog)
-- [ ] **Training** always consumes explicit **`dataset_version_id`** on every supported path (including compat shims — no silent “train on mutable head”)
+- [ ] **Training** always consumes explicit **`dataset_version_id`** on every supported path (including compat shims — no silent “train on mutable head”) — **partial:** `POST .../runs/trigger` defaults to strict (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`, opt-out `=0`); **`check_run_readiness`** uses pinned version **`record_count`** when `dataset_version_id` is present in `override_config` or `plugin_context` (gate no longer compares mutable `datasets.current_size` for that input); **`POST .../runs`** and **`POST .../pipelines/{pipeline_id}/run`** accept optional top-level **`dataset_version_id`** (validated, merged into override + context); model **auto-trigger** (`POST .../pipelines/.../run` from scheduler) remains pipeline-only / legacy-capable unless policy payload is extended
 - [x] **Accumulation buffer** = mutable runtime ingestion (`dataset_accumulation_buffers`)
 - [x] **Runtime ingestion** does not rewrite historical version rows; materialization **adds** a new `dataset_versions` row
 - [x] **Imported** and **runtime-accumulated** datasets share the **same versioning model** (`source_type` + buffer lineage)
@@ -434,9 +436,9 @@ The codebase still bridges:
 
 ### Concurrency & transaction safety
 
-- [ ] Advisory lock / `SELECT FOR UPDATE` on hot materialization path (verify overlap with DB tests)
+- [x] Advisory lock / `SELECT FOR UPDATE` on hot materialization path (`pg_advisory_xact_lock` + `FOR UPDATE` in `lineage_service._materialize_runtime_feedback_if_needed`)
 - [x] Materialization idempotency key (partial guarantee)
-- [ ] Metrics + logs for duplicate / retry outcomes
+- [x] Metrics + logs for duplicate / retry outcomes (Prometheus counters + structured logs include idempotent hit + trace_id)
 
 ---
 
@@ -444,21 +446,21 @@ The codebase still bridges:
 
 #### Metrics (target)
 
-- [ ] `accumulation_current_size` / gauge family per dataset or buffer id (cardinality-aware)
-- [ ] `accumulation_target_threshold`
-- [ ] `materialization_attempt_total`
-- [ ] `materialization_version_created_total`
-- [ ] `materialization_failure_total`
+- [x] `accumulation_current_size` / gauge family per dataset or buffer id (cardinality-aware) — exported as `mlair_dataset_accumulation_current_size` (grouped by `strategy`/`source_type`/`window_status`)
+- [x] `accumulation_target_threshold` — exported as `mlair_dataset_accumulation_target_threshold` (grouped by `strategy`/`source_type`/`window_status`)
+- [x] `materialization_attempt_total` (exported as `mlair_dataset_materialization_attempt_total`)
+- [x] `materialization_version_created_total` (exported as `mlair_dataset_materialization_version_created_total`)
+- [x] `materialization_failure_total` (exported as `mlair_dataset_materialization_failure_total`)
 
 #### Structured logs
 
-- [ ] Include `dataset_id`, `strategy`, `threshold`, `current_size` before/after, `version`, `idempotency_key`, `trace_id`
+- [x] Include `dataset_id`, `strategy`, `threshold`, `current_size` before/after, `version`, `idempotency_key`, `trace_id` (`dataset_materialized` + `dataset_materialization_idempotent_hit`)
 
 #### Alerts
 
-- [ ] Buffer not reset after successful materialization
-- [ ] Repeated materialization failure burst
-- [ ] Version allocator / uniqueness collision
+- [x] Buffer not reset after successful materialization (heuristic alert in `deploy/monitoring/alerts/mlair-alerts.yml`)
+- [x] Repeated materialization failure burst (alert in `deploy/monitoring/alerts/mlair-alerts.yml`)
+- [x] Version allocator / uniqueness collision (`mlair_dataset_materialization_unique_violation_total` + retry / idempotency resolve in `lineage_service._materialize_runtime_feedback_if_needed`; alert `MlAirDatasetMaterializationUniqueViolation`)
 
 ---
 

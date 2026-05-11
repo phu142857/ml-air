@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services.db_service import db_conn
+from app.services import lineage_service
 from app.services.run_service import get_run
 
 TRAINING_MODE_MIN_ROWS = {
@@ -117,6 +118,20 @@ def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[st
     mode_min_rows = TRAINING_MODE_MIN_ROWS.get(mode, TRAINING_MODE_MIN_ROWS["full"])
     override_cfg = run.get("override_config") or {}
     snapshot_cfg = run.get("config_snapshot") or {}
+    pctx = run.get("plugin_context") or {}
+    if not isinstance(pctx, dict):
+        pctx = {}
+    pinned_vid = str(override_cfg.get("dataset_version_id") or pctx.get("dataset_version_id") or "").strip() or None
+    pinned_dataset_id: str | None = None
+    pinned_record_count: int | None = None
+    if pinned_vid:
+        dv = lineage_service.get_dataset_version(tenant_id, project_id, pinned_vid)
+        if dv and isinstance(dv, dict):
+            pinned_dataset_id = str(dv.get("dataset_id") or "").strip() or None
+            try:
+                pinned_record_count = int(dv.get("record_count") or 0)
+            except Exception:
+                pinned_record_count = 0
 
     declared_inputs = _parse_inputs(override_cfg) or _parse_inputs(snapshot_cfg)
     details: list[dict[str, Any]] = []
@@ -125,6 +140,8 @@ def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[st
         name = str(item.get("dataset") or "").strip()
         required_size = _to_required_size(item.get("required_size"), mode_min_rows)
         dataset_id, actual_size = _dataset_actual_size(tenant_id, project_id, name)
+        if pinned_dataset_id and dataset_id and dataset_id == pinned_dataset_id and pinned_record_count is not None:
+            actual_size = int(pinned_record_count)
         status = "READY" if actual_size >= required_size else "NOT_READY"
         row = {
             "dataset_id": dataset_id,
@@ -135,6 +152,8 @@ def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[st
             "status": status,
             "training_mode": mode,
         }
+        if pinned_vid and pinned_dataset_id and dataset_id and dataset_id == pinned_dataset_id:
+            row["dataset_version_id"] = pinned_vid
         details.append(row)
         _upsert_run_dataset_lineage(
             tenant_id=tenant_id,
@@ -543,13 +562,25 @@ def list_dataset_readiness_evaluations(
     dataset_id: str,
     limit: int = 20,
     offset: int = 0,
+    status: str | None = None,
+    policy_id: str | None = None,
 ) -> list[dict[str, Any]]:
     lim = max(1, min(int(limit), 200))
     off = max(0, int(offset))
+    st_f = str(status or "").strip().lower() or None
+    pid_f = str(policy_id or "").strip() or None
+    where_extra = ""
+    extra_params: list[Any] = []
+    if pid_f:
+        where_extra += " AND policy_id = %s"
+        extra_params.append(pid_f)
+    if st_f:
+        where_extra += " AND LOWER(status) = %s"
+        extra_params.append(st_f)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     evaluation_id,
                     dataset_version_id,
@@ -563,10 +594,11 @@ def list_dataset_readiness_evaluations(
                 WHERE tenant_id = %s
                   AND project_id = %s
                   AND dataset_id = %s
+                  {where_extra}
                 ORDER BY evaluated_at DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, dataset_id, lim, off),
+                (tenant_id, project_id, dataset_id, *extra_params, lim, off),
             )
             rows = cur.fetchall()
     return [

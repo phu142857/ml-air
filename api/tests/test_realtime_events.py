@@ -76,6 +76,25 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertEqual(ev["type"], "training.policy.updated")
         self.assertEqual(ev["resource_id"], "ds-1")
 
+    def test_build_event_model_eligibility_updated(self) -> None:
+        ev = build_event(
+            event_type=EventType.MODEL_ELIGIBILITY_UPDATED,
+            tenant_id="t1",
+            project_id="p1",
+            resource_id="m1",
+            payload={
+                "model_id": "m1",
+                "action": "approval_updated",
+                "version": 3,
+                "approval_status": "approved",
+                "updated_at": 4.0,
+            },
+            trace_id="tr",
+        )
+        self.assertEqual(ev["type"], "model.eligibility.updated")
+        self.assertEqual(ev["resource_id"], "m1")
+        self.assertEqual(ev["payload"]["action"], "approval_updated")
+
 
 if __name__ == "__main__":
     unittest.main()

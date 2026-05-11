@@ -171,6 +171,32 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["eligible"][0]["policy_id"], "p-a")
         self.assertEqual(out["blocked"][0]["policy_id"], "p-b")
 
+    @patch("app.services.readiness_service._upsert_run_dataset_lineage")
+    @patch("app.services.readiness_service._dataset_actual_size", return_value=("ds-pin", 0))
+    @patch(
+        "app.services.lineage_service.get_dataset_version",
+        return_value={"dataset_id": "ds-pin", "record_count": 200},
+    )
+    @patch("app.services.readiness_service.get_run")
+    def test_check_run_readiness_uses_pinned_version_record_count(
+        self, mock_get_run, _mock_gdv, _mock_das, _mock_upsert
+    ) -> None:
+        mock_get_run.return_value = {
+            "tenant_id": "t",
+            "project_id": "p",
+            "training_mode": "quick",
+            "override_config": {
+                "dataset_version_id": "ver-pin-1",
+                "inputs": [{"dataset": "myds", "required_size": 50}],
+            },
+            "config_snapshot": {},
+            "plugin_context": {},
+        }
+        out = readiness_service.check_run_readiness("t", "p", "run-1")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["details"][0]["actual_size"], 200)
+        self.assertEqual(out["details"][0].get("dataset_version_id"), "ver-pin-1")
+
 
 if __name__ == "__main__":
     unittest.main()

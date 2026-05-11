@@ -133,6 +133,7 @@ export default function DatasetHubPage() {
   const [evaluationPage, setEvaluationPage] = useState(0);
   const [maxEvaluationPage, setMaxEvaluationPage] = useState(0);
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
+  const [evaluationPolicyFilter, setEvaluationPolicyFilter] = useState("all");
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
   const [accumulationStrategyDraft, setAccumulationStrategyDraft] = useState("snapshot_on_threshold");
   const [accumulationMsg, setAccumulationMsg] = useState("");
@@ -260,9 +261,17 @@ export default function DatasetHubPage() {
     onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
   });
   const readinessEvaluationsQuery = useQuery({
-    queryKey: [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId), evaluationPage],
+    queryKey: [
+      ...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
+      evaluationPage,
+      evaluationStatusFilter,
+      evaluationPolicyFilter
+    ],
     queryFn: () =>
-      fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 20, evaluationPage * 20),
+      fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 20, evaluationPage * 20, {
+        status: evaluationStatusFilter,
+        policyId: evaluationPolicyFilter === "all" ? undefined : evaluationPolicyFilter
+      }),
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
   });
@@ -272,6 +281,15 @@ export default function DatasetHubPage() {
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
   });
+  const evaluationPolicyFilterOptions = useMemo(() => {
+    return [
+      { value: "all", label: "policy: all" },
+      ...(policiesQuery.data?.items || []).map((p) => ({
+        value: String(p.policy_id),
+        label: `policy: ${String(p.policy_id).slice(0, 8)}…`
+      }))
+    ];
+  }, [policiesQuery.data?.items]);
   const eligibilityQuery = useQuery({
     queryKey: [
       ...mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
@@ -373,10 +391,10 @@ export default function DatasetHubPage() {
   }, [effectivePipeline, pipelineVersionsQuery.data]);
   const evaluationItems = readinessEvaluationsQuery.data?.items || [];
   const canLoadOlderEvaluations = evaluationItems.length === 20;
-  const filteredEvaluationItems = useMemo(() => {
-    if (evaluationStatusFilter === "all") return evaluationItems;
-    return evaluationItems.filter((row) => String(row.status || "blocked").toLowerCase() === evaluationStatusFilter);
-  }, [evaluationItems, evaluationStatusFilter]);
+  useEffect(() => {
+    setEvaluationPage(0);
+    setMaxEvaluationPage(0);
+  }, [evaluationStatusFilter, evaluationPolicyFilter]);
   const policyPresets = [
     { id: "small", label: "Small incremental training", requiredSize: 100 },
     { id: "daily", label: "Daily retrain", requiredSize: 1000 },
@@ -1200,6 +1218,14 @@ export default function DatasetHubPage() {
                 className="min-w-[9rem]"
                 aria-label="Filter evaluations by status"
               />
+              <SelectDropdown
+                value={evaluationPolicyFilter}
+                onChange={setEvaluationPolicyFilter}
+                options={evaluationPolicyFilterOptions}
+                buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                className="min-w-[10rem]"
+                aria-label="Filter evaluations by policy"
+              />
               <Button
                 variant="secondary"
                 onClick={() => setEvaluationPage((prev) => Math.max(0, prev - 1))}
@@ -1240,7 +1266,7 @@ export default function DatasetHubPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEvaluationItems.map((row) => (
+                {evaluationItems.map((row) => (
                   <tr key={row.evaluation_id} className="border-t border-border">
                     <td className="px-3 py-2">
                       <span
@@ -1276,13 +1302,13 @@ export default function DatasetHubPage() {
                 ))}
               </tbody>
             </DataTable>
-            {filteredEvaluationItems.length === 0 && !readinessEvaluationsQuery.isLoading ? (
+            {evaluationItems.length === 0 && !readinessEvaluationsQuery.isLoading ? (
               <p className="p-4 text-xs text-muted-foreground">
-                {evaluationItems.length === 0
-                  ? evaluationPage === 0
+                {evaluationPage === 0
+                  ? evaluationStatusFilter === "all"
                     ? "No readiness evaluations yet."
-                    : "No older evaluations in this range."
-                  : "No evaluations match this status filter."}
+                    : "No evaluations match this status filter."
+                  : "No older evaluations in this range."}
               </p>
             ) : null}
           </DataTableShell>

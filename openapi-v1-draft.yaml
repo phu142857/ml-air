@@ -2527,6 +2527,12 @@ components:
         override_config:
           type: object
           additionalProperties: true
+        dataset_version_id:
+          type: string
+          nullable: true
+          description: >
+            Optional. When set, must exist in tenant/project scope; merged into override_config and context
+            so run readiness uses dataset_versions.record_count for the pinned input (see readiness-and-gating.md).
 
     CheckReadinessRequest:
       type: object

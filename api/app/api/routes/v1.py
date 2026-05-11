@@ -87,6 +87,10 @@ class TriggerRunIn(BaseModel):
     use_latest_pipeline_version: bool = False
     training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
+    dataset_version_id: str | None = Field(
+        default=None,
+        description="Optional: validated dataset_versions.version_id; merged into override_config and context for version-aware readiness.",
+    )
 
 
 class TriggerRunByModelIn(BaseModel):
@@ -191,6 +195,28 @@ def _blocked(detail_reason: str, details: str, *, status_code: int = 422) -> HTT
         status_code=status_code,
         detail={"status": "BLOCKED", "reason": detail_reason, "details": details},
     )
+
+
+def _merge_pinned_dataset_version_for_run(
+    tenant_id: str,
+    project_id: str,
+    *,
+    override_config: dict | None,
+    plugin_context: dict | None,
+    dataset_version_id: str | None,
+) -> tuple[dict, dict]:
+    """If ``dataset_version_id`` is set, validate and pin it into override_config and plugin_context."""
+    ov = dict(override_config or {})
+    ctx = dict(plugin_context or {})
+    vid = str(dataset_version_id or "").strip() or None
+    if not vid:
+        return ov, ctx
+    dv = lineage_service.get_dataset_version(tenant_id, project_id, vid)
+    if not dv:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    ov.setdefault("dataset_version_id", vid)
+    ctx.setdefault("dataset_version_id", vid)
+    return ov, ctx
 
 
 def _validate_pipeline_plugin_contract(
@@ -359,6 +385,13 @@ def trigger_run_v1(
         if plugin_registry.get(plugin_name) is None:
             raise _blocked("PLUGIN_NOT_FOUND", f"Plugin '{plugin_name}' is not available")
 
+    merged_ov, merged_ctx = _merge_pinned_dataset_version_for_run(
+        tenant_id,
+        project_id,
+        override_config=payload.override_config,
+        plugin_context=payload.context,
+        dataset_version_id=payload.dataset_version_id,
+    )
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -369,11 +402,11 @@ def trigger_run_v1(
         trace_id=get_trace_id(),
         experiment_id=payload.experiment_id,
         plugin_name=payload.plugin_name,
-        plugin_context=payload.context,
+        plugin_context=merged_ctx,
         pipeline_version_id=payload.pipeline_version_id,
         use_latest_pipeline_version=payload.use_latest_pipeline_version,
         training_mode=payload.training_mode,
-        override_config=payload.override_config,
+        override_config=merged_ov,
     )
     return run
 
@@ -620,6 +653,13 @@ def run_pipeline_with_gating_v1(
         if plugin_registry.get(plugin_name) is None:
             raise _blocked("PLUGIN_NOT_FOUND", f"Plugin '{plugin_name}' is not available")
 
+    merged_ov, merged_ctx = _merge_pinned_dataset_version_for_run(
+        tenant_id,
+        project_id,
+        override_config=payload.override_config,
+        plugin_context=payload.context,
+        dataset_version_id=payload.dataset_version_id,
+    )
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -630,11 +670,11 @@ def run_pipeline_with_gating_v1(
         trace_id=get_trace_id(),
         experiment_id=payload.experiment_id,
         plugin_name=payload.plugin_name,
-        plugin_context=payload.context,
+        plugin_context=merged_ctx,
         pipeline_version_id=payload.pipeline_version_id,
         use_latest_pipeline_version=payload.use_latest_pipeline_version,
         training_mode=payload.training_mode,
-        override_config=payload.override_config,
+        override_config=merged_ov,
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
     if not check.get("ready"):
@@ -1353,6 +1393,8 @@ def list_dataset_readiness_evaluations_v1(
     dataset_id: str,
     limit: int = 20,
     offset: int = 0,
+    status: str | None = Query(default=None, description="Filter by evaluation status (e.g. eligible, blocked)."),
+    policy_id: str | None = Query(default=None, description="Filter rows for a single training policy."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1366,6 +1408,8 @@ def list_dataset_readiness_evaluations_v1(
             dataset_id=dataset_id,
             limit=limit,
             offset=offset,
+            status=status,
+            policy_id=policy_id,
         )
     }
 
@@ -1377,6 +1421,8 @@ def list_dataset_readiness_history_v1(
     dataset_id: str,
     limit: int = 20,
     offset: int = 0,
+    status: str | None = Query(default=None, description="Filter by evaluation status (e.g. eligible, blocked)."),
+    policy_id: str | None = Query(default=None, description="Filter rows for a single training policy."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Roadmap name: same payload as `/readiness/evaluations` (stored evaluation audit log)."""
@@ -1386,6 +1432,8 @@ def list_dataset_readiness_history_v1(
         dataset_id=dataset_id,
         limit=limit,
         offset=offset,
+        status=status,
+        policy_id=policy_id,
         authorization=authorization,
     )
 

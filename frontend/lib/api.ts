@@ -981,12 +981,20 @@ export async function fetchDatasetReadinessEvaluations(
   datasetId: string,
   token: string,
   limit = 20,
-  offset = 0
+  offset = 0,
+  opts?: { status?: string; policyId?: string }
 ) {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
+  const q = new URLSearchParams();
+  q.set("limit", String(safeLimit));
+  q.set("offset", String(safeOffset));
+  const st = String(opts?.status || "").trim().toLowerCase();
+  if (st && st !== "all") q.set("status", st);
+  const pid = String(opts?.policyId || "").trim();
+  if (pid) q.set("policy_id", pid);
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?limit=${safeLimit}&offset=${safeOffset}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?${q.toString()}`,
     {
       headers: authHeaders(token),
       cache: "no-store"
@@ -1015,12 +1023,20 @@ export async function fetchDatasetReadinessHistory(
   datasetId: string,
   token: string,
   limit = 20,
-  offset = 0
+  offset = 0,
+  opts?: { status?: string; policyId?: string }
 ) {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
+  const q = new URLSearchParams();
+  q.set("limit", String(safeLimit));
+  q.set("offset", String(safeOffset));
+  const st = String(opts?.status || "").trim().toLowerCase();
+  if (st && st !== "all") q.set("status", st);
+  const pid = String(opts?.policyId || "").trim();
+  if (pid) q.set("policy_id", pid);
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/history?limit=${safeLimit}&offset=${safeOffset}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/history?${q.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();

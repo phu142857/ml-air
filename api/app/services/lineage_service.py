@@ -18,9 +18,10 @@ from app.services.db_service import db_conn
 from app.services import realtime_events as rt
 from app.services.trace_service import get_trace_id
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import Counter, Gauge, Histogram
 except Exception:  # pragma: no cover - optional dependency in tests
     Counter = None  # type: ignore[assignment]
+    Gauge = None  # type: ignore[assignment]
     Histogram = None  # type: ignore[assignment]
 
 Direction = Literal["up", "down", "both"]
@@ -35,10 +36,16 @@ SUPPORTED_ACCUMULATION_STRATEGIES = {
 
 
 class _NoopMetric:
+    def labels(self, **_kwargs: Any) -> _NoopMetric:
+        return self
+
     def inc(self, _value: float = 1.0) -> None:
         return
 
     def observe(self, _value: float) -> None:
+        return
+
+    def set(self, _value: float) -> None:
         return
 
 
@@ -69,6 +76,15 @@ MATERIALIZATION_FAILURE_TOTAL = (
     if Counter
     else _NoopMetric()
 )
+MATERIALIZATION_UNIQUE_VIOLATION_TOTAL = (
+    Counter(
+        "mlair_dataset_materialization_unique_violation_total",
+        "Unique constraint violations on dataset_versions insert during buffer materialization",
+        ["constraint"],
+    )
+    if Counter
+    else _NoopMetric()
+)
 MATERIALIZATION_LATENCY_SECONDS = (
     Histogram(
         "mlair_dataset_materialization_latency_seconds",
@@ -79,6 +95,35 @@ MATERIALIZATION_LATENCY_SECONDS = (
     if Histogram
     else _NoopMetric()
 )
+
+ACCUMULATION_CURRENT_SIZE = (
+    Gauge(
+        "mlair_dataset_accumulation_current_size",
+        "Dataset accumulation buffer current_size (cardinality-safe; grouped by strategy/source_type/window_status)",
+        ["strategy", "source_type", "window_status"],
+    )
+    if Gauge
+    else _NoopMetric()
+)
+ACCUMULATION_TARGET_THRESHOLD = (
+    Gauge(
+        "mlair_dataset_accumulation_target_threshold",
+        "Dataset accumulation buffer target_threshold (cardinality-safe; grouped by strategy/source_type/window_status)",
+        ["strategy", "source_type", "window_status"],
+    )
+    if Gauge
+    else _NoopMetric()
+)
+
+
+def _observe_accumulation_gauges(*, strategy: str, source_type: str, window_status: str, current_size: int, target_threshold: int) -> None:
+    if not Gauge:
+        return
+    try:
+        ACCUMULATION_CURRENT_SIZE.labels(strategy=strategy, source_type=source_type, window_status=window_status).set(float(current_size))
+        ACCUMULATION_TARGET_THRESHOLD.labels(strategy=strategy, source_type=source_type, window_status=window_status).set(float(target_threshold))
+    except Exception:  # pragma: no cover - metrics must never break control plane
+        return
 
 
 def _dataset_row_updated_at(tenant_id: str, project_id: str, dataset_id: str) -> datetime | None:
@@ -206,6 +251,13 @@ def _upsert_dataset_buffer(
         window_status=win,
         updated_at=datetime.now(timezone.utc),
         trace_id=get_trace_id(),
+    )
+    _observe_accumulation_gauges(
+        strategy=strat,
+        source_type=src,
+        window_status=win,
+        current_size=now_size,
+        target_threshold=tgt,
     )
 
 
@@ -537,6 +589,23 @@ def _materialization_idempotency_key(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _unique_violation_constraint_kind(exc: BaseException) -> str | None:
+    """Return ``idempotency_key``, ``dataset_version``, ``unknown``, or ``None`` if not a unique violation."""
+    try:
+        from psycopg import errors as pg_errors
+    except ImportError:
+        return None
+    if not isinstance(exc, pg_errors.UniqueViolation):
+        return None
+    diag = getattr(exc, "diag", None)
+    cname = str(getattr(diag, "constraint_name", None) or "").lower()
+    if "idempotency" in cname:
+        return "idempotency_key"
+    if "uq_dataset_versions_dataset_version" in cname or ("dataset_versions" in cname and "version" in cname):
+        return "dataset_version"
+    return "unknown"
+
+
 def _materialize_runtime_feedback_if_needed(
     *,
     tenant_id: str,
@@ -552,6 +621,7 @@ def _materialize_runtime_feedback_if_needed(
     now_size = max(0, int(size or 0))
     started = time.perf_counter()
     strategy_for_metrics = DEFAULT_ACCUMULATION_STRATEGY
+    trace_id = get_trace_id()
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"{tenant_id}:{project_id}:{dataset_id}",))
@@ -605,37 +675,84 @@ def _materialize_runtime_feedback_if_needed(
             existing = cur.fetchone()
             if existing:
                 logger.info(
-                    "dataset_materialization_idempotent_hit dataset_id=%s strategy=%s idem_key=%s version_id=%s",
+                    "dataset_materialization_idempotent_hit dataset_id=%s strategy=%s idem_key=%s version_id=%s trace_id=%s",
                     dataset_id,
                     strategy,
                     idem_key,
                     existing[0],
+                    trace_id,
                 )
                 return str(existing[0]), str(existing[1])
             version = _next_dataset_version_locked(cur, dataset_id)
             version_id = str(uuid4())
-            cur.execute(
-                """
-                INSERT INTO dataset_versions
-                    (
-                        version_id, dataset_id, version, uri, checksum, source_type, record_count,
-                        status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
+            insert_ok = False
+            for _ins_attempt in range(5):
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO dataset_versions
+                            (
+                                version_id, dataset_id, version, uri, checksum, source_type, record_count,
+                                status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
+                            )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
+                        """,
+                        (
+                            version_id,
+                            dataset_id,
+                            version,
+                            uri,
+                            checksum,
+                            "runtime_accumulation",
+                            current_size,
+                            [],
+                            json.dumps([]),
+                            idem_key,
+                        ),
                     )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
-                """,
-                (
-                    version_id,
-                    dataset_id,
-                    version,
-                    uri,
-                    checksum,
-                    "runtime_accumulation",
-                    current_size,
-                    [],
-                    json.dumps([]),
-                    idem_key,
-                ),
-            )
+                    insert_ok = True
+                    break
+                except Exception as exc:
+                    kind = _unique_violation_constraint_kind(exc)
+                    if kind is None:
+                        raise
+                    MATERIALIZATION_UNIQUE_VIOLATION_TOTAL.labels(constraint=kind).inc()
+                    if kind == "idempotency_key":
+                        cur.execute(
+                            "SELECT version_id, version FROM dataset_versions WHERE materialization_idempotency_key = %s",
+                            (idem_key,),
+                        )
+                        row_hit = cur.fetchone()
+                        if row_hit:
+                            logger.info(
+                                "dataset_materialization_unique_race_idempotency dataset_id=%s idem_key=%s version_id=%s trace_id=%s",
+                                dataset_id,
+                                idem_key,
+                                row_hit[0],
+                                trace_id,
+                            )
+                            return str(row_hit[0]), str(row_hit[1])
+                        version = _next_dataset_version_locked(cur, dataset_id)
+                        version_id = str(uuid4())
+                        continue
+                    if kind == "dataset_version":
+                        version = _next_dataset_version_locked(cur, dataset_id)
+                        version_id = str(uuid4())
+                        continue
+                    logger.warning(
+                        "dataset_materialization_unique_violation_unknown dataset_id=%s constraint_diag=%s err=%s trace_id=%s",
+                        dataset_id,
+                        getattr(getattr(exc, "diag", None), "constraint_name", None),
+                        exc,
+                        trace_id,
+                    )
+                    if Counter:
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unique_violation_unknown").inc()
+                    return None, None
+            if not insert_ok:
+                if Counter:
+                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="insert_exhausted_retries").inc()
+                return None, None
             cur.execute(
                 """
                 UPDATE dataset_accumulation_buffers
@@ -658,7 +775,7 @@ def _materialize_runtime_feedback_if_needed(
                 source_type="runtime_accumulation",
                 record_count=current_size,
                 updated_at=datetime.now(timezone.utc),
-                trace_id=get_trace_id(),
+                trace_id=trace_id,
             )
             rt.emit_dataset_buffer_updated(
                 tenant_id=tenant_id,
@@ -669,10 +786,17 @@ def _materialize_runtime_feedback_if_needed(
                 target_threshold=target_threshold,
                 window_status="active",
                 updated_at=datetime.now(timezone.utc),
-                trace_id=get_trace_id(),
+                trace_id=trace_id,
+            )
+            _observe_accumulation_gauges(
+                strategy=strategy,
+                source_type=source_type,
+                window_status="active",
+                current_size=0,
+                target_threshold=target_threshold,
             )
             logger.info(
-                "dataset_materialized dataset_id=%s strategy=%s source_type=%s version=%s version_id=%s threshold=%s current_size=%s idem_key=%s",
+                "dataset_materialized dataset_id=%s strategy=%s source_type=%s version=%s version_id=%s threshold=%s current_size=%s idem_key=%s trace_id=%s",
                 dataset_id,
                 strategy,
                 source_type,
@@ -681,6 +805,7 @@ def _materialize_runtime_feedback_if_needed(
                 target_threshold,
                 current_size,
                 idem_key,
+                trace_id,
             )
             if Counter:
                 MATERIALIZATION_CREATED_TOTAL.labels(strategy=strategy, source_type=source_type).inc()

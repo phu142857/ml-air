@@ -62,6 +62,7 @@ type Envelope = {
     version?: number;
     stage?: string;
     action?: string;
+    approval_status?: string;
   };
 };
 
@@ -124,6 +125,23 @@ function keysForEvent(
         ["model-recent-runs", tenantId, projectId, rid]
       );
     }
+    return keys;
+  }
+  if (t === "model.eligibility.updated") {
+    const mid =
+      (typeof ev.payload?.model_id === "string" ? ev.payload.model_id : undefined) ||
+      (typeof rid === "string" ? rid : undefined);
+    const keys: unknown[][] = [[...mlairKeys.models.list(tenantId, projectId)]];
+    if (mid) {
+      keys.push(
+        [...mlairKeys.models.versions(tenantId, projectId, mid)],
+        [...mlairKeys.models.serving(tenantId, projectId, mid)],
+        [...mlairKeys.models.status(tenantId, projectId, mid)],
+        [...mlairKeys.models.resolvedPipeline(tenantId, projectId, mid)],
+        ["model-recent-runs", tenantId, projectId, mid]
+      );
+    }
+    keys.push(["dataset-training-eligibility", tenantId, projectId]);
     return keys;
   }
   if (t === "dataset.updated") {

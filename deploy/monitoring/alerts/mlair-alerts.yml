@@ -63,3 +63,39 @@ groups:
         annotations:
           summary: "Trigger policies evaluated but no runs fired"
           description: "Scheduler evaluated many trigger policies but did not create any auto-triggered runs in 30 minutes."
+
+      - alert: MlAirDatasetMaterializationFailureBurst
+        expr: increase(mlair_dataset_materialization_failure_total[10m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dataset materialization failure burst"
+          description: "Dataset materialization failures exceeded 3 in the last 10 minutes (check strategy/threshold/config)."
+
+      - alert: MlAirDatasetMaterializationNoVersionsCreated
+        expr: increase(mlair_dataset_materialization_attempt_total[20m]) > 10 and increase(mlair_dataset_materialization_version_created_total[20m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Materialization attempts but no versions created"
+          description: "Many materialization attempts occurred but no versions were created (could be threshold guards, strategy_not_auto, or empty buffers)."
+
+      - alert: MlAirDatasetBufferNotResetAfterMaterialize
+        expr: increase(mlair_dataset_materialization_version_created_total[15m]) > 0 and max_over_time(mlair_dataset_accumulation_current_size[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Buffer not reset after materialization (heuristic)"
+          description: "A materialization created versions recently but accumulation current_size gauge stayed >0. This is heuristic (cardinality-safe gauge); inspect logs for dataset_materialized/trace_id."
+
+      - alert: MlAirDatasetMaterializationUniqueViolation
+        expr: increase(mlair_dataset_materialization_unique_violation_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "dataset_versions unique constraint hit during materialization"
+          description: "Insert collided on idempotency_key or (dataset_id, version); API retries / resolves races. Investigate if this fires frequently (metric label constraint)."
