@@ -18,11 +18,11 @@ OpenAPI draft: [`openapi-v1-draft.yaml`](../../openapi-v1-draft.yaml) documents 
 
 Current readiness architecture notes:
 
-- **Training eligibility** is policy-first: evaluate `(dataset_version_id + policy_id)` via `GET .../readiness` and persist evaluation history (`eligibility_status`, `eligibility_criteria`).
+- **Training eligibility** is policy-first: **`GET .../readiness`** returns derived `(dataset_version_id + policy_id)` evaluation (`eligibility_status`, `eligibility_criteria`) **without** writing audit rows. **`POST .../readiness/evaluate`** persists `dataset_readiness_evaluations` when an explicit check should be recorded.
 - Dataset **training policy** endpoints:
   - `GET .../datasets/{dataset_id}/training-policies`
   - `POST .../datasets/{dataset_id}/training-policies`
   - `PUT .../datasets/{dataset_id}/training-policies`
 - Readiness response includes eligibility fields (`eligibility_status`, `eligibility_criteria`, `reasons`).
 - **Accumulation buffer**: `GET .../datasets/{dataset_id}/buffer` for staging metadata; **`PATCH`** (maintainer) sets `target_threshold` and optional `accumulation_strategy`. Ingest preserves stored materialization config unless explicitly updated. **`POST .../datasets/{dataset_id}/materialize`** (maintainer) materializes the buffer into a new version; same behavior as **`POST .../datasets/{dataset_id}/buffer/materialize`**.
-- **Version-centric readiness**: `GET .../datasets/{dataset_id}/versions/{version_id}/readiness` evaluates immutable snapshots directly.
+- **Version-centric readiness**: `GET .../datasets/{dataset_id}/versions/{version_id}/readiness` evaluates immutable snapshots directly (read-only); `POST .../versions/{version_id}/readiness/evaluate` persists.

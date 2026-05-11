@@ -1270,34 +1270,42 @@ def get_dataset_v1(
     return row
 
 
-@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness")
-def get_dataset_readiness_v1(
+def _evaluate_dataset_readiness_http(
     tenant_id: str,
     project_id: str,
     dataset_id: str,
-    required_size: int | None = None,
-    dataset_version_id: str | None = Query(default=None),
-    policy_id: str | None = Query(default=None),
-    authorization: str | None = Header(default=None),
+    *,
+    required_size: int | None,
+    dataset_version_id: str | None,
+    policy_id: str | None,
 ) -> dict:
-    principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    try:
-        result = readiness_service.evaluate_dataset_readiness(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            dataset_id=dataset_id,
-            required_size=required_size,
-            dataset_version_id=dataset_version_id,
-            policy_id=policy_id,
-        )
-    except ValueError as exc:
-        detail = str(exc)
-        if detail in {"dataset_not_found", "dataset_training_policy_not_found", "dataset_version_not_found"}:
-            raise HTTPException(status_code=404, detail=detail) from exc
-        if detail == "no_materialized_dataset_version":
-            raise HTTPException(status_code=409, detail=detail) from exc
-        raise HTTPException(status_code=400, detail=detail) from exc
+    """Shared evaluate path; raises ValueError with stable detail codes."""
+    return readiness_service.evaluate_dataset_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        required_size=required_size,
+        dataset_version_id=dataset_version_id,
+        policy_id=policy_id,
+    )
+
+
+def _http_exc_from_readiness_value_error(exc: ValueError) -> HTTPException:
+    detail = str(exc)
+    if detail in {"dataset_not_found", "dataset_training_policy_not_found", "dataset_version_not_found"}:
+        return HTTPException(status_code=404, detail=detail)
+    if detail == "no_materialized_dataset_version":
+        return HTTPException(status_code=409, detail=detail)
+    return HTTPException(status_code=400, detail=detail)
+
+
+def _persist_dataset_readiness_evaluation(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    result: dict,
+) -> tuple[str, str]:
+    """Insert evaluation row + emit realtime; returns (evaluation_id, evaluated_at ISO)."""
     evaluation_id = readiness_service.record_dataset_readiness_evaluation(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -1319,7 +1327,66 @@ def get_dataset_readiness_v1(
         updated_at=datetime.now(timezone.utc),
         trace_id=get_trace_id(),
     )
-    return {**result, "evaluation_id": evaluation_id}
+    evaluated_at = datetime.now(timezone.utc).isoformat()
+    return evaluation_id, evaluated_at
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness")
+def get_dataset_readiness_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    required_size: int | None = None,
+    dataset_version_id: str | None = Query(default=None),
+    policy_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Pure read: derived readiness only (safe for polling / prefetch). No DB audit rows."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    try:
+        result = _evaluate_dataset_readiness_http(
+            tenant_id,
+            project_id,
+            dataset_id,
+            required_size=required_size,
+            dataset_version_id=dataset_version_id,
+            policy_id=policy_id,
+        )
+    except ValueError as exc:
+        raise _http_exc_from_readiness_value_error(exc) from exc
+    evaluated_at = datetime.now(timezone.utc).isoformat()
+    return {**result, "evaluated_at": evaluated_at}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluate")
+def post_dataset_readiness_evaluate_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    required_size: int | None = None,
+    dataset_version_id: str | None = Query(default=None),
+    policy_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Explicit audit: evaluate, persist ``dataset_readiness_evaluations``, emit ``dataset.readiness.updated``."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    try:
+        result = _evaluate_dataset_readiness_http(
+            tenant_id,
+            project_id,
+            dataset_id,
+            required_size=required_size,
+            dataset_version_id=dataset_version_id,
+            policy_id=policy_id,
+        )
+    except ValueError as exc:
+        raise _http_exc_from_readiness_value_error(exc) from exc
+    evaluation_id, evaluated_at = _persist_dataset_readiness_evaluation(tenant_id, project_id, dataset_id, result)
+    return {**result, "evaluation_id": evaluation_id, "evaluated_at": evaluated_at}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness")
@@ -1333,6 +1400,29 @@ def get_dataset_version_readiness_v1(
 ) -> dict:
     """Version-centric readiness API: evaluate a specific immutable dataset version."""
     return get_dataset_readiness_v1(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        required_size=None,
+        dataset_version_id=version_id,
+        policy_id=policy_id,
+        authorization=authorization,
+    )
+
+
+@router.post(
+    "/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness/evaluate"
+)
+def post_dataset_version_readiness_evaluate_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    policy_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Version-scoped POST alias for ``POST .../readiness/evaluate`` (pins ``dataset_version_id``)."""
+    return post_dataset_readiness_evaluate_v1(
         tenant_id=tenant_id,
         project_id=project_id,
         dataset_id=dataset_id,

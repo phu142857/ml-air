@@ -7,7 +7,7 @@ Run pipelines only when required input datasets are ready, while still allowing 
 ## Terminology (use consistently across docs)
 
 - **Training policy**: persisted rules for a dataset (and optionally a model), identified by `policy_id` — for example `required_size`, `freshness_hours`, `validation_rules`. Prefer policy-backed thresholds over ad-hoc per-request sizes.
-- **Readiness / training eligibility evaluation**: `GET /datasets/{dataset_id}/readiness` evaluates `(dataset_version_id + policy_id)` and returns `eligibility_status`, `eligibility_criteria`, and evaluation history — lifecycle-oriented, not a global “dataset.ready” flag.
+- **Readiness / training eligibility evaluation**: `GET /datasets/{dataset_id}/readiness` evaluates `(dataset_version_id + policy_id)` and returns `eligibility_status`, `eligibility_criteria` (derived read; no DB audit row). Persisted history uses `POST /datasets/{dataset_id}/readiness/evaluate` or `GET .../readiness/evaluations` to list prior rows — lifecycle-oriented, not a global “dataset.ready” flag.
 - **Execution gate (pipeline/run)**: `check-readiness`, `pipelines/.../run`, and `runs/trigger` apply readiness in **run context** (`training_mode`, `override_config.inputs[]`, snapshot) to allow or block execution.
 - **Accumulation materialization target**: `target_threshold` on **`PATCH .../datasets/{dataset_id}/buffer`** (and `GET .../buffer`) controls staging “when to materialize” for supported paths — **not** the same field as **`required_size`** on a training policy (eligibility on a version).
 

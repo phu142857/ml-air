@@ -15,6 +15,7 @@ import {
   fetchDatasetBuffer,
   fetchDatasetReadinessEvaluations,
   fetchDatasetReadiness,
+  postDatasetReadinessEvaluate,
   createDatasetTrainingPolicy,
   fetchDatasetTrainingPolicies,
   fetchDatasetTrainingEligibility,
@@ -309,6 +310,33 @@ export default function DatasetHubPage() {
       }),
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
+  });
+  const [evaluatePersistMsg, setEvaluatePersistMsg] = useState<string | null>(null);
+  const evaluatePersistMutation = useMutation({
+    mutationFn: async () => {
+      if (!token || !selectedPolicyId) throw new Error("missing_policy");
+      return postDatasetReadinessEvaluate(tenantId, projectId, datasetId, token, {
+        requiredSize: 1000,
+        datasetVersionId: selectedVersionForReadiness,
+        policyId: selectedPolicyId
+      });
+    },
+    onSuccess: async (out) => {
+      setEvaluatePersistMsg(`Recorded evaluation ${String(out.evaluation_id || "").slice(0, 8)}…`);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
+          exact: false
+        }),
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.readiness(tenantId, projectId, datasetId, 0),
+          exact: false
+        })
+      ]);
+    },
+    onError: (err: unknown) => {
+      setEvaluatePersistMsg(describeTrainError(err));
+    }
   });
   const policiesQuery = useQuery({
     queryKey: mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId),
@@ -739,7 +767,9 @@ export default function DatasetHubPage() {
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-xs text-muted-foreground">
-              Enterprise mode: evaluate <span className="text-foreground">dataset_version + policy</span>.
+              Live panel uses <span className="font-mono text-foreground">GET …/readiness</span> (derived state only; safe to
+              poll). To append an audit row in the history table, use{" "}
+              <span className="font-semibold text-foreground">Evaluate now (persist)</span> below.
             </p>
             <div className="mb-3 grid gap-3 md:grid-cols-2">
               <label className="text-xs text-muted-foreground">
@@ -838,6 +868,33 @@ export default function DatasetHubPage() {
                 </div>
                 <div className="mb-2 text-xs text-muted-foreground">
                   Policy: <span className="font-mono text-foreground">{readinessQuery.data.policy_id || "—"}</span>
+                </div>
+                {readinessQuery.data.evaluated_at ? (
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    Snapshot at:{" "}
+                    <span className="font-mono text-foreground">{formatDateTimeCompact(readinessQuery.data.evaluated_at)}</span>
+                  </div>
+                ) : null}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="px-3 py-1 text-xs"
+                    disabled={
+                      !selectedPolicyId ||
+                      evaluatePersistMutation.isPending ||
+                      readinessVersionSelectOptions.length === 0
+                    }
+                    onClick={() => {
+                      setEvaluatePersistMsg(null);
+                      evaluatePersistMutation.mutate();
+                    }}
+                  >
+                    {evaluatePersistMutation.isPending ? "Recording…" : "Evaluate now (persist)"}
+                  </Button>
+                  {evaluatePersistMsg ? (
+                    <span className="text-xs text-muted-foreground">{evaluatePersistMsg}</span>
+                  ) : null}
                 </div>
                 {(readinessQuery.data.eligibility_criteria || []).length ? (
                   <div className="mt-3 space-y-2">
@@ -1278,6 +1335,11 @@ export default function DatasetHubPage() {
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Readiness evaluations</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Rows are created only by explicit actions (e.g. <span className="font-semibold">Evaluate now (persist)</span> above
+            or automation calling <span className="font-mono">POST …/readiness/evaluate</span>), not by polling{" "}
+            <span className="font-mono">GET …/readiness</span>.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">

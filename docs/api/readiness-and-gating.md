@@ -10,7 +10,7 @@ Keep these names aligned with the operator UI and [`ROADMAP.md`](../../ROADMAP.m
 
 | Term | Meaning | Primary surface |
 | --- | --- | --- |
-| **Dataset Readiness** | Lifecycle evaluation on `dataset_version` + training policy (sizes, criteria, persisted evaluations). | Dataset Hub **Readiness** tab + `GET .../readiness` |
+| **Dataset Readiness** | Lifecycle evaluation on `dataset_version` + training policy (sizes, criteria). **Derived** via `GET .../readiness`; **audit rows** via `POST .../readiness/evaluate`. | Dataset Hub **Readiness** tab |
 | **Training Eligibility** | Per-policy aggregate “can train?” view (readiness outcome matrix). | Dataset Hub + `GET .../eligibility` |
 | **Execution Gate** | Pipeline/run-level check that mirrors orchestration inputs (synthetic run + `check-readiness`). | Pipeline detail — **advanced**, maintainer opt-in in UI |
 
@@ -18,9 +18,9 @@ Training from immutable versions is initiated from **Dataset Hub**; the pipeline
 
 ## Endpoints
 
-### 1) `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness`
+### 1) `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness` — **pure read**
 
-Checks a dataset version against readiness policy.
+Computes dataset-version readiness against a training policy. **Does not** insert into `dataset_readiness_evaluations` and **does not** emit `dataset.readiness.updated`. Safe for polling, prefetch, SSR, and focus refetch.
 
 Query:
 
@@ -38,7 +38,7 @@ Version-centric endpoint:
 
 - `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness?policy_id=<id>`
 
-Response:
+Response (includes):
 
 - `dataset_id`
 - `dataset_name`
@@ -48,8 +48,23 @@ Response:
 - `status` / `eligibility_status`
 - `eligibility_criteria[]`
 - `policy_id`
-- `evaluation_id`
+- `evaluated_at` — ISO timestamp for this **response snapshot** (not a stored audit primary key)
 - `reasons[]`
+
+There is **no** `evaluation_id` on `GET` responses.
+
+### 1.0) `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluate` — **explicit audit**
+
+Same query parameters as `GET .../readiness` (`policy_id`, `dataset_version_id`, `required_size`). Runs the evaluation, **persists** one row in `dataset_readiness_evaluations`, emits **`dataset.readiness.updated`**, and returns the readiness JSON plus:
+
+- `evaluation_id` — inserted row id
+- `evaluated_at` — snapshot time (aligned with the write path)
+
+Version-scoped POST (pins the version in the path):
+
+- `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness/evaluate?policy_id=<id>`
+
+Use `POST .../evaluate` for operator “record this check”, schedulers, pre-training validation, or policy engines — **not** for passive UI polling (use `GET` for that).
 
 ### 1.1) Policy management
 
@@ -80,9 +95,10 @@ Use consistent presets across teams to reduce audit ambiguity:
   - `trigger_mode`: `manual`
   - Best for strict promotion checks before model rollout.
 
-You can create these templates with `POST .../training-policies` and then evaluate readiness with:
+You can create these templates with `POST .../training-policies` and then:
 
-- `GET .../datasets/{dataset_id}/readiness?policy_id=<policy_id>&dataset_version_id=<version_id>`
+- **Live / polling:** `GET .../datasets/{dataset_id}/readiness?policy_id=<policy_id>&dataset_version_id=<version_id>`
+- **Audit row:** `POST .../datasets/{dataset_id}/readiness/evaluate?policy_id=<policy_id>&dataset_version_id=<version_id>`
 
 Example `POST` payloads:
 
@@ -113,10 +129,17 @@ Example `POST` payloads:
 }
 ```
 
-Example evaluate call:
+Example **read** (derived readiness; no audit row):
 
 ```bash
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness?policy_id=<policy_id>&dataset_version_id=<version_id>" \
+  -H "Authorization: Bearer admin-token"
+```
+
+Example **persisted evaluation** (audit history):
+
+```bash
+curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness/evaluate?policy_id=<policy_id>&dataset_version_id=<version_id>" \
   -H "Authorization: Bearer admin-token"
 ```
 
@@ -316,7 +339,7 @@ Treat **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** as an **explicit compatibil
 
 #### Dual-read period and phasing down aggregate reliance
 
-For migrations, **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** may run temporarily while Hub and APIs already prefer **`dataset_version_id`** on train and readiness calls. Treat this as a **bounded** operator phase: confirm **`GET .../readiness/evaluations`** / history meets audit needs, then set **`0`** so new evaluations do not lean on mutable **`datasets.current_size`** when no version exists. On orchestration clusters, **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`** can further block vacuous-ready **`POST .../runs`** once pipeline versions declare **`inputs`**.
+For migrations, **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** may run temporarily while Hub and APIs already prefer **`dataset_version_id`** on train and readiness calls. Treat this as a **bounded** operator phase: confirm **`GET .../readiness/evaluations`** / history meets audit needs, then set **`0`** so new **persisted** evaluations (from **`POST .../readiness/evaluate`**) do not lean on mutable **`datasets.current_size`** when no version exists. On orchestration clusters, **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`** can further block vacuous-ready **`POST .../runs`** once pipeline versions declare **`inputs`**.
 
 ### Readiness gate semantics (non-breaking enhancement)
 

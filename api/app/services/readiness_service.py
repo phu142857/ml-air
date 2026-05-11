@@ -481,7 +481,7 @@ def summarize_dataset_training_eligibility(
 ) -> dict[str, Any]:
     """
     Read-only aggregate: run version-centric readiness for each training policy.
-    Does not persist evaluations (use GET .../readiness for that).
+    Does not persist evaluations (use ``POST .../readiness/evaluate`` for audit rows).
     """
     policies = list_dataset_training_policies(
         tenant_id=tenant_id, project_id=project_id, dataset_id=dataset_id, limit=200, offset=0

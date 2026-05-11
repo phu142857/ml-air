@@ -13,13 +13,15 @@ Use Dataset Hub as the primary entry point for **training eligibility** (policy 
 
 ### 1) Dataset-level readiness (policy-driven eligibility)
 
-Endpoint:
+Endpoints:
 
-- `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness?policy_id=<id>&dataset_version_id=<id>`
+- **Live / polling (read-only):** `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness?policy_id=<id>&dataset_version_id=<id>`
+- **Explicit audit row:** `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluate?...` (same query parameters)
 
 What it means:
 
-- Runs a **training eligibility evaluation** for `(dataset_version + training policy)` — response includes `eligibility_status`, `eligibility_criteria`, and persisted evaluation records.
+- **`GET`** runs a **derived** training eligibility evaluation for `(dataset_version + training policy)` — response includes `eligibility_status`, `eligibility_criteria`, and `evaluated_at` (snapshot time). It does **not** append `dataset_readiness_evaluations` rows.
+- **`POST .../evaluate`** runs the same evaluation and **persists** one history row (and emits realtime), for operator or automation audit.
 - Good for lifecycle UX: “can we train on this snapshot under this policy?”
 
 Policy lifecycle endpoints:
@@ -31,7 +33,7 @@ Policy lifecycle endpoints:
 Recommended UX:
 
 - User chooses a policy (for example: small, daily, production gate)
-- Readiness evaluates `(dataset_version + policy)` and stores evaluation history
+- Hub polls **`GET .../readiness`** for the live panel; user clicks **Evaluate now (persist)** (or automation calls **`POST .../evaluate`**) when an audit row should be recorded
 
 What client cannot set:
 

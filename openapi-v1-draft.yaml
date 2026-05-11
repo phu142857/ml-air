@@ -823,7 +823,7 @@ paths:
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness:
     get:
       tags: [Datasets]
-      summary: Evaluate dataset-version readiness by policy (legacy-compatible)
+      summary: Dataset readiness (pure read — derived state, no audit persistence)
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
@@ -847,11 +847,48 @@ paths:
           description: Legacy fallback used only when policy_id is omitted.
       responses:
         "200":
-          description: Readiness summary
+          description: Derived readiness (includes evaluated_at; no evaluation_id)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatasetReadiness"
+        "404":
+          description: dataset_not_found
+        "409":
+          description: no_materialized_dataset_version (strict mode)
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluate:
+    post:
+      tags: [Datasets]
+      summary: Evaluate readiness and persist audit evaluation
+      description: |
+        Runs the same evaluation as ``GET .../readiness`` but inserts a row in ``dataset_readiness_evaluations``
+        and emits ``dataset.readiness.updated``. Use for explicit operator checks, schedulers, or pre-train gates — not for polling.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - name: policy_id
+          in: query
+          schema:
+            type: string
+        - name: dataset_version_id
+          in: query
+          schema:
+            type: string
+        - name: required_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1000
+      responses:
+        "200":
+          description: Evaluation persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetReadinessEvaluateResult"
         "404":
           description: dataset_not_found
         "409":
@@ -872,11 +909,36 @@ paths:
             type: string
       responses:
         "200":
-          description: Readiness summary
+          description: Derived readiness (includes evaluated_at; no evaluation_id)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatasetReadiness"
+        "404":
+          description: dataset_not_found or dataset_version_not_found
+        "409":
+          description: no_materialized_dataset_version (strict mode)
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness/evaluate:
+    post:
+      tags: [Datasets]
+      summary: Evaluate readiness for a version and persist audit evaluation
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - name: policy_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Evaluation persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetReadinessEvaluateResult"
         "404":
           description: dataset_not_found or dataset_version_not_found
         "409":
@@ -2851,6 +2913,7 @@ components:
 
     DatasetReadiness:
       type: object
+      description: Derived readiness snapshot (GET). Includes ``evaluated_at`` (response snapshot time); no ``evaluation_id``.
       properties:
         dataset_id:
           type: string
@@ -2863,6 +2926,20 @@ components:
           type: integer
         ready:
           type: boolean
+        evaluated_at:
+          type: string
+          format: date-time
+          description: ISO time when this JSON snapshot was produced (not a persisted audit row).
+
+    DatasetReadinessEvaluateResult:
+      allOf:
+        - $ref: "#/components/schemas/DatasetReadiness"
+        - type: object
+          required: [evaluation_id]
+          properties:
+            evaluation_id:
+              type: string
+              description: Primary key of the inserted ``dataset_readiness_evaluations`` row.
 
     DatasetReadinessEvaluationList:
       type: object

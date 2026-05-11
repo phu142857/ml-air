@@ -789,8 +789,35 @@ export async function fetchDatasetReadiness(
     eligibility_status?: "eligible" | "blocked" | string;
     eligibility_criteria?: Array<{ code: string; label: string; status: "pass" | "fail" | string }>;
     policy_id?: string | null;
-    evaluation_id?: string;
+    /** ISO timestamp of this derived snapshot (GET is read-only; no ``evaluation_id``). */
+    evaluated_at?: string;
     reasons?: Array<string | Record<string, unknown>>;
+  };
+}
+
+/** Persist a readiness evaluation row + emit realtime (explicit audit; not for polling). */
+export async function postDatasetReadinessEvaluate(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  opts?: { requiredSize?: number; datasetVersionId?: string; policyId?: string }
+) {
+  const scoped = normalizeProjectId(projectId);
+  const req = Math.max(1, Math.floor(opts?.requiredSize ?? 1000));
+  const versionQuery = opts?.datasetVersionId
+    ? `&dataset_version_id=${encodeURIComponent(opts.datasetVersionId)}`
+    : "";
+  const policyQuery = opts?.policyId ? `&policy_id=${encodeURIComponent(opts.policyId)}` : "";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scoped}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluate?required_size=${req}${versionQuery}${policyQuery}`,
+    { method: "POST", headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as Awaited<ReturnType<typeof fetchDatasetReadiness>> & {
+    evaluation_id: string;
+    evaluated_at: string;
   };
 }
 

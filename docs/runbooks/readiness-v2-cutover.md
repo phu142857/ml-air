@@ -19,7 +19,7 @@ Current default in code/config examples: **strict mode enabled** (`ML_AIR_READIN
 - Dataset pipelines are producing immutable versions (`vN`) continuously.
 - Scheduled/manual materialization is active for runtime accumulation strategies.
 - Dataset Hub shows expected latest versions and source badges.
-- Readiness evaluations are present with `dataset_version_id` and `policy_id`.
+- Persisted readiness evaluations (via **`POST .../readiness/evaluate`** or pre-cutover **`GET .../readiness`** behavior) include `dataset_version_id` and `policy_id` where applicable.
 - Scheduler metrics are available:
   - `mlair_scheduler_dataset_materialization_tick_evaluated_total`
   - `mlair_scheduler_dataset_materialization_tick_triggered_total`
