@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Alembic **`0022_dataset_source_kind_enum`**: PostgreSQL enum **`dataset_source_kind`** and persisted **`canonical_source_type`** on **`dataset_versions`** and **`dataset_accumulation_buffers`** (backfilled from existing **`source_type`** text).
 - Guide: **`docs/guides/dataset-accumulation-strategies.md`** (strategy matrix + concurrency pointers).
 - **`POST /v1/.../datasets/{dataset_id}/materialize`**: maintainer alias for **`POST .../datasets/{dataset_id}/buffer/materialize`** (same response and error codes).
 - Alembic migration **`0013_model_governance`**: `model_versions.approval_status` / `approval_reason` / `approval_updated_at`; table **`model_serving_slots`** (`candidate` | `challenger` | `champion` | `canary`).

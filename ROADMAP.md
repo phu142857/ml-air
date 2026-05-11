@@ -470,7 +470,8 @@ The codebase still bridges:
 
 - [x] Buffer + strategy + materialization metadata (through migration `0018` baseline)
 - [x] Readiness evaluation projection + indexes — table **`dataset_readiness_evaluations`** (`0016`, `0017` `policy_id`) + secondary indexes migration **`0021_dataset_readiness_evaluation_indexes.py`** (status / policy-scoped `evaluated_at` DESC)
-- [ ] `source_type` enum normalization + any missing audit columns
+- [x] `source_type` enum normalization — PostgreSQL enum **`dataset_source_kind`** + persisted **`canonical_source_type`** on **`dataset_versions`** and **`dataset_accumulation_buffers`** (Alembic **`0022`**); literals stay in **`source_type`**
+- [ ] Any remaining audit columns (cross-cutting timeline API still Phase 5)
 
 #### Phase B — Dual-write / compatibility
 

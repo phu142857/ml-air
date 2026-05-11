@@ -205,16 +205,19 @@ def _upsert_dataset_buffer(
         strat = DEFAULT_ACCUMULATION_STRATEGY
     with db_conn() as conn:
         with conn.cursor() as cur:
+            canon_buf = canonical_dataset_source_type(src)
             cur.execute(
                 """
                 INSERT INTO dataset_accumulation_buffers(
-                    buffer_id, tenant_id, project_id, dataset_id, source_type, current_size, target_threshold, accumulation_strategy,
+                    buffer_id, tenant_id, project_id, dataset_id, source_type, canonical_source_type,
+                    current_size, target_threshold, accumulation_strategy,
                     window_status, window_start, window_end, last_materialized_version_id, last_materialized_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (tenant_id, project_id, dataset_id)
                 DO UPDATE SET
                     source_type = EXCLUDED.source_type,
+                    canonical_source_type = EXCLUDED.canonical_source_type,
                     current_size = EXCLUDED.current_size,
                     target_threshold = EXCLUDED.target_threshold,
                     accumulation_strategy = COALESCE(EXCLUDED.accumulation_strategy, dataset_accumulation_buffers.accumulation_strategy),
@@ -231,6 +234,7 @@ def _upsert_dataset_buffer(
                     project_id,
                     dataset_id,
                     src,
+                    canon_buf,
                     now_size,
                     tgt,
                     strat,
@@ -266,7 +270,7 @@ def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT buffer_id, source_type, current_size, target_threshold, window_status, started_at, updated_at
+                SELECT buffer_id, source_type, canonical_source_type, current_size, target_threshold, window_status, started_at, updated_at
                      , accumulation_strategy, window_start, window_end, last_materialized_version_id, last_materialized_at
                 FROM dataset_accumulation_buffers
                 WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
@@ -277,26 +281,29 @@ def get_dataset_buffer(tenant_id: str, project_id: str, dataset_id: str) -> dict
     if not row:
         return None
     st = row[1]
+    db_canon = row[2]
     return {
         "buffer_id": row[0],
         "dataset_id": dataset_id,
         "source_type": st,
-        "canonical_source_type": canonical_dataset_source_type(str(st) if st is not None else None),
-        "current_size": int(row[2] or 0),
-        "record_count": int(row[2] or 0),
-        "target_threshold": int(row[3] or 0),
-        "window_status": row[4],
+        "canonical_source_type": (
+            str(db_canon) if db_canon is not None else canonical_dataset_source_type(str(st) if st is not None else None)
+        ),
+        "current_size": int(row[3] or 0),
+        "record_count": int(row[3] or 0),
+        "target_threshold": int(row[4] or 0),
+        "window_status": row[5],
         "window_strategy": "threshold",
-        "materialization_strategy": str(row[7] or DEFAULT_ACCUMULATION_STRATEGY),
-        "accumulation_strategy": str(row[7] or DEFAULT_ACCUMULATION_STRATEGY),
-        "started_at": row[5].isoformat(),
-        "created_at": row[5].isoformat(),
-        "last_ingested_at": row[6].isoformat(),
-        "updated_at": row[6].isoformat(),
-        "window_start": row[8].isoformat() if row[8] else None,
-        "window_end": row[9].isoformat() if row[9] else None,
-        "last_materialized_version_id": row[10],
-        "last_materialized_at": row[11].isoformat() if row[11] else None,
+        "materialization_strategy": str(row[8] or DEFAULT_ACCUMULATION_STRATEGY),
+        "accumulation_strategy": str(row[8] or DEFAULT_ACCUMULATION_STRATEGY),
+        "started_at": row[6].isoformat(),
+        "created_at": row[6].isoformat(),
+        "last_ingested_at": row[7].isoformat(),
+        "updated_at": row[7].isoformat(),
+        "window_start": row[9].isoformat() if row[9] else None,
+        "window_end": row[10].isoformat() if row[10] else None,
+        "last_materialized_version_id": row[11],
+        "last_materialized_at": row[12].isoformat() if row[12] else None,
     }
 
 
@@ -454,16 +461,27 @@ def _upsert_dataset_version(
             if row:
                 if source_type is not None or record_count is not None:
                     cur.execute(
+                        "SELECT source_type FROM dataset_versions WHERE version_id = %s",
+                        (row[0],),
+                    )
+                    st_row = cur.fetchone()
+                    existing_st = str(st_row[0]).strip() if st_row and st_row[0] is not None else ""
+                    eff = existing_st or (str(source_type).strip() if source_type is not None else "")
+                    canon = canonical_dataset_source_type(eff or None)
+                    cur.execute(
                         """
                         UPDATE dataset_versions
                         SET source_type = COALESCE(source_type, %s),
-                            record_count = COALESCE(%s, record_count)
+                            record_count = COALESCE(%s, record_count),
+                            canonical_source_type = %s
                         WHERE version_id = %s
                         """,
-                        (source_type, record_count, row[0]),
+                        (source_type, record_count, canon, row[0]),
                     )
                 return row[0]
             version_id = str(uuid4())
+            st_ins = str(source_type or "manual_upload").strip() or "manual_upload"
+            canon_ins = canonical_dataset_source_type(st_ins)
             cur.execute(
                 """
                 INSERT INTO dataset_versions
@@ -474,13 +492,14 @@ def _upsert_dataset_version(
                         uri,
                         checksum,
                         source_type,
+                        canonical_source_type,
                         record_count,
                         status,
                         quality_score,
                         summary,
                         details
                     )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 """,
                 (
                     version_id,
@@ -488,7 +507,8 @@ def _upsert_dataset_version(
                     version,
                     uri,
                     checksum,
-                    source_type,
+                    st_ins,
+                    canon_ins,
                     int(record_count) if record_count is not None else None,
                     status,
                     int(quality_score),
@@ -503,7 +523,7 @@ def _upsert_dataset_version(
                     project_id=project_id,
                     dataset_id=dataset_id,
                     dataset_version_id=version_id,
-                    source_type=str(source_type or "manual_upload"),
+                    source_type=st_ins,
                     record_count=int(record_count or 0),
                     updated_at=datetime.now(timezone.utc),
                     trace_id=get_trace_id(),
@@ -692,10 +712,10 @@ def _materialize_runtime_feedback_if_needed(
                         """
                         INSERT INTO dataset_versions
                             (
-                                version_id, dataset_id, version, uri, checksum, source_type, record_count,
+                                version_id, dataset_id, version, uri, checksum, source_type, canonical_source_type, record_count,
                                 status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
                             )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
                         """,
                         (
                             version_id,
@@ -704,6 +724,7 @@ def _materialize_runtime_feedback_if_needed(
                             uri,
                             checksum,
                             "runtime_accumulation",
+                            canonical_dataset_source_type("runtime_accumulation"),
                             current_size,
                             [],
                             json.dumps([]),
@@ -1365,7 +1386,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
-                     , dv.source_type, dv.record_count
+                     , dv.source_type, dv.canonical_source_type, dv.record_count
                      , dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
@@ -1383,12 +1404,16 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
             "checksum": r[3],
             "created_at": r[4].isoformat(),
             "source_type": r[5] or "manual_upload",
-            "canonical_source_type": canonical_dataset_source_type(str(r[5]) if r[5] is not None else "manual_upload"),
-            "record_count": int(r[6] or 0),
-            "status": r[7] or "ready",
-            "quality_score": int(r[8] or 0),
-            "summary": r[9] or [],
-            "details": r[10] or [],
+            "canonical_source_type": (
+                str(r[6])
+                if r[6] is not None
+                else canonical_dataset_source_type(str(r[5]) if r[5] is not None else "manual_upload")
+            ),
+            "record_count": int(r[7] or 0),
+            "status": r[8] or "ready",
+            "quality_score": int(r[9] or 0),
+            "summary": r[10] or [],
+            "details": r[11] or [],
         }
         for r in rows
     ]
@@ -1420,7 +1445,7 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
-                       dv.source_type, dv.record_count,
+                       dv.source_type, dv.canonical_source_type, dv.record_count,
                        dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
@@ -1432,6 +1457,7 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
     if not row:
         return None
     st = row[7] or "manual_upload"
+    db_canon = row[8]
     return {
         "version_id": row[0],
         "version": row[1],
@@ -1441,12 +1467,14 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "dataset_id": row[5],
         "dataset_name": row[6],
         "source_type": st,
-        "canonical_source_type": canonical_dataset_source_type(str(st)),
-        "record_count": int(row[8] or 0),
-        "status": row[9] or "ready",
-        "quality_score": int(row[10] or 0),
-        "summary": row[11] or [],
-        "details": row[12] or [],
+        "canonical_source_type": (
+            str(db_canon) if db_canon is not None else canonical_dataset_source_type(str(st))
+        ),
+        "record_count": int(row[9] or 0),
+        "status": row[10] or "ready",
+        "quality_score": int(row[11] or 0),
+        "summary": row[12] or [],
+        "details": row[13] or [],
     }
 
 
@@ -1735,7 +1763,7 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
             cur.execute(
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
-                       dv.source_type, dv.record_count,
+                       dv.source_type, dv.canonical_source_type, dv.record_count,
                        dv.status, dv.quality_score, dv.summary, dv.details
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
@@ -1756,11 +1784,16 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
             "dataset_id": r[5],
             "dataset_name": r[6],
             "source_type": r[7] or "manual_upload",
-            "record_count": int(r[8] or 0),
-            "status": r[9] or "ready",
-            "quality_score": int(r[10] or 0),
-            "summary": r[11] or [],
-            "details": r[12] or [],
+            "canonical_source_type": (
+                str(r[8])
+                if r[8] is not None
+                else canonical_dataset_source_type(str(r[7]) if r[7] is not None else "manual_upload")
+            ),
+            "record_count": int(r[9] or 0),
+            "status": r[10] or "ready",
+            "quality_score": int(r[11] or 0),
+            "summary": r[12] or [],
+            "details": r[13] or [],
         }
         for r in rows
     ]

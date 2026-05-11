@@ -2915,7 +2915,9 @@ components:
         canonical_source_type:
           type: string
           enum: [import, runtime_accumulated, manual, generated, unknown]
-          description: Derived category for clients (additive; storage literal remains in `source_type`).
+          description: |
+            Persisted PostgreSQL `dataset_source_kind` (Alembic `0022`); storage literal remains in `source_type`.
+            Matches `app/dataset_source_type.py` / `frontend/lib/dataset-source-type.ts`.
         current_size:
           type: integer
         record_count:
@@ -3027,7 +3029,8 @@ components:
         canonical_source_type:
           type: string
           enum: [import, runtime_accumulated, manual, generated, unknown]
-          description: Server-derived category (mirrors `app/dataset_source_type.py`).
+          description: |
+            Persisted PostgreSQL `dataset_source_kind` (Alembic `0022`); mirrors `app/dataset_source_type.py`.
       additionalProperties: true
 
     DatasetVersionDeleteResult:
