@@ -28,10 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- **Governance docs:** `ARCHITECTURE.md` §7, `docs/index.md`, and OpenAPI describe **approval**, **serving slots** (contract + DB; HTTP may be unmounted), and the **production promote** gate (plus roadmap-only items such as audit timeline API).
+- **ROADMAP:** Phase C/D readiness v2 + Hub-first lifecycle checkboxes aligned with shipped evaluations UI and pipeline execution-gate posture; README + Dataset list/detail subtitles point operators at **`docs/guides/dataset-accumulation-strategies.md`**.
+- **Governance docs:** `ARCHITECTURE.md` §7, `docs/index.md`, and OpenAPI describe **approval**, **serving slots** (contract + DB; HTTP routes mount when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**), and the **production promote** gate (plus roadmap-only items such as audit timeline API).
 - Guide: **`docs/guides/model-centric-pipeline-mapping-and-trigger.md`**
 - Guide: **`docs/guides/integrate-external-executor.md`**
 - Guide: **`docs/guides/consume-mlair-from-compose.md`**
 - Guide: **`docs/guides/downstream-model-promote-webhook.md`** (outbound promote webhook contract)
 - Guide: **`docs/guides/downstream-executor-control-plane.md`** (end-to-end control plane + external executor)
-- API: **`docs/api/post-runs-trigger.md`**
+- API: **`docs/api/post-runs-trigger.md`** (Related: accumulation strategies guide).

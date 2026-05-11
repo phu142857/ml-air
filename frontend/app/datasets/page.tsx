@@ -210,7 +210,7 @@ export default function DatasetsPage() {
     <RouteShell
       activeNav="Datasets"
       title="Dataset Hub"
-      subtitle="Primary lifecycle surface: versions, readiness, eligibility, train — pipelines are optional overrides"
+      subtitle="Primary lifecycle surface: versions, readiness, eligibility, train — buffer strategies: docs/guides/dataset-accumulation-strategies.md; pipelines stay optional overrides"
     >
       <ConfirmDialog
         open={confirmOpen}

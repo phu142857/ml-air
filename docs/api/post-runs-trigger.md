@@ -84,6 +84,7 @@ curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_proj
 
 ## Related
 
+- [Dataset accumulation strategies](../guides/dataset-accumulation-strategies.md) — how runtime buffers become immutable **`dataset_versions`** before training on versioned snapshots.
 - [Model-centric pipeline mapping and run trigger](../guides/model-centric-pipeline-mapping-and-trigger.md) — mapping table and `resolved-pipeline`.
 - [Readiness and Gating API](./readiness-and-gating.md) — how `inputs` and `training_mode` interact; pipeline **`POST .../pipelines/{pipeline_id}/run`** and **`POST .../runs`** share **`TriggerRunRequest`**, including optional top-level **`dataset_version_id`** (same pin semantics for the execution gate). **Backward-compatibility review** for run/pipeline payloads: same doc, section *Pipeline and run API compatibility*.
 - **Train-intent telemetry (browser, opt-in):** same doc, section *Optional train-intent telemetry* — `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` distinguishes **`hub_runs_trigger`** vs **`pipeline_gated_run`** from the Next client (`frontend/lib/train-intent-telemetry.ts`).

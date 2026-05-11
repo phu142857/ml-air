@@ -492,8 +492,8 @@ export default function DatasetHubPage() {
     setPolicyRequiredSizeDraft(String(firstPolicy.required_size || 1000));
   }, [policiesQuery.data]);
   const datasetSubtitle = dataset
-    ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)} · readiness + eligibility + train live here`
-    : "Primary surface for versions, readiness, eligibility matrix, and intent-driven train (pipeline = advanced execution gate)";
+    ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)} · readiness + eligibility + train live here · buffer strategies: docs/guides/dataset-accumulation-strategies.md`
+    : "Primary surface for versions, readiness, eligibility matrix, and intent-driven train (pipeline = advanced execution gate) · buffer strategies: docs/guides/dataset-accumulation-strategies.md";
 
   const lineageVersionRow = useMemo(() => {
     const items = versionsQuery.data?.items || [];

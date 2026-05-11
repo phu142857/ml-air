@@ -339,7 +339,7 @@ The codebase still bridges:
 
 **Step B — Materialization**
 
-- [ ] Single decision module: strategy evaluation → atomic **new `dataset_version`** + buffer reset/advance
+- [x] Single decision module: strategy evaluation → atomic **new `dataset_version`** + buffer reset/advance — **`lineage_service._materialize_runtime_feedback_if_needed`** is the shared atomic insert + buffer advance path (threshold ingest, manual/schedule materialize, idempotency); strategy *selection* (when to call) remains in ingest/tick/callers by design
 - [x] Idempotency key on version insert (`materialization_idempotency_key`)
 - [x] Emit lifecycle events (see **Realtime lifecycle events**) — **`_materialize_runtime_feedback_if_needed`** emits **`dataset.version.created`** and **`dataset.buffer.updated`** on successful materialization paths
 
@@ -479,11 +479,11 @@ The codebase still bridges:
 
 #### Phase C — Readiness v2
 
-- [ ] Version-centric readiness default + Hub history backed by table
+- [x] Version-centric readiness default + Hub history backed by table — **`dataset_readiness_evaluations`** + **`GET .../readiness/evaluations`** / **`/readiness/history`** + Hub paginated list; strict aggregate fallback off by default (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`)
 
 #### Phase D — Full Hub-first lifecycle
 
-- [ ] Hub = canonical lifecycle; pipeline = orchestration/debug only for lifecycle actions
+- [x] Hub = canonical lifecycle; pipeline = orchestration/debug only for lifecycle actions — shipped per Phase 5–6 exit criteria + Dataset Hub primary copy; pipeline **Execution gate** is maintainer-only advanced path (`docs/api/readiness-and-gating.md`)
 
 ---
 

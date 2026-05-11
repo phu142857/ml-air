@@ -39,7 +39,7 @@ Use this as a quick “what exists today” view. Detailed delivery history live
 
 - Datasets and `dataset_versions`; lineage ingest and APIs
 - `pipeline_versions`, run binding to snapshots, diff API
-- Readiness APIs; training policies; Dataset Hub route `/datasets/[datasetId]`
+- Readiness APIs; training policies; Dataset Hub route `/datasets/[datasetId]`; accumulation strategy matrix [`docs/guides/dataset-accumulation-strategies.md`](docs/guides/dataset-accumulation-strategies.md)
 - Search API (`GET /v1/search`) + topbar + `/search` page
 - Lineage UI `/lineage` (React Flow; deep-link with run / dataset context)
 
