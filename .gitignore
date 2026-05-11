@@ -1,38 +1,88 @@
-# Node / Next.js
-node_modules/
-package-lock.json
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-
-# Frontend logs
-frontend/npm-debug.log*
-frontend/yarn-debug.log*
-frontend/yarn-error.log*
-frontend/pnpm-debug.log*
-
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
-venv/
-
-# Build and cache
-dist/
-build/
+# OS
 .DS_Store
-frontend/tsconfig.tsbuildinfo
+Thumbs.db
 
-# Local environment
+# Editors / IDE (local only; share team defaults via repo if you prefer)
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment and secrets (keep .env.example tracked)
 .env
+.env.local
+.env.*.local
+!.env.example
 
 # Local managed key material (do not commit secrets)
 deploy/security/manifest-keys.local.json
+
+# Personal / scratch notes (not for the remote repo)
 startUpForRTS.md
-frontend/tsconfig.tsbuildinfo
-ROADMAP.md
-ROADMAP.md
-ROADMAP.md
+
+# --- Node / JavaScript ---
+# Dependency installs (always ignore; commit a lockfile for reproducible CI)
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Next.js / frontend
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+.turbo/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+downloads/
+eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.manifest
+*.spec
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Tools / test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+coverage.xml
+*.cover
+.cache/
+pytestdebug.log
+
+# Build / generic artifacts
+build/
+*.bak

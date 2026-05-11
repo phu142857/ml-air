@@ -124,6 +124,8 @@ const READINESS_EVAL_SOURCE_FILTER_OPTIONS = [
   { value: "auto_policy", label: "source: auto_policy" }
 ];
 
+const READINESS_EVALUATIONS_PAGE_SIZE = 20;
+
 export default function DatasetHubPage() {
   const params = useParams<{ datasetId: string }>();
   const datasetId = decodeURIComponent(params.datasetId);
@@ -140,8 +142,7 @@ export default function DatasetHubPage() {
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
   const [policyRequiredSizeDraft, setPolicyRequiredSizeDraft] = useState("1000");
   const [newPolicyTriggerMode, setNewPolicyTriggerMode] = useState("manual");
-  const [evaluationPage, setEvaluationPage] = useState(0);
-  const [maxEvaluationPage, setMaxEvaluationPage] = useState(0);
+  const [evaluationCurrentPage, setEvaluationCurrentPage] = useState(1);
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
   /** When false, `POST .../runs/trigger` can omit `dataset_version_id` server-side (compat); Hub still pins per-row Train. */
   const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
@@ -175,8 +176,7 @@ export default function DatasetHubPage() {
 
   useEffect(() => {
     setSelectedVersionId("");
-    setEvaluationPage(0);
-    setMaxEvaluationPage(0);
+    setEvaluationCurrentPage(1);
   }, [datasetId]);
 
   useEffect(() => {
@@ -306,58 +306,12 @@ export default function DatasetHubPage() {
     onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
   });
   const readinessEvaluationsQuery = useQuery({
-    queryKey: [
-      ...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
-      evaluationPage,
-      evaluationStatusFilter,
-      evaluationPolicyFilter,
-      evaluationSourceFilter
-    ],
+    queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
     queryFn: () =>
-      fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 20, evaluationPage * 20, {
-        status: evaluationStatusFilter,
-        policyId: evaluationPolicyFilter === "all" ? undefined : evaluationPolicyFilter,
-        source: evaluationSourceFilter === "all" ? undefined : evaluationSourceFilter
-      }),
+      fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 200, 0),
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
   });
-
-  // Restore the highest-known evaluation page from React Query cache so the
-  // "Page 1 / X" display doesn't reset to 1/1 after navigation/remount.
-  useEffect(() => {
-    if (!tenantId || !projectId || !datasetId) return;
-    const prefix = mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId);
-    const pageIndex = prefix.length;
-    const cached = queryClient.getQueriesData({ queryKey: prefix });
-    let maxSeen = 0;
-    for (const [key, data] of cached) {
-      if (!Array.isArray(key)) continue;
-      const page = Number(key[pageIndex]);
-      if (!Number.isFinite(page)) continue;
-      if (String(key[pageIndex + 1] ?? "") !== String(evaluationStatusFilter)) continue;
-      if (String(key[pageIndex + 2] ?? "") !== String(evaluationPolicyFilter)) continue;
-      if (String(key[pageIndex + 3] ?? "") !== String(evaluationSourceFilter)) continue;
-      const items = (data as { items?: unknown[] } | undefined)?.items;
-      if (Array.isArray(items)) {
-        maxSeen = Math.max(maxSeen, page);
-      }
-    }
-    setMaxEvaluationPage((prev) => Math.max(prev, maxSeen));
-  }, [
-    tenantId,
-    projectId,
-    datasetId,
-    evaluationStatusFilter,
-    evaluationPolicyFilter,
-    evaluationSourceFilter,
-    readinessEvaluationsQuery.dataUpdatedAt,
-    queryClient
-  ]);
-
-  useEffect(() => {
-    setMaxEvaluationPage((prev) => Math.max(prev, evaluationPage));
-  }, [evaluationPage]);
   const [evaluatePersistMsg, setEvaluatePersistMsg] = useState<string | null>(null);
   const evaluatePersistMutation = useMutation({
     mutationFn: async () => {
@@ -509,12 +463,32 @@ export default function DatasetHubPage() {
     if (!hasPlugin) return { ok: false, reason: "Task plugin is missing in pipeline config" };
     return { ok: true, reason: "" };
   }, [effectivePipeline, pipelineVersionsQuery.data]);
-  const evaluationItems = readinessEvaluationsQuery.data?.items || [];
-  const canLoadOlderEvaluations = evaluationItems.length === 20;
+  const allEvaluationItems = readinessEvaluationsQuery.data?.items ?? [];
+  const filteredEvaluations = useMemo(() => {
+    return allEvaluationItems.filter((row) => {
+      const statusOk =
+        evaluationStatusFilter === "all" ||
+        String(row.status || "").toLowerCase() === evaluationStatusFilter.toLowerCase();
+      const policyOk =
+        evaluationPolicyFilter === "all" || String(row.policy_id || "") === evaluationPolicyFilter;
+      const sourceVal = String((row as { source?: string }).source || "manual").toLowerCase();
+      const sourceOk =
+        evaluationSourceFilter === "all" || sourceVal === evaluationSourceFilter.toLowerCase();
+      return statusOk && policyOk && sourceOk;
+    });
+  }, [allEvaluationItems, evaluationStatusFilter, evaluationPolicyFilter, evaluationSourceFilter]);
+  const evaluationTotalPages = Math.max(1, Math.ceil(filteredEvaluations.length / READINESS_EVALUATIONS_PAGE_SIZE));
+  const paginatedEvaluations = useMemo(
+    () =>
+      filteredEvaluations.slice(
+        (evaluationCurrentPage - 1) * READINESS_EVALUATIONS_PAGE_SIZE,
+        evaluationCurrentPage * READINESS_EVALUATIONS_PAGE_SIZE
+      ),
+    [filteredEvaluations, evaluationCurrentPage]
+  );
   useEffect(() => {
-    setEvaluationPage(0);
-    setMaxEvaluationPage(0);
-  }, [evaluationStatusFilter, evaluationPolicyFilter, evaluationSourceFilter]);
+    setEvaluationCurrentPage((p) => Math.min(p, evaluationTotalPages));
+  }, [evaluationTotalPages]);
   const policyPresets = [
     { id: "small", label: "Small incremental training", requiredSize: 100 },
     { id: "daily", label: "Daily retrain", requiredSize: 1000 },
@@ -1391,11 +1365,18 @@ export default function DatasetHubPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <span />
+            <span className="text-sm text-muted-foreground">
+              Showing {(evaluationCurrentPage - 1) * READINESS_EVALUATIONS_PAGE_SIZE + 1}-
+              {Math.min(evaluationCurrentPage * READINESS_EVALUATIONS_PAGE_SIZE, filteredEvaluations.length)} of{" "}
+              {filteredEvaluations.length} evaluations
+            </span>
             <div className="flex items-center gap-2">
               <SelectDropdown
                 value={evaluationStatusFilter}
-                onChange={setEvaluationStatusFilter}
+                onChange={(v) => {
+                  setEvaluationStatusFilter(v);
+                  setEvaluationCurrentPage(1);
+                }}
                 options={READINESS_EVAL_STATUS_FILTER_OPTIONS}
                 buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
                 className="min-w-[9rem]"
@@ -1403,7 +1384,10 @@ export default function DatasetHubPage() {
               />
               <SelectDropdown
                 value={evaluationSourceFilter}
-                onChange={setEvaluationSourceFilter}
+                onChange={(v) => {
+                  setEvaluationSourceFilter(v);
+                  setEvaluationCurrentPage(1);
+                }}
                 options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
                 buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
                 className="min-w-[10rem]"
@@ -1411,7 +1395,10 @@ export default function DatasetHubPage() {
               />
               <SelectDropdown
                 value={evaluationPolicyFilter}
-                onChange={setEvaluationPolicyFilter}
+                onChange={(v) => {
+                  setEvaluationPolicyFilter(v);
+                  setEvaluationCurrentPage(1);
+                }}
                 options={evaluationPolicyFilterOptions}
                 buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
                 className="min-w-[10rem]"
@@ -1419,27 +1406,20 @@ export default function DatasetHubPage() {
               />
               <Button
                 variant="secondary"
-                onClick={() => setEvaluationPage((prev) => Math.max(0, prev - 1))}
-                disabled={evaluationPage === 0 || readinessEvaluationsQuery.isLoading}
+                onClick={() => setEvaluationCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={evaluationCurrentPage === 1 || readinessEvaluationsQuery.isLoading}
               >
                 {"<<"}
               </Button>
               <span className="px-3 text-sm text-foreground">
-                Page {evaluationPage + 1} / {maxEvaluationPage + 1}
+                Page {evaluationCurrentPage} / {evaluationTotalPages}
               </span>
               <Button
                 variant="secondary"
-                onClick={() => {
-                  if (evaluationPage < maxEvaluationPage) {
-                    setEvaluationPage((prev) => prev + 1);
-                    return;
-                  }
-                  if (!canLoadOlderEvaluations || readinessEvaluationsQuery.isLoading) return;
-                  const nextPage = maxEvaluationPage + 1;
-                  setMaxEvaluationPage(nextPage);
-                  setEvaluationPage(nextPage);
-                }}
-                disabled={(!canLoadOlderEvaluations && evaluationPage === maxEvaluationPage) || readinessEvaluationsQuery.isLoading}
+                onClick={() =>
+                  setEvaluationCurrentPage((prev) => Math.min(evaluationTotalPages, prev + 1))
+                }
+                disabled={evaluationCurrentPage === evaluationTotalPages || readinessEvaluationsQuery.isLoading}
               >
                 {">>"}
               </Button>
@@ -1458,7 +1438,7 @@ export default function DatasetHubPage() {
                 </tr>
               </thead>
               <tbody>
-                {evaluationItems.map((row) => (
+                {paginatedEvaluations.map((row) => (
                   <tr key={row.evaluation_id} className="border-t border-border">
                     <td className="px-3 py-2">
                       <span
@@ -1497,13 +1477,11 @@ export default function DatasetHubPage() {
                 ))}
               </tbody>
             </DataTable>
-            {evaluationItems.length === 0 && !readinessEvaluationsQuery.isLoading ? (
+            {paginatedEvaluations.length === 0 && !readinessEvaluationsQuery.isLoading ? (
               <p className="p-4 text-xs text-muted-foreground">
-                {evaluationPage === 0
-                  ? evaluationStatusFilter === "all"
-                    ? "No readiness evaluations yet."
-                    : "No evaluations match this status filter."
-                  : "No older evaluations in this range."}
+                {allEvaluationItems.length === 0
+                  ? "No readiness evaluations yet."
+                  : "No evaluations match the current filters."}
               </p>
             ) : null}
           </DataTableShell>
