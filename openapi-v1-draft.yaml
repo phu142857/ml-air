@@ -993,6 +993,38 @@ paths:
         "404":
           description: dataset_not_found
 
+  /v1/tenants/{tenant_id}/projects/{project_id}/audit/timeline:
+    get:
+      tags: [Audit]
+      summary: Unified audit timeline feed (read-only aggregation)
+      description: |
+        Aggregates persisted audit-adjacent tables (readiness evaluations, model approval/serving metadata)
+        plus run/task snapshots into a single time-ordered feed. Safe for polling and paging.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: resource_type
+          in: query
+          schema: { type: string }
+          description: Optional filter (dataset|model|run|task).
+        - name: resource_id
+          in: query
+          schema: { type: string }
+          description: Optional filter resource id (requires resource_type).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditTimelineList"
+
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility:
     get:
       tags: [Datasets]
@@ -2948,6 +2980,29 @@ components:
           type: array
           items:
             type: object
+            additionalProperties: true
+
+    AuditTimelineList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              ts:
+                type: string
+                format: date-time
+                nullable: true
+              kind:
+                type: string
+              resource_type:
+                type: string
+              resource_id:
+                type: string
+              payload:
+                type: object
+                additionalProperties: true
             additionalProperties: true
 
     DatasetTrainingEligibilitySummary:

@@ -38,6 +38,7 @@ from app.dataset_source_type import canonical_dataset_source_type
 from app.services import lineage_service
 from app.services import readiness_service
 from app.services import realtime_events as rt
+from app.services import audit_timeline_service
 from app.services.run_service import (
     create_replay_run,
     create_run,
@@ -1587,6 +1588,36 @@ def list_dataset_readiness_history_v1(
         policy_id=policy_id,
         authorization=authorization,
     )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/audit/timeline")
+def list_audit_timeline_v1(
+    tenant_id: str,
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    resource_type: str | None = Query(default=None, description="Optional: filter by resource type (dataset, model, run, task)."),
+    resource_id: str | None = Query(default=None, description="Optional: filter by resource id (requires resource_type)."),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """
+    Unified audit-ish timeline feed for a tenant/project.
+
+    This is a read-only aggregation over already-persisted tables (readiness evaluations,
+    model approval/slots) plus run/task snapshots. It is safe for polling and paging.
+    """
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {
+        "items": audit_timeline_service.list_audit_timeline(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            limit=limit,
+            offset=offset,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+    }
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility")

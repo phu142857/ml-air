@@ -619,7 +619,7 @@ Lineage + pipeline versioning + debug UX. Target tag **`v0.3.0`**.
 - [x] Model governance: approval, promote gate, rollback in UI
 - [x] Serving slots: DB + service layer
 - [x] Serving slots: HTTP routes — mounted when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at API startup (`GET|PUT .../models/{id}/serving`); default **`0`** keeps quickstart minimal; UI follows **`runtime-config.features.serving_slots_http`**
-- [ ] Unified audit timeline API (`ARCHITECTURE.md` §7)
+- [x] Unified audit timeline API (`GET /v1/tenants/{tenant_id}/projects/{project_id}/audit/timeline`) — read-only aggregation over persisted audit tables + run/task snapshots (`ARCHITECTURE.md` §7)
 
 ### Phase 6 (Day 91–120): K8s + CI/CD
 
