@@ -311,6 +311,40 @@ export default function DatasetHubPage() {
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
   });
+
+  // Restore the highest-known evaluation page from React Query cache so the
+  // "Page 1 / X" display doesn't reset to 1/1 after navigation/remount.
+  useEffect(() => {
+    if (!tenantId || !projectId || !datasetId) return;
+    const prefix = mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId);
+    const pageIndex = prefix.length;
+    const cached = queryClient.getQueriesData({ queryKey: prefix });
+    let maxSeen = 0;
+    for (const [key, data] of cached) {
+      if (!Array.isArray(key)) continue;
+      const page = Number(key[pageIndex]);
+      if (!Number.isFinite(page)) continue;
+      if (String(key[pageIndex + 1] ?? "") !== String(evaluationStatusFilter)) continue;
+      if (String(key[pageIndex + 2] ?? "") !== String(evaluationPolicyFilter)) continue;
+      const items = (data as { items?: unknown[] } | undefined)?.items;
+      if (Array.isArray(items)) {
+        maxSeen = Math.max(maxSeen, page);
+      }
+    }
+    setMaxEvaluationPage((prev) => Math.max(prev, maxSeen));
+  }, [
+    tenantId,
+    projectId,
+    datasetId,
+    evaluationStatusFilter,
+    evaluationPolicyFilter,
+    readinessEvaluationsQuery.dataUpdatedAt,
+    queryClient
+  ]);
+
+  useEffect(() => {
+    setMaxEvaluationPage((prev) => Math.max(prev, evaluationPage));
+  }, [evaluationPage]);
   const [evaluatePersistMsg, setEvaluatePersistMsg] = useState<string | null>(null);
   const evaluatePersistMutation = useMutation({
     mutationFn: async () => {
