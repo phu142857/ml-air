@@ -16,7 +16,7 @@ Multi-tenant control plane for **pipeline runs**, **model registry**, **datasets
 
 ## Current status (checklist)
 
-Use this as a quick “what exists today” view. Detailed delivery history lives in `[ROADMAP.md](ROADMAP.md)`.
+Use this as a quick “what exists today” view. Detailed delivery history lives in [ROADMAP.md](ROADMAP.md).
 
 ### Core platform
 
@@ -64,13 +64,13 @@ Use this as a quick “what exists today” view. Detailed delivery history live
 
 ### In progress / incremental (not a blocker to run the stack)
 
-- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — see `[ROADMAP.md](ROADMAP.md)`. **Optional** Hub vs pipeline train-intent beacon: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (+ debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`); see `docs/api/readiness-and-gating.md` § *Optional train-intent telemetry*.)
+- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — see [ROADMAP.md](ROADMAP.md). **Optional** Hub vs pipeline train-intent beacon: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (+ debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`); see `docs/api/readiness-and-gating.md` § *Optional train-intent telemetry*.)
 - **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback remains in ROADMAP dataset lifecycle section.)
 - **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
 
 ### Release hygiene (maintainers)
 
-- Before tagging a milestone: run `make up` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see checklists inside `[ROADMAP.md](ROADMAP.md)` for v0.2.0 / governance gates).
+- Before tagging a milestone: run `make up` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see checklists inside [ROADMAP.md](ROADMAP.md) for v0.2.0 / governance gates).
 
 ---
 
@@ -167,7 +167,7 @@ flowchart LR
 
 **Defaults (`.env.example`):** API **8080**, UI **38080**, Postgres / Redis / MinIO / Prometheus / Grafana wired in the quickstart compose file.
 
-**Full operator docs:** `[docs/index.md](docs/index.md)`. **Post-pull DB:** run `cd api && alembic upgrade head` (see `[CONTRIBUTING.md](CONTRIBUTING.md)` § Database migrations).
+**Full operator docs:** [docs/index.md](docs/index.md). **Post-pull DB:** run `cd api && alembic upgrade head` (see [CONTRIBUTING.md](CONTRIBUTING.md) § Database migrations).
 
 ---
 
@@ -198,8 +198,8 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 ## API
 
 - **Base path:** `/v1`
-- **Contract draft:** `[openapi-v1-draft.yaml](openapi-v1-draft.yaml)` — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls.
-- **Narrative API docs:** `[docs/api/](docs/api/)`
+- **Contract draft:** [openapi-v1-draft.yaml](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls.
+- **Narrative API docs:** [docs/api/](docs/api/)
 
 **Examples**
 
@@ -215,13 +215,13 @@ curl -sS -X POST http://localhost:8080/v1/pipelines/validate \
   -d '{"config":{"tasks":[{"id":"train","plugin":"your_plugin_name"}]}}'
 ```
 
-Token model and roles: **Security** section in `[docs/index.md](docs/index.md)`.
+Token model and roles: **Security** section in [docs/index.md](docs/index.md).
 
 ---
 
 ## Plugin system
 
-- Plugins discovered via Python `**importlib.metadata` entry points** in group `**mlair.plugins`** (`[docs/guides/create-plugin.md](docs/guides/create-plugin.md)`)
+- Plugins discovered via Python `**importlib.metadata` entry points** in group `**mlair.plugins`** ([docs/guides/create-plugin.md](docs/guides/create-plugin.md))
 - **Pipeline version `config.tasks[]`** should declare a `**plugin**` per task; API validates on run trigger so misconfiguration fails with `**BLOCKED` / `PLUGIN_NOT_FOUND**`
 - **API image** installs `**mlair-reference-plugins`** from `api/builtin_reference_plugins/` (`app_etl_adapter`, `app_train_adapter`, `echo_tracking`, …). Replace or extend in production with your own packages.
 - **Executor** runs optional subprocess plugins (`ML_AIR_PLUGIN_RUNNER_MODULE`, default `mlair_runner`). The reference executor suits **orchestration demos**; **real training** belongs in your service or a dedicated plugin package in the executor image.
@@ -265,7 +265,7 @@ From repo root (stack up where a target requires a live API):
 - `make test-helm`  
 - `**make test-all**` — runs the full set above (maintainer bar before release)
 
-Other useful targets: `make seed-demo`, `make backfill-lineage*`, `make enable-ed25519-dev`, `make backup-db` / `make restore-db`. See the `[Makefile](Makefile)` for the complete list.
+Other useful targets: `make seed-demo`, `make backfill-lineage*`, `make enable-ed25519-dev`, `make backup-db` / `make restore-db`. See the [Makefile](Makefile) for the complete list.
 
 ---
 
@@ -280,9 +280,9 @@ Other useful targets: `make seed-demo`, `make backfill-lineage*`, `make enable-e
 - Build and publish images (e.g. GitHub Actions `.github/workflows/publish-images.yml` on SemVer tags `v*.*.*`)
 - Set `**NEXT_PUBLIC_API_BASE_URL`** for published frontend builds (repository variable / build-arg) to the browser-reachable API URL
 - Pin image tag in consumer compose or Kubernetes (e.g. `MLAIR_IMAGE_TAG`)
-- Helm: `[charts/ml-air/README.md](charts/ml-air/README.md)`; reference workflow `.github/workflows/deploy-helm-staging.yml`
+- Helm: [charts/ml-air/README.md](charts/ml-air/README.md); reference workflow `.github/workflows/deploy-helm-staging.yml`
 
-Operational runbooks: `[docs/troubleshooting/](docs/troubleshooting/)`
+Operational runbooks: [docs/troubleshooting/](docs/troubleshooting/)
 
 ---
 
@@ -290,19 +290,19 @@ Operational runbooks: `[docs/troubleshooting/](docs/troubleshooting/)`
 
 - **Metrics:** scrape `/metrics` on API, scheduler, executor (configs under `deploy/monitoring/`)
 - **Dashboards / alerts:** Grafana JSON + alert rules in `deploy/monitoring/`
-- **Guides:** `[docs/guides/view-metrics.md](docs/guides/view-metrics.md)`, `[docs/guides/setup-prometheus.md](docs/guides/setup-prometheus.md)`
+- **Guides:** [docs/guides/view-metrics.md](docs/guides/view-metrics.md), [docs/guides/setup-prometheus.md](docs/guides/setup-prometheus.md)
 
 ---
 
 ## Contributing
 
-See `[CONTRIBUTING.md](CONTRIBUTING.md)`. In short: focused PRs, `make test-env-sync` when env vars change, and smoke / Helm when touching runtime services.
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: focused PRs, `make test-env-sync` when env vars change, and smoke / Helm when touching runtime services.
 
 ---
 
 ## License
 
-Released under the **MIT License** — see `[LICENSE](LICENSE)`. API contract drafts may evolve; consumer-facing changes are summarized in `[CHANGELOG.md](CHANGELOG.md)`.
+Released under the **MIT License** — see [LICENSE](LICENSE). API contract drafts may evolve; consumer-facing changes are summarized in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -311,10 +311,10 @@ Released under the **MIT License** — see `[LICENSE](LICENSE)`. API contract dr
 
 | Document                                                               | Purpose                                        |
 | ---------------------------------------------------------------------- | ---------------------------------------------- |
-| `[docs/index.md](docs/index.md)`                                       | All guides (run, gating, plugins, UI, DR)      |
-| `[CHANGELOG.md](CHANGELOG.md)`                                         | Notable API and env changes for integrators    |
-| `[ARCHITECTURE.md](ARCHITECTURE.md)`                                   | Target enterprise architecture                 |
-| `[ROADMAP.md](ROADMAP.md)`                                             | Delivery milestones + Hub-first migration plan |
-| `[docs/plugin-development-guide.md](docs/plugin-development-guide.md)` | Plugin packaging & contract                    |
+| [docs/index.md](docs/index.md)                                       | All guides (run, gating, plugins, UI, DR)      |
+| [CHANGELOG.md](CHANGELOG.md)                                         | Notable API and env changes for integrators    |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                                   | Target enterprise architecture                 |
+| [ROADMAP.md](ROADMAP.md)                                             | Delivery milestones + Hub-first migration plan |
+| [docs/plugin-development-guide.md](docs/plugin-development-guide.md) | Plugin packaging & contract                    |
 
 
