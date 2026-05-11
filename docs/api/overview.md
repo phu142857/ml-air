@@ -16,6 +16,11 @@ Core resources:
 
 OpenAPI draft: [`openapi-v1-draft.yaml`](../../openapi-v1-draft.yaml) documents **Models** (including **approval** and **serving** slot paths), **Runs**, **Datasets**, **Lineage**, **Tracking**, **Search**, **Plugins**, **Auth**, and the unified **audit timeline** feed (`GET /v1/tenants/{tenant_id}/projects/{project_id}/audit/timeline`) alongside `api/app/api/routes/v1.py`. **Approval** and most model paths match the running router; **serving** `GET|PUT .../models/.../serving` is mounted when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at API startup (default off in quickstart).
 
+Audit timeline notes:
+
+- `GET .../audit/timeline` is a **read-only aggregation** over persisted tables (not a full event-sourcing log).
+- Optional filters include `resource_type/resource_id`, `kind` (exact kind match), and `source` (audit label for readiness evaluations).
+
 Current readiness architecture notes:
 
 - **Training eligibility** is policy-first: **`GET .../readiness`** returns derived `(dataset_version_id + policy_id)` evaluation (`eligibility_status`, `eligibility_criteria`) **without** writing audit rows. **`POST .../readiness/evaluate`** persists `dataset_readiness_evaluations` when an explicit check should be recorded.

@@ -19,6 +19,10 @@
 - Match **JWT / static token** env vars with the API (`ML_AIR_JWT_*`, `ML_AIR_AUTH_TOKENS_JSON`) so WebSocket auth stays consistent.
 - Disable publish fan-out in environments without a subscriber: set `MLAIR_REALTIME_ENABLED=false` on **API** and **scheduler** if desired (realtime service can stay off).
 
+## Event payload notes (selected)
+
+- `dataset.readiness.updated`: payload includes `required_size`, `current_size`, `status`, `updated_at`, and optional `source` (audit label such as `manual`, `scheduler`, `pre_training`, `auto_policy`) when the update was triggered by an explicit persisted evaluation.
+
 ## Backpressure
 
 - Per-socket cap: `MLAIR_REALTIME_MAX_PENDING_SENDS` (default **64**). When exceeded, new events for that socket are **dropped** and `mlair_realtime_events_dropped_total` increments. Raise the cap or scale out more realtime replicas if drops correlate with slow clients.

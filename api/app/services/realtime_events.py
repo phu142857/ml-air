@@ -276,8 +276,10 @@ def emit_dataset_readiness_updated(
     current_size: int,
     status: str,
     updated_at: datetime | None,
+    source: str | None = None,
     trace_id: str | None = None,
 ) -> None:
+    src = str(source or "").strip().lower() or None
     publish_mlair_event(
         build_event(
             event_type=EventType.DATASET_READINESS_UPDATED,
@@ -290,6 +292,7 @@ def emit_dataset_readiness_updated(
                 "current_size": int(current_size),
                 "status": str(status),
                 "updated_at": dt_to_unix(updated_at),
+                **({"source": src} if src else {}),
             },
         )
     )

@@ -1305,6 +1305,8 @@ def _persist_dataset_readiness_evaluation(
     project_id: str,
     dataset_id: str,
     result: dict,
+    *,
+    source: str | None = None,
 ) -> tuple[str, str]:
     """Insert evaluation row + emit realtime; returns (evaluation_id, evaluated_at ISO)."""
     evaluation_id = readiness_service.record_dataset_readiness_evaluation(
@@ -1317,6 +1319,7 @@ def _persist_dataset_readiness_evaluation(
         current_size=int(result.get("current_size") or 0),
         status=str(result.get("status") or "blocked"),
         reasons=result.get("reasons") or [],
+        source=source,
     )
     rt.emit_dataset_readiness_updated(
         tenant_id=tenant_id,
@@ -1326,6 +1329,7 @@ def _persist_dataset_readiness_evaluation(
         current_size=int(result.get("current_size") or 0),
         status=str(result.get("status") or "blocked"),
         updated_at=datetime.now(timezone.utc),
+        source=source,
         trace_id=get_trace_id(),
     )
     evaluated_at = datetime.now(timezone.utc).isoformat()
@@ -1368,11 +1372,16 @@ def post_dataset_readiness_evaluate_v1(
     required_size: int | None = None,
     dataset_version_id: str | None = Query(default=None),
     policy_id: str | None = Query(default=None),
+    source: str | None = Query(
+        default=None,
+        description="Audit source label (manual|scheduler|pre_training|auto_policy|...). Stored on the evaluation row.",
+    ),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Explicit audit: evaluate, persist ``dataset_readiness_evaluations``, emit ``dataset.readiness.updated``."""
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    src = str(source or "manual").strip().lower() or "manual"
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
     try:
@@ -1386,8 +1395,10 @@ def post_dataset_readiness_evaluate_v1(
         )
     except ValueError as exc:
         raise _http_exc_from_readiness_value_error(exc) from exc
-    evaluation_id, evaluated_at = _persist_dataset_readiness_evaluation(tenant_id, project_id, dataset_id, result)
-    return {**result, "evaluation_id": evaluation_id, "evaluated_at": evaluated_at}
+    evaluation_id, evaluated_at = _persist_dataset_readiness_evaluation(
+        tenant_id, project_id, dataset_id, result, source=src
+    )
+    return {**result, "evaluation_id": evaluation_id, "evaluated_at": evaluated_at, "source": src}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness")
@@ -1420,6 +1431,7 @@ def post_dataset_version_readiness_evaluate_v1(
     dataset_id: str,
     version_id: str,
     policy_id: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Version-scoped POST alias for ``POST .../readiness/evaluate`` (pins ``dataset_version_id``)."""
@@ -1430,6 +1442,7 @@ def post_dataset_version_readiness_evaluate_v1(
         required_size=None,
         dataset_version_id=version_id,
         policy_id=policy_id,
+        source=source,
         authorization=authorization,
     )
 
@@ -1547,6 +1560,7 @@ def list_dataset_readiness_evaluations_v1(
     offset: int = 0,
     status: str | None = Query(default=None, description="Filter by evaluation status (e.g. eligible, blocked)."),
     policy_id: str | None = Query(default=None, description="Filter rows for a single training policy."),
+    source: str | None = Query(default=None, description="Filter rows for a single evaluation source label."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1562,6 +1576,7 @@ def list_dataset_readiness_evaluations_v1(
             offset=offset,
             status=status,
             policy_id=policy_id,
+            source=source,
         )
     }
 
@@ -1575,6 +1590,7 @@ def list_dataset_readiness_history_v1(
     offset: int = 0,
     status: str | None = Query(default=None, description="Filter by evaluation status (e.g. eligible, blocked)."),
     policy_id: str | None = Query(default=None, description="Filter rows for a single training policy."),
+    source: str | None = Query(default=None, description="Filter rows for a single evaluation source label."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Roadmap name: same payload as `/readiness/evaluations` (stored evaluation audit log)."""
@@ -1586,6 +1602,7 @@ def list_dataset_readiness_history_v1(
         offset=offset,
         status=status,
         policy_id=policy_id,
+        source=source,
         authorization=authorization,
     )
 
@@ -1598,6 +1615,8 @@ def list_audit_timeline_v1(
     offset: int = Query(default=0, ge=0),
     resource_type: str | None = Query(default=None, description="Optional: filter by resource type (dataset, model, run, task)."),
     resource_id: str | None = Query(default=None, description="Optional: filter by resource id (requires resource_type)."),
+    kind: str | None = Query(default=None, description="Optional: filter by timeline kind (exact match)."),
+    source: str | None = Query(default=None, description="Optional: filter by audit source label (readiness events)."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """
@@ -1616,6 +1635,8 @@ def list_audit_timeline_v1(
             offset=offset,
             resource_type=resource_type,
             resource_id=resource_id,
+            kind=kind,
+            source=source,
         )
     }
 

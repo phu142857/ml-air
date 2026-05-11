@@ -882,6 +882,12 @@ paths:
             type: integer
             minimum: 1
             default: 1000
+        - name: source
+          in: query
+          schema:
+            type: string
+            default: manual
+          description: Audit source label stored on the evaluation row (manual|scheduler|pre_training|auto_policy|...).
       responses:
         "200":
           description: Evaluation persisted
@@ -932,6 +938,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: source
+          in: query
+          schema:
+            type: string
+            default: manual
       responses:
         "200":
           description: Evaluation persisted
@@ -958,6 +969,10 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
+        - name: source
+          in: query
+          schema: { type: string }
+          description: Filter rows for a single evaluation source label.
       responses:
         "200":
           description: OK
@@ -983,6 +998,9 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
+        - name: source
+          in: query
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -1017,6 +1035,14 @@ paths:
           in: query
           schema: { type: string }
           description: Optional filter resource id (requires resource_type).
+        - name: kind
+          in: query
+          schema: { type: string }
+          description: Optional filter by timeline kind (exact match).
+        - name: source
+          in: query
+          schema: { type: string }
+          description: Optional filter by audit source label (applies to readiness evaluation events).
       responses:
         "200":
           description: OK
@@ -2972,6 +2998,9 @@ components:
             evaluation_id:
               type: string
               description: Primary key of the inserted ``dataset_readiness_evaluations`` row.
+            source:
+              type: string
+              description: Audit label stored on the evaluation row (manual|scheduler|pre_training|auto_policy|...).
 
     DatasetReadinessEvaluationList:
       type: object
@@ -2980,6 +3009,34 @@ components:
           type: array
           items:
             type: object
+            properties:
+              evaluation_id:
+                type: string
+              dataset_version_id:
+                type: string
+                nullable: true
+              policy_id:
+                type: string
+                nullable: true
+              required_size:
+                type: integer
+              current_size:
+                type: integer
+              status:
+                type: string
+              source:
+                type: string
+                description: Audit label for why this row exists (manual|scheduler|pre_training|auto_policy|...).
+              evaluated_at:
+                type: string
+                format: date-time
+              reasons:
+                type: array
+                items:
+                  anyOf:
+                    - type: string
+                    - type: object
+                      additionalProperties: true
             additionalProperties: true
 
     AuditTimelineList:
@@ -3000,6 +3057,9 @@ components:
                 type: string
               resource_id:
                 type: string
+              source:
+                type: string
+                nullable: true
               payload:
                 type: object
                 additionalProperties: true

@@ -228,8 +228,10 @@ def record_dataset_readiness_evaluation(
     current_size: int,
     status: str,
     reasons: list[dict[str, Any]] | list[str] | None = None,
+    source: str | None = None,
 ) -> str:
     evaluation_id = str(uuid4())
+    src = str(source or "manual").strip().lower() or "manual"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -244,9 +246,10 @@ def record_dataset_readiness_evaluation(
                     required_size,
                     current_size,
                     status,
+                    source,
                     reasons
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::json)
                 """,
                 (
                     evaluation_id,
@@ -258,6 +261,7 @@ def record_dataset_readiness_evaluation(
                     int(required_size),
                     int(current_size),
                     str(status),
+                    src,
                     json.dumps(reasons or []),
                 ),
             )
@@ -572,11 +576,13 @@ def list_dataset_readiness_evaluations(
     offset: int = 0,
     status: str | None = None,
     policy_id: str | None = None,
+    source: str | None = None,
 ) -> list[dict[str, Any]]:
     lim = max(1, min(int(limit), 200))
     off = max(0, int(offset))
     st_f = str(status or "").strip().lower() or None
     pid_f = str(policy_id or "").strip() or None
+    src_f = str(source or "").strip().lower() or None
     where_extra = ""
     extra_params: list[Any] = []
     if pid_f:
@@ -585,6 +591,9 @@ def list_dataset_readiness_evaluations(
     if st_f:
         where_extra += " AND LOWER(status) = %s"
         extra_params.append(st_f)
+    if src_f:
+        where_extra += " AND LOWER(source) = %s"
+        extra_params.append(src_f)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -596,6 +605,7 @@ def list_dataset_readiness_evaluations(
                     required_size,
                     current_size,
                     status,
+                    source,
                     evaluated_at,
                     reasons
                 FROM dataset_readiness_evaluations
@@ -617,8 +627,9 @@ def list_dataset_readiness_evaluations(
             "required_size": int(r[3] or 0),
             "current_size": int(r[4] or 0),
             "status": str(r[5] or "blocked"),
-            "evaluated_at": r[6].isoformat(),
-            "reasons": r[7] or [],
+            "source": r[6] or "manual",
+            "evaluated_at": r[7].isoformat(),
+            "reasons": r[8] or [],
         }
         for r in rows
     ]

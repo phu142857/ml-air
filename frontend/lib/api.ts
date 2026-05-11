@@ -801,7 +801,7 @@ export async function postDatasetReadinessEvaluate(
   projectId: string,
   datasetId: string,
   token: string,
-  opts?: { requiredSize?: number; datasetVersionId?: string; policyId?: string }
+  opts?: { requiredSize?: number; datasetVersionId?: string; policyId?: string; source?: string }
 ) {
   const scoped = normalizeProjectId(projectId);
   const req = Math.max(1, Math.floor(opts?.requiredSize ?? 1000));
@@ -809,8 +809,9 @@ export async function postDatasetReadinessEvaluate(
     ? `&dataset_version_id=${encodeURIComponent(opts.datasetVersionId)}`
     : "";
   const policyQuery = opts?.policyId ? `&policy_id=${encodeURIComponent(opts.policyId)}` : "";
+  const sourceQuery = opts?.source ? `&source=${encodeURIComponent(opts.source)}` : "";
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${scoped}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluate?required_size=${req}${versionQuery}${policyQuery}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scoped}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluate?required_size=${req}${versionQuery}${policyQuery}${sourceQuery}`,
     { method: "POST", headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
@@ -1025,7 +1026,7 @@ export async function fetchDatasetReadinessEvaluations(
   token: string,
   limit = 20,
   offset = 0,
-  opts?: { status?: string; policyId?: string }
+  opts?: { status?: string; policyId?: string; source?: string }
 ) {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
@@ -1036,6 +1037,8 @@ export async function fetchDatasetReadinessEvaluations(
   if (st && st !== "all") q.set("status", st);
   const pid = String(opts?.policyId || "").trim();
   if (pid) q.set("policy_id", pid);
+  const src = String(opts?.source || "").trim().toLowerCase();
+  if (src && src !== "all") q.set("source", src);
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?${q.toString()}`,
     {
@@ -1053,6 +1056,7 @@ export async function fetchDatasetReadinessEvaluations(
       required_size: number;
       current_size: number;
       status: "eligible" | "blocked" | string;
+      source?: string;
       evaluated_at: string;
       reasons?: Array<string | Record<string, unknown>>;
     }>;

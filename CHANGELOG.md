@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Alembic **`0022_dataset_source_kind_enum`**: PostgreSQL enum **`dataset_source_kind`** and persisted **`canonical_source_type`** on **`dataset_versions`** and **`dataset_accumulation_buffers`** (backfilled from existing **`source_type`** text).
+- Alembic **`0023_readiness_eval_source`**: `dataset_readiness_evaluations.source` audit label (defaults to `manual`) plus index for `(scope, source, evaluated_at)` filtering.
 - Guide: **`docs/guides/dataset-accumulation-strategies.md`** (strategy matrix + concurrency pointers).
 - **`POST /v1/.../datasets/{dataset_id}/materialize`**: maintainer alias for **`POST .../datasets/{dataset_id}/buffer/materialize`** (same response and error codes).
 - Alembic migration **`0013_model_governance`**: `model_versions.approval_status` / `approval_reason` / `approval_updated_at`; table **`model_serving_slots`** (`candidate` | `challenger` | `champion` | `canary`).
@@ -25,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dataset readiness:** **`GET .../datasets/{dataset_id}/readiness`** (and version-scoped **`GET .../versions/{version_id}/readiness`**) are **read-only** (derived snapshot + **`evaluated_at`**); they no longer append **`dataset_readiness_evaluations`** rows or emit **`dataset.readiness.updated`**. Explicit audit uses **`POST .../readiness/evaluate`** or **`POST .../versions/{version_id}/readiness/evaluate`** (same query params where applicable). Dataset Hub adds **Evaluate now (persist)**.
+- **Readiness evaluation history:** persisted rows now include `source` (manual/scheduler/pre_training/auto_policy/etc) and Dataset Hub can filter/history by `source`.
 - **Serving slot HTTP API:** routes mount when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at API startup (default **`0`**). The Next.js models UI reads **`GET /v1/runtime-config`** → **`features.serving_slots_http`** instead of a static flag.
 - **Environment variable rename (integrators):** any prior experimental **`MLAIR_VETAI_*`**-style promote webhook variables are superseded by **`MLAIR_MODEL_PROMOTE_*`**. Update deployments and secret managers accordingly; old names are not read by the API.
 

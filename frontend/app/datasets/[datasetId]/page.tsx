@@ -116,6 +116,14 @@ const READINESS_EVAL_STATUS_FILTER_OPTIONS = [
   { value: "blocked", label: "status: blocked" }
 ];
 
+const READINESS_EVAL_SOURCE_FILTER_OPTIONS = [
+  { value: "all", label: "source: all" },
+  { value: "manual", label: "source: manual" },
+  { value: "scheduler", label: "source: scheduler" },
+  { value: "pre_training", label: "source: pre_training" },
+  { value: "auto_policy", label: "source: auto_policy" }
+];
+
 export default function DatasetHubPage() {
   const params = useParams<{ datasetId: string }>();
   const datasetId = decodeURIComponent(params.datasetId);
@@ -138,6 +146,7 @@ export default function DatasetHubPage() {
   /** When false, `POST .../runs/trigger` can omit `dataset_version_id` server-side (compat); Hub still pins per-row Train. */
   const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
   const [evaluationPolicyFilter, setEvaluationPolicyFilter] = useState("all");
+  const [evaluationSourceFilter, setEvaluationSourceFilter] = useState("all");
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
   const [accumulationStrategyDraft, setAccumulationStrategyDraft] = useState("snapshot_on_threshold");
   const [accumulationMsg, setAccumulationMsg] = useState("");
@@ -301,12 +310,14 @@ export default function DatasetHubPage() {
       ...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
       evaluationPage,
       evaluationStatusFilter,
-      evaluationPolicyFilter
+      evaluationPolicyFilter,
+      evaluationSourceFilter
     ],
     queryFn: () =>
       fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 20, evaluationPage * 20, {
         status: evaluationStatusFilter,
-        policyId: evaluationPolicyFilter === "all" ? undefined : evaluationPolicyFilter
+        policyId: evaluationPolicyFilter === "all" ? undefined : evaluationPolicyFilter,
+        source: evaluationSourceFilter === "all" ? undefined : evaluationSourceFilter
       }),
     enabled: Boolean(datasetId && token && dataset),
     ...realtimeFallbackPolling()
@@ -326,6 +337,7 @@ export default function DatasetHubPage() {
       if (!Number.isFinite(page)) continue;
       if (String(key[pageIndex + 1] ?? "") !== String(evaluationStatusFilter)) continue;
       if (String(key[pageIndex + 2] ?? "") !== String(evaluationPolicyFilter)) continue;
+      if (String(key[pageIndex + 3] ?? "") !== String(evaluationSourceFilter)) continue;
       const items = (data as { items?: unknown[] } | undefined)?.items;
       if (Array.isArray(items)) {
         maxSeen = Math.max(maxSeen, page);
@@ -338,6 +350,7 @@ export default function DatasetHubPage() {
     datasetId,
     evaluationStatusFilter,
     evaluationPolicyFilter,
+    evaluationSourceFilter,
     readinessEvaluationsQuery.dataUpdatedAt,
     queryClient
   ]);
@@ -352,7 +365,8 @@ export default function DatasetHubPage() {
       return postDatasetReadinessEvaluate(tenantId, projectId, datasetId, token, {
         requiredSize: 1000,
         datasetVersionId: selectedVersionForReadiness,
-        policyId: selectedPolicyId
+        policyId: selectedPolicyId,
+        source: "manual"
       });
     },
     onSuccess: async (out) => {
@@ -500,7 +514,7 @@ export default function DatasetHubPage() {
   useEffect(() => {
     setEvaluationPage(0);
     setMaxEvaluationPage(0);
-  }, [evaluationStatusFilter, evaluationPolicyFilter]);
+  }, [evaluationStatusFilter, evaluationPolicyFilter, evaluationSourceFilter]);
   const policyPresets = [
     { id: "small", label: "Small incremental training", requiredSize: 100 },
     { id: "daily", label: "Daily retrain", requiredSize: 1000 },
@@ -1388,6 +1402,14 @@ export default function DatasetHubPage() {
                 aria-label="Filter evaluations by status"
               />
               <SelectDropdown
+                value={evaluationSourceFilter}
+                onChange={setEvaluationSourceFilter}
+                options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
+                buttonClassName="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                className="min-w-[10rem]"
+                aria-label="Filter evaluations by source"
+              />
+              <SelectDropdown
                 value={evaluationPolicyFilter}
                 onChange={setEvaluationPolicyFilter}
                 options={evaluationPolicyFilterOptions}
@@ -1430,6 +1452,7 @@ export default function DatasetHubPage() {
                   <th className="px-3 py-2 text-left">Status</th>
                   <th className="px-3 py-2 text-left">Current / Required</th>
                   <th className="px-3 py-2 text-left">Version</th>
+                  <th className="px-3 py-2 text-left">Source</th>
                   <th className="px-3 py-2 text-left">Why blocked</th>
                   <th className="px-3 py-2 text-left">Evaluated</th>
                 </tr>
@@ -1453,6 +1476,9 @@ export default function DatasetHubPage() {
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                       {row.dataset_version_id || "—"}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      {String((row as { source?: string }).source || "manual")}
                     </td>
                     <td
                       className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground"

@@ -14,6 +14,8 @@ def list_audit_timeline(
     offset: int = 0,
     resource_type: str | None = None,
     resource_id: str | None = None,
+    kind: str | None = None,
+    source: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Unified audit-ish timeline view (read-only aggregation).
@@ -27,10 +29,15 @@ def list_audit_timeline(
     safe_offset = max(0, int(offset or 0))
     rt = (resource_type or "").strip().lower() or None
     rid = (resource_id or "").strip() or None
+    k = (kind or "").strip() or None
+    src = (source or "").strip().lower() or None
 
     # Optional filter: only apply if both type+id are provided.
     where_rt = rt if (rt and rid) else None
     where_rid = rid if (rt and rid) else None
+    where_kind = k
+    # Source applies only to events that have a source column (readiness evals today).
+    where_source = src
 
     sql = """
     WITH timeline AS (
@@ -40,6 +47,7 @@ def list_audit_timeline(
         'dataset.readiness.evaluated'::text AS kind,
         'dataset'::text AS resource_type,
         e.dataset_id::text AS resource_id,
+        e.source::text AS source,
         json_build_object(
           'evaluation_id', e.evaluation_id,
           'dataset_version_id', e.dataset_version_id,
@@ -47,6 +55,7 @@ def list_audit_timeline(
           'required_size', e.required_size,
           'current_size', e.current_size,
           'status', e.status,
+          'source', e.source,
           'reasons', e.reasons
         ) AS payload
       FROM dataset_readiness_evaluations e
@@ -60,6 +69,7 @@ def list_audit_timeline(
         'model.version.created'::text AS kind,
         'model'::text AS resource_type,
         m.model_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'version_id', mv.version_id,
           'version', mv.version,
@@ -79,6 +89,7 @@ def list_audit_timeline(
         'model.version.approval_updated'::text AS kind,
         'model'::text AS resource_type,
         m.model_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'version_id', mv.version_id,
           'version', mv.version,
@@ -99,6 +110,7 @@ def list_audit_timeline(
         'model.serving_slot.updated'::text AS kind,
         'model'::text AS resource_type,
         ms.model_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'slot', ms.slot,
           'version_id', ms.version_id
@@ -115,6 +127,7 @@ def list_audit_timeline(
         'run.created'::text AS kind,
         'run'::text AS resource_type,
         r.run_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'pipeline_id', r.pipeline_id,
           'status', r.status,
@@ -130,6 +143,7 @@ def list_audit_timeline(
         'run.updated'::text AS kind,
         'run'::text AS resource_type,
         r.run_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'pipeline_id', r.pipeline_id,
           'status', r.status
@@ -146,6 +160,7 @@ def list_audit_timeline(
         'task.created'::text AS kind,
         'task'::text AS resource_type,
         t.task_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'run_id', t.run_id,
           'status', t.status,
@@ -163,6 +178,7 @@ def list_audit_timeline(
         'task.updated'::text AS kind,
         'task'::text AS resource_type,
         t.task_id::text AS resource_id,
+        NULL::text AS source,
         json_build_object(
           'run_id', t.run_id,
           'status', t.status,
@@ -173,9 +189,11 @@ def list_audit_timeline(
       WHERE r.tenant_id = %(tenant_id)s AND r.project_id = %(project_id)s
         AND t.updated_at <> t.created_at
     )
-    SELECT ts, kind, resource_type, resource_id, payload
+    SELECT ts, kind, resource_type, resource_id, source, payload
     FROM timeline
     WHERE (%(where_rt)s IS NULL OR (resource_type = %(where_rt)s AND resource_id = %(where_rid)s))
+      AND (%(where_kind)s IS NULL OR kind = %(where_kind)s)
+      AND (%(where_source)s IS NULL OR COALESCE(source, '') = %(where_source)s)
     ORDER BY ts DESC
     LIMIT %(limit)s OFFSET %(offset)s
     """
@@ -191,12 +209,14 @@ def list_audit_timeline(
                     "offset": safe_offset,
                     "where_rt": where_rt,
                     "where_rid": where_rid,
+                    "where_kind": where_kind,
+                    "where_source": where_source,
                 },
             )
             rows = cur.fetchall()
 
     out: list[dict[str, Any]] = []
-    for ts, kind, rtype, rid2, payload in rows:
+    for ts, kind, rtype, rid2, src_row, payload in rows:
         # payload is already a dict-like (psycopg json) or string; normalize.
         if isinstance(payload, str):
             try:
@@ -211,6 +231,7 @@ def list_audit_timeline(
                 "kind": str(kind),
                 "resource_type": str(rtype),
                 "resource_id": str(rid2),
+                "source": str(src_row) if src_row is not None else None,
                 "payload": payload_val,
             }
         )

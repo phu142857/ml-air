@@ -59,12 +59,24 @@ Same query parameters as `GET .../readiness` (`policy_id`, `dataset_version_id`,
 
 - `evaluation_id` — inserted row id
 - `evaluated_at` — snapshot time (aligned with the write path)
+- `source` — audit label (defaults to `manual`; use values like `scheduler`, `pre_training`, `auto_policy` for automation)
 
 Version-scoped POST (pins the version in the path):
 
 - `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness/evaluate?policy_id=<id>`
 
 Use `POST .../evaluate` for operator “record this check”, schedulers, pre-training validation, or policy engines — **not** for passive UI polling (use `GET` for that).
+
+### 1.0.1) Evaluation history (persisted rows)
+
+- `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluations?limit=...&offset=...`
+- Alias: `GET .../datasets/{dataset_id}/readiness/history?...`
+
+Optional filters:
+
+- `status=eligible|blocked`
+- `policy_id=<policy_id>`
+- `source=manual|scheduler|pre_training|auto_policy|...`
 
 ### 1.1) Policy management
 
