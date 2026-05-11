@@ -1580,15 +1580,7 @@ def patch_dataset_buffer_v1(
     return row
 
 
-@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer/materialize")
-def materialize_dataset_buffer_v1(
-    tenant_id: str,
-    project_id: str,
-    dataset_id: str,
-    authorization: str | None = Header(default=None),
-) -> dict:
-    principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+def _materialize_dataset_buffer_http_response(tenant_id: str, project_id: str, dataset_id: str) -> dict:
     try:
         out = lineage_service.materialize_dataset_buffer_now(
             tenant_id=tenant_id,
@@ -1605,6 +1597,31 @@ def materialize_dataset_buffer_v1(
     if not out:
         raise HTTPException(status_code=404, detail="dataset_or_buffer_not_found")
     return out
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer/materialize")
+def materialize_dataset_buffer_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return _materialize_dataset_buffer_http_response(tenant_id, project_id, dataset_id)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/materialize")
+def materialize_dataset_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Dataset-scoped alias for ``POST .../datasets/{dataset_id}/buffer/materialize`` (same semantics)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return _materialize_dataset_buffer_http_response(tenant_id, project_id, dataset_id)
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/buffer/materialize-scheduled")

@@ -87,6 +87,7 @@ Each guide follows:
 - [Configure Tenant and Project Scope](./guides/configure-tenant-project-scope.md)
 - [Bootstrap and Scope Sync Contract](./guides/bootstrap-and-scope-sync-contract.md)
 - [Manage Datasets and Train from Model](./guides/manage-datasets-and-train-from-model.md)
+- [Dataset accumulation strategies](./guides/dataset-accumulation-strategies.md)
 
 ## Concepts
 
@@ -99,7 +100,7 @@ Each guide follows:
 ## CLI and API
 
 - [CLI Commands](./cli/commands.md)
-- [API Overview](./api/overview.md)
+- [API Overview](./api/overview.md) (datasets: **`POST .../datasets/{id}/materialize`**, buffer, readiness history)
 - [POST /tenants/…/projects/registry](./api/post-tenant-projects-registry.md)
 - [POST /runs/trigger](./api/post-runs-trigger.md)
 - [Readiness and Gating API](./api/readiness-and-gating.md)

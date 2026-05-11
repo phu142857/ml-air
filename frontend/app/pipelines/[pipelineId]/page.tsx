@@ -193,7 +193,7 @@ export default function PipelineDetailPage() {
                     setGateError("");
                     const datasetName = readinessDatasetInput.trim();
                     if (!datasetName) {
-                      setGateError("Enter the readiness input dataset name.");
+                      setGateError("Enter the execution gate dataset name (must match pipeline version inputs[].dataset).");
                       return;
                     }
                     setIsChecking(true);
@@ -217,7 +217,7 @@ export default function PipelineDetailPage() {
                   variant="secondary"
                   className="px-3 py-2 text-xs"
                 >
-                  Check readiness
+                  Run execution gate check
                 </Button>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">

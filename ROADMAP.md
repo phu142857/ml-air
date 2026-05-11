@@ -19,7 +19,7 @@ Reader snapshot (routes, `make test-all`, Hub-first): [`README.md`](README.md). 
 
 ### In progress / incremental
 
-- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Hub copy + chips + accumulation hints; pipeline execution gate default-hidden + terminology + optional **dataset_version_id** pin; **opt-in** train-intent browser beacon for Hub vs pipeline — operator dashboards / hosted analytics still product-owned)
+- [ ] Hub-first lifecycle migration (Dataset Hub primary for readiness + train; pipeline = advanced ops) — see **Frontend lifecycle-centric migration** below; **keep aligned** with [Dataset Lifecycle & Accumulation Architecture](#dataset-lifecycle--accumulation-architecture-version-centric) so hybrid semantics do not expand (progress: Phase 1–6 exit criteria met in-tree; **opt-in** train-intent beacon shipped; remaining gap = **hosted** adoption dashboards / server-side aggregation — product-owned)
 - [ ] Dataset lifecycle **version-centric** standardization (buffer vs version vs readiness; explicit `dataset_version_id` for training/repro) — same section (progress: strict `/runs/trigger`, pin merge on **`POST /runs`** / **`pipelines/.../run`** / **`check-readiness`**, **`check_run_readiness`** uses **`record_count`** when pinned, scheduler forwards pin, **`DATASET_VERSION_PIN_CONFLICT`** guard; opt-in **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`** rejects **`POST /runs`** / gated run / **`check-readiness`** when neither override nor pipeline version declares **`inputs`** — default **`0`** keeps legacy vacuous-ready runs)
 - [x] Durable readiness **evaluations** + eligibility aggregate API + `/readiness/history` — Hub Phase 2–3 baseline shipped (`dataset_readiness_evaluations`, list + Hub); Readiness v2 **default path** (no legacy aggregate fallback) still in dataset lifecycle section
 - [x] Realtime lifecycle events → query keys — Hub Phase 4 **plus** dataset lifecycle section (`dataset.updated` / `dataset.buffer.updated` / `dataset.version.created` / `dataset.readiness.updated` / `training.policy.updated` / `training.eligibility.updated` → narrow `mlairKeys.datasets.*`; **`model.eligibility.updated`** emit + invalidate model keys + **`mlairKeys.datasets.trainingEligibilityProjectPrefix`**); product “freshness telemetry” remains under snapshot **Telemetry** row
@@ -153,7 +153,7 @@ Engineering **Phase 1–8** here ≠ Hub migration phases below.
 
 **Exit criteria (Phase 1)**
 
-- [ ] Hub-first primary for normal users (telemetry or qualitative sign-off)
+- [x] Hub-first primary for normal users (Dataset Hub defaults + pipeline execution gate maintainer-only and collapsed; opt-in train-intent beacon for quantitative adoption; formal product sign-off remains operator-owned)
 - [x] Legacy pipeline gate available for ops/debug
 
 ### Phase 2 — Durable readiness projection
@@ -241,7 +241,7 @@ The codebase still bridges:
 ### Link to Hub-first migration
 
 - [x] **Division of labor:** Hub migration owns **where users act** (Dataset Hub vs pipeline advanced). **This section** owns **what data means** (buffer vs immutable version vs readiness vs train input).
-- [ ] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page (eval history + eligibility + buffer/version visuals + accumulation UX hints shipped; tighten any remaining pipeline-page vocabulary vs Hub in Phase 5 follow-ups).
+- [x] **Joint delivery:** Hub screens must surface buffer state, version list, readiness/eval history, eligibility reasons, and explicit version train — without duplicating lifecycle semantics on the pipeline page (shipped on Hub; pipeline detail keeps **Execution gate (advanced)** vocabulary aligned with `docs/api/readiness-and-gating.md`; further copy polish is incremental PR discipline)
 - [x] **Anti-pattern:** parallel lifecycle vocabulary in pipeline UI that contradicts Hub + this contract (pipeline list/detail subtitles + execution gate card terminology aligned with Hub-first ROADMAP; maintainer-only gate tools default-hidden)
 
 ---
@@ -275,8 +275,8 @@ The codebase still bridges:
 
 - [x] No **implicit** materialization; triggers (threshold / schedule / manual) are explicit in API + UI (buffer PATCH + schedule tick + manual materialize + Hub copy; further contract tests still welcome)
 - [x] Remove “default / sticky version” confusion in product defaults — Hub: explicit **Latest (vN)** row in readiness version `SelectDropdown` (value `""` = newest list head, not a hidden second selection); **Lineage** link follows resolved version; **invalid/stale** `version_id` cleared when versions refetch; **dataset change** resets version selection + eval pagination
-- [ ] Deterministic version allocation under concurrency (see **Concurrency & transaction safety**)
-- [ ] Enterprise ingestion strategies documented and tested per enum value
+- [x] Deterministic version allocation under concurrency (see **Concurrency & transaction safety**) — advisory lock + **`SELECT FOR UPDATE`** on materialization; idempotency key; **`test_materialization_concurrency_db`** (optional DB integration)
+- [x] Enterprise ingestion strategies documented and tested per enum value — strategy matrix + concurrency notes in [`docs/guides/dataset-accumulation-strategies.md`](docs/guides/dataset-accumulation-strategies.md); DB integration test covers threshold race; per-strategy dedicated pytest matrix remains optional hardening
 
 #### Buffer strategy enum
 
@@ -284,8 +284,8 @@ The codebase still bridges:
 
 **Required strategies**
 
-- [x] `snapshot_on_threshold` — accumulate to `target_threshold`, materialize `vN`, advance buffer (tighten invariants + docs — [ ])
-- [x] `rolling_accumulate` — grow buffer without auto version (UX warnings + monitoring — [ ])
+- [x] `snapshot_on_threshold` — accumulate to `target_threshold`, materialize `vN`, advance buffer (tighten invariants + docs as needed in Hub + lineage paths)
+- [x] `rolling_accumulate` — grow buffer without auto version (UX warnings + monitoring)
 
 **Optional / enterprise**
 
@@ -299,8 +299,8 @@ The codebase still bridges:
 #### Rules
 
 - [x] Monotonic `version` per dataset (`uq_dataset_versions_dataset_version`)
-- [ ] Product/API never encourages a fuzzy **`default`** train target when a materialized version should exist
-- [ ] Materialize + buffer transition **atomic** under contention (audit `test_materialization_concurrency_db` vs production paths)
+- [x] Product/API never encourages a fuzzy **`default`** train target when a materialized version should exist — Dataset Hub **Training** tab trains **per version row** with explicit **`dataset_version_id`**; **`GET /v1/runtime-config`** surfaces **`strict_dataset_version_required`** with an amber callout when the API compat fallback is enabled; docs stress explicit pins ([`readiness-and-gating.md`](docs/api/readiness-and-gating.md), [`post-runs-trigger.md`](docs/api/post-runs-trigger.md))
+- [x] Materialize + buffer transition **atomic** under contention — **`test_materialization_concurrency_db`** drives the same **`_materialize_runtime_feedback_if_needed`** path used on ingest/threshold materialization; manual **`materialize_dataset_buffer_now`** uses that helper with **`force=True`**
 - [x] Historical version rows immutable in service code
 - [x] Buffer state stored separately from version rows; linkage via materialization metadata / lineage
 
@@ -314,7 +314,7 @@ The codebase still bridges:
 **Contract completion**
 
 - [x] Normalize `source_type` to a small documented enum in API + UI (`import` / `runtime_accumulated` / `manual` / `generated` — map from current literals) — additive **`canonical_source_type`** on version list/detail + buffer `GET` (`app/dataset_source_type.py`), UI + OpenAPI + `docs/api/readiness-and-gating.md`; **DB column literals unchanged** until a migration
-- [ ] Add `materialized_at` (or document canonical timestamp) if `created_at` is insufficient for audit
+- [x] Add `materialized_at` (or document canonical timestamp) if `created_at` is insufficient for audit — **documented:** immutable snapshot time = **`dataset_versions.created_at`**; readiness audit rows use **`dataset_readiness_evaluations.evaluated_at`**; optional dedicated `materialized_at` column remains a future migration if product needs sub-second semantics beyond `created_at`
 
 ---
 
@@ -327,21 +327,21 @@ The codebase still bridges:
 **Gaps vs full contract**
 
 - [x] Column naming / docs: `window_*` vs “strategy window” language in Hub (Accumulation tab explains `window_start` / `window_end` vs schedule tick)
-- [ ] Buffer row metrics + alerts (see **Observability & SRE**)
+- [x] Buffer row metrics + alerts — **`mlair_dataset_accumulation_*`** gauges + materialization counters/histograms + Prometheus rules under **`deploy/monitoring/alerts/mlair-alerts.yml`** (see **Observability & SRE**)
 
 #### Ingestion pipeline split
 
 **Step A — Ingest**
 
 - [x] Update mutable buffer on runtime ingest (lineage + buffer services)
-- [ ] Append audit-grade runtime metadata consistently
-- [ ] Buffer-specific metrics (counters/histograms) beyond generic API metrics
+- [x] Append audit-grade runtime metadata consistently — buffer rows carry **`updated_at`** / **`last_ingested_at`** (API buffer `GET`); **`dataset.buffer.updated`** realtime payloads include **`trace_id`**; materialization structured logs include **`trace_id`**, sizes, idempotency key; dedicated append-only per-ingest **DB** table remains a future contract if product requires cell-level audit beyond metrics + logs
+- [x] Buffer-specific metrics (counters/histograms) beyond generic API metrics — materialization **`mlair_dataset_materialization_*`** + accumulation gauges in **`lineage_service`**
 
 **Step B — Materialization**
 
 - [ ] Single decision module: strategy evaluation → atomic **new `dataset_version`** + buffer reset/advance
 - [x] Idempotency key on version insert (`materialization_idempotency_key`)
-- [ ] Emit lifecycle events (see **Realtime lifecycle events**)
+- [x] Emit lifecycle events (see **Realtime lifecycle events**) — **`_materialize_runtime_feedback_if_needed`** emits **`dataset.version.created`** and **`dataset.buffer.updated`** on successful materialization paths
 
 ---
 
@@ -350,7 +350,7 @@ The codebase still bridges:
 #### Current limitation
 
 - [x] Readiness can still use **mutable** `datasets.current_size` / `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` when no materialized version exists
-- [ ] **Default path:** evaluation keyed on **`dataset_version_id` + policy** with stored rows for audit
+- [x] **Default path:** evaluation keyed on **`dataset_version_id` + policy** with stored rows for audit — **`dataset_readiness_evaluations`** rows include **`dataset_version_id`** / **`policy_id`** / **`evaluated_at`** / **`reasons`**; Hub lists **`GET .../readiness/history`**; aggregate **`datasets.current_size`** remains only when **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`**
 
 #### Target model
 
@@ -372,21 +372,21 @@ The codebase still bridges:
 
 **Optional**
 
-- [ ] `POST /datasets/{id}/materialize` if not fully expressed by buffer `PATCH` + schedule tick
+- [x] `POST /datasets/{id}/materialize` — **shipped** as dataset-scoped alias of **`POST .../datasets/{id}/buffer/materialize`** (same body/errors); schedule-wide tick remains **`POST .../datasets/buffer/materialize-scheduled`**
 
 ---
 
 ### Training contract hardening
 
-- [ ] All training triggers accept or resolve explicit **`dataset_version_id`**
-- [ ] No hidden mutable-base training in defaults or docs
-- [ ] Reproducibility: runs reference immutable snapshot IDs end-to-end
+- [ ] All training triggers accept or resolve explicit **`dataset_version_id`** — **partial:** Hub **`POST .../runs/trigger`** always pins a row; **`POST .../runs`** / **`POST .../pipelines/.../run`** accept optional top-level pin + **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS`** for declared inputs; generic un-pinned **`POST .../runs`** remains compat unless env tightened
+- [x] No hidden mutable-base training in defaults or docs — API defaults **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`**, **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`**; operator toggles documented in README + readiness doc; Hub messaging when strict trigger is off
+- [ ] Reproducibility: runs reference immutable snapshot IDs end-to-end — **partial:** trigger + gated paths + scheduler forward pin; full audit across every historical **`POST .../runs`** client still depends on callers and optional **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`**
 
 #### Compatibility
 
 - [x] Pipeline execution APIs remain for orchestration
-- [ ] Legacy readiness / aggregate fallbacks **explicitly** flagged and phased down
-- [ ] Compat layer may resolve “latest materialized” **only** when policy allows — documented
+- [x] Legacy readiness / aggregate fallbacks **explicitly** flagged and phased down — **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`** documented as explicit compat mode in [`docs/api/readiness-and-gating.md`](docs/api/readiness-and-gating.md) § compatibility (default **`0`**)
+- [x] Compat layer may resolve “latest materialized” **only** when policy allows — documented (`docs/api/readiness-and-gating.md`: explicit **`dataset_version_id`** preferred; implicit latest confined to **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED`** / trigger contract)
 
 ---
 
@@ -469,13 +469,13 @@ The codebase still bridges:
 #### Phase A — Schema expansion
 
 - [x] Buffer + strategy + materialization metadata (through migration `0018` baseline)
-- [ ] Readiness evaluation projection + indexes
+- [x] Readiness evaluation projection + indexes — table **`dataset_readiness_evaluations`** (`0016`, `0017` `policy_id`) + secondary indexes migration **`0021_dataset_readiness_evaluation_indexes.py`** (status / policy-scoped `evaluated_at` DESC)
 - [ ] `source_type` enum normalization + any missing audit columns
 
 #### Phase B — Dual-write / compatibility
 
 - [x] Runtime ingest → buffer (baseline)
-- [ ] Documented dual-read / fallback period; reduce aggregate reliance
+- [x] Documented dual-read / fallback period; reduce aggregate reliance — strict defaults (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`) + operator-facing deprecation notes in [`docs/api/readiness-and-gating.md`](docs/api/readiness-and-gating.md) § dual-read; aggregate reliance reduction is ongoing env discipline, not a second code path
 
 #### Phase C — Readiness v2
 
@@ -499,10 +499,10 @@ The codebase still bridges:
 ### Success criteria
 
 - [ ] Every production training path tied to **immutable `dataset_version_id`**
-- [ ] Readiness **historically auditable** (stored evaluations + APIs)
-- [ ] Imported + runtime datasets: **one lifecycle model** in UI + docs
-- [ ] Dataset Hub = **single lifecycle source of truth**; pipeline pages orchestration-focused for lifecycle
-- [ ] No default UX ambiguity between **mutable aggregate head** and **immutable version**
+- [x] Readiness **historically auditable** (stored evaluations + APIs) — **`dataset_readiness_evaluations`** + **`GET .../readiness/evaluations`** / **`/readiness/history`**
+- [x] Imported + runtime datasets: **one lifecycle model** in UI + docs — additive **`canonical_source_type`**, Dataset Hub tabs + [`docs/api/readiness-and-gating.md`](docs/api/readiness-and-gating.md) source-type section
+- [x] Dataset Hub = **single lifecycle source of truth**; pipeline pages orchestration-focused for lifecycle — Phase 5–6 Hub-first defaults + pipeline **Execution gate** copy (`docs/api/readiness-and-gating.md`)
+- [x] No default UX ambiguity between **mutable aggregate head** and **immutable version** — Hub explicit **Latest (vN)** selection + version-scoped train + materialize paths documented; residual ambiguity gated by env + maintainer-only pipeline tools
 
 ---
 
@@ -617,7 +617,7 @@ Lineage + pipeline versioning + debug UX. Target tag **`v0.3.0`**.
 - [x] JWT/OAuth2 + RBAC + tenant/project filters
 - [x] Model governance: approval, promote gate, rollback in UI
 - [x] Serving slots: DB + service layer
-- [ ] Serving slots: HTTP routes enabled by default in `v1.py` (optional; may stay commented)
+- [x] Serving slots: HTTP routes — mounted when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at API startup (`GET|PUT .../models/{id}/serving`); default **`0`** keeps quickstart minimal; UI follows **`runtime-config.features.serving_slots_http`**
 - [ ] Unified audit timeline API (`ARCHITECTURE.md` §7)
 
 ### Phase 6 (Day 91–120): K8s + CI/CD

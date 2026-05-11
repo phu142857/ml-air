@@ -10,6 +10,17 @@ Provide a production-ready hybrid workflow where:
 
 ## Primary UX (lifecycle-centric)
 
+### Materialize (immutable version)
+
+Maintainers can turn the **mutable accumulation buffer** into a new **`dataset_versions`** row via either path (same server behavior):
+
+- `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/materialize`
+- `POST .../datasets/{dataset_id}/buffer/materialize` (legacy path; identical semantics)
+
+Eligible buffer strategies include **`manual_materialize_only`** and **`snapshot_on_schedule`** (see Dataset Hub Accumulation tab and [`readiness-and-gating.md`](../api/readiness-and-gating.md)). Schedule-wide ticks use `POST .../datasets/buffer/materialize-scheduled`.
+
+Strategy reference: [Dataset accumulation strategies](./dataset-accumulation-strategies.md).
+
 Recommended navigation:
 
 1. Open `Datasets` and select dataset hub (`/datasets/{dataset_id}`).

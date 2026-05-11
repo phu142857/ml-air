@@ -868,7 +868,7 @@ export async function materializeDatasetBuffer(
   datasetId: string,
   token: string
 ) {
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/buffer/materialize`, {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/materialize`, {
     method: "POST",
     headers: authHeaders(token),
     cache: "no-store"

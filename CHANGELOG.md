@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Guide: **`docs/guides/dataset-accumulation-strategies.md`** (strategy matrix + concurrency pointers).
+- **`POST /v1/.../datasets/{dataset_id}/materialize`**: maintainer alias for **`POST .../datasets/{dataset_id}/buffer/materialize`** (same response and error codes).
 - Alembic migration **`0013_model_governance`**: `model_versions.approval_status` / `approval_reason` / `approval_updated_at`; table **`model_serving_slots`** (`candidate` | `challenger` | `champion` | `canary`).
 - **Model approval API:** `GET|PUT /v1/.../models/{model_id}/versions/{version}/approval` (new versions default to `pending_manual_approval`).
 - **Serving slot API (contract / implementation):** `GET /v1/.../models/{model_id}/serving`, `PUT /v1/.../models/{model_id}/serving/{slot}` with `{ "version": N }` — see **Changed** below if HTTP handlers are commented out in your checkout.
@@ -21,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Serving slot HTTP API:** `GET|PUT .../models/{model_id}/serving` handlers are **temporarily commented out** in `api/app/api/routes/v1.py`; DB (`model_serving_slots`) and service helpers may remain. Product UI uses **`ENABLE_SERVING_SLOTS_UI`** on the models pages until routes are restored.
+- **Serving slot HTTP API:** routes mount when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at API startup (default **`0`**). The Next.js models UI reads **`GET /v1/runtime-config`** → **`features.serving_slots_http`** instead of a static flag.
 - **Environment variable rename (integrators):** any prior experimental **`MLAIR_VETAI_*`**-style promote webhook variables are superseded by **`MLAIR_MODEL_PROMOTE_*`**. Update deployments and secret managers accordingly; old names are not read by the API.
 
 ### Documentation

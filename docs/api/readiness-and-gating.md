@@ -59,6 +59,8 @@ Response:
 
 Use these APIs to formalize readiness threshold in policy instead of per-request random input.
 
+**Explicit version vs implicit “latest”:** Prefer **`dataset_version_id`** on **`GET .../readiness`** and train triggers. Implicit **latest-version** behavior is confined to **documented** compatibility paths (for example **`POST .../runs/trigger`** with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`**). Do not rely on silent mutable-head semantics for reproducible training.
+
 ### 1.2) Policy templates (recommended defaults)
 
 Use consistent presets across teams to reduce audit ambiguity:
@@ -308,6 +310,14 @@ Review snapshot for operators integrating **pipeline execution** and **run trigg
 - **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`**: dataset **`GET .../readiness`** aggregate fallback when no materialized version exists (strict default **`0`** in this roadmap; see strict-mode notes in §1 above).
 - **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS`** (default **`0`**): when **`1`**, **`POST .../runs`**, **`POST .../pipelines/{pipeline_id}/run`**, and **`POST .../pipelines/{pipeline_id}/check-readiness`** return **422** `reason: NO_DECLARED_DATASET_INPUTS` unless **`override_config.inputs`** or the resolved pipeline version **`config.inputs`** declares at least one dataset name (same precedence as **`check_run_readiness`**). Use **`POST .../runs/trigger`** for model+dataset-first training without hand-building `inputs`.
 
+#### Flagging legacy aggregate readiness
+
+Treat **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** as an **explicit compatibility mode**: dataset readiness evaluation may use **`datasets.current_size`** when no materialized **`dataset_versions`** row exists. Operators should run **`0`** (default) for version-centric audits; set **`1`** only during migration or rollback windows and call it out in release notes.
+
+#### Dual-read period and phasing down aggregate reliance
+
+For migrations, **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** may run temporarily while Hub and APIs already prefer **`dataset_version_id`** on train and readiness calls. Treat this as a **bounded** operator phase: confirm **`GET .../readiness/evaluations`** / history meets audit needs, then set **`0`** so new evaluations do not lean on mutable **`datasets.current_size`** when no version exists. On orchestration clusters, **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS=1`** can further block vacuous-ready **`POST .../runs`** once pipeline versions declare **`inputs`**.
+
 ### Readiness gate semantics (non-breaking enhancement)
 
 - **`check_run_readiness`** uses **`dataset_versions.record_count`** for an input row when a pin is present in **`override_config`** or **`plugin_context`**, instead of always using **`datasets.current_size`** for that row. Callers who do not send a pin see the legacy aggregate path unchanged.
@@ -322,9 +332,14 @@ No stable URL paths or HTTP verbs were removed in these slices; changes are **op
 
 For adoption metrics (“Hub **`POST .../runs/trigger`**” vs “pipeline **`POST .../pipelines/.../run`**”), the Next.js client can **opt in** to a JSON beacon via **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL`** (and optional **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`**). Implementation: `frontend/lib/train-intent-telemetry.ts`, invoked from `triggerRunFromModelDataset` / `triggerPipelineRunWithGating` in `frontend/lib/api.ts`. The endpoint must accept anonymous `POST` + CORS from the UI origin if used cross-origin.
 
+## Dataset version and evaluation audit timestamps
+
+- **`dataset_versions`:** treat **`created_at`** as the canonical wall time when the immutable snapshot row was inserted (materialization or import). There is no separate **`materialized_at`** column today; a future migration could add one if operators need explicit materialization completion time distinct from row insert ordering.
+- **`dataset_readiness_evaluations`:** **`evaluated_at`** is the audit timestamp for each persisted readiness evaluation row (history APIs and Hub list).
+
 ## Dataset / buffer `source_type` literals
 
-APIs persist **storage literals** on `dataset_versions.source_type` and buffer rows (for example `csv_import`, `manual_upload`, `runtime_feedback`, `runtime_accumulation`). List/detail version responses and buffer `GET` now include additive **`canonical_source_type`** (`import` \| `runtime_accumulated` \| `manual` \| `generated` \| `unknown`) from `app/dataset_source_type.py`, while the column literals stay unchanged. The Dataset Hub uses the same categories client-side — see `frontend/lib/dataset-source-type.ts`.
+APIs persist **storage literals** on `dataset_versions.source_type` and buffer rows (for example `csv_import`, `manual_upload`, `runtime_feedback`, `runtime_accumulation`). List/detail version responses and buffer `GET` now include additive **`canonical_source_type`** (`import` \| `runtime_accumulated` \| `manual` \| `generated` \| `unknown`) from `app/dataset_source_type.py`, while the column literals stay unchanged. The Dataset Hub uses the same categories client-side — see `frontend/lib/dataset-source-type.ts`. Buffer **accumulation strategies** (threshold, rolling, schedule, manual) are summarized in [`../guides/dataset-accumulation-strategies.md`](../guides/dataset-accumulation-strategies.md).
 
 ## Command
 

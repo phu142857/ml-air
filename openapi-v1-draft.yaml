@@ -1014,6 +1014,31 @@ paths:
       description: |
         Maintainer role. Manual materialization endpoint for operator-driven strategies.
         Supported strategies: `manual_materialize_only`, `snapshot_on_schedule`.
+        Equivalent dataset-scoped path: **`POST .../datasets/{dataset_id}/materialize`**.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetId"
+      responses:
+        "200":
+          description: Materialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterializeBufferResult"
+        "404":
+          description: dataset_or_buffer_not_found
+        "409":
+          description: buffer_strategy_not_manual_or_schedule or buffer_not_ready_for_materialization
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/materialize:
+    post:
+      tags: [Datasets]
+      summary: Materialize dataset buffer (dataset-scoped alias)
+      description: |
+        Same request/response as **`POST .../datasets/{dataset_id}/buffer/materialize`** — creates a new
+        immutable **`dataset_versions`** row from the accumulation buffer when strategy allows
+        (`manual_materialize_only`, `snapshot_on_schedule`).
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"

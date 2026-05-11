@@ -25,6 +25,7 @@ import {
   fetchModels,
   fetchModelResolvedPipeline,
   fetchPipelineVersions,
+  fetchRuntimeConfig,
   upsertDatasetTrainingPolicy,
   normalizeProjectId
 } from "@/lib/api";
@@ -133,6 +134,8 @@ export default function DatasetHubPage() {
   const [evaluationPage, setEvaluationPage] = useState(0);
   const [maxEvaluationPage, setMaxEvaluationPage] = useState(0);
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
+  /** When false, `POST .../runs/trigger` can omit `dataset_version_id` server-side (compat); Hub still pins per-row Train. */
+  const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
   const [evaluationPolicyFilter, setEvaluationPolicyFilter] = useState("all");
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
   const [accumulationStrategyDraft, setAccumulationStrategyDraft] = useState("snapshot_on_threshold");
@@ -165,6 +168,22 @@ export default function DatasetHubPage() {
     setEvaluationPage(0);
     setMaxEvaluationPage(0);
   }, [datasetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rc = await fetchRuntimeConfig({ preferRelative: true });
+        if (cancelled) return;
+        setStrictDatasetVersionOnTrigger(rc.features?.strict_dataset_version_required !== false);
+      } catch {
+        if (!cancelled) setStrictDatasetVersionOnTrigger(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const items = versionsQuery.data?.items || [];
@@ -1142,6 +1161,18 @@ export default function DatasetHubPage() {
             Uses <code className="rounded px-1 font-mono text-foreground">POST /runs/trigger</code> — resolves pipeline and
             base weights server-side.
           </p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Each <span className="font-semibold text-foreground">Train</span> on a version row sends that row&apos;s{" "}
+            <code className="rounded px-1 font-mono text-foreground">dataset_version_id</code> (immutable snapshot pin),
+            even when the API allows a compat fallback for omitted ids.
+          </p>
+          {!strictDatasetVersionOnTrigger ? (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Runtime config: <span className="font-semibold">strict_dataset_version_required</span> is off —{" "}
+              <code className="font-mono">POST .../runs/trigger</code> may accept calls without an explicit version. This Hub
+              still pins the row you click for reproducible training.
+            </div>
+          ) : null}
           <div className="mb-3">
             <label className="text-xs text-muted-foreground">Model</label>
             <SelectDropdown

@@ -11,6 +11,16 @@ Thank you for improving MLAir.
   - `make test-helm`
 - For larger changes, prefer updating **`openapi-v1-draft.yaml`** and the relevant **`docs/guides/`** page in the same PR so operators stay in sync.
 
+## Database migrations
+
+After pulling API changes that add migrations, upgrade Postgres before running the API (from repo root):
+
+```bash
+cd api && alembic upgrade head
+```
+
+Release notes should call out new heads (for example revision **`0021_readiness_eval_indexes`** on **`0020_tenant_project_registry`**).
+
 ## Local checks
 
 From the repository root (with the stack up if a target requires it):

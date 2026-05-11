@@ -167,7 +167,7 @@ flowchart LR
 
 **Defaults (`.env.example`):** API **8080**, UI **38080**, Postgres / Redis / MinIO / Prometheus / Grafana wired in the quickstart compose file.
 
-**Full operator docs:** `[docs/index.md](docs/index.md)`
+**Full operator docs:** `[docs/index.md](docs/index.md)`. **Post-pull DB:** run `cd api && alembic upgrade head` (see `[CONTRIBUTING.md](CONTRIBUTING.md)` § Database migrations).
 
 ---
 
