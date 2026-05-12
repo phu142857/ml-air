@@ -114,6 +114,7 @@ export default function RunDetailPage() {
             <RunTimelineSection
               runId={runId}
               tasks={tasks}
+              tracking={trackingQuery.data ?? null}
               onOpenTask={(tid) => router.push(`/tasks/${tid}`)}
             />
           </div>

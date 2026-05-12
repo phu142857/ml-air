@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { TaskItem } from "@/lib/api";
+import { useEffect, useRef, useMemo } from "react";
+import type { TaskItem, RunTracking } from "@/lib/api";
 
-type Props = { tasks: TaskItem[]; runId: string; onOpenTask: (taskId: string) => void };
+type Props = {
+  tasks: TaskItem[];
+  runId: string;
+  tracking?: RunTracking | null;
+  onOpenTask: (taskId: string) => void;
+};
 
 function parseTs(s: string | null | undefined): number {
   if (!s) return Date.now();
@@ -11,7 +16,21 @@ function parseTs(s: string | null | undefined): number {
   return Number.isNaN(t) ? Date.now() : t;
 }
 
-export function RunTimelineSection({ tasks, onOpenTask }: Props) {
+const PHASE_LABELS: Record<string, string> = {
+  initializing: "Initializing",
+  data_collection: "Data Collection",
+  preprocessing: "Preprocessing",
+  model_fit: "Model Fitting",
+  calibration: "Calibration",
+  cv_scoring: "Cross-Validation",
+  regression_gate: "Regression Gate",
+  feedback_gate: "Feedback Gate",
+  model_save: "Saving Model",
+  mlair_sync: "MLAir Sync",
+  done: "Completed",
+};
+
+export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
   const failRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -19,6 +38,22 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
       failRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [tasks]);
+
+  const trainingProgress = useMemo(() => {
+    if (!tracking) return null;
+    const pctMetrics = (tracking.metrics ?? [])
+      .filter((m) => m.key === "progress_pct")
+      .sort((a, b) => a.step - b.step);
+    const latestPct = pctMetrics.length > 0 ? pctMetrics[pctMetrics.length - 1].value : null;
+    const phaseParams = (tracking.params ?? []).filter((p) => p.key === "current_phase");
+    const latestPhase = phaseParams.length > 0 ? phaseParams[phaseParams.length - 1].value : null;
+    if (latestPct === null) return null;
+    return {
+      pct: Math.min(100, Math.max(0, Math.round(latestPct))),
+      phase: latestPhase,
+      phaseLabel: latestPhase ? (PHASE_LABELS[latestPhase] ?? latestPhase) : null,
+    };
+  }, [tracking]);
 
   // Keep QUEUED distinct from PENDING in external-execution mode.
   const getStatus = (task: any): "success" | "error" | "running" | "queued" | "pending" => {
@@ -93,18 +128,43 @@ export function RunTimelineSection({ tasks, onOpenTask }: Props) {
                 </span>
               </div>
 
-              {/* Progress Bar */}
-              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mb-2">
-                <div
-                  className={`h-full ${
-                    taskStatus === "error" ? "bg-color-error" :
-                    taskStatus === "success" ? "bg-color-success" :
-                    taskStatus === "queued" ? "bg-amber-400" :
-                    "bg-color-info"
-                  }`}
-                  style={{ width: `${width}%` }}
-                />
-              </div>
+              {/* Training Progress Bar */}
+              {trainingProgress && trainingProgress.pct > 0 ? (
+                <div className="mb-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-overline font-semibold text-muted-foreground uppercase tracking-wider">
+                      {trainingProgress.phaseLabel ?? "Training"}
+                    </span>
+                    <span className={`font-mono text-xs font-bold ${
+                      trainingProgress.pct >= 100 ? "text-color-success" : "text-color-info"
+                    }`}>
+                      {trainingProgress.pct}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ease-out ${
+                        taskStatus === "error" ? "bg-color-error" :
+                        trainingProgress.pct >= 100 ? "bg-color-success" :
+                        "bg-color-info"
+                      }`}
+                      style={{ width: `${trainingProgress.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mb-2">
+                  <div
+                    className={`h-full ${
+                      taskStatus === "error" ? "bg-color-error" :
+                      taskStatus === "success" ? "bg-color-success" :
+                      taskStatus === "queued" ? "bg-amber-400" :
+                      "bg-color-info"
+                    }`}
+                    style={{ width: `${width}%` }}
+                  />
+                </div>
+              )}
 
               {/* Meta Info */}
               <div className="flex gap-4 text-caption text-muted-foreground">

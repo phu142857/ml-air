@@ -86,3 +86,4 @@ pytestdebug.log
 # Build / generic artifacts
 build/
 *.bak
+frontend/tsconfig.tsbuildinfo

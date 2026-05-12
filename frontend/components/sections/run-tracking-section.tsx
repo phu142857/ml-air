@@ -69,6 +69,7 @@ export function RunTrackingSection({ tracking }: Props) {
                   (Array.isArray(tracking.metrics) 
                     ? tracking.metrics 
                     : Object.entries(tracking.metrics).map(([key, value]) => ({ key, value }))
+                  ).filter((metric: any) => metric.key !== "progress_pct"
                   ).map((metric: any, i: number) => (
                     <div
                       key={i}
@@ -85,17 +86,22 @@ export function RunTrackingSection({ tracking }: Props) {
             )}
 
             {/* PARAMS */}
-            {activeTab === "params" && (
-              <div className="rounded-lg border border-border bg-muted p-3">
-                {!tracking.params || Object.keys(tracking.params).length === 0 ? (
-                  <EmptyState message="No parameters recorded." />
-                ) : (
-                  <pre className="max-h-60 overflow-x-auto font-mono text-caption leading-relaxed text-color-success">
-                    {JSON.stringify(tracking.params, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )}
+            {activeTab === "params" && (() => {
+              const filtered = Array.isArray(tracking.params)
+                ? tracking.params.filter((p: any) => p.key !== "current_phase")
+                : tracking.params;
+              return (
+                <div className="rounded-lg border border-border bg-muted p-3">
+                  {!filtered || (Array.isArray(filtered) && filtered.length === 0) || Object.keys(filtered).length === 0 ? (
+                    <EmptyState message="No parameters recorded." />
+                  ) : (
+                    <pre className="max-h-60 overflow-x-auto font-mono text-caption leading-relaxed text-color-success">
+                      {JSON.stringify(filtered, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* ARTIFACTS */}
             {activeTab === "artifacts" && (
