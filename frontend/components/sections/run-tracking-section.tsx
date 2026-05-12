@@ -1,14 +1,121 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { RunTracking } from "@/lib/api";
-import { BarChart3, Settings, Package, GitBranch, Search } from "lucide-react";
+import { BarChart3, Settings, Package, Search } from "lucide-react";
 
 type Props = {
   tracking: RunTracking | null;
 };
 
 type TabType = "metrics" | "params" | "artifacts";
+
+// Runtime progress keys — hidden from metrics tab (shown in task progress bars)
+const PROGRESS_KEY_RE = /^(.+_)?progress_pct$/;
+const PHASE_KEY_RE = /^(.+_)?phase$/;
+
+// Internal / debug metric keys to always hide
+const HIDDEN_METRIC_KEYS = new Set([
+  "progress_pct",
+  "current_phase",
+  "split_random_state",
+]);
+
+// Internal / debug param keys to always hide
+const HIDDEN_PARAM_KEYS = new Set([
+  "current_phase",
+  "source",
+  "phase",
+]);
+const HIDDEN_PARAM_PREFIXES = ["vetai_model_params_json"];
+
+// Deduplicate metrics: keep only the latest (highest step) per key
+function deduplicateMetrics(
+  metrics: Array<{ key: string; value: number; step: number }>,
+): Array<{ key: string; value: number; step: number }> {
+  const best = new Map<string, { key: string; value: number; step: number }>();
+  for (const m of metrics) {
+    const prev = best.get(m.key);
+    if (!prev || m.step > prev.step) {
+      best.set(m.key, m);
+    }
+  }
+  return Array.from(best.values());
+}
+
+function isHiddenMetric(key: string): boolean {
+  if (HIDDEN_METRIC_KEYS.has(key)) return true;
+  if (PROGRESS_KEY_RE.test(key)) return true;
+  if (PHASE_KEY_RE.test(key)) return true;
+  return false;
+}
+
+function isHiddenParam(key: string): boolean {
+  if (HIDDEN_PARAM_KEYS.has(key)) return true;
+  if (PHASE_KEY_RE.test(key)) return true;
+  if (PROGRESS_KEY_RE.test(key)) return true;
+  for (const prefix of HIDDEN_PARAM_PREFIXES) {
+    if (key === prefix) return true;
+  }
+  return false;
+}
+
+// Friendly display names for common metric/param keys
+const LABEL_MAP: Record<string, string> = {
+  training_accuracy: "Training Accuracy",
+  validation_accuracy: "Validation Accuracy",
+  validation_f1: "Validation F1",
+  cv_mean_accuracy: "CV Mean Accuracy",
+  cv_std_accuracy: "CV Std Accuracy",
+  cv_mean_f1_weighted: "CV Mean F1 (weighted)",
+  cv_std_f1_weighted: "CV Std F1 (weighted)",
+  f1_score: "F1 Score",
+  training_time_seconds: "Training Time (s)",
+  n_samples: "Samples",
+  n_features: "Features",
+  n_classes: "Classes",
+  test_split_ratio: "Test Split Ratio",
+  cv_folds: "CV Folds",
+  cv_repeats: "CV Repeats",
+  calibration_brier_before: "Brier (before cal.)",
+  calibration_brier_after: "Brier (after cal.)",
+  calibration_samples: "Calibration Samples",
+  confidence_threshold_f1: "Confidence Threshold",
+  confidence_threshold_f1_score: "Threshold F1 Score",
+  golden_base_accuracy: "Golden Base Accuracy",
+  golden_new_accuracy: "Golden New Accuracy",
+  golden_base_f1_weighted: "Golden Base F1",
+  golden_new_f1_weighted: "Golden New F1",
+  feedback_base_score: "Feedback Base Score",
+  feedback_new_score: "Feedback New Score",
+  feedback_eval_size: "Feedback Eval Size",
+  golden_test_size: "Golden Test Size",
+  regression_effective_tolerance_f1: "Regression Tolerance F1",
+  vetai_training_id: "Training ID",
+  vetai_cv_strategy: "CV Strategy",
+  vetai_validation_mode_used: "Validation Mode",
+  vetai_validation_note: "Validation Note",
+  vetai_calibration_method: "Calibration Method",
+  vetai_feedback_gate_metric: "Feedback Gate Metric",
+  vetai_training_scope: "Training Scope",
+  vetai_model_version: "Model Version",
+  vetai_training_mode: "Training Mode",
+  vetai_pipeline_kind: "Pipeline Kind",
+  vetai_finetune_base_dir: "Finetune Base Dir",
+};
+
+function friendlyLabel(key: string): string {
+  return LABEL_MAP[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const EmptyState = ({ message }: { message: string }) => (
+  <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
+    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+      <Search size={20} />
+    </div>
+    <p className="text-section font-semibold text-muted-foreground">{message}</p>
+  </div>
+);
 
 export function RunTrackingSection({ tracking }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>("metrics");
@@ -19,14 +126,26 @@ export function RunTrackingSection({ tracking }: Props) {
     { id: "artifacts" as TabType, label: "Artifacts", icon: Package },
   ];
 
-  const EmptyState = ({ message }: { message: string }) => (
-    <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <Search size={20} />
-      </div>
-      <p className="text-section font-semibold text-muted-foreground">{message}</p>
-    </div>
-  );
+  // Filtered & deduplicated metrics
+  const visibleMetrics = useMemo(() => {
+    if (!tracking?.metrics) return [];
+    const raw = Array.isArray(tracking.metrics)
+      ? tracking.metrics
+      : Object.entries(tracking.metrics).map(([key, value]) => ({ key, value: value as number, step: 0 }));
+    const filtered = raw.filter((m) => !isHiddenMetric(m.key));
+    return deduplicateMetrics(filtered);
+  }, [tracking]);
+
+  // Filtered & deduplicated params
+  const visibleParams = useMemo(() => {
+    if (!tracking?.params || !Array.isArray(tracking.params)) return [];
+    const seen = new Map<string, { key: string; value: string }>();
+    for (const p of tracking.params) {
+      if (isHiddenParam(p.key)) continue;
+      seen.set(p.key, p);
+    }
+    return Array.from(seen.values());
+  }, [tracking]);
 
   return (
     <section className="rounded-lg border border-obs-border bg-obs-surface p-4 transition-colors">
@@ -63,19 +182,15 @@ export function RunTrackingSection({ tracking }: Props) {
             {/* METRICS */}
             {activeTab === "metrics" && (
               <div className="space-y-1">
-                {(!tracking.metrics || (Array.isArray(tracking.metrics) && tracking.metrics.length === 0)) ? (
+                {visibleMetrics.length === 0 ? (
                   <EmptyState message="No metrics logged yet." />
                 ) : (
-                  (Array.isArray(tracking.metrics) 
-                    ? tracking.metrics 
-                    : Object.entries(tracking.metrics).map(([key, value]) => ({ key, value }))
-                  ).filter((metric: any) => metric.key !== "progress_pct"
-                  ).map((metric: any, i: number) => (
+                  visibleMetrics.map((metric, i) => (
                     <div
-                      key={i}
+                      key={metric.key}
                       className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
                     >
-                      <span className="font-mono text-xs text-muted-foreground">{metric.key || `metric_${i}`}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{friendlyLabel(metric.key)}</span>
                       <span className="rounded border border-color-info/40 bg-color-info/15 px-2 py-1 font-mono text-xs font-bold text-color-info">
                         {typeof metric.value === "number" ? metric.value.toFixed(4) : String(metric.value)}
                       </span>
@@ -86,22 +201,25 @@ export function RunTrackingSection({ tracking }: Props) {
             )}
 
             {/* PARAMS */}
-            {activeTab === "params" && (() => {
-              const filtered = Array.isArray(tracking.params)
-                ? tracking.params.filter((p: any) => p.key !== "current_phase")
-                : tracking.params;
-              return (
-                <div className="rounded-lg border border-border bg-muted p-3">
-                  {!filtered || (Array.isArray(filtered) && filtered.length === 0) || Object.keys(filtered).length === 0 ? (
-                    <EmptyState message="No parameters recorded." />
-                  ) : (
-                    <pre className="max-h-60 overflow-x-auto font-mono text-caption leading-relaxed text-color-success">
-                      {JSON.stringify(filtered, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              );
-            })()}
+            {activeTab === "params" && (
+              <div className="space-y-1">
+                {visibleParams.length === 0 ? (
+                  <EmptyState message="No parameters recorded." />
+                ) : (
+                  visibleParams.map((param) => (
+                    <div
+                      key={param.key}
+                      className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">{friendlyLabel(param.key)}</span>
+                      <span className="rounded border border-border bg-muted px-2 py-1 font-mono text-xs text-foreground max-w-[60%] truncate" title={String(param.value)}>
+                        {String(param.value)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             {/* ARTIFACTS */}
             {activeTab === "artifacts" && (

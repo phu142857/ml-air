@@ -33,11 +33,13 @@ import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
 const MODEL_STAGE_FILTER_OPTIONS = [
-  { value: "all", label: "all" },
-  { value: "production", label: "production" },
-  { value: "staging", label: "staging" },
-  { value: "archived", label: "archived" }
+  { value: "all", label: "stage: all" },
+  { value: "production", label: "stage: production" },
+  { value: "staging", label: "stage: staging" },
+  { value: "archived", label: "stage: archived" }
 ];
+
+const VERSIONS_PAGE_SIZE = 20;
 
 export default function ModelDetailPage() {
   const params = useParams<{ modelId: string }>();
@@ -47,6 +49,7 @@ export default function ModelDetailPage() {
   const servingSlotsUi = useServingSlotsHttpFeature();
   const { tenantId, projectId, token } = useAppContext();
   const [stageFilter, setStageFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule">("manual");
   const [debounceMinutes, setDebounceMinutes] = useState("10");
   const [scheduleCron, setScheduleCron] = useState("0 */6 * * *");
@@ -112,11 +115,23 @@ export default function ModelDetailPage() {
 
   const model = useMemo(() => modelsQuery.data?.items.find((x) => x.model_id === modelId) ?? null, [modelsQuery.data, modelId]);
 
-  const versions = useMemo(() => {
-    const items = versionsQuery.data?.items ?? [];
-    if (stageFilter === "all") return items;
-    return items.filter((v) => v.stage === stageFilter);
-  }, [versionsQuery.data, stageFilter]);
+  const allVersions = versionsQuery.data?.items ?? [];
+  const filteredVersions = useMemo(() => {
+    if (stageFilter === "all") return allVersions;
+    return allVersions.filter((v) => v.stage === stageFilter);
+  }, [allVersions, stageFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredVersions.length / VERSIONS_PAGE_SIZE));
+  const paginatedVersions = useMemo(
+    () =>
+      filteredVersions.slice(
+        (currentPage - 1) * VERSIONS_PAGE_SIZE,
+        currentPage * VERSIONS_PAGE_SIZE
+      ),
+    [filteredVersions, currentPage]
+  );
+  useEffect(() => {
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   const promoteMutation = useMutation({
     mutationFn: ({ version, stage }: { version: number; stage: string }) =>
@@ -392,20 +407,46 @@ export default function ModelDetailPage() {
         ) : null}
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-section font-semibold text-foreground">Versions</h2>
-          {versionBanner ? (
-            <span className="version-inline-banner">{versionBanner}</span>
-          ) : null}
+          <div className="flex items-center gap-3">
+            <h2 className="text-section font-semibold text-foreground">Versions</h2>
+            {versionBanner ? (
+              <span className="version-inline-banner">{versionBanner}</span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Filter stage</span>
+            <span className="text-sm text-muted-foreground">
+              Showing {filteredVersions.length === 0 ? 0 : (currentPage - 1) * VERSIONS_PAGE_SIZE + 1}-
+              {Math.min(currentPage * VERSIONS_PAGE_SIZE, filteredVersions.length)} of{" "}
+              {filteredVersions.length} versions
+            </span>
             <SelectDropdown
               value={stageFilter}
-              onChange={setStageFilter}
+              onChange={(v) => {
+                setStageFilter(v);
+                setCurrentPage(1);
+              }}
               options={MODEL_STAGE_FILTER_OPTIONS}
               buttonClassName="rounded-lg border border-border bg-muted px-2 py-1 text-xs"
-              className="min-w-[7.5rem]"
+              className="min-w-[9rem]"
               aria-label="Filter versions by stage"
             />
+            <Button
+              variant="secondary"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1 || versionsQuery.isLoading}
+            >
+              {"<<"}
+            </Button>
+            <span className="px-3 text-sm text-foreground">
+              Page {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || versionsQuery.isLoading}
+            >
+              {">>"}
+            </Button>
           </div>
         </div>
         <DataTableShell>
@@ -420,7 +461,7 @@ export default function ModelDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {versions.map((v) => (
+              {paginatedVersions.map((v) => (
                 <tr key={v.version_id} className="interactive-row border-t border-border transition-colors">
                   <td className="px-3 py-2">v{v.version}</td>
                   <td className="px-3 py-2">
@@ -507,7 +548,7 @@ export default function ModelDetailPage() {
                   </td>
                 </tr>
               ))}
-              {!versions.length && (
+              {!paginatedVersions.length && (
                 <tr>
                   <td className="px-3 py-3 text-muted-foreground" colSpan={5}>
                     No versions for current filter.

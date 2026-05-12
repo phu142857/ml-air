@@ -92,26 +92,90 @@ Use this as a quick “what exists today” view. Detailed delivery history live
 ```mermaid
 flowchart LR
   subgraph clients[Clients]
+    direction TB
     UI[Next.js UI]
-    APP[Integrating app]
+    APP[Integrating App]
   end
+
   subgraph mlair[MLAir]
+    direction TB
     API[FastAPI API]
     SCH[Scheduler]
     EXE[Executor]
   end
-  PG[(PostgreSQL)]
-  RD[(Redis)]
 
-  UI --> API
-  APP --> API
-  API --> PG
-  API --> RD
-  SCH --> RD
-  SCH --> PG
+  subgraph storage[Storage]
+    direction TB
+    PG[(PostgreSQL)]
+    RD[(Redis)]
+  end
+
+  UI & APP --> API
+  API --> PG & RD
+  SCH --> PG & RD
   EXE --> RD
-  EXE --> API
+  EXE -.->|callback| API
 ```
+
+### Multi-task pipeline execution
+
+When a pipeline version defines multiple tasks with `depends_on`, the scheduler resolves the DAG and enqueues tasks as their dependencies complete. The executor runs each task as an independent plugin subprocess.
+
+```mermaid
+sequenceDiagram
+    participant C as Client / Integrating App
+    participant API as MLAir API
+    participant PG as PostgreSQL
+    participant RD as Redis
+    participant SCH as Scheduler
+    participant EXE as Executor
+    participant PLG as Plugin Subprocess
+
+    C->>API: POST /v1/.../runs (pipeline_id, context)
+    API->>PG: Insert run + snapshot config_snapshot
+    API->>RD: Push run event to mlair:runs:new
+    API-->>C: 200 {run_id, status: PENDING, config_snapshot}
+
+    SCH->>RD: Pop run event
+    SCH->>PG: Build task plan from config_snapshot.tasks[]
+    Note over SCH: DAG: taskA -> taskB -> taskC -> ...
+
+    loop For each task in topological order
+        SCH->>PG: Upsert task status = RUNNING
+        SCH->>RD: Push task event to priority queue
+
+        EXE->>RD: BLPOP task from queue
+        EXE->>PLG: Spawn subprocess (plugin_name, stdin context + run_id)
+
+        Note over PLG: Plugin executes business logic<br/>(HTTP calls, training, ETL, etc.)
+
+        opt Real-time tracking
+            PLG->>API: POST /runs/{rid}/metrics (progress)
+            PLG->>API: POST /runs/{rid}/params
+        end
+
+        PLG-->>EXE: stdout JSON (params, metrics, artifacts, lineage)
+
+        EXE->>API: POST task tracking (metrics, params, artifacts)
+        EXE->>API: POST lineage ingest
+        EXE->>RD: Push task_finished event
+
+        SCH->>RD: Pop task_finished
+        SCH->>PG: Update task status = SUCCESS
+        Note over SCH: Check depends_on: all deps SUCCESS?<br/>Enqueue next ready tasks
+    end
+
+    SCH->>PG: All tasks SUCCESS -> run status = SUCCESS
+    C->>API: GET /runs/{rid} -> tasks timeline + tracking
+```
+
+**Key behaviors:**
+
+- **DAG resolution**: tasks only enqueue when all `depends_on` entries are `SUCCESS`
+- **Concurrency**: `max_parallel_tasks` (1-20, default 1) controls how many tasks run simultaneously
+- **Retry**: failed tasks get exponential backoff retries (configurable `max_attempts`); exhausted tasks go to DLQ
+- **Replay**: runs can replay from a specific task, skipping upstream tasks that pass manifest checksum gating
+- **Plugin isolation**: each task runs as a separate subprocess; the executor has no awareness of the DAG
 
 
 

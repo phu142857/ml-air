@@ -16,19 +16,23 @@ function parseTs(s: string | null | undefined): number {
   return Number.isNaN(t) ? Date.now() : t;
 }
 
-const PHASE_LABELS: Record<string, string> = {
-  initializing: "Initializing",
-  data_collection: "Data Collection",
-  preprocessing: "Preprocessing",
-  model_fit: "Model Fitting",
-  calibration: "Calibration",
-  cv_scoring: "Cross-Validation",
-  regression_gate: "Regression Gate",
-  feedback_gate: "Feedback Gate",
-  model_save: "Saving Model",
-  mlair_sync: "MLAir Sync",
-  done: "Completed",
-};
+/**
+ * Extract the task key from a full task_id.
+ * Format: "{run_id}:{task_key}" — e.g. "abc-123:data_prep" → "data_prep"
+ */
+function taskKey(taskId: string): string {
+  const idx = taskId.lastIndexOf(":");
+  return idx >= 0 ? taskId.slice(idx + 1) : taskId;
+}
+
+function getStatus(task: TaskItem): "success" | "error" | "running" | "queued" | "pending" {
+  if (task.error_message && task.error_message.length > 0) return "error";
+  if (task.status === "FAILED") return "error";
+  if (task.status === "SUCCESS") return "success";
+  if (task.status === "QUEUED") return "queued";
+  if (task.status === "RUNNING") return "running";
+  return "pending";
+}
 
 export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
   const failRef = useRef<HTMLDivElement | null>(null);
@@ -39,31 +43,24 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
     }
   }, [tasks]);
 
-  const trainingProgress = useMemo(() => {
-    if (!tracking) return null;
-    const pctMetrics = (tracking.metrics ?? [])
-      .filter((m) => m.key === "progress_pct")
-      .sort((a, b) => a.step - b.step);
-    const latestPct = pctMetrics.length > 0 ? pctMetrics[pctMetrics.length - 1].value : null;
-    const phaseParams = (tracking.params ?? []).filter((p) => p.key === "current_phase");
-    const latestPhase = phaseParams.length > 0 ? phaseParams[phaseParams.length - 1].value : null;
-    if (latestPct === null) return null;
-    return {
-      pct: Math.min(100, Math.max(0, Math.round(latestPct))),
-      phase: latestPhase,
-      phaseLabel: latestPhase ? (PHASE_LABELS[latestPhase] ?? latestPhase) : null,
-    };
+  // Build a per-task progress map: taskKey → percentage (0–100).
+  // Metrics are stored as "{taskKey}_progress_pct" at the run level.
+  const taskProgressMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!tracking?.metrics) return map;
+    const suffix = "_progress_pct";
+    const stepMap: Record<string, number> = {};
+    for (const m of tracking.metrics) {
+      if (!m.key.endsWith(suffix)) continue;
+      const key = m.key.slice(0, -suffix.length);
+      const prevStep = stepMap[key] ?? -1;
+      if (m.step > prevStep) {
+        stepMap[key] = m.step;
+        map[key] = Math.min(100, Math.max(0, Math.round(m.value)));
+      }
+    }
+    return map;
   }, [tracking]);
-
-  // Keep QUEUED distinct from PENDING in external-execution mode.
-  const getStatus = (task: any): "success" | "error" | "running" | "queued" | "pending" => {
-    if (task.error_message && task.error_message.length > 0) return "error";
-    if (task.status === "FAILED") return "error";
-    if (task.status === "SUCCESS") return "success";
-    if (task.status === "QUEUED") return "queued";
-    if (task.status === "RUNNING") return "running";
-    return "pending";
-  };
 
   if (!tasks.length) {
     return (
@@ -73,25 +70,27 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
     );
   }
 
-  const t0 = Math.min(...tasks.map((t) => parseTs(t.started_at || t.created_at)));
-  const t1 = Math.max(...tasks.map((t) => parseTs(t.finished_at || t.updated_at || t.started_at || t.created_at)));
-  const span = Math.max(1, t1 - t0);
-
   return (
     <div className="rounded-lg border border-obs-border bg-obs-surface p-4">
       <div className="space-y-3">
         {tasks.map((t, i) => {
-          const a = parseTs(t.started_at || t.created_at);
-          const b = parseTs(t.finished_at || t.updated_at || t.started_at || t.created_at);
-          const left = ((a - t0) / span) * 100;
-          const width = Math.max(2, Math.max(0, ((b - a) / span) * 100));
           const taskStatus = getStatus(t);
           const isFail = taskStatus === "error";
           const isLastFailed =
-            isFail &&
-            !tasks
-              .slice(i + 1)
-              .some((u) => getStatus(u) === "error");
+            isFail && !tasks.slice(i + 1).some((u) => getStatus(u) === "error");
+
+          // Determine this task's progress independently
+          let pct: number;
+          if (taskStatus === "success") {
+            pct = 100;
+          } else if (taskStatus === "error") {
+            pct = taskProgressMap[taskKey(t.task_id)] ?? 0;
+          } else if (taskStatus === "running") {
+            pct = taskProgressMap[taskKey(t.task_id)] ?? 0;
+          } else {
+            pct = 0; // pending / queued
+          }
+
           return (
             <div
               key={t.task_id + t.attempt}
@@ -128,38 +127,27 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
                 </span>
               </div>
 
-              {/* Training Progress Bar */}
-              {trainingProgress && trainingProgress.pct > 0 ? (
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ease-out ${
-                        taskStatus === "error" ? "bg-color-error" :
-                        trainingProgress.pct >= 100 ? "bg-color-success" :
-                        "bg-color-info"
-                      }`}
-                      style={{ width: `${trainingProgress.pct}%` }}
-                    />
-                  </div>
-                  <span className={`font-mono text-xs font-bold shrink-0 ${
-                    trainingProgress.pct >= 100 ? "text-color-success" : "text-color-info"
-                  }`}>
-                    {trainingProgress.pct}%
-                  </span>
-                </div>
-              ) : (
-                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mb-2">
+              {/* Per-task Progress Bar */}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
                   <div
-                    className={`h-full ${
+                    className={`h-full rounded-full transition-all duration-500 ease-out ${
                       taskStatus === "error" ? "bg-color-error" :
-                      taskStatus === "success" ? "bg-color-success" :
-                      taskStatus === "queued" ? "bg-amber-400" :
-                      "bg-color-info"
+                      pct >= 100 ? "bg-color-success" :
+                      pct > 0 ? "bg-color-info" :
+                      "bg-transparent"
                     }`}
-                    style={{ width: `${width}%` }}
+                    style={{ width: `${pct}%` }}
                   />
                 </div>
-              )}
+                <span className={`font-mono text-xs font-bold shrink-0 w-8 text-right ${
+                  pct >= 100 ? "text-color-success" :
+                  pct > 0 ? "text-color-info" :
+                  "text-muted-foreground"
+                }`}>
+                  {pct}%
+                </span>
+              </div>
 
               {/* Meta Info */}
               <div className="flex gap-4 text-caption text-muted-foreground">
