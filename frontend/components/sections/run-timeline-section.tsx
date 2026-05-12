@@ -130,18 +130,8 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
 
               {/* Training Progress Bar */}
               {trainingProgress && trainingProgress.pct > 0 ? (
-                <div className="mb-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-overline font-semibold text-muted-foreground uppercase tracking-wider">
-                      {trainingProgress.phaseLabel ?? "Training"}
-                    </span>
-                    <span className={`font-mono text-xs font-bold ${
-                      trainingProgress.pct >= 100 ? "text-color-success" : "text-color-info"
-                    }`}>
-                      {trainingProgress.pct}%
-                    </span>
-                  </div>
-                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ease-out ${
                         taskStatus === "error" ? "bg-color-error" :
@@ -151,6 +141,11 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
                       style={{ width: `${trainingProgress.pct}%` }}
                     />
                   </div>
+                  <span className={`font-mono text-xs font-bold shrink-0 ${
+                    trainingProgress.pct >= 100 ? "text-color-success" : "text-color-info"
+                  }`}>
+                    {trainingProgress.pct}%
+                  </span>
                 </div>
               ) : (
                 <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mb-2">
