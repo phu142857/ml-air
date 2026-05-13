@@ -64,21 +64,21 @@ export default function SettingsPage() {
 
   return (
     <RouteShell activeNav="Settings" title="Settings" subtitle="Environment and configuration panel">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardContent className="pt-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-section font-semibold text-foreground">Plugin Registry</h2>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <Card className="min-w-0">
+          <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>Plugin Registry</CardTitle>
             <Button
-              className="rounded-xl px-3 py-2 text-xs"
+              className="shrink-0 rounded-xl px-3 py-2 text-xs"
               onClick={() => reloadMutation.mutate()}
               disabled={reloadMutation.isPending}
             >
               Reload Plugins
             </Button>
-          </div>
+          </CardHeader>
+          <CardContent>
           <DataTableShell>
-            <DataTable className="w-full text-sm">
+            <DataTable className="text-sm">
               <thead className="bg-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">Name</th>
@@ -97,7 +97,7 @@ export default function SettingsPage() {
                     <td className="px-3 py-2">{plugin.name}</td>
                     <td className="px-3 py-2">{plugin.version}</td>
                     <td className="px-3 py-2">{plugin.enabled ? "on" : "off"}</td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-3 py-2">
                       <div className="flex gap-2">
                         <Button
                           className="action-btn-xs rounded-lg px-2 py-1 text-xs"
@@ -147,7 +147,7 @@ export default function SettingsPage() {
         </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Plugin Detail</CardTitle>
           </CardHeader>

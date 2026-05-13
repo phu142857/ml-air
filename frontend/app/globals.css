@@ -78,6 +78,20 @@
   --pill-neutral-fg: oklch(0.35 0.02 85);
   --pill-neutral-border: oklch(0.85 0.008 85);
 
+  /* Status tones (SUCCESS/FAILED/RUNNING/PENDING) — shared across app */
+  --status-success-bg: var(--bg-success);
+  --status-success-fg: var(--color-success);
+  --status-success-border: color-mix(in oklch, var(--color-success) 55%, var(--border-default));
+  --status-failed-bg: var(--bg-error);
+  --status-failed-fg: var(--color-error);
+  --status-failed-border: color-mix(in oklch, var(--color-error) 55%, var(--border-default));
+  --status-running-bg: var(--bg-info);
+  --status-running-fg: var(--color-info);
+  --status-running-border: color-mix(in oklch, var(--color-info) 55%, var(--border-default));
+  --status-pending-bg: var(--bg-warning);
+  --status-pending-fg: var(--color-warning);
+  --status-pending-border: color-mix(in oklch, var(--color-warning) 55%, var(--border-default));
+
   --banner-warn-bg: oklch(0.97 0.04 85);
   --banner-warn-fg: oklch(0.38 0.09 55);
   --banner-warn-border: oklch(0.72 0.14 75);
@@ -156,6 +170,20 @@
   --bg-warning: oklch(0.3 0.06 80 / 0.38);
   --bg-info: oklch(0.28 0.06 250 / 0.38);
 
+  /* Status tones (SUCCESS/FAILED/RUNNING/PENDING) — shared across app */
+  --status-success-bg: var(--bg-success);
+  --status-success-fg: var(--color-success);
+  --status-success-border: color-mix(in oklch, var(--color-success) 50%, var(--border-default));
+  --status-failed-bg: var(--bg-error);
+  --status-failed-fg: var(--color-error);
+  --status-failed-border: color-mix(in oklch, var(--color-error) 50%, var(--border-default));
+  --status-running-bg: var(--bg-info);
+  --status-running-fg: var(--color-info);
+  --status-running-border: color-mix(in oklch, var(--color-info) 50%, var(--border-default));
+  --status-pending-bg: var(--bg-warning);
+  --status-pending-fg: var(--color-warning);
+  --status-pending-border: color-mix(in oklch, var(--color-warning) 50%, var(--border-default));
+
   --pill-success-bg: rgba(6, 78, 59, 0.45);
   --pill-success-fg: #ecfdf5;
   --pill-success-border: rgba(52, 211, 153, 0.45);
@@ -181,14 +209,15 @@
   --pill-action-danger-hover: rgba(153, 27, 27, 0.65);
 }
 
-html,
-body {
-  background: var(--bg-page);
-  color: var(--text-primary);
-}
+@layer base {
+  * {
+    @apply border-border;
+  }
 
-* {
-  border-color: var(--border-default);
+  html,
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
 }
 
 /* Data tables: size + header/body colors (light + dark) */
@@ -238,62 +267,47 @@ table tbody td {
   min-width: 132px;
 }
 
-/* Semantic action button colors */
-.btn-action-primary {
-  background-color: var(--primary) !important;
-  color: var(--primary-foreground) !important;
-}
-
-.btn-action-primary:hover {
-  filter: brightness(0.92);
-}
-
-.btn-action-promote {
-  background-color: var(--secondary) !important;
-  color: var(--foreground) !important;
-  border: 1px solid var(--border-default) !important;
-}
-
-.btn-action-promote:hover {
-  filter: brightness(0.92);
-}
-
-.btn-action-rollback {
-  background-color: var(--secondary) !important;
-  color: var(--foreground) !important;
-  border: 1px solid var(--border-default) !important;
-}
-
-.btn-action-rollback:hover {
-  filter: brightness(0.92);
+/* Glass-style action buttons (SaaS dashboard preset — light + .dark) */
+.btn-action-primary,
+.btn-action-enable {
+  @apply relative inline-flex select-none items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.98];
+  @apply border-emerald-500/40 bg-emerald-100/60 text-emerald-700;
+  @apply hover:border-emerald-500/60 hover:bg-emerald-100/80 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)];
+  @apply dark:border-emerald-500/30 dark:bg-emerald-950/20 dark:text-emerald-400;
+  @apply dark:hover:border-emerald-500/50 dark:hover:bg-emerald-950/30 dark:hover:shadow-[0_0_20px_rgba(16,185,129,0.15)];
 }
 
 .btn-action-delete {
-  background-color: var(--destructive) !important;
-  color: var(--destructive-foreground) !important;
+  @apply relative inline-flex select-none items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.98];
+  @apply border-red-500/40 bg-red-100/60 text-red-700;
+  @apply hover:border-red-500/60 hover:bg-red-100/80 hover:shadow-[0_0_20px_rgba(239,68,68,0.2)];
+  @apply dark:border-red-500/30 dark:bg-red-950/20 dark:text-red-400;
+  @apply dark:hover:border-red-500/50 dark:hover:bg-red-950/30 dark:hover:shadow-[0_0_20px_rgba(239,68,68,0.15)];
 }
 
-.btn-action-delete:hover {
-  filter: brightness(0.92);
+.btn-action-promote,
+.btn-action-rollback,
+.btn-action-cancel,
+.btn-glass-dropdown {
+  @apply relative inline-flex select-none items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.98];
+  @apply border-zinc-400/30 bg-zinc-900/5 text-zinc-700;
+  @apply hover:border-zinc-400/50 hover:bg-zinc-900/10 hover:shadow-[0_0_20px_rgba(0,0,0,0.08)];
+  @apply dark:border-white/20 dark:bg-white/5 dark:text-zinc-100;
+  @apply dark:hover:border-white/30 dark:hover:bg-white/10 dark:hover:shadow-[0_0_20px_rgba(255,255,255,0.1)];
 }
 
-.btn-action-enable {
-  background-color: var(--primary) !important;
-  color: var(--primary-foreground) !important;
+.btn-glass-dropdown {
+  @apply min-w-[10.5rem] max-w-[14rem] justify-between gap-2 py-2 text-left text-sm;
 }
 
-.btn-action-enable:hover {
-  filter: brightness(0.92);
-}
-
-.btn-action-cancel {
-  background-color: var(--secondary) !important;
-  color: var(--foreground) !important;
-  border: 1px solid var(--border-default) !important;
-}
-
-.btn-action-cancel:hover {
-  filter: brightness(0.92);
+.btn-action-primary:disabled,
+.btn-action-promote:disabled,
+.btn-action-rollback:disabled,
+.btn-action-delete:disabled,
+.btn-action-enable:disabled,
+.btn-action-cancel:disabled,
+.btn-glass-dropdown:disabled {
+  @apply cursor-not-allowed opacity-50;
 }
 
 /* Stable hover highlight without layout reflow */
@@ -318,27 +332,27 @@ table tbody td {
 }
 
 .status-badge.success {
-  color: var(--color-success);
-  background: var(--bg-success);
-  border: 1px solid var(--color-success);
+  color: var(--status-success-fg);
+  background: var(--status-success-bg);
+  border: 1px solid var(--status-success-border);
 }
 
 .status-badge.error {
-  color: var(--color-error);
-  background: var(--bg-error);
-  border: 1px solid var(--color-error);
+  color: var(--status-failed-fg);
+  background: var(--status-failed-bg);
+  border: 1px solid var(--status-failed-border);
 }
 
 .status-badge.warning {
-  color: var(--color-warning);
-  background: var(--bg-warning);
-  border: 1px solid var(--color-warning);
+  color: var(--status-pending-fg);
+  background: var(--status-pending-bg);
+  border: 1px solid var(--status-pending-border);
 }
 
 .status-badge.info {
-  color: var(--color-info);
-  background: var(--bg-info);
-  border: 1px solid var(--color-info);
+  color: var(--status-running-fg);
+  background: var(--status-running-bg);
+  border: 1px solid var(--status-running-border);
 }
 
 /* Model governance / inline status pills — same tokens in light & dark */
@@ -378,38 +392,21 @@ table tbody td {
 }
 
 .approval-action-btn {
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.375rem;
-  font-size: 0.625rem;
-  line-height: 1.25;
-  font-weight: 500;
-  border: 1px solid transparent;
-  cursor: pointer;
+  @apply relative inline-flex cursor-pointer select-none items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[0.625rem] font-medium leading-tight backdrop-blur-sm transition-all duration-200 ease-out active:scale-[0.98];
 }
 
 .approval-action-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+  @apply cursor-not-allowed opacity-50;
 }
 
 .approval-action-btn--approve {
-  background-color: var(--pill-action-success-bg);
-  color: var(--pill-action-success-fg);
-  border-color: var(--pill-success-border);
-}
-
-.approval-action-btn--approve:hover:not(:disabled) {
-  background-color: var(--pill-action-success-hover);
+  @apply border-emerald-500/40 bg-emerald-100/60 text-emerald-800;
+  @apply hover:bg-emerald-100/90 dark:border-emerald-500/35 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/45;
 }
 
 .approval-action-btn--reject {
-  background-color: var(--pill-action-danger-bg);
-  color: var(--pill-action-danger-fg);
-  border-color: var(--pill-danger-border);
-}
-
-.approval-action-btn--reject:hover:not(:disabled) {
-  background-color: var(--pill-action-danger-hover);
+  @apply border-red-500/40 bg-red-100/60 text-red-800;
+  @apply hover:bg-red-100/90 dark:border-red-500/35 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/45;
 }
 
 .version-inline-banner {

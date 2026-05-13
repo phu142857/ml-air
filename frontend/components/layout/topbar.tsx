@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAppContext } from "@/lib/app-context";
 import { useTheme } from "@/lib/theme-context";
 import { clearScopeContext, switchScopeContext } from "@/lib/api";
@@ -53,7 +55,7 @@ function ScopeDropdown({
           if (disabled) return;
           setOpen((o) => !o);
         }}
-        className="flex min-w-[10.5rem] max-w-[14rem] items-center justify-between gap-2 rounded-md border border-border bg-muted px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50"
+        className="btn-glass-dropdown disabled:pointer-events-none"
       >
         <span className="truncate font-medium text-foreground">{value || placeholder}</span>
         <span className="shrink-0 text-muted-foreground" aria-hidden>
@@ -63,7 +65,7 @@ function ScopeDropdown({
       {open && list.length ? (
         <ul
           role="listbox"
-          className="absolute left-0 top-[calc(100%+4px)] z-[200] max-h-56 min-w-full overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg"
+          className="absolute left-0 top-[calc(100%+4px)] z-[200] max-h-56 min-w-full overflow-y-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
         >
           {list.map((opt) => (
             <li key={opt} role="presentation">
@@ -159,7 +161,7 @@ export function Topbar() {
   const projectList = projectOptions.length ? projectOptions : projectId ? [projectId] : ["default_project"];
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 flex-nowrap items-center justify-between gap-2 overflow-visible border-b border-border bg-card/95 px-4 backdrop-blur-sm md:px-6">
+    <header className="sticky top-0 z-40 flex h-16 flex-nowrap items-center justify-between gap-2 overflow-visible border-b border-border bg-card/90 px-4 shadow-sm backdrop-blur-md md:px-6">
       <div className="flex min-w-0 flex-1 shrink items-center gap-2 md:gap-3">
         <div className="flex shrink-0 items-center gap-2 text-brand font-semibold tracking-tight text-foreground">
           <span className="inline-block h-2 w-2 rounded-full bg-primary" aria-hidden />
@@ -173,10 +175,10 @@ export function Topbar() {
             router.push(`/search?q=${encodeURIComponent(q.trim())}&type=all`);
           }}
         >
-          <input
+          <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-full min-w-0 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+            className="h-9 w-full min-w-0 border-border bg-muted shadow-none"
             placeholder="Search runs, tasks, datasets…"
           />
         </form>
@@ -188,14 +190,9 @@ export function Topbar() {
         </kbd>
       </div>
       <div className="relative z-50 flex shrink-0 flex-nowrap items-center gap-2 md:gap-3">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary"
-          title="Switch light/dark theme"
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={toggleTheme} title="Switch light/dark theme">
           {theme === "dark" ? "Light" : "Dark"}
-        </button>
+        </Button>
         <ScopeDropdown
           value={tenantId}
           options={tenantList}
@@ -220,23 +217,23 @@ export function Topbar() {
             void switchScope(tenantId, p);
           }}
         />
-        <input
+        <Input
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          className="w-52 shrink-0 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground md:w-64"
+          className="h-9 w-52 shrink-0 border-border bg-muted shadow-none md:w-64"
           placeholder="Bearer token…"
           title={!isBootstrapped ? "Loading scope from API…" : undefined}
         />
-        <button
-          type="button"
-          onClick={() => void refreshBootstrap()}
-          disabled={scopeBusy}
-          className="shrink-0 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
-        >
+        <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={() => void refreshBootstrap()} disabled={scopeBusy}>
           {scopeBusy ? "Loading…" : "Bootstrap"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          disabled={scopeBusy}
+          title="Clear persisted scope override"
           onClick={async () => {
             setScopeTransactionLoading(true);
             try {
@@ -248,12 +245,9 @@ export function Topbar() {
               setScopeTransactionLoading(false);
             }
           }}
-          disabled={scopeBusy}
-          className="shrink-0 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-secondary disabled:opacity-60"
-          title="Clear persisted scope override"
         >
           Reset
-        </button>
+        </Button>
       </div>
     </header>
   );

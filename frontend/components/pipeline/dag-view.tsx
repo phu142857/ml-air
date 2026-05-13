@@ -21,19 +21,26 @@ export function DagView({ tasks, onClickTask }: Props) {
 
   const nodes: Node[] = sourceTasks.map((task, index) => {
     const status = normalizeStatus(task.status);
-    const style =
+    const vars =
       status === "SUCCESS"
-        ? { background: "rgba(62,207,142,0.12)", border: "1px solid rgba(62,207,142,0.45)", color: "#3ecf8e" }
+        ? { bg: "var(--status-success-bg)", fg: "var(--status-success-fg)", border: "var(--status-success-border)" }
         : status === "FAILED"
-          ? { background: "rgba(220,38,38,0.12)", border: "1px solid rgba(220,38,38,0.5)", color: "#fca5a5" }
+          ? { bg: "var(--status-failed-bg)", fg: "var(--status-failed-fg)", border: "var(--status-failed-border)" }
           : status === "RUNNING"
-            ? { background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.45)", color: "#93c5fd" }
-            : { background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.45)", color: "#fcd34d" };
+            ? { bg: "var(--status-running-bg)", fg: "var(--status-running-fg)", border: "var(--status-running-border)" }
+            : { bg: "var(--status-pending-bg)", fg: "var(--status-pending-fg)", border: "var(--status-pending-border)" };
     return {
       id: task.task_id,
       data: { label: `${task.task_id} (${status})` },
       position: { x: index * 240 + 10, y: index % 2 === 0 ? 70 : 190 },
-      style: { ...style, borderRadius: 12, fontSize: 12, padding: "6px 10px" }
+      style: {
+        background: vars.bg,
+        border: `1px solid ${vars.border}`,
+        color: vars.fg,
+        borderRadius: 12,
+        fontSize: 12,
+        padding: "6px 10px"
+      }
     };
   });
 

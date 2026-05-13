@@ -236,11 +236,19 @@ export default function PipelineDetailPage() {
                 <div className="mt-3 rounded-xl border border-border bg-muted p-3">
                   <div className="mb-2 text-xs text-foreground">
                     Ready:{" "}
-                    <span className={gateResult.ready ? "text-emerald-400" : "text-red-400"}>{String(gateResult.ready)}</span>
+                    <span
+                      className={
+                        gateResult.ready
+                          ? "text-[color:var(--status-success-fg)]"
+                          : "text-[color:var(--status-failed-fg)]"
+                      }
+                    >
+                      {String(gateResult.ready)}
+                    </span>
                     {" · "}Mode: {gateResult.training_mode}
                   </div>
                   <DataTableShell>
-                    <DataTable className="w-full text-xs">
+                    <DataTable className="text-xs">
                       <thead className="bg-muted text-muted-foreground">
                         <tr>
                           <th className="px-2 py-1 text-left">Dataset</th>

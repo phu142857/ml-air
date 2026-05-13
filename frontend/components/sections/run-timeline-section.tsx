@@ -99,7 +99,7 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
                 taskStatus === "error" ? "border-color-error bg-bg-error" :
                 taskStatus === "success" ? "border-color-success bg-bg-success" :
                 taskStatus === "running" ? "border-color-info bg-bg-info" :
-                taskStatus === "queued" ? "border border-amber-500/30 bg-amber-500/10" :
+                taskStatus === "queued" ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)]" :
                 "border-border bg-muted"
               }`}
             >
@@ -120,7 +120,7 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
                   }${
                     taskStatus === "running" && " bg-bg-info text-color-info"
                   }${
-                    taskStatus === "queued" && " bg-amber-500/20 text-amber-300"
+                    taskStatus === "queued" && " bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
                   }`}
                 >
                   {taskStatus}

@@ -157,7 +157,7 @@ export default function PipelineVersionsPage() {
         <CardContent>
         {listQuery.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
         <DataTableShell>
-          <DataTable className="w-full text-left text-sm">
+          <DataTable className="text-left text-sm">
             <thead className="border-b border-border bg-muted">
               <tr>
                 <th className="py-2 pr-2">#</th>

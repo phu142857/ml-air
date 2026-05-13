@@ -8,6 +8,7 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   deleteModel,
@@ -222,7 +223,7 @@ export default function ModelDetailPage() {
       title={`Model ${model?.name ?? modelId}`}
       subtitle="Governance, versions, and trigger policy"
     >
-      <ConfirmDialog
+      <ConfirmDeleteDialog
         open={confirmOpen}
         title={confirmTitle}
         body={confirmBody}
@@ -266,7 +267,13 @@ export default function ModelDetailPage() {
           <div className="mb-3 rounded-xl border border-border bg-muted p-3 text-xs">
           <div className="text-foreground">
             Status:{" "}
-            <span className={modelStatusQuery.data?.status === "READY" ? "text-emerald-400" : "text-amber-400"}>
+            <span
+              className={
+                modelStatusQuery.data?.status === "READY"
+                  ? "text-[color:var(--status-success-fg)]"
+                  : "text-[color:var(--status-pending-fg)]"
+              }
+            >
               {modelStatusQuery.data?.status || "UNKNOWN"}
             </span>
           </div>
@@ -450,14 +457,14 @@ export default function ModelDetailPage() {
           </div>
         </div>
         <DataTableShell>
-          <DataTable className="w-full table-fixed text-sm">
+          <DataTable className="text-sm">
             <thead className="bg-muted">
               <tr>
-                <th className="w-[110px] px-3 py-2 text-left">Version</th>
-                <th className="w-[120px] px-3 py-2 text-left">Stage</th>
-                <th className="w-[160px] px-3 py-2 text-left">Approval</th>
+                <th className="px-3 py-2 text-left">Version</th>
+                <th className="px-3 py-2 text-left">Stage</th>
+                <th className="px-3 py-2 text-left">Approval</th>
                 <th className="px-3 py-2 text-left">Run</th>
-                <th className="min-w-[420px] px-3 py-2 text-left">Action</th>
+                <th className="whitespace-nowrap px-3 py-2 text-left">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -467,7 +474,7 @@ export default function ModelDetailPage() {
                   <td className="px-3 py-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
                       v.stage === "production"
-                        ? "border-[#3ecf8e]/40 bg-[#3ecf8e]/15 text-[#3ecf8e]"
+                        ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
                         : "border-border bg-muted text-foreground"
                     }`}>
                       {v.stage === "production" ? "●" : "○"} {v.stage}
@@ -484,7 +491,7 @@ export default function ModelDetailPage() {
                         {v.approval_status || "—"}
                       </span>
                       {projectId !== "all" && v.approval_status === "pending_manual_approval" ? (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-nowrap gap-1">
                           <button
                             type="button"
                             className="approval-action-btn approval-action-btn--approve"
@@ -513,7 +520,7 @@ export default function ModelDetailPage() {
                     <span className="inline-block w-full truncate font-mono text-xs">{v.run_id || "-"}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-nowrap gap-2">
                       <button
                         onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
                         className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
@@ -561,50 +568,5 @@ export default function ModelDetailPage() {
       </CardContent>
       </Card>
     </RouteShell>
-  );
-}
-
-function ConfirmDialog({
-  open,
-  title,
-  body,
-  onDelete,
-  onCancel,
-  isLoading
-}: {
-  open: boolean;
-  title: string;
-  body: string;
-  onDelete: () => void;
-  onCancel: () => void;
-  isLoading?: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
-      <div
-        className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-2 text-section font-semibold text-foreground">{title}</h3>
-        <p className="mb-4 text-sm text-muted-foreground">{body}</p>
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="btn-action-cancel rounded-lg px-3 py-2 text-xs disabled:opacity-60"
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onDelete}
-            className="btn-action-delete rounded-lg px-3 py-2 text-xs disabled:opacity-60"
-            disabled={isLoading}
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

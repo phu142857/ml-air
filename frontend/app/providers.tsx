@@ -6,6 +6,7 @@ import { AppContextProvider } from "@/lib/app-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { Topbar } from "@/components/layout/topbar";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMlairRealtime } from "@/lib/use-mlair-realtime";
 import { fetchRuntimeConfig } from "@/lib/api";
 
@@ -33,14 +34,16 @@ export function AppProviders({ children }: PropsWithChildren) {
 
   return (
     <ThemeProvider>
-      <AppContextProvider>
-        <Topbar />
-        <CommandPalette />
-        <QueryProvider>
-          <MlairRealtimeSubscriber />
-          {children}
-        </QueryProvider>
-      </AppContextProvider>
+      <TooltipProvider delayDuration={200}>
+        <AppContextProvider>
+          <Topbar />
+          <CommandPalette />
+          <QueryProvider>
+            <MlairRealtimeSubscriber />
+            {children}
+          </QueryProvider>
+        </AppContextProvider>
+      </TooltipProvider>
     </ThemeProvider>
   );
 }

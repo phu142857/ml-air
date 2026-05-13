@@ -42,12 +42,14 @@ function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string
   if (kind === "readiness") {
     return {
       label: "Dataset readiness",
-      className: "border-sky-500/45 bg-sky-500/10 text-sky-200"
+      className:
+        "border-sky-500/40 bg-sky-100/60 text-sky-700 backdrop-blur-sm dark:border-sky-500/30 dark:bg-sky-950/25 dark:text-sky-400"
     };
   }
   return {
     label: "Training eligibility",
-    className: "border-violet-500/45 bg-violet-500/10 text-violet-200"
+    className:
+      "border-violet-400/40 bg-violet-100/60 text-violet-700 backdrop-blur-sm dark:border-violet-400/35 dark:bg-violet-950/25 dark:text-violet-300"
   };
 }
 
@@ -581,7 +583,7 @@ export default function DatasetHubPage() {
       </div>
 
       {datasetQuery.isError && datasetQuery.isFetched ? (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
           Could not load dataset (check scope or id).
         </div>
       ) : null}
@@ -609,16 +611,9 @@ export default function DatasetHubPage() {
         </div>
       </div>
 
-      <div className="mb-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-        <span className="font-semibold text-foreground">Hub-first:</span> use{" "}
-        <DomainChip kind="readiness" /> and <DomainChip kind="eligibility" /> on this page; start runs from the{" "}
-        <span className="text-foreground">Training</span> tab. Pipelines stay for DAG/tasks/replay and the execution gate
-        (advanced).
-      </div>
-
       {activeTab === "overview" ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>Lifecycle Layers</CardTitle>
             </CardHeader>
@@ -639,7 +634,7 @@ export default function DatasetHubPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>Dataset Summary</CardTitle>
             </CardHeader>
@@ -684,7 +679,7 @@ export default function DatasetHubPage() {
                       <div className="text-muted-foreground">Last materialized: —</div>
                     )}
                     {bufferMaterializationHints.strat === "rolling_accumulate" ? (
-                      <p className="text-amber-200/90">
+                      <p className="text-[color:var(--status-pending-fg)]/90">
                         Rolling: buffer grows without auto <span className="font-mono">vN</span> snapshots — see Accumulation.
                       </p>
                     ) : bufferMaterializationHints.rowsToThreshold != null ? (
@@ -700,7 +695,7 @@ export default function DatasetHubPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
                 Eligibility Snapshot
@@ -716,8 +711,8 @@ export default function DatasetHubPage() {
                       <span
                         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                           c.status === "pass"
-                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                            : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                            ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+                            : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
                         }`}
                       >
                         {c.status === "pass" ? "PASS" : "FAIL"}
@@ -730,7 +725,7 @@ export default function DatasetHubPage() {
               )}
             </CardContent>
           </Card>
-          <Card className="lg:col-span-2">
+          <Card className="min-w-0 lg:col-span-2">
             <CardHeader>
               <CardTitle>Training Eligibility Matrix</CardTitle>
             </CardHeader>
@@ -754,8 +749,8 @@ export default function DatasetHubPage() {
                         <span
                           className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             r.eligible
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                              : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+                              : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
                           }`}
                         >
                           {r.eligible ? "ELIGIBLE" : "BLOCKED"}
@@ -766,7 +761,7 @@ export default function DatasetHubPage() {
                         {r.modelId ? ` · model=${r.modelId}` : " · model=any"}
                       </div>
                       {!r.eligible && r.reasons.length ? (
-                        <div className="mt-1 text-amber-300/90">{r.reasons.join(" ; ")}</div>
+                        <div className="mt-1 text-[color:var(--status-pending-fg)]/90">{r.reasons.join(" ; ")}</div>
                       ) : null}
                     </div>
                   ))
@@ -877,7 +872,13 @@ export default function DatasetHubPage() {
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-foreground">
                   <DomainChip kind="readiness" />
                   <span>Result:</span>
-                  <span className={readinessQuery.data.ready ? "text-emerald-400" : "text-red-400"}>
+                  <span
+                    className={
+                      readinessQuery.data.ready
+                        ? "text-[color:var(--status-success-fg)]"
+                        : "text-[color:var(--status-failed-fg)]"
+                    }
+                  >
                     {String(readinessQuery.data.eligibility_status || readinessQuery.data.status || "blocked")}
                   </span>
                 </div>
@@ -930,8 +931,8 @@ export default function DatasetHubPage() {
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             c.status === "pass"
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                              : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+                              : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
                           }`}
                         >
                           {c.status === "pass" ? "PASS" : "FAIL"}
@@ -949,7 +950,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "accumulation" ? (
-        <Card className="border-l-4 border-l-amber-500/55">
+        <Card className="border-l-4 border-l-[var(--status-pending-border)]">
           <CardHeader>
             <CardTitle>Active Accumulation Buffer</CardTitle>
           </CardHeader>
@@ -973,8 +974,8 @@ export default function DatasetHubPage() {
                   </p>
                 ) : null}
                 {accumulationStrategyDraft === "rolling_accumulate" ? (
-                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
-                    <span className="font-semibold text-amber-50">Rolling accumulate:</span> the buffer can pass the
+                  <div className="rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-[11px] leading-relaxed text-[color:var(--status-pending-fg)]">
+                    <span className="font-semibold text-foreground">Rolling accumulate:</span> the buffer can pass the
                     materialization target, but MLAir does <span className="font-semibold">not</span> create a new immutable
                     dataset version automatically. Use <span className="font-semibold">Materialize now</span> or switch to{" "}
                     <span className="font-mono">snapshot_on_threshold</span> if you expect threshold-driven snapshots.
@@ -1096,7 +1097,11 @@ export default function DatasetHubPage() {
                 </div>
                 {accumulationMsg ? (
                   <p
-                    className={`text-[11px] ${accumulationMsg.includes("saved") ? "text-emerald-400/90" : "text-amber-300/90"}`}
+                    className={`text-[11px] ${
+                      accumulationMsg.includes("saved")
+                        ? "text-[color:var(--status-success-fg)]/90"
+                        : "text-[color:var(--status-pending-fg)]/90"
+                    }`}
                   >
                     {accumulationMsg}
                   </p>
@@ -1180,7 +1185,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "versions" ? (
-        <Card className="border-l-4 border-l-sky-500/55">
+        <Card className="min-w-0 border-l-4 border-l-sky-500/45 dark:border-l-sky-500/40">
           <CardHeader>
             <CardTitle>Dataset Versions</CardTitle>
           </CardHeader>
@@ -1203,7 +1208,7 @@ export default function DatasetHubPage() {
                 <tbody>
                   {(versionsQuery.data?.items || []).map((v) => (
                     <tr key={v.version_id} className="border-t border-border">
-                      <td className="px-3 py-2">{v.version}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{v.version}</td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}>
                           {normalizeDatasetStatus(v.status)}
@@ -1231,7 +1236,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "training" ? (
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Train model (intent)</CardTitle>
           </CardHeader>
@@ -1246,7 +1251,7 @@ export default function DatasetHubPage() {
             even when the API allows a compat fallback for omitted ids.
           </p>
           {!strictDatasetVersionOnTrigger ? (
-            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            <div className="mb-3 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-xs text-[color:var(--status-pending-fg)]">
               Runtime config: <span className="font-semibold">strict_dataset_version_required</span> is off —{" "}
               <code className="font-mono">POST .../runs/trigger</code> may accept calls without an explicit version. This Hub
               still pins the row you click for reproducible training.
@@ -1277,14 +1282,14 @@ export default function DatasetHubPage() {
             onRequiredSizeChange={setRequiredSize}
             className="mb-3"
           />
-          {trainMsg ? <div className="mb-2 text-xs text-amber-300">{trainMsg}</div> : null}
+          {trainMsg ? <div className="mb-2 text-xs text-[color:var(--status-pending-fg)]">{trainMsg}</div> : null}
           <DataTableShell>
             <DataTable className="text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="px-3 py-2 text-left">Version</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">Version</th>
                   <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Action</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1294,7 +1299,7 @@ export default function DatasetHubPage() {
                     className={`border-t border-border ${selectedVersionForReadiness === v.version_id ? "bg-secondary/40" : ""}`}
                     onClick={() => setSelectedVersionId(v.version_id)}
                   >
-                    <td className="px-3 py-2">{v.version}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{v.version}</td>
                     <td className="px-3 py-2">
                       <span
                         className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
@@ -1302,7 +1307,7 @@ export default function DatasetHubPage() {
                         {normalizeDatasetStatus(v.status)}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-3 py-2">
                       <Button
                         type="button"
                         className="px-3 py-1 text-xs"
@@ -1354,7 +1359,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "readiness" ? (
-      <Card className="mt-4">
+      <Card className="mt-4 min-w-0">
         <CardHeader>
           <CardTitle>Readiness evaluations</CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -1444,8 +1449,8 @@ export default function DatasetHubPage() {
                       <span
                         className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
                           row.status === "eligible"
-                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                            : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                            ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+                            : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
                         }`}
                       >
                         {String(row.status || "blocked").toUpperCase()}
@@ -1454,10 +1459,10 @@ export default function DatasetHubPage() {
                     <td className="px-3 py-2">
                       {Number(row.current_size || 0)} / {Number(row.required_size || 0)}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
                       {row.dataset_version_id || "—"}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
                       {String((row as { source?: string }).source || "manual")}
                     </td>
                     <td
@@ -1467,7 +1472,7 @@ export default function DatasetHubPage() {
                       {String(row.status || "").toLowerCase() === "eligible" ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
-                        <span className="line-clamp-2 text-amber-200/90">
+                        <span className="line-clamp-2 text-[color:var(--status-pending-fg)]/90">
                           {formatEvaluationReasons(row.reasons) || "—"}
                         </span>
                       )}

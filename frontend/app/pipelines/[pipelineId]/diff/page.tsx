@@ -114,7 +114,7 @@ function DiffPageInner() {
       {!canDiff && <p className="text-sm text-muted-foreground">Select two different versions to compare.</p>}
       {canDiff && !diffQuery.isLoading && details.length > 0 && (
         <DataTableShell>
-          <DataTable className="w-full text-left text-sm">
+          <DataTable className="text-left text-sm">
             <thead className="bg-muted">
               <tr>
                 <th className="w-1/4 px-3 py-2">Key</th>

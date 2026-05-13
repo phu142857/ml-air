@@ -10,6 +10,7 @@ import { fetchDatasetRuns, fetchDatasetVersion, fetchLineageForRun, fetchLineage
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 
 function LineagePageInner() {
   const { tenantId, projectId, token } = useAppContext();
@@ -126,15 +127,20 @@ function LineagePageInner() {
 
   return (
     <RouteShell activeNav="Lineage" title="Data lineage" subtitle="Dataset versions and task edges">
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-3">
-        <input
-          className="max-w-md rounded-lg border border-border bg-muted px-2 py-1 font-mono text-xs text-foreground"
-          placeholder="dataset version id (neighborhood, no runId)"
-          value={center}
-          onChange={(e) => setCenter(e.target.value)}
-        />
-        <div className="h-[480px] rounded-2xl border border-border bg-muted">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-1.5 lg:col-start-1 lg:row-start-1">
+          <Label htmlFor="lineage-center" className="text-muted-foreground">
+            Dataset version id &nbsp;&nbsp;
+          </Label>
+          <input
+            id="lineage-center"
+            className="w-full max-w-md rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground shadow-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            placeholder="uuid (neighborhood when no runId in URL)"
+            value={center}
+            onChange={(e) => setCenter(e.target.value)}
+          />
+        </div>
+        <div className="h-[480px] min-h-[280px] rounded-2xl border border-border bg-muted lg:col-start-1 lg:row-start-2 lg:min-h-0">
           <ReactFlow
             fitView
             nodes={highlighted.nodes}
@@ -148,17 +154,18 @@ function LineagePageInner() {
             <Controls />
           </ReactFlow>
         </div>
-        {runId && <p className="text-xs text-muted-foreground">Run-scoped: {runId}</p>}
-        </div>
-        <Card className="h-[480px] p-3">
-          <CardHeader className="mb-0">
+        {runId ? (
+          <p className="text-xs text-muted-foreground lg:col-start-1 lg:row-start-3">{`Run-scoped: ${runId}`}</p>
+        ) : null}
+        <Card className="flex h-[480px] flex-col overflow-hidden p-3 lg:col-start-2 lg:row-start-2">
+          <CardHeader className="mb-0 shrink-0 space-y-0 p-0 pb-2">
             <CardTitle>Dataset detail</CardTitle>
           </CardHeader>
-          <CardContent className="min-h-0">
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-2 p-0">
           {!selectedVersionId && <p className="text-xs text-muted-foreground">Click a node to view detail.</p>}
           {selectedVersionId && (
             <>
-              <div className="rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
+              <div className="shrink-0 rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
                 <p><span className="text-muted-foreground">version_id:</span> {selectedVersionId}</p>
                 <p><span className="text-muted-foreground">dataset:</span> {selectedVersion.data?.dataset_name || "-"}</p>
                 <p><span className="text-muted-foreground">version:</span> {selectedVersion.data?.version || "-"}</p>

@@ -142,7 +142,8 @@ export default function RunDetailPage() {
             <section className="h-full rounded-lg border border-obs-border bg-obs-surface p-4">
               <h2 className="mb-3 text-section font-semibold text-foreground">Config snapshot</h2>
               {runQuery.data?.config_snapshot ? (
-                <table className="w-full text-sm">
+                <div className="min-w-0 overflow-x-auto">
+                <table className="w-full min-w-max text-sm">
                   <thead className="bg-muted">
                     <tr>
                       <th className="px-3 py-2 text-left">Parameter</th>
@@ -162,6 +163,7 @@ export default function RunDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               ) : (
                 <div className="p-10 text-center text-sm text-muted-foreground">No configuration snapshot available.</div>
               )}
@@ -177,8 +179,8 @@ export default function RunDetailPage() {
                   <div className="mb-2 text-xs text-muted-foreground">
                     ready={String(readinessQuery.data.ready)} · mode={readinessQuery.data.training_mode}
                   </div>
-                  <div className="max-h-[260px] overflow-auto rounded-md border border-obs-border bg-obs-log">
-                    <table className="w-full text-xs">
+                  <div className="max-h-[260px] min-w-0 overflow-auto rounded-md border border-obs-border bg-obs-log">
+                    <table className="w-full min-w-max text-xs">
                       <thead className="bg-muted">
                         <tr>
                           <th className="px-2 py-1 text-left">Dataset</th>
@@ -190,7 +192,7 @@ export default function RunDetailPage() {
                       <tbody>
                         {(readinessQuery.data.details || []).map((d) => (
                           <tr key={`${d.dataset}-${d.role}`} className="border-t border-border">
-                            <td className="px-2 py-1">{d.dataset}</td>
+                            <td className="whitespace-nowrap px-2 py-1">{d.dataset}</td>
                             <td className="px-2 py-1">{d.actual_size}</td>
                             <td className="px-2 py-1">{d.required_size}</td>
                             <td className="px-2 py-1">{d.status}</td>
@@ -228,16 +230,23 @@ export default function RunDetailPage() {
 
 function DetailRow({ label, value, highlight = false }: { label: string; value: any; highlight?: boolean }) {
   const getStatusStyles = (val: string) => {
-    if (val === 'SUCCESS') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-    if (val === 'FAILED' || val === 'ERROR') return 'text-red-400 bg-red-500/10 border-red-500/20';
-    return 'text-primary bg-primary/10 border-primary/25';
+    if (val === "SUCCESS") {
+      return "text-[color:var(--status-success-fg)] bg-[var(--status-success-bg)] border-[var(--status-success-border)]";
+    }
+    if (val === "FAILED" || val === "ERROR") {
+      return "text-[color:var(--status-failed-fg)] bg-[var(--status-failed-bg)] border-[var(--status-failed-border)]";
+    }
+    if (val === "RUNNING") {
+      return "text-[color:var(--status-running-fg)] bg-[var(--status-running-bg)] border-[var(--status-running-border)]";
+    }
+    return "text-[color:var(--status-pending-fg)] bg-[var(--status-pending-bg)] border-[var(--status-pending-border)]";
   };
 
   return (
     <div className="flex items-center justify-between border-b border-border py-2 last:border-b-0">
       <span className="text-overline font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       {highlight ? (
-        <span className={`rounded-md border px-2.5 py-1 font-mono text-xs ${getStatusStyles(String(value))}`}>
+        <span className={`rounded-xl border px-2.5 py-1 font-mono text-xs ${getStatusStyles(String(value))}`}>
           {value?.toString() || "N/A"}
         </span>
       ) : (

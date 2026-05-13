@@ -8,6 +8,15 @@ import { RouteShell } from "@/components/layout/route-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   type DatasetVersionItem,
@@ -212,7 +221,7 @@ export default function DatasetsPage() {
       title="Dataset Hub"
       subtitle="Primary lifecycle surface: versions, readiness, eligibility, train — buffer strategies: docs/guides/dataset-accumulation-strategies.md; pipelines stay optional overrides"
     >
-      <ConfirmDialog
+      <ConfirmDeleteDialog
         open={confirmOpen}
         title={confirmTitle}
         body={confirmBody}
@@ -222,8 +231,8 @@ export default function DatasetsPage() {
         }}
         isLoading={deleteDatasetMutation.isPending || deleteDatasetVersionMutation.isPending}
       />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Upload CSV</CardTitle>
           </CardHeader>
@@ -299,9 +308,9 @@ export default function DatasetsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-section font-medium text-foreground">
+        <Card className="min-w-0">
+          <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 flex-1 truncate text-section font-medium text-foreground">
               Dataset Versions {selectedDataset ? `- ${selectedDataset.name}` : ""}
             </h2>
             {selectedDatasetId ? (
@@ -409,13 +418,13 @@ export default function DatasetsPage() {
                       <th className="px-3 py-2 text-left">Status</th>
                       <th className="px-3 py-2 text-left">Score</th>
                       <th className="px-3 py-2 text-left">Created</th>
-                      <th className="px-3 py-2 text-left">Action</th>
+                      <th className="whitespace-nowrap px-3 py-2 text-left">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(versionsQuery.data?.items || []).map((v) => (
                       <tr key={v.version_id} className="interactive-row border-t border-border">
-                        <td className="px-3 py-2">{v.version}</td>
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{v.version}</td>
                         <td className="px-3 py-2">
                           <span
                             className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
@@ -425,7 +434,7 @@ export default function DatasetsPage() {
                         </td>
                         <td className="px-3 py-2">{Number(v.quality_score ?? 0)}</td>
                         <td className="px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
-                        <td className="px-3 py-2">
+                        <td className="whitespace-nowrap px-3 py-2">
                           <button
                             className="btn-action-cancel rounded-lg px-3 py-1 text-xs disabled:opacity-60"
                             title="View details"
@@ -522,57 +531,71 @@ function VersionDetailDialog({
   version: DatasetVersionItem | null;
   onClose: () => void;
 }) {
-  if (!open || !version) return null;
-  const summary = Array.isArray(version.summary) ? version.summary : [];
-  const details = Array.isArray(version.details) ? version.details : [];
+  const summary = version && Array.isArray(version.summary) ? version.summary : [];
+  const details = version && Array.isArray(version.details) ? version.details : [];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-lg rounded-xl border border-border bg-card p-4 shadow-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-3 text-section font-semibold text-foreground">Dataset Version Detail</h3>
-        <div className="space-y-1 text-sm">
-          <div className="text-foreground">
-            Status: <span className="font-semibold">{String(version.status || "ready")}</span>
-          </div>
-          <div className="text-foreground">
-            Score: <span className="font-semibold">{Number(version.quality_score ?? 0)}</span>
-          </div>
-        </div>
-        <div className="mt-3">
-          <div className="text-xs font-semibold text-muted-foreground">Summary</div>
-          {summary.length ? (
-            <ul className="mt-1 list-inside list-disc text-sm text-foreground">
-              {summary.map((item: string, idx: number) => (
-                <li key={`${item}-${idx}`}>{item}</li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-1 text-sm text-muted-foreground">No summary</div>
-          )}
-        </div>
-        <div className="mt-3">
-          <div className="text-xs font-semibold text-muted-foreground">Details</div>
-          {details.length ? (
-            <ul className="mt-1 max-h-52 space-y-1 overflow-auto rounded-lg border border-border bg-secondary p-2 text-xs text-muted-foreground">
-              {details.map((item: Record<string, unknown>, idx: number) => (
-                <li key={idx} className="rounded border border-border bg-muted/80 px-2 py-1">
-                  <span className={detailSeverityClass(item)}>{formatDetailItem(item)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-1 text-sm text-muted-foreground">No details</div>
-          )}
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button onClick={onClose} className="btn-action-cancel rounded-lg px-3 py-2 text-xs">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog
+      open={open && !!version}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[min(90vh,720px)] max-w-lg gap-4 overflow-y-auto sm:max-w-lg">
+        <DialogHeader className="space-y-1.5 text-left">
+          <DialogTitle>Dataset version detail</DialogTitle>
+          <DialogDescription>
+            Quality summary and per-field issues for this immutable snapshot.
+          </DialogDescription>
+        </DialogHeader>
+        {version ? (
+          <>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-foreground">
+                <div>
+                  Status:{" "}
+                  <span className="font-semibold">{String(version.status || "ready")}</span>
+                </div>
+                <div>
+                  Score: <span className="font-semibold">{Number(version.quality_score ?? 0)}</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</div>
+                {summary.length ? (
+                  <ul className="mt-2 list-inside list-disc text-sm text-foreground">
+                    {summary.map((item: string, idx: number) => (
+                      <li key={`${item}-${idx}`}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-2 text-sm text-muted-foreground">No summary</div>
+                )}
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</div>
+                {details.length ? (
+                  <ul className="mt-2 max-h-52 space-y-1 overflow-auto rounded-lg border border-border bg-muted/50 p-2 text-xs text-muted-foreground">
+                    {details.map((item: Record<string, unknown>, idx: number) => (
+                      <li key={idx} className="rounded-md border border-border bg-background/80 px-2 py-1.5">
+                        <span className={detailSeverityClass(item)}>{formatDetailItem(item)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-2 text-sm text-muted-foreground">No details</div>
+                )}
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:justify-end">
+              <Button type="button" variant="secondary" size="sm" onClick={onClose}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -599,7 +622,7 @@ function formatDetailItem(item: Record<string, unknown>): string {
 function detailSeverityClass(item: Record<string, unknown>): string {
   const severity = String(item.severity || "").toLowerCase();
   if (severity === "failed" || severity === "error" || severity === "critical") return "text-destructive";
-  if (severity === "warning" || severity === "warn") return "text-amber-300";
+  if (severity === "warning" || severity === "warn") return "text-[color:var(--status-pending-fg)]";
   return "text-primary";
 }
 
@@ -628,50 +651,5 @@ function IconDelete() {
       <path d="M8 7h8M10 7V5h4v2M7 7l1 12h8l1-12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <path d="M10 10v6M14 10v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
-  );
-}
-
-function ConfirmDialog({
-  open,
-  title,
-  body,
-  onDelete,
-  onCancel,
-  isLoading
-}: {
-  open: boolean;
-  title: string;
-  body: string;
-  onDelete: () => void;
-  onCancel: () => void;
-  isLoading?: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
-      <div
-        className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-2 text-section font-semibold text-foreground">{title}</h3>
-        <p className="mb-4 text-sm text-muted-foreground">{body}</p>
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="btn-action-cancel rounded-lg px-3 py-2 text-xs disabled:opacity-60"
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onDelete}
-            className="btn-action-delete rounded-lg px-3 py-2 text-xs disabled:opacity-60"
-            disabled={isLoading}
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

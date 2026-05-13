@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { PropsWithChildren } from "react";
+import { cn } from "@/lib/utils";
 
 type NavItem =
   | "Dashboard"
@@ -35,9 +36,9 @@ const navItems: Array<{ key: NavItem; href: string }> = [
 export function RouteShell({ activeNav, title, subtitle, children }: Props) {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[224px_1fr]">
-        <aside className="sticky top-16 h-auto max-h-none border-b border-border bg-muted/80 md:h-[calc(100vh-64px)] md:max-h-[calc(100vh-64px)] md:border-b-0 md:border-r md:overflow-y-auto md:px-3 md:py-4">
-          <div className="mb-2 px-3 pt-3 text-overline font-medium uppercase tracking-wide text-muted-foreground md:px-0 md:pt-0">
+      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 md:grid-cols-[240px_1fr]">
+        <aside className="sticky top-16 z-30 h-auto max-h-none border-b border-border bg-muted/40 backdrop-blur-sm md:h-[calc(100vh-64px)] md:max-h-[calc(100vh-64px)] md:border-b-0 md:border-r md:overflow-y-auto md:px-3 md:py-5">
+          <div className="mb-3 px-3 pt-3 text-overline font-medium uppercase tracking-wide text-muted-foreground md:px-0 md:pt-0">
             Workspace
           </div>
           <nav className="flex flex-row gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:gap-0.5 md:px-0 md:pb-0">
@@ -47,11 +48,12 @@ export function RouteShell({ activeNav, title, subtitle, children }: Props) {
                 <Link
                   key={item.key}
                   href={item.href}
-                  className={`shrink-0 rounded-md border px-3 py-2 text-left text-body transition-colors md:py-1.5 ${
+                  className={cn(
+                    "shrink-0 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors md:py-2",
                     active
-                      ? "border-border bg-card text-foreground ring-1 ring-inset ring-primary/35"
-                      : "border-transparent text-muted-foreground hover:border-border hover:bg-secondary hover:text-foreground"
-                  }`}
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                  )}
                 >
                   {item.key}
                 </Link>
@@ -60,11 +62,11 @@ export function RouteShell({ activeNav, title, subtitle, children }: Props) {
           </nav>
         </aside>
 
-        <main className="px-4 py-5 md:px-6 md:py-6">
-          <div className="mx-auto flex max-w-[1400px] flex-col gap-5 md:gap-6">
-            <header className="sticky top-16 z-20 -mx-1 rounded-lg border border-border bg-background/95 px-3 py-3 backdrop-blur-sm md:-mx-0">
+        <main className="min-w-0 px-4 py-5 md:px-8 md:py-8">
+          <div className="mx-auto flex min-w-0 max-w-[1400px] flex-col gap-6 md:gap-8">
+            <header className="sticky top-16 z-20 -mx-1 rounded-xl border border-border bg-card/95 px-4 py-4 shadow-sm backdrop-blur-md md:-mx-0">
               <h1 className="text-page font-semibold tracking-tight text-foreground">{title}</h1>
-              <p className="mt-0.5 text-body text-muted-foreground">{subtitle}</p>
+              <p className="mt-1 text-body text-muted-foreground">{subtitle}</p>
             </header>
             {children}
           </div>

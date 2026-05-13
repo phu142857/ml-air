@@ -7,7 +7,7 @@ export function DataTableShell({ className, ...props }: HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        "overflow-auto rounded-lg border border-border bg-card",
+        "min-w-0 max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain rounded-lg border border-border bg-card [-webkit-overflow-scrolling:touch]",
         className
       )}
       {...props}
@@ -15,7 +15,9 @@ export function DataTableShell({ className, ...props }: HTMLAttributes<HTMLDivEl
   );
 }
 
-/** Linear-style dense tables: tight type, full width. */
+/** Dense tables: at least full shell width; grows with content so the shell can scroll horizontally. */
 export function DataTable({ className, ...props }: TableHTMLAttributes<HTMLTableElement>) {
-  return <table className={cn("w-full text-xs leading-snug", className)} {...props} />;
+  return (
+    <table className={cn("min-w-full w-max border-collapse text-xs leading-snug", className)} {...props} />
+  );
 }
