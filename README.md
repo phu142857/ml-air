@@ -16,7 +16,7 @@ Multi-tenant control plane for **pipeline runs**, **model registry**, **datasets
 
 ## Current status (checklist)
 
-Use this as a quick “what exists today” view. Detailed delivery history lives in [ROADMAP.md](ROADMAP.md).
+Use this as a quick “what exists today” view. Notable shipped changes are summarized in [CHANGELOG.md](CHANGELOG.md).
 
 ### Core platform
 
@@ -64,13 +64,13 @@ Use this as a quick “what exists today” view. Detailed delivery history live
 
 ### In progress / incremental (not a blocker to run the stack)
 
-- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — see [ROADMAP.md](ROADMAP.md). **Optional** Hub vs pipeline train-intent beacon: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (+ debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`); see `docs/api/readiness-and-gating.md` § *Optional train-intent telemetry*.)
-- **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback remains in ROADMAP dataset lifecycle section.)
+- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — details in `docs/api/readiness-and-gating.md`. **Optional** Hub vs pipeline train-intent beacon: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (+ debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`); see the same doc § *Optional train-intent telemetry*.)
+- **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback is still incremental work.)
 - **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
 
 ### Release hygiene (maintainers)
 
-- Before tagging a milestone: run `make up` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see checklists inside [ROADMAP.md](ROADMAP.md) for v0.2.0 / governance gates).
+- Before tagging a milestone: run `make up` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see [CONTRIBUTING.md](CONTRIBUTING.md) for DB migrations and review expectations).
 
 ---
 
@@ -307,7 +307,6 @@ ml-air/
 ├── sdk/                 # Tracking helpers + model-centric trigger / pipeline mapping
 ├── openapi-v1-draft.yaml
 ├── Makefile
-├── ROADMAP.md
 └── ARCHITECTURE.md      # Longer-form target architecture
 ```
 
@@ -378,7 +377,6 @@ Released under the **MIT License** — see [LICENSE](LICENSE). API contract draf
 | [docs/index.md](docs/index.md)                                       | All guides (run, gating, plugins, UI, DR)      |
 | [CHANGELOG.md](CHANGELOG.md)                                         | Notable API and env changes for integrators    |
 | [ARCHITECTURE.md](ARCHITECTURE.md)                                   | Target enterprise architecture                 |
-| [ROADMAP.md](ROADMAP.md)                                             | Delivery milestones + Hub-first migration plan |
 | [docs/plugin-development-guide.md](docs/plugin-development-guide.md) | Plugin packaging & contract                    |
 
 
