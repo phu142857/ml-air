@@ -153,6 +153,18 @@ class DatasetBufferPatchIn(BaseModel):
     )
 
 
+class ExternalRefAppendIn(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+    label: str | None = Field(default=None, max_length=256)
+
+
+class DatasetVersionMetadataPatchIn(BaseModel):
+    """Additive-only merge: existing tags/refs are preserved; new entries are union-appended (deduped)."""
+
+    append_tags: list[str] = Field(default_factory=list, max_length=64)
+    append_external_refs: list[ExternalRefAppendIn] = Field(default_factory=list, max_length=32)
+
+
 class CreatePipelineVersionIn(BaseModel):
     config: dict = Field(default_factory=dict)
 
@@ -2041,6 +2053,37 @@ def get_dataset_version_v1(
     if not row:
         raise HTTPException(status_code=404, detail="dataset_version_not_found")
     return row
+
+
+@router.patch("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/metadata")
+def patch_dataset_version_metadata_v1(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    body: DatasetVersionMetadataPatchIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    tags = [str(t).strip() for t in (body.append_tags or []) if str(t).strip()]
+    refs = [r.model_dump(exclude_none=True) for r in (body.append_external_refs or [])]
+    if not tags and not refs:
+        raise HTTPException(status_code=422, detail="metadata_patch_empty")
+    try:
+        out = lineage_service.patch_dataset_version_additive_metadata(
+            tenant_id,
+            project_id,
+            version_id,
+            append_tags=tags or None,
+            append_external_refs=refs or None,
+        )
+    except ValueError as exc:
+        if str(exc) == "metadata_patch_empty":
+            raise HTTPException(status_code=422, detail="metadata_patch_empty") from exc
+        raise
+    if not out:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return out
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/download")

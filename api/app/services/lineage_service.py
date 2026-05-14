@@ -1435,6 +1435,103 @@ def get_dataset(tenant_id: str, project_id: str, dataset_id: str) -> dict | None
     }
 
 
+def _coerce_json_list(raw: Any) -> list[Any]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        try:
+            v = json.loads(raw)
+            return v if isinstance(v, list) else []
+        except Exception:
+            return []
+    return []
+
+
+def _tags_list_from_db(raw: Any) -> list[str]:
+    out: list[str] = []
+    for x in _coerce_json_list(raw):
+        s = str(x).strip()
+        if s and s not in out:
+            out.append(s)
+    return out
+
+
+def _external_refs_list_from_db(raw: Any) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for x in _coerce_json_list(raw):
+        if not isinstance(x, dict):
+            continue
+        u = str(x.get("url") or "").strip()
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        item: dict[str, str] = {"url": u}
+        lab = str(x.get("label") or "").strip()
+        if lab:
+            item["label"] = lab
+        out.append(item)
+    return out
+
+
+def _normalize_append_tags(append: list[str] | None) -> list[str]:
+    if not append:
+        return []
+    out: list[str] = []
+    for x in append:
+        s = str(x).strip()
+        if not s or len(s) > 128:
+            continue
+        if s not in out:
+            out.append(s)
+    return out
+
+
+def _normalize_append_external_refs(
+    append: list[dict[str, Any]] | None,
+) -> list[dict[str, str]]:
+    if not append:
+        return []
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for x in append:
+        if not isinstance(x, dict):
+            continue
+        u = str(x.get("url") or "").strip()
+        if not u or len(u) > 2048 or u in seen:
+            continue
+        seen.add(u)
+        item: dict[str, str] = {"url": u}
+        lab = str(x.get("label") or "").strip()
+        if lab and len(lab) <= 256:
+            item["label"] = lab
+        out.append(item)
+    return out
+
+
+def _merge_distinct_tags(existing: Any, append: list[str]) -> list[str]:
+    base = _tags_list_from_db(existing)
+    for t in append:
+        if t not in base:
+            base.append(t)
+    return base
+
+
+def _merge_distinct_external_refs(
+    existing: Any, append: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    base = _external_refs_list_from_db(existing)
+    seen = {r["url"] for r in base}
+    for r in append:
+        u = r.get("url") or ""
+        if u and u not in seen:
+            seen.add(u)
+            base.append(dict(r))
+    return base
+
+
 def _dataset_version_list_item_from_row(r: tuple[Any, ...]) -> dict:
     st = r[5] or "manual_upload"
     db_canon = r[6]
@@ -1453,6 +1550,8 @@ def _dataset_version_list_item_from_row(r: tuple[Any, ...]) -> dict:
         "quality_score": int(r[9] or 0),
         "summary": r[10] or [],
         "details": r[11] or [],
+        "tags": _tags_list_from_db(r[12]) if len(r) > 12 else [],
+        "external_refs": _external_refs_list_from_db(r[13]) if len(r) > 13 else [],
     }
 
 
@@ -1470,6 +1569,7 @@ def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dat
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
                      , dv.source_type, dv.canonical_source_type, dv.record_count
                      , dv.status, dv.quality_score, dv.summary, dv.details
+                     , dv.tags, dv.external_refs
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
@@ -1490,6 +1590,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
                      , dv.source_type, dv.canonical_source_type, dv.record_count
                      , dv.status, dv.quality_score, dv.summary, dv.details
+                     , dv.tags, dv.external_refs
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
@@ -1508,7 +1609,8 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
                        dv.source_type, dv.canonical_source_type, dv.record_count,
-                       dv.status, dv.quality_score, dv.summary, dv.details
+                       dv.status, dv.quality_score, dv.summary, dv.details,
+                       dv.tags, dv.external_refs
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND dv.version_id = %s
@@ -1537,7 +1639,58 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "quality_score": int(row[11] or 0),
         "summary": row[12] or [],
         "details": row[13] or [],
+        "tags": _tags_list_from_db(row[14]),
+        "external_refs": _external_refs_list_from_db(row[15]),
     }
+
+
+def patch_dataset_version_additive_metadata(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    *,
+    append_tags: list[str] | None = None,
+    append_external_refs: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Merge **append-only** ``tags`` and ``external_refs`` JSON arrays on a version row."""
+    tags_norm = _normalize_append_tags(append_tags)
+    refs_norm = _normalize_append_external_refs(append_external_refs)
+    if not tags_norm and not refs_norm:
+        raise ValueError("metadata_patch_empty")
+    dataset_id_for_notify: str | None = None
+    with db_conn() as conn:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT dv.version_id, dv.dataset_id, dv.tags, dv.external_refs
+                    FROM dataset_versions dv
+                    JOIN datasets d ON d.dataset_id = dv.dataset_id
+                    WHERE d.tenant_id = %s AND d.project_id = %s AND dv.version_id = %s
+                    FOR UPDATE OF dv
+                    """,
+                    (tenant_id, project_id, version_id),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                dataset_id_for_notify = str(row[1])
+                merged_tags = _merge_distinct_tags(row[2], tags_norm)
+                merged_refs = _merge_distinct_external_refs(row[3], refs_norm)
+                cur.execute(
+                    """
+                    UPDATE dataset_versions
+                    SET tags = %s::jsonb,
+                        external_refs = %s::jsonb
+                    WHERE version_id = %s
+                    """,
+                    (json.dumps(merged_tags), json.dumps(merged_refs), version_id),
+                )
+    if dataset_id_for_notify:
+        _notify_dataset_updated(
+            tenant_id, project_id, dataset_id_for_notify, action="version_metadata_updated"
+        )
+    return get_dataset_version(tenant_id, project_id, version_id)
 
 
 def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: str) -> tuple[bytes, str]:
@@ -1826,7 +1979,8 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
                 """
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
                        dv.source_type, dv.canonical_source_type, dv.record_count,
-                       dv.status, dv.quality_score, dv.summary, dv.details
+                       dv.status, dv.quality_score, dv.summary, dv.details,
+                       dv.tags, dv.external_refs
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s
@@ -1856,6 +2010,8 @@ def _load_version_nodes(tenant_id: str, project_id: str, version_ids: set[str]) 
             "quality_score": int(r[11] or 0),
             "summary": r[12] or [],
             "details": r[13] or [],
+            "tags": _tags_list_from_db(r[14]),
+            "external_refs": _external_refs_list_from_db(r[15]),
         }
         for r in rows
     ]

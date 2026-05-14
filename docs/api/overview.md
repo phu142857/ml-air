@@ -10,7 +10,7 @@ Core resources:
 - tasks (including **external worker** lease/complete under `/v1/tasks/…`; see [External worker execution](../guides/external-worker-execution.md))
 - pipelines and pipeline versions (**`POST|GET .../pipelines/{id}/versions`**, **`GET .../pipeline-versions/{id}`**, **`.../diff`**, **`POST .../check-readiness`**, **`POST /v1/pipelines/validate`**)
 - models (registry CRUD, versions, import, promote — see prior list in OpenAPI **Models** tag; narrative [POST /models](./post-models.md), [POST /versions](./post-model-versions.md), [GET /versions](./get-model-versions.md))
-- **datasets** (list, CSV upload/preview, versions, download, **`GET|PATCH .../datasets/{id}/buffer`**, **`POST .../datasets/{id}/materialize`**, policy-driven readiness, training-policies CRUD-lite) and **lineage** (neighborhood query, run slice, ingest)
+- **datasets** (list, CSV upload/preview, versions, download, additive **`PATCH .../dataset-versions/{version_id}/metadata`** for `tags` / `external_refs`, **`GET|PATCH .../datasets/{id}/buffer`**, **`POST .../datasets/{id}/materialize`**, policy-driven readiness, training-policies CRUD-lite) and **lineage** (neighborhood query, run slice, ingest)
 - **tracking** (experiments, params/metrics/artifacts, **`GET .../tracking`**, **`POST .../runs/compare`**)
 - **readiness and gating** (run and dataset surfaces above; narrative [readiness and gating](./readiness-and-gating.md))
 - **search** (`GET .../search`), **`GET /v1/auth/whoami`**, **plugins** (`/v1/plugins/...`)

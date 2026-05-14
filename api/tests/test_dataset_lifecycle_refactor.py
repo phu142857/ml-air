@@ -224,6 +224,21 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["dataset"], "only-snap")
 
+    def test_merge_distinct_tags_dedupes(self) -> None:
+        self.assertEqual(
+            lineage_service._merge_distinct_tags(["a", "b"], ["b", "c"]),  # type: ignore[attr-defined]
+            ["a", "b", "c"],
+        )
+
+    def test_merge_distinct_external_refs_dedupes_by_url(self) -> None:
+        self.assertEqual(
+            lineage_service._merge_distinct_external_refs(  # type: ignore[attr-defined]
+                [{"url": "https://a.example/x", "label": "A"}],
+                [{"url": "https://a.example/x", "label": "dup"}, {"url": "https://b.example/"}],
+            ),
+            [{"url": "https://a.example/x", "label": "A"}, {"url": "https://b.example/"}],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
