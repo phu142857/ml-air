@@ -1,6 +1,6 @@
 """Add additive metadata columns tags and external_refs on dataset_versions
 
-Revision ID: 0024_dataset_version_tags_external_refs
+Revision ID: 0024_dsver_tags_extrefs
 Revises: 0023_readiness_eval_source
 Create Date: 2026-05-13
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0024_dataset_version_tags_external_refs"
+revision = "0024_dsver_tags_extrefs"
 down_revision = "0023_readiness_eval_source"
 branch_labels = None
 depends_on = None

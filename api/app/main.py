@@ -20,13 +20,6 @@ logging.basicConfig(
 logger = logging.getLogger("mlair.api")
 
 app = FastAPI(title="ml-air-api", version="0.1.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 app.include_router(v1_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
@@ -83,6 +76,61 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
         int(elapsed * 1000),
     )
     response.headers["X-Trace-Id"] = trace_id
+    return response
+
+
+def _install_cors_middleware(application: FastAPI) -> None:
+    """Register CORS after tracing. Enables Private Network Access preflight when supported."""
+    _allow_pn = os.getenv("ML_AIR_CORS_ALLOW_PRIVATE_NETWORK", "1").strip() == "1"
+    _common = {
+        "allow_origins": ["*"],
+        "allow_credentials": False,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+    try:
+        application.add_middleware(CORSMiddleware, **_common, allow_private_network=_allow_pn)
+    except TypeError:
+        application.add_middleware(CORSMiddleware, **_common)
+
+
+_install_cors_middleware(app)
+
+
+@app.middleware("http")
+async def permissive_cors_bridge(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Outer CORS bridge: explicit OPTIONS + ACAO on responses when clients hit the API directly (``:38080`` → ``:8080``).
+
+    Complements ``CORSMiddleware`` (PNA / missing ``Origin`` / odd preflights). Registered **last** so it runs **first**.
+    """
+    allow_pn = os.getenv("ML_AIR_CORS_ALLOW_PRIVATE_NETWORK", "1").strip() == "1"
+    origin = request.headers.get("origin")
+    if request.method == "OPTIONS" and request.headers.get("access-control-request-method"):
+        acrh = request.headers.get("access-control-request-headers")
+        h: dict[str, str] = {
+            "Access-Control-Allow-Methods": "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+            "Access-Control-Max-Age": "86400",
+        }
+        if acrh:
+            h["Access-Control-Allow-Headers"] = acrh
+        else:
+            h["Access-Control-Allow-Headers"] = "*"
+        if origin:
+            h["Access-Control-Allow-Origin"] = origin
+            h["Vary"] = "Origin"
+        else:
+            h["Access-Control-Allow-Origin"] = "*"
+        if allow_pn and request.headers.get("access-control-request-private-network") is not None:
+            h["Access-Control-Allow-Private-Network"] = "true"
+        return Response(status_code=200, content="OK", media_type="text/plain", headers=h)
+
+    response = await call_next(request)
+    if not response.headers.get("access-control-allow-origin"):
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers.append("Vary", "Origin")
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"
     return response
 
 

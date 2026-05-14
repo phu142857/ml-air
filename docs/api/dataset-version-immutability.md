@@ -19,7 +19,7 @@ The service may **fill in or normalize** metadata that does not redefine the tra
 
 - **`source_type` / `canonical_source_type`** — lineage categorization; normalization is documented in [Readiness and Gating](./readiness-and-gating.md).
 - **`summary` / `details` (JSONB)** — human-readable quality notes from validation or ingest.
-- **`tags` (JSONB array of strings)** and **`external_refs` (JSONB array of `{ "url", "label?" }`)** — merged append-only via **`PATCH .../dataset-versions/{version_id}/metadata`** (maintainer role); returned on **`GET .../dataset-versions/{version_id}`** and dataset version list responses ([`lineage_service.py`](../../api/app/services/lineage_service.py), Alembic **`0024_dataset_version_tags_external_refs`**).
+- **`tags` (JSONB array of strings)** and **`external_refs` (JSONB array of `{ "url", "label?" }`)** — merged append-only via **`PATCH .../dataset-versions/{version_id}/metadata`** (maintainer role); returned on **`GET .../dataset-versions/{version_id}`** and dataset version list responses ([`lineage_service.py`](../../api/app/services/lineage_service.py), Alembic **`0024_dsver_tags_extrefs`**).
 - **Lineage graph edges** — relationships to runs/tasks/other versions.
 
 ## Optional validation

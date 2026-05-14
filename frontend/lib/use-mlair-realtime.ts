@@ -3,7 +3,7 @@
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import type { DatasetItem, ModelItem, RunItem, TaskItem } from "./api";
+import { getRealtimeWsBase, type DatasetItem, type ModelItem, type RunItem, type TaskItem } from "./api";
 import { useAppContext } from "./app-context";
 import { mlairKeys } from "./query-keys";
 
@@ -409,8 +409,6 @@ export function useMlairRealtime() {
   const shouldHaltRef = useRef(false);
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS?.trim();
-    if (!base) return;
     if (tenantId === "all" || projectId === "all") return;
 
     shouldHaltRef.current = false;
@@ -428,6 +426,8 @@ export function useMlairRealtime() {
 
     const connect = () => {
       if (shouldHaltRef.current) return;
+      const base = getRealtimeWsBase();
+      if (!base) return;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -483,10 +483,24 @@ export function useMlairRealtime() {
       };
     };
 
+    const onRuntimeConfig = () => {
+      backoffRef.current = BASE_BACKOFF_MS;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+      wsRef.current?.close();
+      wsRef.current = null;
+      connect();
+    };
+
+    window.addEventListener("mlair-runtime-config-updated", onRuntimeConfig);
+
     connect();
 
     return () => {
       shouldHaltRef.current = true;
+      window.removeEventListener("mlair-runtime-config-updated", onRuntimeConfig);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
       wsRef.current?.close();

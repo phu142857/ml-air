@@ -2,17 +2,52 @@ import { recordTrainIntentTelemetry } from "./train-intent-telemetry";
 import { buildAuditTimelineSearchParams, type AuditTimelineFilters } from "./audit-timeline-filters";
 
 type RuntimeConfigGlobal = {
-  __ML_AIR_RUNTIME_CONFIG__?: { api_base_url?: string | null; realtime_base_url?: string | null } | null;
+  __ML_AIR_RUNTIME_CONFIG__?: {
+    api_base_url?: string | null;
+    realtime_base_url?: string | null;
+    environment?: string;
+    features?: Record<string, boolean>;
+  } | null;
 };
 
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+/**
+ * Absolute API URL from build-time env (always non-empty). Used when same-origin ``/v1`` proxy fails.
+ * In Docker quickstart this is ``http://localhost:8080`` so the **browser** can reach the published API port.
+ */
+export function getPublicApiBaseUrl(): string {
+  return stripTrailingSlash(process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080");
+}
+
 export function getApiBaseUrl(): string {
-  // Runtime-config first (deploy-time injection), then build-time env, then localhost fallback.
   if (typeof window !== "undefined") {
     const g = window as unknown as RuntimeConfigGlobal;
     const raw = String(g.__ML_AIR_RUNTIME_CONFIG__?.api_base_url || "").trim();
     if (raw) return raw;
+    // Same-origin ``/v1/*`` via Next proxy (``app/v1/[[...segments]]/route.ts``) — avoids browser↔API CORS.
+    if (process.env.NODE_ENV !== "test") {
+      return "";
+    }
   }
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+  return stripTrailingSlash(
+    process.env.MLAIR_NEXT_INTERNAL_API_URL ||
+      process.env.ML_AIR_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      "http://localhost:8080"
+  );
+}
+
+/** WebSocket root: injected runtime config, then build-time env. */
+export function getRealtimeWsBase(): string {
+  if (typeof window !== "undefined") {
+    const g = window as unknown as RuntimeConfigGlobal;
+    const w = String(g.__ML_AIR_RUNTIME_CONFIG__?.realtime_base_url || "").trim();
+    if (w) return w;
+  }
+  return String(process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS || "").trim();
 }
 
 // Important: keep `API_BASE` usable in template strings without refactoring call sites.
@@ -280,11 +315,51 @@ export async function fetchWhoAmI(token: string): Promise<WhoAmIResponse> {
 }
 
 export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): Promise<RuntimeConfigResponse> {
-  const url = opts?.preferRelative ? "/v1/runtime-config" : `${API_BASE}/v1/runtime-config`;
-  const res = await fetch(url, { cache: "no-store" });
-  const data = (await res.json()) as RuntimeConfigResponse;
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data;
+  async function readOk(res: Response): Promise<RuntimeConfigResponse> {
+    const data = (await res.json()) as RuntimeConfigResponse;
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    return data;
+  }
+
+  const browserPreferRelative =
+    Boolean(opts?.preferRelative) && typeof window !== "undefined" && process.env.NODE_ENV !== "test";
+
+  if (browserPreferRelative) {
+    const rel = await fetch("/v1/runtime-config", { cache: "no-store" });
+    if (!rel.ok) {
+      let detail = "";
+      try {
+        const j = (await rel.json()) as { message?: string; hint?: string; error?: string };
+        detail = [j.error, j.message, j.hint].filter(Boolean).join(" — ") || JSON.stringify(j);
+      } catch {
+        try {
+          detail = (await rel.text()).slice(0, 500);
+        } catch {
+          /* ignore */
+        }
+      }
+      throw new Error(
+        `runtime-config HTTP ${rel.status}${detail ? `: ${detail}` : ""}. ` +
+          "The UI uses same-origin /v1; fix the Next.js→API proxy (MLAIR_NEXT_INTERNAL_API_URL, docker compose) — do not rely on the browser calling :8080 directly."
+      );
+    }
+    const out = await readOk(rel);
+    if (!String(out.api_base_url || "").trim()) {
+      return { ...out, api_base_url: getPublicApiBaseUrl() };
+    }
+    return out;
+  }
+
+  const base =
+    typeof window !== "undefined"
+      ? stripTrailingSlash(String(getApiBaseUrl() || getPublicApiBaseUrl()))
+      : stripTrailingSlash(getApiBaseUrl());
+  const res = await fetch(`${base}/v1/runtime-config`, { cache: "no-store" });
+  const out = await readOk(res);
+  if (typeof window !== "undefined" && !String(out.api_base_url || "").trim()) {
+    return { ...out, api_base_url: getPublicApiBaseUrl() };
+  }
+  return out;
 }
 
 export async function fetchBootstrapContext(

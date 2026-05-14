@@ -6,12 +6,19 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
         NEXT_PUBLIC_MLAIR_REALTIME_WS: ${NEXT_PUBLIC_MLAIR_REALTIME_WS:-ws://localhost:8001}
+        MLAIR_NEXT_INTERNAL_API_URL: ${MLAIR_NEXT_INTERNAL_API_URL:-http://api:8080}
     container_name: ml-air-frontend
+    environment:
+      MLAIR_NEXT_INTERNAL_API_URL: ${MLAIR_NEXT_INTERNAL_API_URL:-http://api:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${ML_AIR_FRONTEND_PORT:-38080}:3000"
     depends_on:
-      - api
-      - realtime
+      api:
+        condition: service_healthy
+      realtime:
+        condition: service_started
     restart: unless-stopped
 
   api:
@@ -58,6 +65,16 @@ services:
     depends_on:
       - redis
       - postgres
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
     restart: unless-stopped
 
   realtime:

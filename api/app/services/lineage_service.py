@@ -514,9 +514,12 @@ def _upsert_dataset_version(
                         status,
                         quality_score,
                         summary,
-                        details
+                        details,
+                        tags,
+                        external_refs,
+                        materialized_from_buffer
                     )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
                 """,
                 (
                     version_id,
@@ -531,6 +534,9 @@ def _upsert_dataset_version(
                     int(quality_score),
                     summary or [],
                     json.dumps(details or []),
+                    json.dumps([]),
+                    json.dumps([]),
+                    False,
                 ),
             )
             tenant_id, project_id = _dataset_scope(dataset_id)
@@ -744,9 +750,10 @@ def _materialize_runtime_feedback_if_needed(
                             INSERT INTO dataset_versions
                                 (
                                     version_id, dataset_id, version, uri, checksum, source_type, canonical_source_type, record_count,
-                                    status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
+                                    status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key,
+                                    tags, external_refs
                                 )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s, %s::jsonb, %s::jsonb)
                             """,
                             (
                                 version_id,
@@ -760,6 +767,8 @@ def _materialize_runtime_feedback_if_needed(
                                 [],
                                 json.dumps([]),
                                 idem_key,
+                                json.dumps([]),
+                                json.dumps([]),
                             ),
                         )
                         insert_ok = True

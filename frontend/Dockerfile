@@ -15,7 +15,9 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
+ARG MLAIR_NEXT_INTERNAL_API_URL=http://api:8080
 ENV NODE_ENV=production
+ENV MLAIR_NEXT_INTERNAL_API_URL=${MLAIR_NEXT_INTERNAL_API_URL}
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
