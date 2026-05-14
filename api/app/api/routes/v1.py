@@ -230,6 +230,35 @@ def _ensure_declared_readiness_inputs(merged_override: dict, pipeline_version_co
     )
 
 
+def _strict_dataset_version_required() -> bool:
+    return os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1"
+
+
+def _ensure_strict_dataset_version_for_declared_inputs(
+    merged_override: dict, pipeline_version_config: dict
+) -> None:
+    """When strict mode is on and this run declares dataset readiness inputs, require a pinned dataset_version_id."""
+    if not _strict_dataset_version_required():
+        return
+    rows = readiness_service.effective_declared_readiness_inputs(merged_override, pipeline_version_config)
+    if not rows:
+        return
+    if str(merged_override.get("dataset_version_id") or "").strip():
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "status": "BLOCKED",
+            "reason": "DATASET_VERSION_REQUIRED",
+            "details": (
+                "dataset_version_id is required when this run declares dataset readiness inputs "
+                "(override_config.inputs / pipeline version config). Set top-level dataset_version_id "
+                "or override_config.dataset_version_id, or set ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0."
+            ),
+        },
+    )
+
+
 def _merge_pinned_dataset_version_for_run(
     tenant_id: str,
     project_id: str,
@@ -436,6 +465,7 @@ def trigger_run_v1(
         plugin_context=payload.context,
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
         tenant_id=tenant_id,
@@ -546,6 +576,20 @@ def trigger_run_by_model_dataset_v1(
         override_config=override_cfg,
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
+    _now = datetime.now(timezone.utc)
+    _tr = get_trace_id()
+    rt.emit_training_triggered(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        run_id=run["run_id"],
+        model_id=payload.model_id,
+        dataset_id=payload.dataset_id,
+        dataset_version_id=str(dv.get("version_id") or ""),
+        pipeline_id=pipeline_id,
+        blocked_by_gate=not bool(check.get("ready")),
+        updated_at=_now,
+        trace_id=_tr,
+    )
     rt.emit_training_eligibility_updated(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -553,8 +597,8 @@ def trigger_run_by_model_dataset_v1(
         dataset_id=payload.dataset_id,
         status="eligible" if check.get("ready") else "blocked",
         ready=bool(check.get("ready")),
-        updated_at=datetime.now(timezone.utc),
-        trace_id=get_trace_id(),
+        updated_at=_now,
+        trace_id=_tr,
     )
     if not check.get("ready"):
         set_run_status(run["run_id"], "FAILED")
@@ -656,6 +700,7 @@ def check_pipeline_readiness_v1(
         plugin_context={},
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
         tenant_id=tenant_id,
@@ -720,6 +765,7 @@ def run_pipeline_with_gating_v1(
         plugin_context=payload.context,
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
         tenant_id=tenant_id,

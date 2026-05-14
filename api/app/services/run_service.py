@@ -353,6 +353,8 @@ def set_run_status(run_id: str, status: str) -> bool:
                 updated_at=_parse_updated_at_dt(row.get("updated_at")),
                 trace_id=get_trace_id(),
             )
+            if normalized == "SUCCESS":
+                rt.maybe_emit_training_completed_from_run_row(row)
     return bool(updated)
 
 

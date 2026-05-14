@@ -22,6 +22,8 @@
 ## Event payload notes (selected)
 
 - `dataset.readiness.updated`: payload includes `required_size`, `current_size`, `status`, `updated_at`, and optional `source` (audit label such as `manual`, `scheduler`, `pre_training`, `auto_policy`) when the update was triggered by an explicit persisted evaluation.
+- `training.triggered`: published by the API when **`POST .../runs/trigger`** creates a run (after `create_run`, alongside readiness check). Payload includes `run_id`, `model_id`, `dataset_id`, `dataset_version_id`, `pipeline_id`, `blocked_by_gate`, `updated_at`. UI maps this type to runs list + Hub/model invalidation (see `frontend/lib/use-mlair-realtime.ts`).
+- `training.completed`: published when a run reaches **SUCCESS** and `override_config` or `plugin_context` carries a pinned `dataset_version_id` (API `set_run_status` path and scheduler `_transition_run_status`). Payload includes `run_id`, `pipeline_id`, `dataset_version_id`, optional `model_id` / `dataset_id`, `status`, `updated_at`.
 
 ## Backpressure
 

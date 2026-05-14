@@ -476,6 +476,45 @@ def _project_running_tasks(tenant_id: str, project_id: str) -> int:
             return int(row[0]) if row else 0
 
 
+def _coerce_json_dict(value: object) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            out = json.loads(value)
+            return out if isinstance(out, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _maybe_publish_training_completed_scheduler(client: Redis, run_id: str, updated: tuple) -> None:
+    if len(updated) < 7 or str(updated[2]).upper() != "SUCCESS":
+        return
+    ov = _coerce_json_dict(updated[4])
+    pc = _coerce_json_dict(updated[5])
+    dvid = str(ov.get("dataset_version_id") or "").strip() or str(pc.get("dataset_version_id") or "").strip()
+    if not dvid:
+        return
+    tenant_id, project_id = str(updated[0]), str(updated[1])
+    pipeline_id = str(updated[6] or "")
+    model_id = (str(pc.get("model_id") or pc.get("mlair_model_id") or "").strip() or None)
+    dataset_id = (str(pc.get("dataset_id") or "").strip() or None)
+    ua = updated[3] if isinstance(updated[3], datetime) else None
+    realtime_publish.publish_training_completed(
+        client,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        run_id=run_id,
+        pipeline_id=pipeline_id,
+        dataset_version_id=dvid,
+        model_id=model_id,
+        dataset_id=dataset_id,
+        updated_at=ua,
+        trace_id=None,
+    )
+
+
 def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | None = None) -> None:
     updated: tuple | None = None
     with connect(_db_url(), autocommit=True) as conn:
@@ -492,7 +531,7 @@ def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | 
                 """
                 UPDATE runs SET status = %s, updated_at = NOW()
                 WHERE run_id = %s
-                RETURNING tenant_id, project_id, status, updated_at
+                RETURNING tenant_id, project_id, status, updated_at, override_config, plugin_context, pipeline_id
                 """,
                 (next_status, run_id),
             )
@@ -507,6 +546,7 @@ def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | 
             updated_at=updated[3] if isinstance(updated[3], datetime) else None,
             trace_id=None,
         )
+        _maybe_publish_training_completed_scheduler(redis_client, run_id, updated)
 
 
 def _emit_task_scheduler_realtime(client: Redis, done_event: dict) -> None:

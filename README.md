@@ -1,16 +1,18 @@
 # MLAir
 
-Multi-tenant control plane for **pipeline runs**, **model registry**, **datasets / lineage**, **readiness & execution gates**, and **observability**—API-first, with a Next.js operator UI.
+**MLAir** is a **lifecycle-first** ML control plane: **dataset version → readiness → training eligibility → run → model governance**, with **pipelines as the execution substrate** (DAG tasks, retries, replay), not the primary mental model.
+
+Multi-tenant API for **immutable dataset versions**, **readiness & execution gates**, **model registry**, **pipeline runs** (versioned snapshots), **lineage**, and **observability**—API-first, with a Next.js operator UI.
 
 ---
 
 ## What it is
 
-**Problem:** Teams need a single place to register models, version pipelines, trigger runs with guardrails (dataset readiness, execution-time checks, replay policy), and audit what happened—without baking domain training logic into the orchestrator.
+**Problem:** Teams need a single place to anchor training on **versioned data**, evaluate **policy-backed readiness**, trigger **gated runs**, promote models, and audit lineage—without folding lifecycle rules into ad-hoc scripts or treating “latest mutable data” as the training source of truth.
 
 **Who uses it:** Platform / MLOps engineers and product teams that integrate training or ETL via **plugins** and HTTP contracts.
 
-**How it fits:** MLAir owns **orchestration, persistence, auth scope, and audit**. Your application (or a separate worker package) owns **business logic**; plugins are the **adapter boundary** between the two.
+**How it fits:** MLAir owns **lifecycle metadata, orchestration, persistence, auth scope, and audit**. Your application owns **business validation**; plugins are the **adapter boundary**; **pipelines** express **how** work runs, not **what** lifecycle state means.
 
 ---
 

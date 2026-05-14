@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any
 
 from app.services.queue_service import redis_client
+from app.services.trace_service import get_trace_id
 
 logger = logging.getLogger("mlair.api.realtime_events")
 
@@ -28,6 +29,8 @@ class EventType(str, Enum):
     DATASET_READINESS_UPDATED = "dataset.readiness.updated"
     TRAINING_ELIGIBILITY_UPDATED = "training.eligibility.updated"
     TRAINING_POLICY_UPDATED = "training.policy.updated"
+    TRAINING_TRIGGERED = "training.triggered"
+    TRAINING_COMPLETED = "training.completed"
 
 
 def realtime_enabled() -> bool:
@@ -411,3 +414,85 @@ def emit_training_eligibility_updated(
             },
         )
     )
+
+
+def emit_training_triggered(
+    *,
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    model_id: str,
+    dataset_id: str,
+    dataset_version_id: str,
+    pipeline_id: str,
+    blocked_by_gate: bool,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    """Hub / intent-driven train: run row exists; gate may still block execution."""
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.TRAINING_TRIGGERED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=run_id,
+            trace_id=trace_id,
+            payload={
+                "run_id": run_id,
+                "model_id": model_id,
+                "dataset_id": dataset_id,
+                "dataset_version_id": dataset_version_id,
+                "pipeline_id": pipeline_id,
+                "blocked_by_gate": bool(blocked_by_gate),
+                "updated_at": dt_to_unix(updated_at),
+            },
+        )
+    )
+
+
+def maybe_emit_training_completed_from_run_row(row: dict[str, Any]) -> None:
+    """Lifecycle semantic: run reached SUCCESS with a pinned dataset version (override or plugin context)."""
+    if str(row.get("status") or "").upper() != "SUCCESS":
+        return
+    ov = row.get("override_config") if isinstance(row.get("override_config"), dict) else {}
+    pc = row.get("plugin_context") if isinstance(row.get("plugin_context"), dict) else {}
+    dvid = str(ov.get("dataset_version_id") or "").strip() or str(pc.get("dataset_version_id") or "").strip()
+    if not dvid:
+        return
+    tenant_id = str(row.get("tenant_id") or "").strip()
+    project_id = str(row.get("project_id") or "").strip()
+    run_id = str(row.get("run_id") or "").strip()
+    pipeline_id = str(row.get("pipeline_id") or "").strip()
+    if not tenant_id or not project_id or not run_id:
+        return
+    model_id = str(pc.get("model_id") or pc.get("mlair_model_id") or "").strip() or None
+    dataset_id = str(pc.get("dataset_id") or "").strip() or None
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.TRAINING_COMPLETED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=run_id,
+            trace_id=get_trace_id(),
+            payload={
+                "run_id": run_id,
+                "pipeline_id": pipeline_id,
+                "dataset_version_id": dvid,
+                "model_id": model_id,
+                "dataset_id": dataset_id,
+                "status": "SUCCESS",
+                "updated_at": dt_to_unix(_parse_row_updated_at(row.get("updated_at"))),
+            },
+        )
+    )
+
+
+def _parse_row_updated_at(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None

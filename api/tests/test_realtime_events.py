@@ -76,6 +76,45 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertEqual(ev["type"], "training.policy.updated")
         self.assertEqual(ev["resource_id"], "ds-1")
 
+    def test_build_event_training_triggered(self) -> None:
+        ev = build_event(
+            event_type=EventType.TRAINING_TRIGGERED,
+            tenant_id="t1",
+            project_id="p1",
+            resource_id="run-99",
+            payload={
+                "run_id": "run-99",
+                "model_id": "m1",
+                "dataset_id": "d1",
+                "dataset_version_id": "dv1",
+                "pipeline_id": "pl1",
+                "blocked_by_gate": False,
+                "updated_at": 1.0,
+            },
+            trace_id="tr",
+        )
+        self.assertEqual(ev["type"], "training.triggered")
+        self.assertEqual(ev["resource_id"], "run-99")
+        self.assertEqual(ev["payload"]["dataset_version_id"], "dv1")
+
+    def test_build_event_training_completed(self) -> None:
+        ev = build_event(
+            event_type=EventType.TRAINING_COMPLETED,
+            tenant_id="t1",
+            project_id="p1",
+            resource_id="run-7",
+            payload={
+                "run_id": "run-7",
+                "pipeline_id": "pl",
+                "dataset_version_id": "dv9",
+                "status": "SUCCESS",
+                "updated_at": 9.0,
+            },
+            trace_id="tr",
+        )
+        self.assertEqual(ev["type"], "training.completed")
+        self.assertEqual(ev["resource_id"], "run-7")
+
     def test_build_event_model_eligibility_updated(self) -> None:
         ev = build_event(
             event_type=EventType.MODEL_ELIGIBILITY_UPDATED,

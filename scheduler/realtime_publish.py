@@ -10,6 +10,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from typing import Any
+
 from redis import Redis
 
 logger = logging.getLogger("mlair.scheduler.realtime")
@@ -96,5 +98,46 @@ def publish_task_updated(
         "timestamp": time.time(),
         "trace_id": trace_id,
         "payload": {"status": status, "run_id": run_id, "updated_at": _dt_to_unix(updated_at)},
+    }
+    _publish(client, event)
+
+
+def publish_training_completed(
+    client: Redis,
+    *,
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    pipeline_id: str,
+    dataset_version_id: str,
+    model_id: str | None,
+    dataset_id: str | None,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    """Same envelope as API ``training.completed`` for lifecycle-aware UIs."""
+    if not _enabled():
+        return
+    payload: dict[str, Any] = {
+        "run_id": run_id,
+        "pipeline_id": pipeline_id,
+        "dataset_version_id": dataset_version_id,
+        "status": "SUCCESS",
+        "updated_at": _dt_to_unix(updated_at),
+    }
+    if model_id:
+        payload["model_id"] = model_id
+    if dataset_id:
+        payload["dataset_id"] = dataset_id
+    event = {
+        "version": "v1",
+        "event_id": str(uuid.uuid4()),
+        "type": "training.completed",
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "resource_id": run_id,
+        "timestamp": time.time(),
+        "trace_id": trace_id,
+        "payload": payload,
     }
     _publish(client, event)

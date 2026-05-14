@@ -56,6 +56,9 @@ type Envelope = {
     updated_at?: number;
     run_id?: string;
     dataset_id?: string;
+    dataset_version_id?: string;
+    pipeline_id?: string;
+    blocked_by_gate?: boolean;
     policy_id?: string;
     status?: string;
     model_id?: string;
@@ -182,6 +185,63 @@ function keysForEvent(
       keys.push(
         [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, dsid)],
         [...mlairKeys.datasetRuns(tenantId, projectId, dsid)]
+      );
+    }
+    return keys;
+  }
+  if (t === "training.triggered") {
+    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
+    const targetRunId = runId || rid;
+    if (targetRunId) {
+      keys.push(
+        [...mlairKeys.run.detail(targetRunId)],
+        [...mlairKeys.run.tasks(targetRunId)],
+        [...mlairKeys.run.logs(targetRunId)],
+        [...mlairKeys.run.tracking(targetRunId)],
+        [...mlairKeys.run.readiness(targetRunId)]
+      );
+    }
+    const dsid = typeof ev.payload?.dataset_id === "string" ? ev.payload.dataset_id : undefined;
+    if (dsid) {
+      keys.push(
+        ...keysDatasetHubSurface(tenantId, projectId, dsid),
+        [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, dsid)]
+      );
+    }
+    const mid = typeof ev.payload?.model_id === "string" ? ev.payload.model_id : undefined;
+    if (mid) {
+      keys.push(
+        [...mlairKeys.models.list(tenantId, projectId)],
+        [...mlairKeys.models.versions(tenantId, projectId, mid)],
+        [...mlairKeys.models.status(tenantId, projectId, mid)],
+        ["model-recent-runs", tenantId, projectId, mid]
+      );
+    }
+    return keys;
+  }
+  if (t === "training.completed") {
+    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
+    const targetRunId = runId || rid;
+    if (targetRunId) {
+      keys.push(
+        [...mlairKeys.run.detail(targetRunId)],
+        [...mlairKeys.run.tasks(targetRunId)],
+        [...mlairKeys.run.logs(targetRunId)],
+        [...mlairKeys.run.tracking(targetRunId)],
+        [...mlairKeys.run.readiness(targetRunId)]
+      );
+    }
+    const dsid = typeof ev.payload?.dataset_id === "string" ? ev.payload.dataset_id : undefined;
+    if (dsid) {
+      keys.push(...keysDatasetHubSurface(tenantId, projectId, dsid));
+    }
+    const mid = typeof ev.payload?.model_id === "string" ? ev.payload.model_id : undefined;
+    if (mid) {
+      keys.push(
+        [...mlairKeys.models.list(tenantId, projectId)],
+        [...mlairKeys.models.versions(tenantId, projectId, mid)],
+        [...mlairKeys.models.status(tenantId, projectId, mid)],
+        ["model-recent-runs", tenantId, projectId, mid]
       );
     }
     return keys;
