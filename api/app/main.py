@@ -3,7 +3,7 @@ import os
 import time
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
@@ -11,6 +11,7 @@ from app.api.routes.v1 import router as v1_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
+from app.services.lineage_service import DatasetVersionSnapshotIntegrityError
 from app.services.trace_service import normalize_trace_id, set_trace_id
 
 logging.basicConfig(
@@ -20,6 +21,19 @@ logging.basicConfig(
 logger = logging.getLogger("mlair.api")
 
 app = FastAPI(title="ml-air-api", version="0.1.0")
+
+
+@app.exception_handler(DatasetVersionSnapshotIntegrityError)
+async def _dataset_version_snapshot_integrity_handler(
+    _request: Request, exc: DatasetVersionSnapshotIntegrityError
+) -> JSONResponse:
+    status_code = 409 if exc.code == "checksum_mismatch" else 404
+    detail: dict[str, str] = {"code": exc.code}
+    if exc.hint:
+        detail["hint"] = exc.hint
+    return JSONResponse(status_code=status_code, content={"detail": detail})
+
+
 app.include_router(v1_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
@@ -43,6 +57,9 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 def on_startup() -> None:
     assert_db_connection()
     plugin_registry.reload()
+    from app.services.event_outbox_service import start_outbox_drain_background
+
+    start_outbox_drain_background()
     logger.info("api_startup_completed")
 
 

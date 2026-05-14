@@ -27,6 +27,55 @@ except Exception:  # pragma: no cover - optional dependency in tests
 Direction = Literal["up", "down", "both"]
 logger = logging.getLogger("mlair.api.lineage_service")
 DEFAULT_ACCUMULATION_STRATEGY = "snapshot_on_threshold"
+
+
+class DatasetVersionSnapshotIntegrityError(Exception):
+    """Raised when ``ML_AIR_VALIDATE_DATASET_VERSION_CHECKSUM=1`` and bytes disagree with stored ``checksum``."""
+
+    def __init__(self, code: str, *, hint: str | None = None) -> None:
+        self.code = code
+        self.hint = hint
+        super().__init__(code)
+
+
+def _sha256_file_path_hex(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _validate_dataset_version_snapshot_if_enabled(uri: str | None, checksum: str | None) -> None:
+    """Opt-in: re-hash ``file://`` artifact and compare to ``dataset_versions.checksum``."""
+    if os.getenv("ML_AIR_VALIDATE_DATASET_VERSION_CHECKSUM", "").strip() != "1":
+        return
+    ch = str(checksum or "").strip()
+    if not ch:
+        return
+    u = str(uri or "").strip()
+    if not u:
+        return
+    try:
+        path = _file_uri_to_path(u)
+    except ValueError:
+        return
+    if not os.path.isfile(path):
+        raise DatasetVersionSnapshotIntegrityError(
+            "artifact_missing",
+            hint="Snapshot URI points to a missing file; check ML_AIR_DATASET_ARTIFACT_ROOT and volume mounts.",
+        )
+    digest = _sha256_file_path_hex(path)
+    if digest.lower() != ch.lower():
+        raise DatasetVersionSnapshotIntegrityError(
+            "checksum_mismatch",
+            hint="Stored checksum does not match artifact bytes (ML_AIR_VALIDATE_DATASET_VERSION_CHECKSUM=1).",
+        )
+
+
 SUPPORTED_ACCUMULATION_STRATEGIES = {
     "snapshot_on_threshold",
     "rolling_accumulate",
@@ -607,6 +656,44 @@ def _next_dataset_version_locked(cur: Any, dataset_id: str) -> str:
     row = cur.fetchone()
     n = int((row or [0])[0] or 0)
     return f"v{n + 1}"
+
+
+def _allocate_next_monotonic_dataset_version_label(dataset_id: str) -> str:
+    """Next ``vN`` label for ``dataset_id``, counting only rows whose ``version`` matches ``^v[0-9]+$`` (ignores legacy ``default`` / ad-hoc labels)."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(MAX(CAST(SUBSTRING(version FROM 2) AS INTEGER)), 0)
+                FROM dataset_versions
+                WHERE dataset_id = %s
+                  AND version ~ '^v[0-9]+$'
+                """,
+                (dataset_id,),
+            )
+            row = cur.fetchone()
+    n = int((row or [0])[0] or 0)
+    return f"v{n + 1}"
+
+
+def _lineage_snapshot_version_label(
+    dataset_id: str,
+    ver_raw: Any,
+    *,
+    batch_unpinned_cache: dict[str, str],
+) -> str:
+    """Explicit plugin ``version`` string, or monotonic ``vN`` per ingest batch (Phase 1: drop ``default`` sentinel).
+
+    Set ``ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL=1`` to restore the historical ``default`` label for omitted versions.
+    """
+    explicit = str(ver_raw).strip() if ver_raw is not None else ""
+    if explicit:
+        return explicit
+    if os.getenv("ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL", "").strip() == "1":
+        return "default"
+    if dataset_id not in batch_unpinned_cache:
+        batch_unpinned_cache[dataset_id] = _allocate_next_monotonic_dataset_version_label(dataset_id)
+    return batch_unpinned_cache[dataset_id]
 
 
 def _materialization_idempotency_key(
@@ -1294,6 +1381,7 @@ def ingest_lineage_from_task(
 
     touched_dataset_ids: set[str] = set()
     input_vids: list[str | None] = []
+    batch_unpinned: dict[str, str] = {}
     for item in ins:
         if not isinstance(item, dict):
             continue
@@ -1301,13 +1389,15 @@ def ingest_lineage_from_task(
         if not name:
             continue
         ver_raw = item.get("version")
-        ver = str(ver_raw or "default").strip() or "default"
         ingest = _ingest_lineage_dataset_and_buffer(
             tenant_id,
             project_id,
             name,
             item,
             default_source_type="api_ingestion",
+        )
+        ver = _lineage_snapshot_version_label(
+            str(ingest["dataset_id"]), ver_raw, batch_unpinned_cache=batch_unpinned
         )
         materialized_version_id, materialized_version = _materialize_runtime_feedback_lineage_item_if_applicable(
             tenant_id=tenant_id,
@@ -1342,13 +1432,15 @@ def ingest_lineage_from_task(
         if not name:
             continue
         ver_raw = item.get("version")
-        ver = str(ver_raw or "default").strip() or "default"
         ingest = _ingest_lineage_dataset_and_buffer(
             tenant_id,
             project_id,
             name,
             item,
             default_source_type="etl",
+        )
+        ver = _lineage_snapshot_version_label(
+            str(ingest["dataset_id"]), ver_raw, batch_unpinned_cache=batch_unpinned
         )
         materialized_version_id, materialized_version = _materialize_runtime_feedback_lineage_item_if_applicable(
             tenant_id=tenant_id,
@@ -1571,6 +1663,15 @@ def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dat
     ``ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`` and the client omits ``dataset_version_id``).
     Prefer passing an explicit ``dataset_version_id`` in all other integrations.
     """
+    if os.getenv("ML_AIR_WARN_IMPLICIT_DATASET_HEAD", "").strip() == "1":
+        logger.warning(
+            "implicit_dataset_version_head tenant_id=%s project_id=%s dataset_id=%s "
+            "(get_latest_materialized_dataset_version; prefer explicit dataset_version_id — "
+            "see docs/api/dataset-version-immutability.md)",
+            tenant_id,
+            project_id,
+            dataset_id,
+        )
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -1588,7 +1689,10 @@ def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dat
                 (tenant_id, project_id, dataset_id),
             )
             row = cur.fetchone()
-    return _dataset_version_list_item_from_row(row) if row else None
+    out = _dataset_version_list_item_from_row(row) if row else None
+    if out:
+        _validate_dataset_version_snapshot_if_enabled(out.get("uri"), out.get("checksum"))
+    return out
 
 
 def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> list[dict]:
@@ -1651,6 +1755,8 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "tags": _tags_list_from_db(row[14]),
         "external_refs": _external_refs_list_from_db(row[15]),
     }
+    _validate_dataset_version_snapshot_if_enabled(out["uri"], out["checksum"])
+    return out
 
 
 def patch_dataset_version_additive_metadata(

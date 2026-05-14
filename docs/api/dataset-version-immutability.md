@@ -24,7 +24,15 @@ The service may **fill in or normalize** metadata that does not redefine the tra
 
 ## Optional validation
 
-**Snapshot hash re-validation** on read is not implemented as a product toggle; checksum evidence is used in replay/gating paths where configured (see replay and manifest docs).
+When **`ML_AIR_VALIDATE_DATASET_VERSION_CHECKSUM=1`**, `get_dataset_version` and `get_latest_materialized_dataset_version` re-hash **`file://`** snapshot bytes and compare to the stored **`checksum`**. Mismatch returns **`409`** with `detail.code=checksum_mismatch`; missing artifact returns **`404`** with `detail.code=artifact_missing` (via `DatasetVersionSnapshotIntegrityError` → FastAPI handler in [`main.py`](../../api/app/main.py)). Non-`file://` URIs or rows with an empty checksum are skipped (no-op). Listing versions (`GET .../datasets/{id}/versions`) does **not** validate every row (performance).
+
+**Lineage task ingest:** when a plugin omits ``version`` on an input/output item, the API no longer writes the historical string ``default`` as ``dataset_versions.version``. It allocates the next monotonic ``vN`` (only counting existing ``^v[0-9]+$`` rows) once per ``dataset_id`` per ``ingest_lineage_from_task`` batch, so multiple unversioned items in the same batch still share one label. Set ``ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL=1`` to restore the legacy ``default`` label.
+
+## Declared-inputs-only default (generic `POST .../runs`)
+
+**Shipped contract (Phase 1):** generic **`POST .../runs`**, **`POST .../pipelines/{pipeline_id}/run`**, and **`POST .../pipelines/{id}/check-readiness`** enforce a pinned **`dataset_version_id`** only when **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`** (default) **and** the merged override + pipeline version config **declare dataset readiness inputs** (`inputs` / readiness wiring). Pipelines with **no** declared dataset inputs stay **unpinned-compatible** without extra flags.
+
+Operators who want **every** run surface to require a pin regardless of declared inputs enable **`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1`** together with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`** (see rollback table below).
 
 ## Implicit dataset version resolution (engineering audit)
 
@@ -39,6 +47,8 @@ These are the **only** product paths where a **dataset** snapshot may be chosen 
 
 **Automation:** the scheduler’s auto-trigger path sends `dataset_version_id` on `POST .../pipelines/{id}/run` only when the cloned model `override_config` contains a pin — there is no separate implicit dataset head resolver in the scheduler.
 
+**Observability:** set **`ML_AIR_WARN_IMPLICIT_DATASET_HEAD=1`** to emit **`WARNING`** logs whenever the API resolves an implicit dataset head (`get_latest_materialized_dataset_version` or readiness latest-row under legacy fallback), so operators can grep logs before tightening env flags.
+
 ## Rollback and strictness levers (no calendar sunset yet)
 
 Version-centric behavior is controlled by environment variables; there is **no committed calendar sunset** for legacy modes in-repo — operators set policy in their own change windows.
@@ -49,5 +59,6 @@ Version-centric behavior is controlled by environment variables; there is **no c
 | `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` | When `1` **and** `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`, `POST .../runs`, `POST .../pipelines/{id}/run`, and `POST .../pipelines/{id}/check-readiness` require a pinned `dataset_version_id` (top-level or `override_config`) **even when** the run does not declare dataset readiness inputs. Default `0` keeps non-dataset pipelines compatible. |
 | `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS` | When `1`, `POST .../runs`, gated pipeline run, and `check-readiness` require declared `inputs` in override or pipeline version config. |
 | `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | When `0` (default), dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, and **`GET .../eligibility`** forbid implicit latest-head when materialized versions exist (**422** without `dataset_version_id`). When `1`, legacy implicit head + `datasets.current_size` when no versions — see [readiness-v2-cutover](../runbooks/readiness-v2-cutover.md). |
+| `ML_AIR_WARN_IMPLICIT_DATASET_HEAD` | When `1`, log **`WARNING`** when implicit dataset-version head resolution runs (compat paths above). Default `0`. |
 
 For Hub UX, the readiness version row labeled **Head snapshot (vN)** pins the list head’s **`version_id`** (explicit id in the selector), not a nameless default — train still uses row pins from the versions table — see [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).

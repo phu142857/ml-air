@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from uuid import uuid4
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from app.services.db_service import db_conn
 from app.services import lineage_service
@@ -14,6 +15,8 @@ from app.services.readiness_evaluation_semantics import (
     readiness_eval_result_matches_stored_row,
 )
 from app.services.run_service import get_run
+
+logger = logging.getLogger("mlair.api.readiness_service")
 
 TRAINING_MODE_MIN_ROWS = {
     "quick": 50,
@@ -543,6 +546,16 @@ def evaluate_dataset_readiness(
             current_size = int(latest["record_count"])
             selected_version_status = str(latest.get("status") or "ready")
             selected_version_created_at = latest.get("created_at")
+            if _allow_legacy_readiness_fallback() and os.getenv("ML_AIR_WARN_IMPLICIT_DATASET_HEAD", "").strip() == "1":
+                logger.warning(
+                    "implicit_dataset_version_head tenant_id=%s project_id=%s dataset_id=%s version_id=%s "
+                    "(readiness/eligibility legacy latest-head; set ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0 — "
+                    "see docs/api/dataset-version-immutability.md)",
+                    tenant_id,
+                    project_id,
+                    dataset_id,
+                    selected_version_id,
+                )
         else:
             if not _allow_legacy_readiness_fallback():
                 raise ValueError("no_materialized_dataset_version")

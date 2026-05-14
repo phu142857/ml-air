@@ -38,6 +38,7 @@ tags:
   - name: Search
   - name: Plugins
   - name: Audit
+  - name: Webhooks
 
 paths:
   /v1/tenants:
@@ -1118,6 +1119,121 @@ paths:
               schema: { type: string, format: binary }
         "422":
           description: unsupported_export_format
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox:
+    get:
+      tags: [Audit]
+      summary: List durable semantic-event outbox rows (Postgres)
+      description: |
+        Read-only listing of `semantic_event_outbox` for the tenant/project (migration `0025_evt_outbox`).
+        Returns full stored envelopes. Empty `items` if the table is absent or the database is unreachable.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: event_type
+          in: query
+          schema: { type: string }
+          description: Optional filter by semantic event `type`.
+        - name: delivered
+          in: query
+          schema: { type: string, enum: [yes, no] }
+          description: Optional filter on `redis_delivered_at` (yes = delivered, no = undelivered).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemanticEventOutboxList"
+        "422":
+          description: invalid_delivered_filter
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox/replay:
+    post:
+      tags: [Audit]
+      summary: Re-publish outbox envelopes to Redis (manual replay)
+      description: |
+        Maintainer-only. Loads envelopes by `outbox_id` for this tenant/project and publishes each to the
+        realtime Redis channel. Same `event_id` as stored; subscribers may dedupe. Optional `mark_delivered`
+        updates `redis_delivered_at` when publish succeeds and the column is still null.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemanticEventOutboxReplayIn"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemanticEventOutboxReplayResult"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions:
+    get:
+      tags: [Webhooks]
+      summary: List semantic webhook subscriptions
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemanticWebhookSubscriptionList"
+    post:
+      tags: [Webhooks]
+      summary: Create semantic webhook subscription
+      description: |
+        Maintainer-only. `target_url` host must be listed in `ML_AIR_WEBHOOK_ALLOWED_HOSTS`.
+        Requires a non-empty allowlist env var on the API process.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemanticWebhookSubscriptionIn"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemanticWebhookSubscriptionRow"
+        "422":
+          description: invalid_webhook_target_url | webhook_allowlist_required | webhook_host_not_allowed
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions/{subscription_id}:
+    delete:
+      tags: [Webhooks]
+      summary: Delete semantic webhook subscription
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: subscription_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: webhook_subscription_not_found
 
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility:
     get:
@@ -3158,6 +3274,112 @@ components:
                 type: object
                 additionalProperties: true
             additionalProperties: true
+
+    SemanticEventOutboxRow:
+      type: object
+      properties:
+        outbox_id:
+          type: string
+        event_type:
+          type: string
+        envelope:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        redis_delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: true
+
+    SemanticEventOutboxList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticEventOutboxRow"
+
+    SemanticEventOutboxReplayIn:
+      type: object
+      required: [outbox_ids]
+      properties:
+        outbox_ids:
+          type: array
+          items: { type: string, minLength: 1 }
+          minItems: 1
+          maxItems: 50
+        mark_delivered:
+          type: boolean
+          default: true
+
+    SemanticEventOutboxReplayResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              outbox_id: { type: string }
+              redis_published: { type: boolean }
+              detail:
+                type: string
+                nullable: true
+            additionalProperties: true
+
+    SemanticWebhookSubscriptionIn:
+      type: object
+      required: [target_url]
+      properties:
+        target_url:
+          type: string
+          minLength: 8
+          maxLength: 2048
+        secret_hmac:
+          type: string
+          nullable: true
+          maxLength: 256
+        event_types:
+          type: array
+          items: { type: string }
+          nullable: true
+        enabled:
+          type: boolean
+          default: true
+
+    SemanticWebhookSubscriptionRow:
+      type: object
+      properties:
+        subscription_id: { type: string }
+        tenant_id: { type: string }
+        project_id: { type: string }
+        target_url: { type: string }
+        secret_hmac_configured: { type: boolean }
+        event_types:
+          type: array
+          items: { type: string }
+          nullable: true
+        enabled: { type: boolean }
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: true
+
+    SemanticWebhookSubscriptionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticWebhookSubscriptionRow"
 
     DatasetTrainingEligibilitySummary:
       type: object

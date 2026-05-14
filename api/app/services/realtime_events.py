@@ -14,6 +14,8 @@ from typing import Any
 
 from app.services.queue_service import redis_client
 from app.services.trace_service import get_trace_id
+from app.services import event_outbox_service
+from app.services import semantic_webhook_subscription_service as semantic_webhook_subs
 
 try:
     from prometheus_client import Counter as _PrometheusCounter
@@ -133,8 +135,10 @@ def build_event(
 
 
 def publish_mlair_event(event: dict[str, Any]) -> None:
-    if not realtime_enabled():
-        return
+    event_id = str(event.get("event_id") or "").strip()
+    if event_outbox_service.outbox_writes_enabled():
+        event_outbox_service.record_outbox_attempt(event)
+
     tenant_id = str(event.get("tenant_id") or "").strip()
     project_id = str(event.get("project_id") or "").strip()
     ev_type = str(event.get("type") or "")
@@ -146,37 +150,45 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
             ev_type or None,
         )
         return
-    channel = f"mlair.events.{tenant_id}.{project_id}"
-    try:
-        redis_client().publish(channel, json.dumps(event, separators=(",", ":"), default=str))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "realtime_publish_failed type=%s resource_id=%s tenant=%s project=%s err=%s",
-            ev_type,
-            event.get("resource_id"),
-            tenant_id,
-            project_id,
-            exc,
-        )
-        return
-    tr = event.get("trace_id")
-    if tr:
-        logger.info(
-            "realtime_published type=%s trace_id=%s tenant=%s project=%s resource=%s",
-            ev_type,
-            tr,
-            tenant_id,
-            project_id,
-            event.get("resource_id"),
-        )
-    else:
-        logger.debug(
-            "realtime_published type=%s resource_id=%s tenant=%s project=%s",
-            ev_type,
-            event.get("resource_id"),
-            tenant_id,
-            project_id,
-        )
+
+    redis_ok = False
+    if realtime_enabled():
+        channel = f"mlair.events.{tenant_id}.{project_id}"
+        try:
+            redis_client().publish(channel, json.dumps(event, separators=(",", ":"), default=str))
+            redis_ok = True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "realtime_publish_failed type=%s resource_id=%s tenant=%s project=%s err=%s",
+                ev_type,
+                event.get("resource_id"),
+                tenant_id,
+                project_id,
+                exc,
+            )
+    if event_outbox_service.outbox_writes_enabled() and event_id and redis_ok:
+        event_outbox_service.mark_outbox_redis_delivered(event_id)
+    if redis_ok:
+        tr = event.get("trace_id")
+        if tr:
+            logger.info(
+                "realtime_published type=%s trace_id=%s tenant=%s project=%s resource=%s",
+                ev_type,
+                tr,
+                tenant_id,
+                project_id,
+                event.get("resource_id"),
+            )
+        else:
+            logger.debug(
+                "realtime_published type=%s resource_id=%s tenant=%s project=%s",
+                ev_type,
+                event.get("resource_id"),
+                tenant_id,
+                project_id,
+            )
+
+    semantic_webhook_subs.schedule_deliver_semantic_webhooks(event)
 
 
 def emit_run_created(

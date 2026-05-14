@@ -40,4 +40,23 @@ Aliases and additional types are defined in [`api/app/services/realtime_events.p
 ## Consumers
 
 - **Web UI:** `NEXT_PUBLIC_MLAIR_REALTIME_WS` + `useMlairRealtime` (debounced invalidation).
-- **Automation:** subscribe to the Redis channel or extend the audit export path ([`GET .../audit/timeline/export`](./overview.md)) for persisted history; realtime is not a durable log.
+- **Automation:** subscribe to the Redis channel or extend the audit export path ([`GET .../audit/timeline/export`](./overview.md)) for persisted history.
+
+## Durable outbox (optional)
+
+When **`ML_AIR_EVENT_OUTBOX=1`**, the API appends each semantic envelope to Postgres table **`semantic_event_outbox`** before attempting Redis publish, and sets **`redis_delivered_at`** after a successful publish. Failed Redis attempts leave the row undelivered for a background drain (enable with **`ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC`** > 0 on the API process — advisory-locked batch republish). This is **not** a full transactional outbox across business writes + events; it is an **at-least-once delivery log + retry** for the realtime channel. See [`event_outbox_service.py`](../../api/app/services/event_outbox_service.py).
+
+### Outbox listing and manual replay (operator)
+
+After migration **`0025_evt_outbox`**, project-scoped APIs (same auth as audit timeline):
+
+- **`GET /v1/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox`** — **viewer**; optional query `event_type`, `delivered` (`yes` \| `no`), `limit`/`offset`. Returns **`items`** with `outbox_id`, `event_type`, full **`envelope`**, `created_at`, `redis_delivered_at`.
+- **`POST /v1/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox/replay`** — **maintainer**; JSON body `{ "outbox_ids": ["<uuid>", ...], "mark_delivered": true }` (up to **50** ids). Re-publishes each stored envelope to the Redis channel (same **`event_id`** as when first written). Response **`results`** per id: `redis_published`, optional `detail` (`not_found`, `redis_publish_failed`, `outbox_unavailable`). Manual replay can duplicate deliveries for subscribers that do not dedupe on **`event_id`**.
+
+## Webhook subscriptions (optional)
+
+When **`ML_AIR_SEMANTIC_WEBHOOK_DELIVERY=1`**, each valid semantic publish also **fans out** (best-effort, background thread) to registered HTTP targets for that tenant/project. The POST body is the same JSON envelope as Redis. Registration and delivery use a non-empty deployment allowlist **`ML_AIR_WEBHOOK_ALLOWED_HOSTS`** (comma-separated hostnames; case-insensitive exact match to the URL host). **`POST .../webhooks/subscriptions`** is rejected if the allowlist is unset — configure hosts before registering URLs. Optional per-subscription **`secret_hmac`** adds **`X-MLAir-Signature-256: sha256=<hex>`** (HMAC-SHA256 over the raw JSON body bytes). Migration **`0026_semantic_webhook_subscriptions`** — table **`semantic_webhook_subscriptions`**. APIs (see [`semantic_webhook_subscription_service.py`](../../api/app/services/semantic_webhook_subscription_service.py)):
+
+- **`GET /v1/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions`** — **viewer**; returns **`items`** (`subscription_id`, `target_url`, `secret_hmac_configured`, `event_types` or all-types, `enabled`, timestamps). Secrets are never returned.
+- **`POST .../webhooks/subscriptions`** — **maintainer**; body `{ "target_url", "secret_hmac"?, "event_types"?, "enabled"? }`. Omit **`event_types`** or use an empty list to receive **all** semantic types.
+- **`DELETE .../webhooks/subscriptions/{subscription_id}`** — **maintainer**.

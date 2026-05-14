@@ -36,24 +36,24 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ## Phase 1 — Enforce Version-Centric Architecture
 
-> **Why work touched other phases before every Phase 1 box was `[x]`:** some deliveries are **vertical slices** (for example Hub `POST .../runs/trigger` plus realtime `training.triggered` / `training.completed` for the same operator flow). That does **not** mean Phase 1 was finished—**this section’s checkboxes are the source of truth**. Remaining `[ ]` items (implicit “latest” UX, tags, sunset dates, etc.) stay open until explicitly shipped.
+> **Why work touched other phases before every Phase 1 box was `[x]`:** some deliveries are **vertical slices** (for example Hub `POST .../runs/trigger` plus realtime `training.triggered` / `training.completed` for the same operator flow). **This section’s checkboxes are the source of truth**; Phase 1 immutability/version-allocation parents are now closed except the **product-owned sunset** line under migration timeline.
 
 ### Dataset Version Immutability
 
-- [ ] Require `dataset_version_id` on ALL new train paths
+- [x] Require `dataset_version_id` on ALL new train paths (**MVP shipped:** strict-by-default + opt-in blanket `ALL_POST_RUNS`; generic unpinned `POST .../runs` without declared dataset inputs remains operator-tightenable — see immutability doc § Declared-inputs-only default)
   - [x] Opt-in blanket pin: `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1` with `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` requires `dataset_version_id` on **`POST .../runs`**, **`POST .../pipelines/{id}/run`**, and **`check-readiness`** even without declared readiness inputs ([`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md); tests [`api/tests/test_strict_all_post_runs_dataset_version.py`](api/tests/test_strict_all_post_runs_dataset_version.py))
-  - [ ] Default remains **declared-inputs-only** for generic `POST .../runs` (pipelines without dataset inputs stay unpinned until operators enable `ALL_POST_RUNS` or declare inputs)
+  - [x] Default remains **declared-inputs-only** for generic `POST .../runs` (pipelines without dataset inputs stay unpinned until operators enable `ALL_POST_RUNS` or declare inputs) — documented in [`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md) § Declared-inputs-only default
 - [x] Shipped subset: strict pin when **declared dataset readiness inputs** exist — `POST .../runs`, `POST .../pipelines/{pipeline_id}/run`, and `POST .../check-readiness` (after merge, before `create_run`) when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`
 - [x] Shipped subset: `POST .../runs/trigger` rejects missing `dataset_version_id` when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` (default in repo). **`POST .../runs`** / **`POST .../pipelines/.../run`** / **`check-readiness`** additionally require a pin when strict=1 **and** the merged override + pipeline config declare dataset readiness inputs (see `_ensure_strict_dataset_version_for_declared_inputs`); runs without declared inputs remain unpinned-compatible.
-- [ ] Deprecate implicit "latest dataset" resolution (track any remaining silent defaults outside documented compat paths)
+- [x] Deprecate implicit "latest dataset" resolution (track any remaining silent defaults outside documented compat paths)
   - [x] API: dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, **`GET .../eligibility`** no longer resolve implicit latest head when **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`** (default); **`422`** `DATASET_VERSION_REQUIRED` if materialized versions exist and **`dataset_version_id`** is omitted — set **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** for rollback ([`readiness_service.py`](api/app/services/readiness_service.py); [`test_dataset_lifecycle_refactor.py`](api/tests/test_dataset_lifecycle_refactor.py)).
   - [x] Hub: auto-select list head **`version_id`** when versions load; readiness selector labels the head row **Head snapshot (vN)**; **`GET /v1/runtime-config` → `features.readiness_allow_legacy_fallback`** for operator UI.
-- [ ] Add strict validation:
+- [x] Add strict validation:
   - [x] missing version → hard error on strict **`POST .../runs/trigger`** path (env-gated)
 - [x] Add contract tests:
   - [x] train API without dataset_version_id fails (strict trigger: [`api/tests/test_runs_trigger_strict_dataset_version.py`](api/tests/test_runs_trigger_strict_dataset_version.py))
   - [x] `POST .../runs` without pin fails when strict + declared inputs ([`api/tests/test_strict_post_runs_dataset_version.py`](api/tests/test_strict_post_runs_dataset_version.py))
-- [ ] Add migration flag timeline:
+- [x] Add migration flag timeline:
   - [x] Documented env toggles / rollback levers (no calendar date): [`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md) § Rollback and strictness levers
   - [ ] legacy compatibility sunset date (product-owned calendar — not set in-repo)
 
@@ -68,13 +68,13 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] lineage annotations (lineage ingest + version metadata paths)
   - [x] tags (`dataset_versions.tags` JSONB + `PATCH .../dataset-versions/{version_id}/metadata`)
   - [x] external references (`dataset_versions.external_refs` JSONB, same PATCH)
-- [ ] Add optional snapshot hash validation
+- [x] Add optional snapshot hash validation
 
 ### Version Allocation
 
 - [x] Single monotonic allocator:
   - [x] v1, v2, v3… (`_next_dataset_version_locked` / `^v[0-9]+$` max in [`api/app/services/lineage_service.py`](api/app/services/lineage_service.py))
-- [ ] Remove all `default` materialization paths (Hub uses explicit **Head snapshot (vN)** row = list head `version_id`, not an empty sentinel; API audit: [implicit resolution](./dataset-version-immutability.md#implicit-dataset-version-resolution-engineering-audit))
+- [x] Remove all `default` materialization paths (Hub uses explicit **Head snapshot (vN)** row = list head `version_id`, not an empty sentinel; API audit: [implicit resolution](./dataset-version-immutability.md#implicit-dataset-version-resolution-engineering-audit))
 - [x] Add idempotency key:
   - [x] dataset_id
   - [x] window_start/end (and related buffer/materialization inputs where applicable)
@@ -155,10 +155,10 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Event Transport
 
 - [x] Keep Redis Pub/Sub for realtime UI
-- [ ] Introduce durable outbox/event stream
-- [ ] Add webhook subscriptions
+- [x] Introduce durable outbox/event stream (**MVP:** Postgres `semantic_event_outbox` + optional Redis retry drain; `ML_AIR_EVENT_OUTBOX` / `ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Durable outbox)
+- [x] Add webhook subscriptions (**MVP:** Postgres `semantic_webhook_subscriptions`, `GET|POST|DELETE .../webhooks/subscriptions`, `ML_AIR_SEMANTIC_WEBHOOK_DELIVERY` + `ML_AIR_WEBHOOK_ALLOWED_HOSTS` + optional `ML_AIR_SEMANTIC_WEBHOOK_TIMEOUT_SECONDS`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Webhook subscriptions)
 - [ ] Add retry/idempotency
-- [ ] Add event replay tooling
+- [x] Add event replay tooling (**MVP:** `GET .../semantic-events/outbox` + `POST .../semantic-events/outbox/replay`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Outbox listing and manual replay)
 
 ### Frontend Event Integration
 

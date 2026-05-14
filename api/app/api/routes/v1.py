@@ -4,7 +4,7 @@ import logging
 import os
 import re
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 from prometheus_client import Counter
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,8 @@ from app.services import readiness_service
 from app.services import realtime_events as rt
 from app.services import semantic_metrics
 from app.services import audit_timeline_service
+from app.services import event_outbox_service
+from app.services import semantic_webhook_subscription_service
 from app.services.run_service import (
     create_replay_run,
     create_run,
@@ -178,6 +180,22 @@ class ReplayRunIn(BaseModel):
     idempotency_key: str | None = None
     plugin_name: str | None = None
     context: dict = Field(default_factory=dict)
+
+
+class EventOutboxReplayIn(BaseModel):
+    """Re-publish envelopes from ``semantic_event_outbox`` to the realtime Redis channel."""
+
+    outbox_ids: list[str] = Field(min_length=1, max_length=50)
+    mark_delivered: bool = True
+
+
+class SemanticWebhookSubscriptionIn(BaseModel):
+    """Register a POST target for semantic event envelopes (same JSON body as Redis realtime)."""
+
+    target_url: str = Field(min_length=8, max_length=2048)
+    secret_hmac: str | None = Field(default=None, max_length=256)
+    event_types: list[str] | None = None
+    enabled: bool = True
 
 
 class PluginValidateIn(BaseModel):
@@ -1028,6 +1046,8 @@ def runtime_config_v1() -> dict:
         "readiness_allow_legacy_fallback": readiness_service.is_readiness_legacy_fallback_enabled(),
         "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
         "serving_slots_http": _serving_slots_http_enabled(),
+        "semantic_event_outbox": os.getenv("ML_AIR_EVENT_OUTBOX", "0") == "1",
+        "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
     }
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
@@ -1845,6 +1865,127 @@ def export_audit_timeline_v1(
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox")
+def list_semantic_event_outbox_v1(
+    tenant_id: str,
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    event_type: str | None = Query(default=None, description="Optional filter by semantic ``type`` string."),
+    delivered: str | None = Query(
+        default=None,
+        description="Filter Redis delivery: ``yes`` | ``no`` | omit for any.",
+    ),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """List rows from ``semantic_event_outbox`` (requires migration 0025); empty if table missing or DB error."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if delivered is not None and str(delivered).strip().lower() not in ("", "any", "yes", "no"):
+        raise HTTPException(status_code=422, detail="invalid_delivered_filter")
+    dv = (delivered or "").strip().lower() or None
+    if dv in ("", "any"):
+        dv = None
+    items = event_outbox_service.list_outbox_for_project(
+        tenant_id,
+        project_id,
+        limit=limit,
+        offset=offset,
+        event_type=event_type,
+        delivered=dv,
+    )
+    return {"items": items}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox/replay")
+def replay_semantic_event_outbox_v1(
+    tenant_id: str,
+    project_id: str,
+    payload: EventOutboxReplayIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Re-publish selected outbox envelopes to Redis (maintainer); same ``event_id`` as stored (client dedupe may apply)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    ids = [str(x).strip() for x in payload.outbox_ids if str(x).strip()]
+    if not ids:
+        raise HTTPException(status_code=422, detail="no_outbox_ids")
+    if len(ids) > 50:
+        raise HTTPException(status_code=422, detail="too_many_outbox_ids")
+    results = event_outbox_service.replay_outbox_by_ids(
+        tenant_id,
+        project_id,
+        ids,
+        mark_delivered=payload.mark_delivered,
+    )
+    return {"results": results}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions")
+def list_semantic_webhook_subscriptions_v1(
+    tenant_id: str,
+    project_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """List semantic webhook subscriptions (migration ``0026``); empty if table missing."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {"items": semantic_webhook_subscription_service.list_subscriptions(tenant_id, project_id)}
+
+
+@router.post(
+    "/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_semantic_webhook_subscription_v1(
+    tenant_id: str,
+    project_id: str,
+    payload: SemanticWebhookSubscriptionIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Create a subscription; ``target_url`` host must appear in ``ML_AIR_WEBHOOK_ALLOWED_HOSTS``."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not semantic_webhook_subscription_service.is_acceptable_target_url(payload.target_url):
+        raise HTTPException(status_code=422, detail="invalid_webhook_target_url")
+    if not semantic_webhook_subscription_service.webhook_allowed_hosts():
+        raise HTTPException(
+            status_code=422,
+            detail="webhook_allowlist_required",
+        )
+    if not semantic_webhook_subscription_service.is_target_host_allowlisted(payload.target_url):
+        raise HTTPException(status_code=422, detail="webhook_host_not_allowed")
+    row = semantic_webhook_subscription_service.create_subscription(
+        tenant_id,
+        project_id,
+        target_url=payload.target_url,
+        secret_hmac=payload.secret_hmac,
+        event_types=payload.event_types,
+        enabled=payload.enabled,
+    )
+    if not row:
+        raise HTTPException(status_code=500, detail="webhook_subscription_create_failed")
+    return row
+
+
+@router.delete(
+    "/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions/{subscription_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_semantic_webhook_subscription_v1(
+    tenant_id: str,
+    project_id: str,
+    subscription_id: str,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    ok = semantic_webhook_subscription_service.delete_subscription(tenant_id, project_id, subscription_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="webhook_subscription_not_found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility")
