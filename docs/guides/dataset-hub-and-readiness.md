@@ -91,7 +91,7 @@ Dataset Hub shows:
 - policy selector and policy presets
 - accumulation buffer metadata and **editable materialization target** (`target_threshold` via `PATCH .../buffer`; distinct from policy `required_size`)
 - schedule strategy controls in Accumulation tab (`Run schedule tick`, scoped to tenant/project, with materialized/skipped summary)
-- dataset versions table with source badges (`IMPORTED DATASET` vs `RUNTIME ACCUMULATED`)
+- dataset versions table with source badges (`IMPORTED DATASET` vs `RUNTIME ACCUMULATED`), **tags** and **external refs** (read-only pills/links; maintainers append via **Edit metadata** on the Versions tab)
 - training eligibility matrix by policy/model (eligible vs blocked reasons for selected version scope)
 - train action per version (intent-driven)
 

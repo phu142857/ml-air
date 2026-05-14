@@ -1606,14 +1606,16 @@ export type SearchResultItem = {
   updated_at?: string | null;
 };
 
+export type DatasetVersionExternalRef = { url: string; label?: string };
+
 export type DatasetVersionItem = {
   version_id: string;
   version: string;
   uri?: string | null;
   checksum?: string | null;
   created_at: string;
-  dataset_id: string;
-  dataset_name: string;
+  dataset_id?: string;
+  dataset_name?: string;
   source_type?: string;
   /** From API: import | runtime_accumulated | manual | generated | unknown */
   canonical_source_type?: string;
@@ -1622,6 +1624,8 @@ export type DatasetVersionItem = {
   quality_score?: number;
   summary?: string[];
   details?: Array<Record<string, unknown>>;
+  tags?: string[];
+  external_refs?: DatasetVersionExternalRef[];
 };
 
 export async function searchApi(
@@ -1705,6 +1709,27 @@ export async function fetchDatasetVersion(
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${versionId}`,
     { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetVersionItem;
+}
+
+export async function patchDatasetVersionMetadata(
+  tenantId: string,
+  projectId: string,
+  versionId: string,
+  token: string,
+  body: { append_tags?: string[]; append_external_refs?: DatasetVersionExternalRef[] }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${encodeURIComponent(versionId)}/metadata`,
+    {
+      method: "PATCH",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store"
+    }
   );
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));

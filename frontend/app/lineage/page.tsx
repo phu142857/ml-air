@@ -38,7 +38,7 @@ function LineagePageInner() {
   const datasetIdForRuns = selectedVersion.data?.dataset_id || "";
   const datasetRuns = useQuery({
     queryKey: mlairKeys.datasetRuns(tenantId, projectId, datasetIdForRuns),
-    queryFn: () => fetchDatasetRuns(tenantId, projectId, selectedVersion.data!.dataset_id, token, 20),
+    queryFn: () => fetchDatasetRuns(tenantId, projectId, datasetIdForRuns, token, 20),
     enabled: Boolean(datasetIdForRuns && token)
   });
 

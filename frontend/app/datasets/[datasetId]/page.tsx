@@ -9,6 +9,9 @@ import { TrainingGateFields } from "@/components/readiness/training-gate-fields"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, DataTableShell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   fetchDataset,
@@ -23,6 +26,7 @@ import {
   materializeDatasetBuffer,
   materializeScheduledDatasetBuffers,
   patchDatasetBuffer,
+  patchDatasetVersionMetadata,
   fetchModels,
   fetchModelResolvedPipeline,
   fetchPipelineVersions,
@@ -133,7 +137,7 @@ export default function DatasetHubPage() {
   const datasetId = decodeURIComponent(params.datasetId);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { tenantId, projectId, token } = useAppContext();
+  const { tenantId, projectId, token, accessibleScopes } = useAppContext();
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [trainingMode, setTrainingMode] = useState("standard");
@@ -164,6 +168,13 @@ export default function DatasetHubPage() {
     materialized: Array<{ dataset_id: string; dataset_version_id: string; version: string; strategy: string }>;
     skipped: Array<Record<string, unknown>>;
   } | null>(null);
+  const [versionMetaOpen, setVersionMetaOpen] = useState(false);
+  const [versionMetaId, setVersionMetaId] = useState("");
+  const [versionMetaLabel, setVersionMetaLabel] = useState("");
+  const [versionMetaTagInput, setVersionMetaTagInput] = useState("");
+  const [versionMetaRefUrl, setVersionMetaRefUrl] = useState("");
+  const [versionMetaRefLabel, setVersionMetaRefLabel] = useState("");
+  const [versionMetaMsg, setVersionMetaMsg] = useState("");
 
   const datasetQuery = useQuery({
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
@@ -352,6 +363,37 @@ export default function DatasetHubPage() {
     },
     onError: (err: unknown) => {
       setEvaluatePersistMsg(describeTrainError(err));
+    }
+  });
+  const patchVersionMetadataMutation = useMutation({
+    mutationFn: async () => {
+      const append_tags = versionMetaTagInput
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const url = versionMetaRefUrl.trim();
+      const append_external_refs =
+        url.length > 0
+          ? [{ url, ...(versionMetaRefLabel.trim() ? { label: versionMetaRefLabel.trim() } : {}) }]
+          : [];
+      if (!append_tags.length && !append_external_refs.length) {
+        throw new Error(JSON.stringify({ detail: "metadata_patch_empty" }));
+      }
+      return patchDatasetVersionMetadata(tenantId, projectId, versionMetaId, token, {
+        append_tags: append_tags.length ? append_tags : undefined,
+        append_external_refs: append_external_refs.length ? append_external_refs : undefined
+      });
+    },
+    onSuccess: async () => {
+      setVersionMetaMsg("");
+      setVersionMetaTagInput("");
+      setVersionMetaRefUrl("");
+      setVersionMetaRefLabel("");
+      setVersionMetaOpen(false);
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) });
+    },
+    onError: (err: unknown) => {
+      setVersionMetaMsg(describeTrainError(err));
     }
   });
   const policiesQuery = useQuery({
@@ -562,6 +604,11 @@ export default function DatasetHubPage() {
     setSelectedPolicyId((prev) => prev || firstPolicy.policy_id);
     setPolicyRequiredSizeDraft(String(firstPolicy.required_size || 1000));
   }, [policiesQuery.data]);
+  const canEditVersionMetadata = useMemo(() => {
+    const role = accessibleScopes.find((s) => s.tenant_id === tenantId && s.project_id === projectId)?.role;
+    const r = String(role || "").toLowerCase();
+    return r === "maintainer" || r === "admin";
+  }, [accessibleScopes, tenantId, projectId]);
   const datasetSubtitle = dataset
     ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)} · readiness + eligibility + train live here · buffer strategies: docs/guides/dataset-accumulation-strategies.md`
     : "Primary surface for versions, readiness, eligibility matrix, and intent-driven train (pipeline = advanced execution gate) · buffer strategies: docs/guides/dataset-accumulation-strategies.md";
@@ -1211,9 +1258,11 @@ export default function DatasetHubPage() {
             <CardTitle>Dataset Versions</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">
+            <p className="mb-2 text-xs text-muted-foreground">
               Immutable snapshots — bind training and audits to explicit{" "}
-              <span className="font-mono text-foreground">version_id</span>.
+              <span className="font-mono text-foreground">version_id</span>. Tags and external refs are{" "}
+              <span className="font-semibold text-foreground">additive</span> (PATCH merge); maintainers can append from{" "}
+              <span className="font-semibold text-foreground">Edit metadata</span>.
             </p>
             <DataTableShell>
               <DataTable className="text-sm">
@@ -1223,7 +1272,10 @@ export default function DatasetHubPage() {
                     <th className="px-3 py-2 text-left">Status</th>
                     <th className="px-3 py-2 text-left">Source</th>
                     <th className="px-3 py-2 text-left">Rows</th>
+                    <th className="min-w-[7rem] px-3 py-2 text-left">Tags</th>
+                    <th className="min-w-[6rem] px-3 py-2 text-left">Refs</th>
                     <th className="px-3 py-2 text-left">Created</th>
+                    {canEditVersionMetadata ? <th className="px-3 py-2 text-left">Metadata</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -1246,7 +1298,71 @@ export default function DatasetHubPage() {
                         })()}
                       </td>
                       <td className="px-3 py-2">{Number(v.record_count || 0)}</td>
-                      <td className="px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
+                      <td className="max-w-[12rem] px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(v.tags) ? v.tags : []).length ? (
+                            (Array.isArray(v.tags) ? v.tags : []).map((t) => (
+                              <span
+                                key={`${v.version_id}:${t}`}
+                                className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] text-foreground"
+                              >
+                                {t}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="max-w-[10rem] px-3 py-2 text-[10px] text-muted-foreground">
+                        {(Array.isArray(v.external_refs) ? v.external_refs : []).length ? (
+                          <ul className="list-inside list-disc space-y-0.5">
+                            {(Array.isArray(v.external_refs) ? v.external_refs : []).slice(0, 2).map((r, idx) => {
+                              const url = typeof r?.url === "string" ? r.url : "";
+                              const lab = typeof r?.label === "string" && r.label ? r.label : url.slice(0, 24);
+                              return (
+                                <li key={`${v.version_id}:ref:${idx}`} className="truncate">
+                                  {url ? (
+                                    <a href={url} target="_blank" rel="noreferrer" className="text-sky-600 underline dark:text-sky-400">
+                                      {lab}
+                                    </a>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          "—"
+                        )}
+                        {(Array.isArray(v.external_refs) ? v.external_refs : []).length > 2 ? (
+                          <div className="text-[10px]">
+                            +{(Array.isArray(v.external_refs) ? v.external_refs : []).length - 2} more
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
+                      {canEditVersionMetadata ? (
+                        <td className="whitespace-nowrap px-3 py-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="px-2 py-1 text-[10px]"
+                            onClick={() => {
+                              setVersionMetaMsg("");
+                              setVersionMetaId(v.version_id);
+                              setVersionMetaLabel(v.version);
+                              setVersionMetaTagInput("");
+                              setVersionMetaRefUrl("");
+                              setVersionMetaRefLabel("");
+                              setVersionMetaOpen(true);
+                            }}
+                          >
+                            Edit metadata
+                          </Button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -1524,6 +1640,79 @@ export default function DatasetHubPage() {
       </Card>
       ) : null}
 
+      <Dialog
+        open={versionMetaOpen}
+        onOpenChange={(open) => {
+          setVersionMetaOpen(open);
+          if (!open) setVersionMetaMsg("");
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add version metadata</DialogTitle>
+            <DialogDescription>
+              Append-only merge for <span className="font-mono text-foreground">v{versionMetaLabel}</span> (
+              <span className="font-mono text-[10px] text-muted-foreground">{versionMetaId.slice(0, 8)}…</span>). Empty
+              submit is rejected.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label htmlFor="vm-tags" className="text-xs text-muted-foreground">
+                New tags (comma or newline separated)
+              </Label>
+              <Input
+                id="vm-tags"
+                className="mt-1 font-mono text-xs"
+                value={versionMetaTagInput}
+                onChange={(e) => setVersionMetaTagInput(e.target.value)}
+                placeholder="e.g. pii-reviewed, staging"
+              />
+            </div>
+            <div>
+              <Label htmlFor="vm-ref-url" className="text-xs text-muted-foreground">
+                External reference URL (optional)
+              </Label>
+              <Input
+                id="vm-ref-url"
+                className="mt-1 font-mono text-xs"
+                value={versionMetaRefUrl}
+                onChange={(e) => setVersionMetaRefUrl(e.target.value)}
+                placeholder="https://…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="vm-ref-label" className="text-xs text-muted-foreground">
+                Link label (optional)
+              </Label>
+              <Input
+                id="vm-ref-label"
+                className="mt-1 text-xs"
+                value={versionMetaRefLabel}
+                onChange={(e) => setVersionMetaRefLabel(e.target.value)}
+                placeholder="Human-readable title"
+              />
+            </div>
+            {versionMetaMsg ? (
+              <div className="rounded-md border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-2 py-1.5 text-xs text-[color:var(--status-pending-fg)]">
+                {versionMetaMsg}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setVersionMetaOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={patchVersionMetadataMutation.isPending}
+              onClick={() => patchVersionMetadataMutation.mutate()}
+            >
+              {patchVersionMetadataMutation.isPending ? "Saving…" : "Append"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </RouteShell>
   );
 }
