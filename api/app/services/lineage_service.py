@@ -1189,6 +1189,82 @@ def _insert_edge(
             return cur.rowcount > 0
 
 
+def _ingest_lineage_dataset_and_buffer(
+    tenant_id: str,
+    project_id: str,
+    name: str,
+    item: dict[str, Any],
+    *,
+    default_source_type: str,
+) -> dict[str, Any]:
+    """
+    **Ingest step:** upsert dataset row + accumulation buffer for one lineage item.
+
+    Does **not** create ``dataset_versions`` rows or run threshold materialization —
+    see ``_materialize_runtime_feedback_lineage_item_if_applicable``.
+    """
+    uri = item.get("uri")
+    chk = item.get("checksum")
+    size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
+    try:
+        size = int(size_raw) if size_raw is not None else None
+    except Exception:
+        size = None
+    dataset_id = _upsert_dataset(
+        tenant_id,
+        project_id,
+        name,
+        source_uri=str(uri) if uri else None,
+        checksum=str(chk) if chk else None,
+        current_size=size,
+    )
+    source_type = str(item.get("source_type") or default_source_type).strip() or default_source_type
+    _upsert_dataset_buffer(
+        tenant_id,
+        project_id,
+        dataset_id,
+        source_type=source_type,
+        current_size=size,
+        window_status="active",
+    )
+    return {
+        "dataset_id": dataset_id,
+        "source_type": source_type,
+        "uri": uri,
+        "checksum": chk,
+        "size": size,
+        "ver_raw": item.get("version"),
+    }
+
+
+def _materialize_runtime_feedback_lineage_item_if_applicable(
+    *,
+    tenant_id: str,
+    project_id: str,
+    ingest: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    """
+    **Post-ingest materialization step:** threshold snapshot for ``runtime_feedback`` when
+    the lineage item omitted an explicit ``version`` label (compat path).
+    """
+    ver_raw = ingest.get("ver_raw")
+    source_type = str(ingest.get("source_type") or "").strip()
+    if ver_raw not in (None, "") or source_type != "runtime_feedback":
+        return None, None
+    uri = ingest.get("uri")
+    chk = ingest.get("checksum")
+    size = ingest.get("size")
+    return _materialize_runtime_feedback_if_needed(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=str(ingest["dataset_id"]),
+        source_type=source_type,
+        uri=str(uri) if uri else None,
+        checksum=str(chk) if chk else None,
+        size=size if isinstance(size, int) else None,
+    )
+
+
 def ingest_lineage_from_task(
     tenant_id: str,
     project_id: str,
@@ -1217,57 +1293,31 @@ def ingest_lineage_from_task(
             continue
         ver_raw = item.get("version")
         ver = str(ver_raw or "default").strip() or "default"
-        uri = item.get("uri")
-        chk = item.get("checksum")
-        size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
-        try:
-            size = int(size_raw) if size_raw is not None else None
-        except Exception:
-            size = None
-        ds = _upsert_dataset(
+        ingest = _ingest_lineage_dataset_and_buffer(
             tenant_id,
             project_id,
             name,
-            source_uri=str(uri) if uri else None,
-            checksum=str(chk) if chk else None,
-            current_size=size,
+            item,
+            default_source_type="api_ingestion",
         )
-        _upsert_dataset_buffer(
-            tenant_id,
-            project_id,
-            ds,
-            source_type=str(item.get("source_type") or "api_ingestion"),
-            current_size=size,
-            window_status="active",
+        materialized_version_id, materialized_version = _materialize_runtime_feedback_lineage_item_if_applicable(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            ingest=ingest,
         )
-        source_type_for_item = str(item.get("source_type") or "api_ingestion").strip() or "api_ingestion"
-        materialized_version_id: str | None = None
-        if (
-            ver_raw in (None, "")
-            and source_type_for_item == "runtime_feedback"
-        ):
-            materialized_version_id, materialized_version = _materialize_runtime_feedback_if_needed(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                dataset_id=ds,
-                source_type=source_type_for_item,
-                uri=str(uri) if uri else None,
-                checksum=str(chk) if chk else None,
-                size=size,
-            )
-            if materialized_version:
-                ver = materialized_version
-        touched_dataset_ids.add(str(ds))
-        item_source_type = source_type_for_item
+        if materialized_version:
+            ver = materialized_version
+        touched_dataset_ids.add(str(ingest["dataset_id"]))
+        item_source_type = str(ingest["source_type"])
         input_vids.append(
             materialized_version_id
             or _upsert_dataset_version(
-                ds,
+                ingest["dataset_id"],
                 ver,
-                str(uri) if uri else None,
-                str(chk) if chk else None,
+                str(ingest["uri"]) if ingest.get("uri") else None,
+                str(ingest["checksum"]) if ingest.get("checksum") else None,
                 source_type=item_source_type,
-                record_count=size,
+                record_count=ingest["size"],
             )
         )
 
@@ -1284,57 +1334,31 @@ def ingest_lineage_from_task(
             continue
         ver_raw = item.get("version")
         ver = str(ver_raw or "default").strip() or "default"
-        uri = item.get("uri")
-        chk = item.get("checksum")
-        size_raw = item.get("size") or item.get("current_size") or item.get("row_count")
-        try:
-            size = int(size_raw) if size_raw is not None else None
-        except Exception:
-            size = None
-        ds = _upsert_dataset(
+        ingest = _ingest_lineage_dataset_and_buffer(
             tenant_id,
             project_id,
             name,
-            source_uri=str(uri) if uri else None,
-            checksum=str(chk) if chk else None,
-            current_size=size,
+            item,
+            default_source_type="etl",
         )
-        _upsert_dataset_buffer(
-            tenant_id,
-            project_id,
-            ds,
-            source_type=str(item.get("source_type") or "etl"),
-            current_size=size,
-            window_status="active",
+        materialized_version_id, materialized_version = _materialize_runtime_feedback_lineage_item_if_applicable(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            ingest=ingest,
         )
-        source_type_for_item = str(item.get("source_type") or "etl").strip() or "etl"
-        materialized_version_id = None
-        if (
-            ver_raw in (None, "")
-            and source_type_for_item == "runtime_feedback"
-        ):
-            materialized_version_id, materialized_version = _materialize_runtime_feedback_if_needed(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                dataset_id=ds,
-                source_type=source_type_for_item,
-                uri=str(uri) if uri else None,
-                checksum=str(chk) if chk else None,
-                size=size,
-            )
-            if materialized_version:
-                ver = materialized_version
-        touched_dataset_ids.add(str(ds))
-        item_source_type = source_type_for_item
+        if materialized_version:
+            ver = materialized_version
+        touched_dataset_ids.add(str(ingest["dataset_id"]))
+        item_source_type = str(ingest["source_type"])
         output_vids.append(
             materialized_version_id
             or _upsert_dataset_version(
-                ds,
+                ingest["dataset_id"],
                 ver,
-                str(uri) if uri else None,
-                str(chk) if chk else None,
+                str(ingest["uri"]) if ingest.get("uri") else None,
+                str(ingest["checksum"]) if ingest.get("checksum") else None,
                 source_type=item_source_type,
-                record_count=size,
+                record_count=ingest["size"],
             )
         )
 

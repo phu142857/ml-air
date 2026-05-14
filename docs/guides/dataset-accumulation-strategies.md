@@ -15,4 +15,4 @@ MLAir **`dataset_accumulation_buffers.accumulation_strategy`** controls how muta
 
 **Decision vs effect:** pre-insert gating (strategy / threshold / empty buffer) lives in **`_materialization_gate_failure_reason`**; the transactional block applies the **effect** (idempotent read, insert, buffer reset).
 
-**Related:** [`readiness-and-gating.md`](../api/readiness-and-gating.md) (source types), Dataset Hub **Accumulation** tab, [`manage-datasets-and-train-from-model.md`](./manage-datasets-and-train-from-model.md).
+**Ingest vs materialize (task lineage):** **`ingest_lineage_from_task`** first calls **`_ingest_lineage_dataset_and_buffer`** (dataset row + buffer only), then **`_materialize_runtime_feedback_lineage_item_if_applicable`** when the item is **`runtime_feedback`** with no explicit **`version`** (same synchronous behavior as before; split is structural clarity and reuse). [`readiness-and-gating.md`](../api/readiness-and-gating.md) (source types), Dataset Hub **Accumulation** tab, [`manage-datasets-and-train-from-model.md`](./manage-datasets-and-train-from-model.md).
