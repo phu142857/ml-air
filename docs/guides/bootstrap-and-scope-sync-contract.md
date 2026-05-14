@@ -39,7 +39,9 @@ Response example:
   "features": {
     "dataset_hub_v2": true,
     "strict_dataset_version_required": true,
-    "scope_debug_panel": true
+    "strict_dataset_version_all_post_runs": false,
+    "scope_debug_panel": true,
+    "serving_slots_http": false
   },
   "build": {
     "frontend_version": "0.6.94",
@@ -50,6 +52,7 @@ Response example:
 
 Rules:
 
+- **`features.strict_dataset_version_*`** reflects dataset version pinning toggles (see [`docs/api/dataset-version-immutability.md`](../api/dataset-version-immutability.md)); UIs and integrators should not assume defaults without reading this object.
 - runtime config is non-secret and cacheable for short TTL (30-60s).
 - secrets remain server-side only.
 - if endpoint is unavailable, frontend falls back to injected `window.__ML_AIR_RUNTIME_CONFIG__`.

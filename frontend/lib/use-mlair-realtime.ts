@@ -121,7 +121,7 @@ function keysForEvent(
     return keys;
   }
   if (t === "model.promoted") {
-    const keys: unknown[][] = [[...mlairKeys.models.list(tenantId, projectId)]];
+    const keys: unknown[][] = [[...mlairKeys.models.list(tenantId, projectId)], [...mlairKeys.audit.timeline(tenantId, projectId)]];
     if (rid) {
       keys.push(
         [...mlairKeys.models.versions(tenantId, projectId, rid)],
@@ -147,6 +147,7 @@ function keysForEvent(
       );
     }
     keys.push([...mlairKeys.datasets.trainingEligibilityProjectPrefix(tenantId, projectId)]);
+    keys.push([...mlairKeys.audit.timeline(tenantId, projectId)]);
     return keys;
   }
   if (t === "dataset.updated") {
@@ -158,7 +159,7 @@ function keysForEvent(
   }
   if (t === "dataset.buffer.updated" || t === "dataset.version.created" || t === "buffer.threshold_met") {
     if (!rid) return [];
-    return keysDatasetHubSurface(tenantId, projectId, rid);
+    return [...keysDatasetHubSurface(tenantId, projectId, rid), [...mlairKeys.audit.timeline(tenantId, projectId)]];
   }
   if (t === "dataset.readiness.updated") {
     if (!rid) return [];
@@ -166,7 +167,8 @@ function keysForEvent(
       [...mlairKeys.datasets.readiness(tenantId, projectId, rid, 0)],
       [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, rid)],
       [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, rid)],
-      [...mlairKeys.datasetRuns(tenantId, projectId, rid)]
+      [...mlairKeys.datasetRuns(tenantId, projectId, rid)],
+      [...mlairKeys.audit.timeline(tenantId, projectId)]
     ];
   }
   if (t === "training.policy.updated") {
@@ -189,6 +191,7 @@ function keysForEvent(
         [...mlairKeys.datasetRuns(tenantId, projectId, dsid)]
       );
     }
+    keys.push([...mlairKeys.audit.timeline(tenantId, projectId)]);
     return keys;
   }
   if (t === "eligibility.updated") {
@@ -206,6 +209,7 @@ function keysForEvent(
           [...mlairKeys.datasetRuns(tenantId, projectId, dsid)]
         );
       }
+      keys.push([...mlairKeys.audit.timeline(tenantId, projectId)]);
       return keys;
     }
     if (kind === "model") {
@@ -223,15 +227,17 @@ function keysForEvent(
         );
       }
       keys.push([...mlairKeys.datasets.trainingEligibilityProjectPrefix(tenantId, projectId)]);
+      keys.push([...mlairKeys.audit.timeline(tenantId, projectId)]);
       return keys;
     }
     return [
       [...mlairKeys.datasets.trainingEligibilityProjectPrefix(tenantId, projectId)],
-      [...mlairKeys.runs.list(tenantId, projectId)]
+      [...mlairKeys.runs.list(tenantId, projectId)],
+      [...mlairKeys.audit.timeline(tenantId, projectId)]
     ];
   }
   if (t === "training.triggered") {
-    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
+    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)], [...mlairKeys.audit.timeline(tenantId, projectId)]];
     const targetRunId = runId || rid;
     if (targetRunId) {
       keys.push(
@@ -252,7 +258,6 @@ function keysForEvent(
     const mid = typeof ev.payload?.model_id === "string" ? ev.payload.model_id : undefined;
     if (mid) {
       keys.push(
-        [...mlairKeys.models.list(tenantId, projectId)],
         [...mlairKeys.models.versions(tenantId, projectId, mid)],
         [...mlairKeys.models.status(tenantId, projectId, mid)],
         ["model-recent-runs", tenantId, projectId, mid]
@@ -261,7 +266,7 @@ function keysForEvent(
     return keys;
   }
   if (t === "training.completed") {
-    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
+    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)], [...mlairKeys.audit.timeline(tenantId, projectId)]];
     const targetRunId = runId || rid;
     if (targetRunId) {
       keys.push(
@@ -279,7 +284,6 @@ function keysForEvent(
     const mid = typeof ev.payload?.model_id === "string" ? ev.payload.model_id : undefined;
     if (mid) {
       keys.push(
-        [...mlairKeys.models.list(tenantId, projectId)],
         [...mlairKeys.models.versions(tenantId, projectId, mid)],
         [...mlairKeys.models.status(tenantId, projectId, mid)],
         ["model-recent-runs", tenantId, projectId, mid]

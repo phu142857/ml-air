@@ -1,4 +1,5 @@
 import { recordTrainIntentTelemetry } from "./train-intent-telemetry";
+import { buildAuditTimelineSearchParams, type AuditTimelineFilters } from "./audit-timeline-filters";
 
 type RuntimeConfigGlobal = {
   __ML_AIR_RUNTIME_CONFIG__?: { api_base_url?: string | null; realtime_base_url?: string | null } | null;
@@ -412,6 +413,40 @@ export async function fetchRuns(tenantId: string, projectId: string, token: stri
   const merged = responses.flatMap((x) => x.items || []);
   merged.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   return { items: merged };
+}
+
+export type AuditTimelineItem = {
+  ts: string | null;
+  kind: string;
+  resource_type: string;
+  resource_id: string;
+  source: string | null;
+  payload: Record<string, unknown>;
+};
+
+/** Unified audit-ish timeline (readiness evals, model events, run/task snapshots). */
+export async function fetchAuditTimeline(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; filters?: AuditTimelineFilters }
+): Promise<{ items: AuditTimelineItem[] }> {
+  if (tenantId === "all" || projectId === "all") {
+    return { items: [] };
+  }
+  const scopedProjectId = normalizeProjectId(projectId);
+  const lim = Math.min(200, Math.max(1, opts?.limit ?? 25));
+  const filters = opts?.filters ?? {};
+  const qs = buildAuditTimelineSearchParams(filters, lim);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/audit/timeline?${qs}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store"
+    }
+  );
+  if (!res.ok) return { items: [] };
+  return (await res.json()) as { items: AuditTimelineItem[] };
 }
 
 export async function triggerRun(

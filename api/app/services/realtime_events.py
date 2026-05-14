@@ -51,6 +51,16 @@ LIFECYCLE_BUFFER_THRESHOLD_MET_TOTAL = _lifecycle_counter(
     "Dataset buffer current_size crossed to >= target_threshold on upsert",
     ("accumulation_strategy",),
 )
+LIFECYCLE_MODEL_PROMOTED_TOTAL = _lifecycle_counter(
+    "mlair_lifecycle_model_promoted_total",
+    "Model version stage changed via promote (model.promoted semantic emit)",
+    ("stage",),
+)
+LIFECYCLE_MODEL_VERSION_APPROVAL_SET_TOTAL = _lifecycle_counter(
+    "mlair_lifecycle_model_version_approval_set_total",
+    "Model version approval_status updated (governance)",
+    ("approval_status",),
+)
 
 logger = logging.getLogger("mlair.api.realtime_events")
 
@@ -84,6 +94,20 @@ def dt_to_unix(dt: datetime | None) -> float:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return float(dt.timestamp())
+
+
+def record_lifecycle_model_promoted(*, stage: str) -> None:
+    """Low-cardinality counter aligned with ``emit_model_promoted``."""
+    s = re.sub(r"[^a-z0-9_]+", "_", str(stage or "").strip().lower()) or "unknown"
+    LIFECYCLE_MODEL_PROMOTED_TOTAL.labels(stage=s).inc()
+
+
+def record_lifecycle_model_version_approval_set(*, approval_status: str) -> None:
+    """Low-cardinality counter for explicit approval transitions (``approval_updated``)."""
+    st = str(approval_status or "").strip().lower()
+    if st not in {"pending_manual_approval", "approved", "rejected"}:
+        st = "other"
+    LIFECYCLE_MODEL_VERSION_APPROVAL_SET_TOTAL.labels(approval_status=st).inc()
 
 
 def build_event(
@@ -248,6 +272,7 @@ def emit_model_promoted(
             },
         )
     )
+    record_lifecycle_model_promoted(stage=str(stage or "").strip() or "unknown")
 
 
 def emit_model_eligibility_updated(

@@ -101,7 +101,7 @@ You should see:
 - Keep overrides in `override_config` to preserve reproducibility.
 - In lifecycle-centric flow, policy owns threshold (`required_size` in policy), not random per-request input.
 - In current frontend migration state, Pipeline detail uses gate checks as advanced tooling; primary train UX is Dataset Hub.
-- Readiness v2 strict mode is the default (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`); if no version is materialized yet, API returns `409 no_materialized_dataset_version`.
+- Readiness v2 strict mode is the default (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`): callers must pass **`dataset_version_id`** on dataset-scoped readiness/eligibility when versions exist (**422** if omitted); if no version is materialized yet, API returns **`409 no_materialized_dataset_version`**.
 
 ## Auto Trigger Policy (Persisted)
 

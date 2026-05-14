@@ -3,6 +3,8 @@
  * Scope order: domain → tenantId → projectId → entity ids (stable invalidation + realtime alignment).
  */
 
+import { auditTimelineFilterKey, type AuditTimelineFilters } from "./audit-timeline-filters";
+
 export const mlairKeys = {
   plugins: {
     all: () => ["plugins"] as const
@@ -83,6 +85,10 @@ export const mlairKeys = {
       ["lineage-run", runId, tenantId, projectId] as const,
     neighborhood: (tenantId: string, projectId: string, center: string) =>
       ["lineage-nb", center, tenantId, projectId] as const
+  },
+  audit: {
+    timeline: (tenantId: string, projectId: string, filters: AuditTimelineFilters = {}) =>
+      ["audit-timeline", tenantId, projectId, auditTimelineFilterKey(filters)] as const
   },
   search: (tenantId: string, projectId: string, q: string, type: string) =>
     ["search", q, type, tenantId, projectId] as const

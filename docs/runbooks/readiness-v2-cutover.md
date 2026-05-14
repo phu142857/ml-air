@@ -35,17 +35,17 @@ Current default in code/config examples: **strict mode enabled** (`ML_AIR_READIN
 
 2. **Dry-run verification**
    - For representative datasets, compare:
-     - `GET .../datasets/{id}/readiness?policy_id=<id>`
+     - `GET .../datasets/{id}/readiness?policy_id=<id>&dataset_version_id=<version_id>`
      - `GET .../datasets/{id}/versions/{version_id}/readiness?policy_id=<id>`
    - Confirm eligibility status and reasons are consistent.
 
 3. **Strict mode**
    - Set `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`.
    - Restart API service.
-   - Legacy endpoint now returns `409 no_materialized_dataset_version` when no version exists.
+   - Dataset-scoped readiness without **`dataset_version_id`** returns **`422`** `DATASET_VERSION_REQUIRED` when at least one materialized version exists (no implicit latest-head). When **no** versions exist, **`GET .../readiness`** returns **`409 no_materialized_dataset_version`**.
 
 4. **Post-cutover validation**
-   - Verify no high-volume `409 no_materialized_dataset_version` in API logs.
+   - Verify no high-volume `409 no_materialized_dataset_version` or sustained **`422`** `DATASET_VERSION_REQUIRED` in API logs (the latter usually means a client still omits **`dataset_version_id`**).
    - Verify scheduled/manual materialization keeps new versions flowing.
    - Verify training flows still use pinned `dataset_version_id`.
 
@@ -53,6 +53,7 @@ Current default in code/config examples: **strict mode enabled** (`ML_AIR_READIN
 
 - API error rate for readiness endpoints:
   - track `409 no_materialized_dataset_version`.
+  - track **`422`** `DATASET_VERSION_REQUIRED` (dataset-scoped readiness/eligibility without **`dataset_version_id`** while versions exist).
 - Scheduler materialization health:
   - trigger count increases periodically.
   - skipped reasons are mostly expected (e.g. `below_threshold_guard`).

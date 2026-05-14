@@ -101,6 +101,7 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md) (datasets: **`POST .../datasets/{id}/materialize`**, buffer, readiness history)
+- [Realtime event envelope (v1)](./api/realtime-event-envelope.md) (Redis payload + `payload` field matrix)
 - [POST /tenants/…/projects/registry](./api/post-tenant-projects-registry.md)
 - [POST /runs/trigger](./api/post-runs-trigger.md)
 - [Readiness and Gating API](./api/readiness-and-gating.md)

@@ -148,6 +148,8 @@ export default function DatasetHubPage() {
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
   /** When false, `POST .../runs/trigger` can omit `dataset_version_id` server-side (compat); Hub still pins per-row Train. */
   const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
+  /** When true, API requires `dataset_version_id` on `POST .../runs`, gated pipeline run, and check-readiness without declared inputs. */
+  const [strictDatasetVersionAllPostRuns, setStrictDatasetVersionAllPostRuns] = useState(false);
   const [evaluationPolicyFilter, setEvaluationPolicyFilter] = useState("all");
   const [evaluationSourceFilter, setEvaluationSourceFilter] = useState("all");
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
@@ -188,6 +190,7 @@ export default function DatasetHubPage() {
         const rc = await fetchRuntimeConfig({ preferRelative: true });
         if (cancelled) return;
         setStrictDatasetVersionOnTrigger(rc.features?.strict_dataset_version_required !== false);
+        setStrictDatasetVersionAllPostRuns(rc.features?.strict_dataset_version_all_post_runs === true);
       } catch {
         if (!cancelled) setStrictDatasetVersionOnTrigger(true);
       }
@@ -229,7 +232,7 @@ export default function DatasetHubPage() {
     ],
     queryFn: () =>
       fetchDatasetReadiness(tenantId, projectId, datasetId, token, 1000, selectedVersionForReadiness, selectedPolicyId || undefined),
-    enabled: Boolean(datasetId && token && dataset && selectedPolicyId),
+    enabled: Boolean(datasetId && token && dataset && selectedPolicyId && selectedVersionForReadiness),
     ...realtimeFallbackPolling()
   });
   const bufferQuery = useQuery({
@@ -318,6 +321,7 @@ export default function DatasetHubPage() {
   const evaluatePersistMutation = useMutation({
     mutationFn: async () => {
       if (!token || !selectedPolicyId) throw new Error("missing_policy");
+      if (!selectedVersionForReadiness) throw new Error("missing_dataset_version");
       return postDatasetReadinessEvaluate(tenantId, projectId, datasetId, token, {
         requiredSize: 1000,
         datasetVersionId: selectedVersionForReadiness,
@@ -367,7 +371,11 @@ export default function DatasetHubPage() {
         datasetVersionId: selectedVersionForReadiness || undefined
       }),
     enabled: Boolean(
-      datasetId && token && dataset && (policiesQuery.data?.items?.length ?? 0) > 0
+      datasetId &&
+        token &&
+        dataset &&
+        (policiesQuery.data?.items?.length ?? 0) > 0 &&
+        selectedVersionForReadiness
     ),
     ...realtimeFallbackPolling()
   });
@@ -1255,6 +1263,15 @@ export default function DatasetHubPage() {
               Runtime config: <span className="font-semibold">strict_dataset_version_required</span> is off —{" "}
               <code className="font-mono">POST .../runs/trigger</code> may accept calls without an explicit version. This Hub
               still pins the row you click for reproducible training.
+            </div>
+          ) : null}
+          {strictDatasetVersionAllPostRuns ? (
+            <div className="mb-3 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+              Runtime config: <span className="font-semibold text-foreground">strict_dataset_version_all_post_runs</span> is on —{" "}
+              <code className="font-mono text-foreground">POST .../runs</code>,{" "}
+              <code className="font-mono text-foreground">{"POST .../pipelines/{id}/run"}</code>, and{" "}
+              <code className="font-mono text-foreground">check-readiness</code> require a pinned <code className="font-mono text-foreground">dataset_version_id</code> even when the
+              pipeline does not declare dataset readiness inputs (integrators using generic run APIs must send a pin).
             </div>
           ) : null}
           <div className="mb-3">

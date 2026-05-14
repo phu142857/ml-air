@@ -18,6 +18,27 @@ Training from immutable versions is initiated from **Dataset Hub**; the pipeline
 
 **See also:** [Dataset version immutability policy](./dataset-version-immutability.md) — frozen vs additive fields on `dataset_versions`, and strictness env vars.
 
+## Canonical readiness reason codes (global contract for MLAir)
+
+Readiness responses and persisted evaluations expose two layers of machine-readable codes:
+
+- **Internal `code`** (snake_case, stable per criterion): for example `size_threshold`, `approval`, `validation_rules`. Clients may branch on these for fine-grained UX.
+- **`canonical_code`** (uppercase enum): a **low-cardinality** vocabulary shared across API payloads, audit rows, realtime hints, and Prometheus. Any internal `code` not explicitly mapped uses **`UNKNOWN_READINESS_REASON`**.
+
+**Source of truth (code + metric label mapping):** [`api/app/services/readiness_canonical_codes.py`](../../api/app/services/readiness_canonical_codes.py). Adding a new internal criterion requires updating that module (and this table), then extending tests in [`api/tests/test_readiness_canonical_codes.py`](../../api/tests/test_readiness_canonical_codes.py).
+
+| Internal `code` | `canonical_code` | `mlair_eligibility_denied_total` label `reason` |
+| --- | --- | --- |
+| `size_threshold` | `THRESHOLD_NOT_MET` | `threshold_not_met` |
+| `freshness` | `FRESHNESS_NOT_MET` | `freshness_not_met` |
+| `model_compatibility` | `MODEL_POLICY_MISMATCH` | `model_policy_mismatch` |
+| `approval` | `GOVERNANCE_BLOCKED` | `governance_blocked` |
+| `validation_rules` | `GOVERNANCE_BLOCKED` | `governance_blocked` |
+| `legacy_fallback` | `LEGACY_COMPATIBILITY_FALLBACK` | `legacy_compatibility_fallback` |
+| *(any other / empty)* | `UNKNOWN_READINESS_REASON` | `other` |
+
+**Prometheus nuance:** `metric_label_for_canonical` maps the canonical enum to the `reason` label. If `POST .../readiness/evaluate` persists `ready=false` but neither `reasons` nor failing `eligibility_criteria` yield a code, the counter uses **`unknown`** (see [`api/app/services/semantic_metrics.py`](../../api/app/services/semantic_metrics.py) `primary_eligibility_denied_reason`). That is distinct from **`other`**, which covers unrecognized internal codes after canonicalization.
+
 ## Endpoints
 
 ### 1) `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness` — **pure read**
@@ -27,14 +48,15 @@ Computes dataset-version readiness against a training policy. **Does not** inser
 Query:
 
 - `policy_id` (recommended)
-- `dataset_version_id` (optional; defaults to latest dataset version)
+- `dataset_version_id` (**required** when `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0` and the dataset has at least one materialized version; otherwise **422** `DATASET_VERSION_REQUIRED`. When legacy is **`1`**, omitted id resolves to latest head by `created_at`.)
 - `required_size` (legacy fallback when policy_id is omitted)
 
 Strict cutover note:
 
-- Default behavior is strict (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`): no aggregate fallback when no materialized version exists.
-- Set `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1` only as temporary rollback mode.
-- In strict mode, readiness returns `409 no_materialized_dataset_version` until at least one version is materialized.
+- Default (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`): no implicit latest-head on dataset-scoped **`GET .../readiness`**, **`POST .../readiness/evaluate`**, or **`GET .../eligibility`** when materialized versions exist — pass **`dataset_version_id`** or use the version-scoped readiness URL.
+- With **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`**: legacy implicit latest-head is allowed; aggregate **`datasets.current_size`** may still apply when **no** materialized row exists (see § Flagging legacy aggregate readiness).
+- Set **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** only as temporary rollback mode.
+- When zero versions exist and legacy is off, readiness returns **`409 no_materialized_dataset_version`** until materialization.
 
 Version-centric endpoint:
 
@@ -48,20 +70,27 @@ Response (includes):
 - `required_size`
 - `ready`
 - `status` / `eligibility_status`
-- `eligibility_criteria[]`
+- `eligibility_criteria[]` — each row includes `code`, matching **`canonical_code`**, `label`, and `status` (`pass` / `fail`).
 - `policy_id`
 - `evaluated_at` — ISO timestamp for this **response snapshot** (not a stored audit primary key)
-- `reasons[]`
+- `reasons[]` — each object includes stable internal `code` (for example `size_threshold`, `freshness`) plus **`canonical_code`**; see [Canonical readiness reason codes](#canonical-readiness-reason-codes-global-contract-for-mlair) above.
 
 There is **no** `evaluation_id` on `GET` responses.
 
 ### 1.0) `POST /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluate` — **explicit audit**
 
-Same query parameters as `GET .../readiness` (`policy_id`, `dataset_version_id`, `required_size`). Runs the evaluation, **persists** one row in `dataset_readiness_evaluations`, emits **`dataset.readiness.updated`**, and returns the readiness JSON plus:
+Same query parameters as `GET .../readiness` (`policy_id`, `dataset_version_id`, `required_size`). Runs the evaluation, then by default **persists at most one new** row in `dataset_readiness_evaluations` when the outcome **differs semantically** from the latest row for the same **policy + dataset_version_id** scope (sizes, status, reasons). Emits **`dataset.readiness.updated`** only when a **new** row is inserted. Returns the readiness JSON plus:
 
-- `evaluation_id` — inserted row id
-- `evaluated_at` — snapshot time (aligned with the write path)
+- `evaluation_id` — row id (new or the latest reused row when deduplicated)
+- `evaluated_at` — snapshot time for the returned `evaluation_id`
 - `source` — audit label (defaults to `manual`; use values like `scheduler`, `pre_training`, `auto_policy` for automation)
+- `persisted` — `true` when this call used the persist path (`persist=true`, the default); `false` when `persist=false` (evaluate-only, no DB write)
+- `deduplicated` — when `persisted` is true: `true` if no new row was written because the outcome matched the latest row for that scope; `false` if a new row was inserted
+
+Query flags:
+
+- **`persist=false`** — run the same evaluation as GET but via POST; **no** history row and **no** realtime event (for dry-runs / tooling).
+- **`force_persist=true`** — always append a new evaluation row (disables semantic dedupe for this request).
 
 Version-scoped POST (pins the version in the path):
 
@@ -88,7 +117,7 @@ Optional filters:
 
 Use these APIs to formalize readiness threshold in policy instead of per-request random input.
 
-**Explicit version vs implicit “latest”:** Prefer **`dataset_version_id`** on **`GET .../readiness`** and train triggers. Implicit **latest-version** behavior is confined to **documented** compatibility paths (for example **`POST .../runs/trigger`** with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`**). Do not rely on silent mutable-head semantics for reproducible training.
+**Explicit version vs implicit “latest”:** **`dataset_version_id`** is required on dataset-scoped **`GET .../readiness`** / **`POST .../readiness/evaluate`** / **`GET .../eligibility`** unless **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** (implicit latest-head + aggregate fallback). Other implicit latest behavior is confined to **documented** paths (for example **`POST .../runs/trigger`** with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`**). Do not rely on silent mutable-head semantics for reproducible training.
 
 ### 1.2) Policy templates (recommended defaults)
 
@@ -344,12 +373,13 @@ Review snapshot for operators integrating **pipeline execution** and **run trigg
 ### Environment toggles (rollback levers)
 
 - **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED`** (default **`1`**): `POST .../runs/trigger` requires an explicit dataset version id; set **`0`** only to allow implicit “latest version” fallback (documented in [`post-runs-trigger.md`](./post-runs-trigger.md)).
-- **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`**: dataset **`GET .../readiness`** aggregate fallback when no materialized version exists (strict default **`0`** in this roadmap; see strict-mode notes in §1 above).
+- **`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS`** (default **`0`**): when **`1`** together with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`**, **`POST .../runs`**, **`POST .../pipelines/{pipeline_id}/run`**, and **`check-readiness`** require a pinned **`dataset_version_id`** even when the run does not declare dataset readiness inputs — see [Dataset version immutability](./dataset-version-immutability.md) § Rollback and strictness levers.
+- **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`**: when **`0`** (default), dataset-scoped **`GET .../readiness`**, **`POST .../readiness/evaluate`**, and **`GET .../eligibility`** require **`dataset_version_id`** if any materialized version exists (**422** `DATASET_VERSION_REQUIRED`); when **`1`**, implicit latest-head and **`datasets.current_size`** fallback apply as documented in §1 and § Flagging legacy aggregate readiness.
 - **`ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS`** (default **`0`**): when **`1`**, **`POST .../runs`**, **`POST .../pipelines/{pipeline_id}/run`**, and **`POST .../pipelines/{pipeline_id}/check-readiness`** return **422** `reason: NO_DECLARED_DATASET_INPUTS` unless **`override_config.inputs`** or the resolved pipeline version **`config.inputs`** declares at least one dataset name (same precedence as **`check_run_readiness`**). Use **`POST .../runs/trigger`** for model+dataset-first training without hand-building `inputs`.
 
 #### Flagging legacy aggregate readiness
 
-Treat **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** as an **explicit compatibility mode**: dataset readiness evaluation may use **`datasets.current_size`** when no materialized **`dataset_versions`** row exists. Operators should run **`0`** (default) for version-centric audits; set **`1`** only during migration or rollback windows and call it out in release notes.
+Treat **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** as an **explicit compatibility mode**: dataset readiness may resolve **implicit latest head** when **`dataset_version_id`** is omitted, and may use **`datasets.current_size`** when no materialized **`dataset_versions`** row exists. Operators should run **`0`** (default) for version-centric audits; set **`1`** only during migration or rollback windows and call it out in release notes.
 
 #### Dual-read period and phasing down aggregate reliance
 

@@ -8,6 +8,11 @@ from typing import Any
 
 from app.services.db_service import db_conn
 from app.services import lineage_service
+from app.services.readiness_canonical_codes import attach_canonical_to_reason_row, canonical_readiness_code
+from app.services.readiness_evaluation_semantics import (
+    normalize_dataset_version_id,
+    readiness_eval_result_matches_stored_row,
+)
 from app.services.run_service import get_run
 
 TRAINING_MODE_MIN_ROWS = {
@@ -268,6 +273,122 @@ def record_dataset_readiness_evaluation(
     return evaluation_id
 
 
+def get_latest_dataset_readiness_evaluation_for_scope(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    policy_id: str | None,
+    dataset_version_id: str | None,
+) -> dict[str, Any] | None:
+    """Latest persisted row for (tenant, project, dataset, policy, version); version match uses SQL NULL semantics."""
+    pid = str(policy_id or "")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    evaluation_id,
+                    dataset_version_id,
+                    policy_id,
+                    required_size,
+                    current_size,
+                    status,
+                    source,
+                    evaluated_at,
+                    reasons
+                FROM dataset_readiness_evaluations
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND dataset_id = %s
+                  AND policy_id = %s
+                  AND dataset_version_id IS NOT DISTINCT FROM %s
+                ORDER BY evaluated_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, dataset_id, pid, dataset_version_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    reasons_raw = row[8]
+    if isinstance(reasons_raw, str):
+        try:
+            reasons_parsed: Any = json.loads(reasons_raw)
+        except json.JSONDecodeError:
+            reasons_parsed = []
+    else:
+        reasons_parsed = reasons_raw or []
+    return {
+        "evaluation_id": row[0],
+        "dataset_version_id": row[1],
+        "policy_id": row[2],
+        "required_size": int(row[3] or 0),
+        "current_size": int(row[4] or 0),
+        "status": str(row[5] or "blocked"),
+        "source": row[6] or "manual",
+        "evaluated_at": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+        "reasons": reasons_parsed,
+    }
+
+
+def persist_dataset_readiness_evaluation_with_dedupe(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    result: dict[str, Any],
+    source: str | None,
+    force_persist: bool,
+) -> tuple[str, str, bool]:
+    """
+    Persist one evaluation row unless an identical semantic snapshot already exists for this scope.
+
+    Returns ``(evaluation_id, evaluated_at_iso, inserted_new_row)``.
+    When ``inserted_new_row`` is False, ``evaluation_id`` / ``evaluated_at_iso`` refer to the latest matching row (dedupe).
+    """
+    policy_id = str(result.get("policy_id") or "")
+    dvid = normalize_dataset_version_id(result.get("dataset_version_id"))
+    if force_persist:
+        evaluation_id = record_dataset_readiness_evaluation(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dvid,
+            policy_id=policy_id or None,
+            required_size=int(result.get("required_size") or 0),
+            current_size=int(result.get("current_size") or 0),
+            status=str(result.get("status") or "blocked"),
+            reasons=result.get("reasons") or [],
+            source=source,
+        )
+        return evaluation_id, datetime.now(timezone.utc).isoformat(), True
+
+    latest = get_latest_dataset_readiness_evaluation_for_scope(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        policy_id=policy_id,
+        dataset_version_id=dvid,
+    )
+    if latest and readiness_eval_result_matches_stored_row(latest, result):
+        return str(latest["evaluation_id"]), str(latest["evaluated_at"]), False
+
+    evaluation_id = record_dataset_readiness_evaluation(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        dataset_version_id=dvid,
+        policy_id=policy_id or None,
+        required_size=int(result.get("required_size") or 0),
+        current_size=int(result.get("current_size") or 0),
+        status=str(result.get("status") or "blocked"),
+        reasons=result.get("reasons") or [],
+        source=source,
+    )
+    return evaluation_id, datetime.now(timezone.utc).isoformat(), True
+
+
 def _load_dataset_row(tenant_id: str, project_id: str, dataset_id: str) -> dict[str, Any] | None:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -408,7 +529,10 @@ def evaluate_dataset_readiness(
         selected_version_status = str(dv.get("status") or "ready")
         selected_version_created_at = dv.get("created_at")
     else:
+        # Implicit "latest head" resolution is opt-in via ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK (default off).
         latest = _load_latest_dataset_version_row(tenant_id, project_id, dataset_id)
+        if latest and not _allow_legacy_readiness_fallback():
+            raise ValueError("dataset_version_id_required")
         if latest:
             selected_version_id = str(latest["version_id"])
             current_size = int(latest["record_count"])
@@ -437,28 +561,71 @@ def evaluate_dataset_readiness(
     approval_ok = str(selected_version_status).lower() not in {"failed", "blocked"}
     rules_ok = len(validation_rules) == 0 or approval_ok
     criteria = [
-        {"code": "size_threshold", "label": "Dataset size threshold", "status": "pass" if size_ok else "fail"},
-        {"code": "freshness", "label": "Freshness window", "status": "pass" if freshness_ok else "fail"},
-        {"code": "model_compatibility", "label": "Model compatibility", "status": "pass" if compatibility_ok else "fail"},
-        {"code": "approval", "label": "Approval gate", "status": "pass" if approval_ok else "fail"},
-        {"code": "validation_rules", "label": f"Validation rules ({len(validation_rules)})", "status": "pass" if rules_ok else "fail"},
+        {
+            "code": "size_threshold",
+            "canonical_code": canonical_readiness_code("size_threshold"),
+            "label": "Dataset size threshold",
+            "status": "pass" if size_ok else "fail",
+        },
+        {
+            "code": "freshness",
+            "canonical_code": canonical_readiness_code("freshness"),
+            "label": "Freshness window",
+            "status": "pass" if freshness_ok else "fail",
+        },
+        {
+            "code": "model_compatibility",
+            "canonical_code": canonical_readiness_code("model_compatibility"),
+            "label": "Model compatibility",
+            "status": "pass" if compatibility_ok else "fail",
+        },
+        {
+            "code": "approval",
+            "canonical_code": canonical_readiness_code("approval"),
+            "label": "Approval gate",
+            "status": "pass" if approval_ok else "fail",
+        },
+        {
+            "code": "validation_rules",
+            "canonical_code": canonical_readiness_code("validation_rules"),
+            "label": f"Validation rules ({len(validation_rules)})",
+            "status": "pass" if rules_ok else "fail",
+        },
     ]
     ready = size_ok and freshness_ok and compatibility_ok and approval_ok and rules_ok
     reasons: list[dict[str, Any]] = []
     if not size_ok:
-        reasons.append({"code": "size_threshold", "message": f"current_size {current_size} < required_size {req}"})
+        reasons.append(
+            attach_canonical_to_reason_row(
+                {"code": "size_threshold", "message": f"current_size {current_size} < required_size {req}"}
+            )
+        )
     if not freshness_ok:
-        reasons.append({"code": "freshness", "message": f"version older than freshness_hours={freshness_hours}"})
+        reasons.append(
+            attach_canonical_to_reason_row(
+                {"code": "freshness", "message": f"version older than freshness_hours={freshness_hours}"}
+            )
+        )
     if not compatibility_ok:
-        reasons.append({"code": "model_compatibility", "message": f"model_id {model_id} not found in tenant/project"})
+        reasons.append(
+            attach_canonical_to_reason_row(
+                {"code": "model_compatibility", "message": f"model_id {model_id} not found in tenant/project"}
+            )
+        )
     if not approval_ok:
-        reasons.append({"code": "approval", "message": f"dataset_version status is {selected_version_status}"})
+        reasons.append(
+            attach_canonical_to_reason_row(
+                {"code": "approval", "message": f"dataset_version status is {selected_version_status}"}
+            )
+        )
     if used_legacy_fallback:
         reasons.append(
-            {
-                "code": "legacy_fallback",
-                "message": "No materialized dataset_version found; used datasets.current_size compatibility fallback",
-            }
+            attach_canonical_to_reason_row(
+                {
+                    "code": "legacy_fallback",
+                    "message": "No materialized dataset_version found; used datasets.current_size compatibility fallback",
+                }
+            )
         )
     return {
         "dataset_id": dataset_id,

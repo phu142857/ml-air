@@ -26,6 +26,7 @@
 - `eligibility.updated`: canonical umbrella for eligibility-affecting changes. Payload includes **`kind`**: **`training`** (same fields as `training.eligibility.updated`: `run_id`, `dataset_id`, `status`, `ready`, `updated_at`) or **`model`** (same fields as `model.eligibility.updated`, plus `kind`). Emitted **in addition to** `training.eligibility.updated` / `model.eligibility.updated` so existing subscribers stay valid; new integrations can subscribe only to `eligibility.updated`.
 - `training.completed`: published when a run reaches **SUCCESS** and `override_config` or `plugin_context` carries a pinned `dataset_version_id` (API `set_run_status` path and scheduler `_transition_run_status`). Payload includes `run_id`, `pipeline_id`, `dataset_version_id`, optional `model_id` / `dataset_id`, `status`, `updated_at`.
 - `buffer.threshold_met`: published when a dataset accumulation buffer’s **`current_size`** crosses from **below** to **at or above** **`target_threshold`** on buffer upsert (`_upsert_dataset_buffer`). Payload includes `dataset_id`, `source_type`, `current_size`, `target_threshold`, `accumulation_strategy`, `window_status`, `updated_at`. UI invalidates the same Hub keys as `dataset.buffer.updated`.
+- Envelope and per-type **`payload`** field matrix: [Realtime event envelope (v1)](../api/realtime-event-envelope.md).
 
 ## Backpressure
 

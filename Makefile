@@ -305,6 +305,19 @@ backfill-lineage-report-dry-run:
 		echo "==> report written to $(BACKFILL_REPORT_PATH)"; \
 	fi
 
+.PHONY: test-prometheus-rules
+# Validates alert/recording rule YAML (no running stack required). Uses host `promtool` when installed, otherwise `docker run`.
+test-prometheus-rules:
+	@bash -c 'set -euo pipefail; \
+	RULES=deploy/monitoring/alerts/mlair-alerts.yml; \
+	if command -v promtool >/dev/null 2>&1; then \
+		promtool check rules "$$RULES"; \
+	else \
+		_img="$${MLAIR_PROMTOOL_IMAGE:-docker.io/prom/prometheus:v2.52.0}"; \
+		echo "[INFO] promtool not in PATH; using $$_img (override MLAIR_PROMTOOL_IMAGE)"; \
+		docker run --rm --entrypoint promtool -v "$$(pwd):/w:ro" -w /w "$$_img" check rules "/w/$$RULES"; \
+	fi'
+
 .PHONY: test-observability
 test-observability:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
@@ -321,7 +334,7 @@ incident-drill:
 	bash scripts/incident_drill.sh
 
 .PHONY: test-all
-test-all: test-env-sync test-manifest-key-rotation test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-smoke-v03 test-observability test-helm
+test-all: test-env-sync test-manifest-key-rotation test-prometheus-rules test-smoke-mlair test-smoke-model-registry test-smoke-phase2 test-smoke-v03 test-observability test-helm
 
 .PHONY: backup-db
 backup-db:

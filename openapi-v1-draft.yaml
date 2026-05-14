@@ -12,7 +12,10 @@ info:
     (`candidate` | `challenger` | `champion` | `canary`), plus optional promote webhooks for downstream systems.
 
     **Serving slots:** `GET|PUT .../models/{model_id}/serving` are mounted when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**
-    at API process start (default `0`). **`GET /v1/runtime-config`** exposes `features.serving_slots_http` for UIs.
+    at API process start (default `0`). **`GET /v1/runtime-config`** → **`features`**: `serving_slots_http` mirrors that mount;
+    **`strict_dataset_version_required`** mirrors **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED`** (default `1`);
+    **`strict_dataset_version_all_post_runs`** is true only when **`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1`**
+    and base strict is on (generic **`POST .../runs`**, gated pipeline run, **`check-readiness`** require a pin even without declared inputs).
 
     **Runs, readiness, datasets, lineage, pipeline versions, tracking, search, and plugins** sections
     in this file are kept aligned with `api/app/api/routes/v1.py` (draft; prefer the running service
@@ -1043,6 +1046,18 @@ paths:
           in: query
           schema: { type: string }
           description: Optional filter by audit source label (applies to readiness evaluation events).
+        - name: policy_id
+          in: query
+          schema: { type: string }
+          description: Optional filter readiness rows by payload policy_id.
+        - name: dataset_version_id
+          in: query
+          schema: { type: string }
+          description: Optional filter readiness rows by payload dataset_version_id.
+        - name: readiness_status
+          in: query
+          schema: { type: string }
+          description: Optional filter readiness rows by payload status (e.g. eligible, blocked).
       responses:
         "200":
           description: OK
@@ -1050,6 +1065,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditTimelineList"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/audit/timeline/export:
+    get:
+      tags: [Audit]
+      summary: Export audit timeline (NDJSON or JSON download)
+      description: |
+        Same filters as `GET .../audit/timeline` but returns a downloadable body with `Content-Disposition: attachment`.
+        Use `format=jsonl` for newline-delimited JSON (one envelope per line, includes `tenant_id` and `project_id`),
+        or `format=json` for a single JSON object with an `items` array.
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: format
+          in: query
+          schema: { type: string, enum: [jsonl, json], default: jsonl }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 1000 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: resource_type
+          in: query
+          schema: { type: string }
+        - name: resource_id
+          in: query
+          schema: { type: string }
+        - name: kind
+          in: query
+          schema: { type: string }
+        - name: source
+          in: query
+          schema: { type: string }
+        - name: policy_id
+          in: query
+          schema: { type: string }
+        - name: dataset_version_id
+          in: query
+          schema: { type: string }
+        - name: readiness_status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Export body
+          content:
+            application/x-ndjson:
+              schema: { type: string, format: binary }
+            application/json:
+              schema: { type: string, format: binary }
+        "422":
+          description: unsupported_export_format
 
   /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility:
     get:

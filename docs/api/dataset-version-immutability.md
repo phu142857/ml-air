@@ -34,7 +34,8 @@ Version-centric behavior is controlled by environment variables; there is **no c
 | Variable | Effect |
 | --- | --- |
 | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED` | When `1` (default), `POST .../runs/trigger` requires `dataset_version_id`. When `0`, trigger may resolve latest version if omitted. |
+| `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` | When `1` **and** `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`, `POST .../runs`, `POST .../pipelines/{id}/run`, and `POST .../pipelines/{id}/check-readiness` require a pinned `dataset_version_id` (top-level or `override_config`) **even when** the run does not declare dataset readiness inputs. Default `0` keeps non-dataset pipelines compatible. |
 | `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS` | When `1`, `POST .../runs`, gated pipeline run, and `check-readiness` require declared `inputs` in override or pipeline version config. |
-| `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | Readiness aggregate fallback (see readiness runbooks); default strict path documented in [readiness-v2-cutover](../runbooks/readiness-v2-cutover.md). |
+| `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | When `0` (default), dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, and **`GET .../eligibility`** forbid implicit latest-head when materialized versions exist (**422** without `dataset_version_id`). When `1`, legacy implicit head + `datasets.current_size` when no versions — see [readiness-v2-cutover](../runbooks/readiness-v2-cutover.md). |
 
 For Hub UX, **“Latest (vN)”** in readiness selectors is an **evaluation convenience** (resolved head), not a substitute for pinning `dataset_version_id` on train — see [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).

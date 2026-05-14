@@ -185,6 +185,8 @@ def _notify_model_eligibility_updated(
         stage=stage,
         approval_status=approval_status,
     )
+    if str(action) == "approval_updated" and approval_status:
+        rt.record_lifecycle_model_version_approval_set(approval_status=str(approval_status))
 
 
 def _default_artifact_uri(model_id: str, version_num: int) -> str | None:

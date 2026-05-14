@@ -65,10 +65,11 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["version"], "v12")
         self.assertEqual(out["dataset_version_id"], "vid-1")
 
+    @patch("app.services.readiness_service._allow_legacy_readiness_fallback", return_value=True)
     @patch("app.services.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
     @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value={"version_id": "v-1", "record_count": 1200})
     @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 0})
-    def test_readiness_evaluate_uses_version_record_count(self, _ds, _latest, _policy) -> None:
+    def test_readiness_evaluate_uses_version_record_count(self, _ds, _latest, _policy, _legacy) -> None:
         out = readiness_service.evaluate_dataset_readiness(
             tenant_id="t",
             project_id="p",
@@ -79,6 +80,19 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["current_size"], 1200)
         self.assertTrue(out["ready"])
         self.assertEqual(out["status"], "eligible")
+
+    @patch("app.services.readiness_service._allow_legacy_readiness_fallback", return_value=False)
+    @patch("app.services.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
+    @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value={"version_id": "v-1", "record_count": 100, "status": "ready"})
+    @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 0})
+    def test_readiness_rejects_implicit_latest_head_when_legacy_off(self, _ds, _latest, _policy, _legacy) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            readiness_service.evaluate_dataset_readiness(
+                tenant_id="t",
+                project_id="p",
+                dataset_id="ds1",
+            )
+        self.assertEqual(str(ctx.exception), "dataset_version_id_required")
 
     @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 999})
     @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value=None)

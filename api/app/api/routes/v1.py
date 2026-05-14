@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect
 from prometheus_client import Counter
@@ -235,6 +236,31 @@ def _strict_dataset_version_required() -> bool:
     return os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1"
 
 
+def _strict_dataset_version_all_post_runs() -> bool:
+    """Opt-in Phase-1 lever: require a pinned version on generic POST run paths (not only declared-input runs)."""
+    return os.getenv("ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS", "0") == "1"
+
+
+def _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_override: dict) -> None:
+    """When ``ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1`` and base strict is on, require ``dataset_version_id``."""
+    if not _strict_dataset_version_all_post_runs() or not _strict_dataset_version_required():
+        return
+    if str(merged_override.get("dataset_version_id") or "").strip():
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "status": "BLOCKED",
+            "reason": "DATASET_VERSION_REQUIRED",
+            "details": (
+                "ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1 requires dataset_version_id on this path "
+                "(top-level or override_config) while ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1. "
+                "Unset ALL_POST_RUNS or set ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0 for legacy pipelines."
+            ),
+        },
+    )
+
+
 def _ensure_strict_dataset_version_for_declared_inputs(
     merged_override: dict, pipeline_version_config: dict
 ) -> None:
@@ -466,6 +492,7 @@ def trigger_run_v1(
         plugin_context=payload.context,
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
@@ -702,6 +729,7 @@ def check_pipeline_readiness_v1(
         plugin_context={},
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
@@ -767,6 +795,7 @@ def run_pipeline_with_gating_v1(
         plugin_context=payload.context,
         dataset_version_id=payload.dataset_version_id,
     )
+    _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     run = create_run(
@@ -984,6 +1013,7 @@ def runtime_config_v1() -> dict:
     features = {
         "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
         "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
+        "strict_dataset_version_all_post_runs": _strict_dataset_version_all_post_runs(),
         "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
         "serving_slots_http": _serving_slots_http_enabled(),
     }
@@ -1346,6 +1376,20 @@ def _http_exc_from_readiness_value_error(exc: ValueError) -> HTTPException:
         return HTTPException(status_code=404, detail=detail)
     if detail == "no_materialized_dataset_version":
         return HTTPException(status_code=409, detail=detail)
+    if detail == "dataset_version_id_required":
+        return HTTPException(
+            status_code=422,
+            detail={
+                "status": "BLOCKED",
+                "reason": "DATASET_VERSION_REQUIRED",
+                "details": (
+                    "dataset_version_id is required for dataset-scoped readiness when "
+                    "ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK is off (default). Pass query "
+                    "dataset_version_id, use GET .../datasets/{dataset_id}/versions/{version_id}/readiness, "
+                    "or set ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1 for implicit latest-head compatibility."
+                ),
+            },
+        )
     return HTTPException(status_code=400, detail=detail)
 
 
@@ -1356,33 +1400,33 @@ def _persist_dataset_readiness_evaluation(
     result: dict,
     *,
     source: str | None = None,
-) -> tuple[str, str]:
-    """Insert evaluation row + emit realtime; returns (evaluation_id, evaluated_at ISO)."""
-    evaluation_id = readiness_service.record_dataset_readiness_evaluation(
+    force_persist: bool = False,
+) -> tuple[str, str, bool]:
+    """Persist with semantic dedupe unless ``force_persist``. Emit realtime only on a new row.
+
+    Returns ``(evaluation_id, evaluated_at_iso, inserted_new_row)``.
+    """
+    evaluation_id, evaluated_at, inserted_new = readiness_service.persist_dataset_readiness_evaluation_with_dedupe(
         tenant_id=tenant_id,
         project_id=project_id,
         dataset_id=dataset_id,
-        dataset_version_id=result.get("dataset_version_id"),
-        policy_id=str(result.get("policy_id") or ""),
-        required_size=int(result.get("required_size") or 0),
-        current_size=int(result.get("current_size") or 0),
-        status=str(result.get("status") or "blocked"),
-        reasons=result.get("reasons") or [],
+        result=result,
         source=source,
+        force_persist=force_persist,
     )
-    rt.emit_dataset_readiness_updated(
-        tenant_id=tenant_id,
-        project_id=project_id,
-        dataset_id=dataset_id,
-        required_size=int(result.get("required_size") or 0),
-        current_size=int(result.get("current_size") or 0),
-        status=str(result.get("status") or "blocked"),
-        updated_at=datetime.now(timezone.utc),
-        source=source,
-        trace_id=get_trace_id(),
-    )
-    evaluated_at = datetime.now(timezone.utc).isoformat()
-    return evaluation_id, evaluated_at
+    if inserted_new:
+        rt.emit_dataset_readiness_updated(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            required_size=int(result.get("required_size") or 0),
+            current_size=int(result.get("current_size") or 0),
+            status=str(result.get("status") or "blocked"),
+            updated_at=datetime.now(timezone.utc),
+            source=source,
+            trace_id=get_trace_id(),
+        )
+    return evaluation_id, evaluated_at, inserted_new
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness")
@@ -1391,7 +1435,10 @@ def get_dataset_readiness_v1(
     project_id: str,
     dataset_id: str,
     required_size: int | None = None,
-    dataset_version_id: str | None = Query(default=None),
+    dataset_version_id: str | None = Query(
+        default=None,
+        description="Required unless ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1: pins immutable snapshot for evaluation (no implicit latest-head).",
+    ),
     policy_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
@@ -1419,15 +1466,26 @@ def post_dataset_readiness_evaluate_v1(
     project_id: str,
     dataset_id: str,
     required_size: int | None = None,
-    dataset_version_id: str | None = Query(default=None),
+    dataset_version_id: str | None = Query(
+        default=None,
+        description="Required unless ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1: pins immutable snapshot (no implicit latest-head).",
+    ),
     policy_id: str | None = Query(default=None),
     source: str | None = Query(
         default=None,
         description="Audit source label (manual|scheduler|pre_training|auto_policy|...). Stored on the evaluation row.",
     ),
+    persist: bool = Query(
+        default=True,
+        description="If false, evaluate only (no DB row, no realtime). Default true.",
+    ),
+    force_persist: bool = Query(
+        default=False,
+        description="If true, always append a new evaluation row even when semantically identical to the latest row for this policy+version scope.",
+    ),
     authorization: str | None = Header(default=None),
 ) -> dict:
-    """Explicit audit: evaluate, persist ``dataset_readiness_evaluations``, emit ``dataset.readiness.updated``."""
+    """Explicit audit: evaluate, persist ``dataset_readiness_evaluations`` (deduped by default), emit ``dataset.readiness.updated`` on new rows only."""
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     src = str(source or "manual").strip().lower() or "manual"
@@ -1444,11 +1502,22 @@ def post_dataset_readiness_evaluate_v1(
         )
     except ValueError as exc:
         raise _http_exc_from_readiness_value_error(exc) from exc
-    evaluation_id, evaluated_at = _persist_dataset_readiness_evaluation(
-        tenant_id, project_id, dataset_id, result, source=src
+    if not persist:
+        evaluated_at = datetime.now(timezone.utc).isoformat()
+        return {**result, "evaluated_at": evaluated_at, "source": src, "persisted": False}
+    evaluation_id, evaluated_at, inserted_new = _persist_dataset_readiness_evaluation(
+        tenant_id, project_id, dataset_id, result, source=src, force_persist=force_persist
     )
-    semantic_metrics.record_eligibility_denied_persist(source=src, result=result)
-    return {**result, "evaluation_id": evaluation_id, "evaluated_at": evaluated_at, "source": src}
+    if inserted_new and not bool(result.get("ready")):
+        semantic_metrics.record_eligibility_denied_persist(source=src, result=result)
+    return {
+        **result,
+        "evaluation_id": evaluation_id,
+        "evaluated_at": evaluated_at,
+        "source": src,
+        "persisted": True,
+        "deduplicated": not inserted_new,
+    }
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/readiness")
@@ -1482,6 +1551,8 @@ def post_dataset_version_readiness_evaluate_v1(
     version_id: str,
     policy_id: str | None = Query(default=None),
     source: str | None = Query(default=None),
+    persist: bool = Query(default=True),
+    force_persist: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Version-scoped POST alias for ``POST .../readiness/evaluate`` (pins ``dataset_version_id``)."""
@@ -1493,6 +1564,8 @@ def post_dataset_version_readiness_evaluate_v1(
         dataset_version_id=version_id,
         policy_id=policy_id,
         source=source,
+        persist=persist,
+        force_persist=force_persist,
         authorization=authorization,
     )
 
@@ -1667,6 +1740,9 @@ def list_audit_timeline_v1(
     resource_id: str | None = Query(default=None, description="Optional: filter by resource id (requires resource_type)."),
     kind: str | None = Query(default=None, description="Optional: filter by timeline kind (exact match)."),
     source: str | None = Query(default=None, description="Optional: filter by audit source label (readiness events)."),
+    policy_id: str | None = Query(default=None, description="Optional: filter readiness rows by training policy_id (payload)."),
+    dataset_version_id: str | None = Query(default=None, description="Optional: filter readiness rows by dataset_version_id (payload)."),
+    readiness_status: str | None = Query(default=None, description="Optional: filter readiness rows by evaluation status (e.g. eligible, blocked)."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """
@@ -1687,8 +1763,76 @@ def list_audit_timeline_v1(
             resource_id=resource_id,
             kind=kind,
             source=source,
+            policy_id=policy_id,
+            dataset_version_id=dataset_version_id,
+            readiness_status=readiness_status,
         )
     }
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/audit/timeline/export")
+def export_audit_timeline_v1(
+    tenant_id: str,
+    project_id: str,
+    export_format: str = Query(
+        default="jsonl",
+        alias="format",
+        description="Export shape: jsonl (newline-delimited JSON) or json (single array object).",
+    ),
+    limit: int = Query(default=1000, ge=1, le=5000, description="Max rows to export (capped at 5000)."),
+    offset: int = Query(default=0, ge=0),
+    resource_type: str | None = Query(default=None, description="Optional: filter by resource type (requires resource_id)."),
+    resource_id: str | None = Query(default=None, description="Optional: filter by resource id (requires resource_type)."),
+    kind: str | None = Query(default=None, description="Optional: filter by timeline kind (exact match)."),
+    source: str | None = Query(default=None, description="Optional: filter by audit source label (readiness events)."),
+    policy_id: str | None = Query(default=None, description="Optional: filter readiness rows by training policy_id (payload)."),
+    dataset_version_id: str | None = Query(default=None, description="Optional: filter readiness rows by dataset_version_id (payload)."),
+    readiness_status: str | None = Query(default=None, description="Optional: filter readiness rows by evaluation status (e.g. eligible, blocked)."),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    """Download audit timeline rows for SIEM / retention (NDJSON or JSON); same filters as ``GET .../audit/timeline``."""
+    fm = str(export_format or "jsonl").strip().lower()
+    if fm not in {"jsonl", "json"}:
+        raise HTTPException(status_code=422, detail="unsupported_export_format")
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    items = audit_timeline_service.list_audit_timeline(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        kind=kind,
+        source=source,
+        policy_id=policy_id,
+        dataset_version_id=dataset_version_id,
+        readiness_status=readiness_status,
+        limit_ceiling=5000,
+    )
+    fn_tenant = re.sub(r"[^a-zA-Z0-9_.-]+", "_", tenant_id)[:80]
+    fn_project = re.sub(r"[^a-zA-Z0-9_.-]+", "_", project_id)[:80]
+    if fm == "jsonl":
+        lines: list[str] = []
+        for row in items:
+            envelope = {"tenant_id": tenant_id, "project_id": project_id, **row}
+            lines.append(json.dumps(envelope, separators=(",", ":"), default=str))
+        body = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
+        filename = f"mlair-audit-timeline-{fn_tenant}-{fn_project}.jsonl"
+        media = "application/x-ndjson"
+    else:
+        body = json.dumps(
+            {"tenant_id": tenant_id, "project_id": project_id, "items": items},
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+        filename = f"mlair-audit-timeline-{fn_tenant}-{fn_project}.json"
+        media = "application/json"
+    return Response(
+        content=body,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility")
@@ -1696,7 +1840,10 @@ def get_dataset_training_eligibility_v1(
     tenant_id: str,
     project_id: str,
     dataset_id: str,
-    dataset_version_id: str | None = Query(default=None),
+    dataset_version_id: str | None = Query(
+        default=None,
+        description="Required unless ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1: same pin semantics as GET .../readiness.",
+    ),
     policy_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:

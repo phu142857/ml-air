@@ -1436,26 +1436,6 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
     ]
 
 
-def get_latest_dataset_version_id(tenant_id: str, project_id: str, dataset_id: str) -> str | None:
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT dv.version_id
-                FROM dataset_versions dv
-                JOIN datasets d ON d.dataset_id = dv.dataset_id
-                WHERE d.tenant_id = %s
-                  AND d.project_id = %s
-                  AND d.dataset_id = %s
-                ORDER BY dv.created_at DESC
-                LIMIT 1
-                """,
-                (tenant_id, project_id, dataset_id),
-            )
-            row = cur.fetchone()
-    return str(row[0]) if row and row[0] else None
-
-
 def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dict | None:
     with db_conn() as conn:
         with conn.cursor() as cur:

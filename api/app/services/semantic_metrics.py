@@ -40,18 +40,6 @@ ELIGIBILITY_DENIED_TOTAL = _counter(
 
 _ALLOWED_READINESS_PATHS = frozenset({"runs_trigger", "pipeline_run"})
 _ALLOWED_AUDIT_SOURCES = frozenset({"manual", "scheduler", "pre_training", "auto_policy", "api"})
-_ALLOWED_DENIAL_REASONS = frozenset(
-    {
-        "size_threshold",
-        "freshness",
-        "model_compatibility",
-        "approval",
-        "validation_rules",
-        "legacy_fallback",
-        "unknown",
-        "other",
-    }
-)
 
 
 def normalize_audit_source(source: str | None) -> str:
@@ -60,21 +48,21 @@ def normalize_audit_source(source: str | None) -> str:
 
 
 def primary_eligibility_denial_reason(result: dict[str, Any]) -> str:
-    """Map evaluate_dataset_readiness payload to a low-cardinality reason label."""
+    """Map evaluate_dataset_readiness payload to a low-cardinality Prometheus ``reason`` label."""
+    from app.services.readiness_canonical_codes import canonical_readiness_code, metric_label_for_canonical
+
     for r in result.get("reasons") or []:
         if isinstance(r, dict):
-            code = str(r.get("code") or "").strip().lower()
-            if code in _ALLOWED_DENIAL_REASONS:
-                return code
-            if code:
-                return "other"
+            cc_raw = str(r.get("canonical_code") or "").strip().upper()
+            ic = str(r.get("code") or "").strip().lower()
+            canonical = cc_raw if cc_raw else canonical_readiness_code(ic)
+            return metric_label_for_canonical(canonical)
     for c in result.get("eligibility_criteria") or []:
         if isinstance(c, dict) and str(c.get("status") or "").lower() == "fail":
-            code = str(c.get("code") or "").strip().lower()
-            if code in _ALLOWED_DENIAL_REASONS:
-                return code
-            if code:
-                return "other"
+            cc_raw = str(c.get("canonical_code") or "").strip().upper()
+            ic = str(c.get("code") or "").strip().lower()
+            canonical = cc_raw if cc_raw else canonical_readiness_code(ic)
+            return metric_label_for_canonical(canonical)
     return "unknown"
 
 

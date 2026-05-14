@@ -14,7 +14,7 @@ class TestSemanticMetricsHelpers(unittest.TestCase):
 
     def test_primary_eligibility_denial_reason_from_reasons(self) -> None:
         r = {"ready": False, "reasons": [{"code": "size_threshold", "message": "too small"}]}
-        self.assertEqual(sm.primary_eligibility_denial_reason(r), "size_threshold")
+        self.assertEqual(sm.primary_eligibility_denial_reason(r), "threshold_not_met")
 
     def test_primary_eligibility_denial_reason_unknown_code_buckets_other(self) -> None:
         r = {"ready": False, "reasons": [{"code": "custom_xyz", "message": "x"}]}
@@ -28,7 +28,7 @@ class TestSemanticMetricsHelpers(unittest.TestCase):
                 {"code": "freshness", "label": "Freshness", "status": "fail"},
             ],
         }
-        self.assertEqual(sm.primary_eligibility_denial_reason(r), "freshness")
+        self.assertEqual(sm.primary_eligibility_denial_reason(r), "freshness_not_met")
 
     def test_primary_eligibility_denial_reason_empty(self) -> None:
         self.assertEqual(sm.primary_eligibility_denial_reason({"ready": False}), "unknown")

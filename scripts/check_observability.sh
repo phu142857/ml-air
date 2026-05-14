@@ -36,6 +36,7 @@ curl -fsS "${PROM_URL}/-/ready" >/dev/null
 prom_rules="$(mktemp)"
 curl -fsS "${PROM_URL}/api/v1/rules" >"${prom_rules}"
 grep -q "MlAirTaskFailuresDetected" "${prom_rules}"
+grep -q "MlAirLifecycleEligibilityDeniedBurst" "${prom_rules}"
 rm -f "${prom_rules}"
 
 echo "[6/6] Grafana health"

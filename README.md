@@ -55,14 +55,14 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 ### Observability & ops
 
 - Prometheus metrics on API, scheduler, executor (`/metrics`)
-- Grafana dashboards + alert rules in repo (`deploy/monitoring/`)
+- Grafana dashboards + alert rules in repo (`deploy/monitoring/`), including **MLAir lifecycle (semantic metrics)** (`grafana/dashboards/mlair-lifecycle-semantic.json`: train/readiness/materialization + **model promote / approval** counters)
 - Request correlation id (`X-Trace-Id`) through the stack
-- Makefile: `make test-observability`, `make incident-drill`, `make backup-db` / `make restore-db`
+- Makefile: `make test-prometheus-rules`, `make test-observability`, `make incident-drill`, `make backup-db` / `make restore-db`
 
 ### Packaging & CI
 
 - Helm chart `charts/ml-air/`
-- CI: build, env sync guard, manifest key rotation guard, smokes, Helm lint (`make test-all` is the local mirror)
+- CI: build, env sync guard, manifest key rotation guard, **Prometheus alert rule lint** (`make test-prometheus-rules` — `promtool` or Docker), smokes, Helm lint (`make test-all` is the local mirror)
 
 ### In progress / incremental (not a blocker to run the stack)
 
@@ -204,7 +204,7 @@ sequenceDiagram
 - **Plugin registry** (entry-point discovery) + validate / reload / toggle endpoints
 - **Prometheus** metrics (API, scheduler, executor) + **Grafana** assets in `deploy/monitoring/`
 - **Helm** chart for Kubernetes (`charts/ml-air/`)
-- **CI / local gates**: env sync, manifest key rotation, smokes, Helm (`make test-all`)
+- **CI / local gates**: env sync, manifest key rotation, **alert rules** (`make test-prometheus-rules`), smokes, Helm (`make test-all`)
 
 ---
 
@@ -250,6 +250,9 @@ Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI
 | `ML_AIR_TRACKING_TOKEN`    | Service token for scheduler/executor → API | `maintainer-token` (example)                                     |
 | `ML_AIR_MANIFEST_*`        | Replay / manifest signing policy           | see `.env.example`                                               |
 | `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS` | When `1`, `POST .../runs`, gated pipeline run, and pipeline `check-readiness` require `override_config.inputs` or version `config.inputs` | `0` (see `docs/api/readiness-and-gating.md`) |
+| `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | When `0` (default), dataset readiness/eligibility forbid implicit latest-head if versions exist; `1` restores legacy implicit head + aggregate size fallback | `0` |
+| `ML_AIR_STRICT_DATASET_VERSION_REQUIRED` | When `1`, train trigger and declared-inputs run paths require an explicit `dataset_version_id`; `runtime-config.features.strict_dataset_version_required` mirrors | `1` (see `docs/api/dataset-version-immutability.md`) |
+| `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` | When `1` (and strict required is on), generic `POST .../runs`, gated `POST .../pipelines/{id}/run`, and `check-readiness` require a pin even without declared dataset inputs; `runtime-config.features.strict_dataset_version_all_post_runs` mirrors | `0` |
 | `ML_AIR_ENABLE_SERVING_SLOTS_HTTP` | When `1`, mount model **serving slot** routes (`GET|PUT .../serving`); `runtime-config.features.serving_slots_http` mirrors for the UI | `0` |
 | `NEXT_PUBLIC_API_BASE_URL` | Browser → API base URL                     | `http://localhost:8080`                                          |
 | `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` | Optional JSON `POST` beacon for train intent (Hub vs pipeline) | empty (disabled) |
@@ -264,7 +267,7 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 ## API
 
 - **Base path:** `/v1`
-- **Contract draft:** [openapi-v1-draft.yaml](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls.
+- **Contract draft:** [openapi-v1-draft.yaml](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls. **Dataset version strictness** for generic run APIs is reflected in **`features.strict_dataset_version_required`** and **`features.strict_dataset_version_all_post_runs`** (Hub Train tab reads the latter for a maintainer notice).
 - **Narrative API docs:** [docs/api/](docs/api/)
 
 **Examples**
@@ -322,13 +325,14 @@ From repo root (stack up where a target requires a live API):
 - `make doctor` — diagnostics  
 - `make test-env-sync` — `.env` / `.env.example` drift  
 - `make test-manifest-key-rotation` — manifest key rotation guard  
+- `make test-prometheus-rules` — `promtool check rules` on `deploy/monitoring/alerts/mlair-alerts.yml`  
 - `make test-smoke-mlair` — API smoke  
 - `make test-smoke-model-registry`  
 - `make test-smoke-phase2`  
 - `make test-smoke-v03` — lineage / versioning / replay smoke  
 - `make test-observability`  
 - `make test-helm`  
-- `**make test-all**` — runs the full set above (maintainer bar before release)
+- `**make test-all**` — runs the full set above, including `test-prometheus-rules` (maintainer bar before release)
 
 Other useful targets: `make seed-demo`, `make backfill-lineage*`, `make enable-ed25519-dev`, `make backup-db` / `make restore-db`. See the [Makefile](Makefile) for the complete list.
 

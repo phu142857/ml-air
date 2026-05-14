@@ -16,6 +16,10 @@ def list_audit_timeline(
     resource_id: str | None = None,
     kind: str | None = None,
     source: str | None = None,
+    policy_id: str | None = None,
+    dataset_version_id: str | None = None,
+    readiness_status: str | None = None,
+    limit_ceiling: int = 200,
 ) -> list[dict[str, Any]]:
     """
     Unified audit-ish timeline view (read-only aggregation).
@@ -25,7 +29,7 @@ def list_audit_timeline(
       already exist (readiness evals, model approval/slots) plus run/task snapshots.
     - Ordering is by `ts` DESC.
     """
-    safe_limit = max(1, min(200, int(limit or 50)))
+    safe_limit = max(1, min(max(1, min(10_000, int(limit_ceiling))), int(limit or 50)))
     safe_offset = max(0, int(offset or 0))
     rt = (resource_type or "").strip().lower() or None
     rid = (resource_id or "").strip() or None
@@ -38,6 +42,9 @@ def list_audit_timeline(
     where_kind = k
     # Source applies only to events that have a source column (readiness evals today).
     where_source = src
+    pol = (policy_id or "").strip() or None
+    dvid = (dataset_version_id or "").strip() or None
+    rstat = (readiness_status or "").strip().lower() or None
 
     sql = """
     WITH timeline AS (
@@ -194,6 +201,18 @@ def list_audit_timeline(
     WHERE (%(where_rt)s IS NULL OR (resource_type = %(where_rt)s AND resource_id = %(where_rid)s))
       AND (%(where_kind)s IS NULL OR kind = %(where_kind)s)
       AND (%(where_source)s IS NULL OR COALESCE(source, '') = %(where_source)s)
+      AND (%(where_policy_id)s IS NULL OR (
+            kind = 'dataset.readiness.evaluated'
+            AND (payload->>'policy_id') = %(where_policy_id)s
+          ))
+      AND (%(where_dataset_version_id)s IS NULL OR (
+            kind = 'dataset.readiness.evaluated'
+            AND (payload->>'dataset_version_id') = %(where_dataset_version_id)s
+          ))
+      AND (%(where_readiness_status)s IS NULL OR (
+            kind = 'dataset.readiness.evaluated'
+            AND LOWER(COALESCE(payload->>'status', '')) = %(where_readiness_status)s
+          ))
     ORDER BY ts DESC
     LIMIT %(limit)s OFFSET %(offset)s
     """
@@ -211,6 +230,9 @@ def list_audit_timeline(
                     "where_rid": where_rid,
                     "where_kind": where_kind,
                     "where_source": where_source,
+                    "where_policy_id": pol,
+                    "where_dataset_version_id": dvid,
+                    "where_readiness_status": rstat,
                 },
             )
             rows = cur.fetchall()

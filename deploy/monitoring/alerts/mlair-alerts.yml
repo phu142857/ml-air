@@ -99,3 +99,41 @@ groups:
         annotations:
           summary: "dataset_versions unique constraint hit during materialization"
           description: "Insert collided on idempotency_key or (dataset_id, version); API retries / resolves races. Investigate if this fires frequently (metric label constraint)."
+
+  - name: mlair-lifecycle-semantic
+    rules:
+      - alert: MlAirLifecycleEligibilityDeniedBurst
+        expr: sum(increase(mlair_eligibility_denied_total[15m])) > 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of persisted not-ready readiness evaluations"
+          description: "More than 15 new mlair_eligibility_denied_total increments in 15 minutes (POST .../readiness/evaluate inserts when ready=false). Tune threshold or investigate policy / data drift."
+
+      - alert: MlAirLifecycleReadinessGateBlockedBurst
+        expr: sum(increase(mlair_readiness_blocked_total[15m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many runs blocked at the execution readiness gate"
+          description: "More than 10 mlair_readiness_blocked_total increments in 15 minutes (runs_trigger / pipeline_run paths). Inspect gate inputs and dataset versions."
+
+      - alert: MlAirLifecycleTrainIntentBlockedBurst
+        expr: sum(increase(mlair_lifecycle_training_triggered_total{blocked_by_gate="true"}[15m])) > 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many Hub train intents blocked before run creation"
+          description: "More than 15 training.triggered emits with blocked_by_gate=true in 15 minutes. Check eligibility, readiness, and strict dataset_version pins."
+
+      - alert: MlAirLifecycleModelApprovalRejectedBurst
+        expr: sum(increase(mlair_lifecycle_model_version_approval_set_total{approval_status="rejected"}[15m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Burst of model version rejections"
+          description: "More than 3 approval_status=rejected updates in 15 minutes. Review governance workflow and model artifacts."
