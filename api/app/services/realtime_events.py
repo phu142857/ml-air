@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -13,6 +14,43 @@ from typing import Any
 
 from app.services.queue_service import redis_client
 from app.services.trace_service import get_trace_id
+
+try:
+    from prometheus_client import Counter as _PrometheusCounter
+except Exception:  # pragma: no cover - optional dependency in lightweight tests
+    _PrometheusCounter = None  # type: ignore[assignment]
+
+
+class _LifecycleNoopCounter:
+    def labels(self, **_kwargs: Any) -> _LifecycleNoopCounter:
+        return self
+
+    def inc(self, _amount: float = 1.0) -> None:
+        return None
+
+
+def _lifecycle_counter(name: str, documentation: str, labelnames: tuple[str, ...] | None = None) -> Any:
+    if _PrometheusCounter is None:
+        return _LifecycleNoopCounter()
+    if labelnames:
+        return _PrometheusCounter(name, documentation, list(labelnames))
+    return _PrometheusCounter(name, documentation)
+
+
+LIFECYCLE_TRAINING_TRIGGERED_TOTAL = _lifecycle_counter(
+    "mlair_lifecycle_training_triggered_total",
+    "Hub train intent: POST .../runs/trigger path emitted training.triggered (blocked_by_gate label)",
+    ("blocked_by_gate",),
+)
+LIFECYCLE_TRAINING_COMPLETED_TOTAL = _lifecycle_counter(
+    "mlair_lifecycle_training_completed_total",
+    "Run reached SUCCESS with pinned dataset_version_id (training.completed semantic emit)",
+)
+LIFECYCLE_BUFFER_THRESHOLD_MET_TOTAL = _lifecycle_counter(
+    "mlair_lifecycle_buffer_threshold_met_total",
+    "Dataset buffer current_size crossed to >= target_threshold on upsert",
+    ("accumulation_strategy",),
+)
 
 logger = logging.getLogger("mlair.api.realtime_events")
 
@@ -25,9 +63,11 @@ class EventType(str, Enum):
     MODEL_ELIGIBILITY_UPDATED = "model.eligibility.updated"
     DATASET_UPDATED = "dataset.updated"
     DATASET_BUFFER_UPDATED = "dataset.buffer.updated"
+    BUFFER_THRESHOLD_MET = "buffer.threshold_met"
     DATASET_VERSION_CREATED = "dataset.version.created"
     DATASET_READINESS_UPDATED = "dataset.readiness.updated"
     TRAINING_ELIGIBILITY_UPDATED = "training.eligibility.updated"
+    ELIGIBILITY_UPDATED = "eligibility.updated"
     TRAINING_POLICY_UPDATED = "training.policy.updated"
     TRAINING_TRIGGERED = "training.triggered"
     TRAINING_COMPLETED = "training.completed"
@@ -244,6 +284,16 @@ def emit_model_eligibility_updated(
             payload=payload,
         )
     )
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.ELIGIBILITY_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=model_id,
+            trace_id=trace_id,
+            payload={**payload, "kind": "model"},
+        )
+    )
 
 
 def emit_dataset_updated(
@@ -331,6 +381,42 @@ def emit_dataset_buffer_updated(
     )
 
 
+def emit_buffer_threshold_met(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    source_type: str,
+    current_size: int,
+    target_threshold: int,
+    accumulation_strategy: str,
+    window_status: str,
+    updated_at: datetime | None,
+    trace_id: str | None = None,
+) -> None:
+    """Emitted when buffer ``current_size`` first reaches or exceeds ``target_threshold`` on an upsert."""
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.BUFFER_THRESHOLD_MET,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=dataset_id,
+            trace_id=trace_id,
+            payload={
+                "dataset_id": dataset_id,
+                "source_type": source_type,
+                "current_size": int(current_size),
+                "target_threshold": int(target_threshold),
+                "accumulation_strategy": str(accumulation_strategy),
+                "window_status": str(window_status),
+                "updated_at": dt_to_unix(updated_at),
+            },
+        )
+    )
+    safe_strat = re.sub(r"[^a-zA-Z0-9_]+", "_", str(accumulation_strategy or "unknown").strip())[:64] or "unknown"
+    LIFECYCLE_BUFFER_THRESHOLD_MET_TOTAL.labels(accumulation_strategy=safe_strat).inc()
+
+
 def emit_dataset_version_created(
     *,
     tenant_id: str,
@@ -398,6 +484,13 @@ def emit_training_eligibility_updated(
     updated_at: datetime | None,
     trace_id: str | None = None,
 ) -> None:
+    base_payload: dict[str, Any] = {
+        "run_id": run_id,
+        "dataset_id": dataset_id,
+        "status": status,
+        "ready": bool(ready),
+        "updated_at": dt_to_unix(updated_at),
+    }
     publish_mlair_event(
         build_event(
             event_type=EventType.TRAINING_ELIGIBILITY_UPDATED,
@@ -405,13 +498,17 @@ def emit_training_eligibility_updated(
             project_id=project_id,
             resource_id=run_id,
             trace_id=trace_id,
-            payload={
-                "run_id": run_id,
-                "dataset_id": dataset_id,
-                "status": status,
-                "ready": bool(ready),
-                "updated_at": dt_to_unix(updated_at),
-            },
+            payload=base_payload,
+        )
+    )
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.ELIGIBILITY_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=run_id,
+            trace_id=trace_id,
+            payload={**base_payload, "kind": "training"},
         )
     )
 
@@ -448,6 +545,7 @@ def emit_training_triggered(
             },
         )
     )
+    LIFECYCLE_TRAINING_TRIGGERED_TOTAL.labels(blocked_by_gate="true" if blocked_by_gate else "false").inc()
 
 
 def maybe_emit_training_completed_from_run_row(row: dict[str, Any]) -> None:
@@ -485,6 +583,7 @@ def maybe_emit_training_completed_from_run_row(row: dict[str, Any]) -> None:
             },
         )
     )
+    LIFECYCLE_TRAINING_COMPLETED_TOTAL.inc()
 
 
 def _parse_row_updated_at(value: Any) -> datetime | None:

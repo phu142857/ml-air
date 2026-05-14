@@ -167,6 +167,33 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
+  it("invalidates same project eligibility prefix for eligibility.updated kind=model", () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { unmount } = renderWithQueryClient(queryClient);
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emitJson({
+      version: "v1",
+      event_id: "evt-eu",
+      type: "eligibility.updated",
+      resource_id: "m1",
+      payload: {
+        kind: "model",
+        model_id: "m1",
+        updated_at: 1710000003,
+        action: "approval_updated"
+      }
+    });
+    vi.advanceTimersByTime(400);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["dataset-training-eligibility", "t1", "p1"],
+      exact: false
+    });
+    unmount();
+  });
+
   it("ignores unsupported envelope version and ping event", () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");

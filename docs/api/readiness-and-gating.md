@@ -16,6 +16,8 @@ Keep these names aligned with the operator UI and [`ROADMAP.md`](../../ROADMAP.m
 
 Training from immutable versions is initiated from **Dataset Hub**; the pipeline page remains orchestration, replay, and execution-gate debugging.
 
+**See also:** [Dataset version immutability policy](./dataset-version-immutability.md) — frozen vs additive fields on `dataset_versions`, and strictness env vars.
+
 ## Endpoints
 
 ### 1) `GET /v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness` — **pure read**

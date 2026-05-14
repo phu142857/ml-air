@@ -48,7 +48,7 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 ### Operator UI (Next.js)
 
 - Scope context: tenant / project / token + env-based API base URL
-- Routes: `/dashboard`, `/runs`, `/runs/[runId]`, `/pipelines`, `/pipelines/[pipelineId]`, `/pipelines/.../versions`, `/pipelines/.../diff`, `/tasks/[taskId]`, `/models`, `/models/[modelId]`, `/datasets`, `/datasets/[datasetId]`, `/lineage`, `/search`, `/settings`
+- Routes: `/dashboard`, `/runs`, `/runs/[runId]`, `/pipelines`, `/pipelines/[pipelineId]`, `/pipelines/.../versions`, `/pipelines/.../diff`, `/tasks/[taskId]`, `/models`, `/models/[modelId]`, `/datasets`, `/datasets/[datasetId]`, `/lifecycle`, `/lineage`, `/search`, `/settings`
 - DAG visualization, run detail, logs / timeline, error handling patterns
 - Custom **SelectDropdown** controls where native `<select>` broke under layout (overflow / sticky / blur); topbar tenant/project pickers use the same pattern
 

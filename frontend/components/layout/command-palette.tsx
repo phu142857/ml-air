@@ -14,6 +14,7 @@ const NAV: Entry[] = [
   { id: "lineage", label: "Lineage", hint: "Debug graph", href: "/lineage", keywords: "graph" },
   { id: "models", label: "Models", hint: "Governance · policies · serving", href: "/models", keywords: "approval" },
   { id: "datasets", label: "Dataset Hub", hint: "Lifecycle · versions · readiness · train", href: "/datasets", keywords: "csv upload hub version" },
+  { id: "lifecycle", label: "Lifecycle insights", hint: "Hub links · semantic ops", href: "/lifecycle", keywords: "readiness materialization train" },
   { id: "tasks", label: "Tasks", hint: "Task list", href: "/tasks", keywords: "worker" },
   { id: "settings", label: "Settings", hint: "Scope & preferences", href: "/settings", keywords: "tenant project" },
   { id: "search", label: "Search", hint: "Runs, tasks, datasets…", href: "/search", keywords: "find" }

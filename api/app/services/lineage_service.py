@@ -203,6 +203,8 @@ def _upsert_dataset_buffer(
     strat = str(accumulation_strategy or DEFAULT_ACCUMULATION_STRATEGY).strip() or DEFAULT_ACCUMULATION_STRATEGY
     if strat not in SUPPORTED_ACCUMULATION_STRATEGIES:
         strat = DEFAULT_ACCUMULATION_STRATEGY
+    prev_buf = get_dataset_buffer(tenant_id, project_id, dataset_id)
+    prev_size = int(prev_buf.get("current_size") or 0) if prev_buf else 0
     with db_conn() as conn:
         with conn.cursor() as cur:
             canon_buf = canonical_dataset_source_type(src)
@@ -256,6 +258,21 @@ def _upsert_dataset_buffer(
         updated_at=datetime.now(timezone.utc),
         trace_id=get_trace_id(),
     )
+    if now_size >= tgt and prev_size < tgt:
+        _now = datetime.now(timezone.utc)
+        _tr = get_trace_id()
+        rt.emit_buffer_threshold_met(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            source_type=src,
+            current_size=now_size,
+            target_threshold=tgt,
+            accumulation_strategy=strat,
+            window_status=win,
+            updated_at=_now,
+            trace_id=_tr,
+        )
     _observe_accumulation_gauges(
         strategy=strat,
         source_type=src,

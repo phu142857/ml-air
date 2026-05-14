@@ -38,6 +38,7 @@ from app.dataset_source_type import canonical_dataset_source_type
 from app.services import lineage_service
 from app.services import readiness_service
 from app.services import realtime_events as rt
+from app.services import semantic_metrics
 from app.services import audit_timeline_service
 from app.services.run_service import (
     create_replay_run,
@@ -601,6 +602,7 @@ def trigger_run_by_model_dataset_v1(
         trace_id=_tr,
     )
     if not check.get("ready"):
+        semantic_metrics.record_readiness_blocked(path="runs_trigger")
         set_run_status(run["run_id"], "FAILED")
         append_run_log(
             run_id=run["run_id"],
@@ -785,6 +787,7 @@ def run_pipeline_with_gating_v1(
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
     if not check.get("ready"):
+        semantic_metrics.record_readiness_blocked(path="pipeline_run")
         set_run_status(run["run_id"], "FAILED")
         append_run_log(
             run_id=run["run_id"],
@@ -1444,6 +1447,7 @@ def post_dataset_readiness_evaluate_v1(
     evaluation_id, evaluated_at = _persist_dataset_readiness_evaluation(
         tenant_id, project_id, dataset_id, result, source=src
     )
+    semantic_metrics.record_eligibility_denied_persist(source=src, result=result)
     return {**result, "evaluation_id": evaluation_id, "evaluated_at": evaluated_at, "source": src}
 
 

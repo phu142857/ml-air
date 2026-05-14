@@ -10,11 +10,29 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from typing import Any
-
 from redis import Redis
 
 logger = logging.getLogger("mlair.scheduler.realtime")
+
+try:
+    from prometheus_client import Counter as _SchedulerPromCounter
+except Exception:  # pragma: no cover
+    _SchedulerPromCounter = None  # type: ignore[assignment]
+
+
+class _SchedNoop:
+    def inc(self, _amount: float = 1.0) -> None:
+        return None
+
+
+_LIFECYCLE_TRAINING_COMPLETED_SCHEDULER = (
+    _SchedulerPromCounter(
+        "mlair_lifecycle_training_completed_total",
+        "Run reached SUCCESS with pinned dataset_version_id (scheduler publish path)",
+    )
+    if _SchedulerPromCounter
+    else _SchedNoop()
+)
 
 
 def _enabled() -> bool:
@@ -116,8 +134,6 @@ def publish_training_completed(
     trace_id: str | None = None,
 ) -> None:
     """Same envelope as API ``training.completed`` for lifecycle-aware UIs."""
-    if not _enabled():
-        return
     payload: dict[str, Any] = {
         "run_id": run_id,
         "pipeline_id": pipeline_id,
@@ -140,4 +156,6 @@ def publish_training_completed(
         "trace_id": trace_id,
         "payload": payload,
     }
-    _publish(client, event)
+    if _enabled():
+        _publish(client, event)
+    _LIFECYCLE_TRAINING_COMPLETED_SCHEDULER.inc()

@@ -11,6 +11,7 @@ type NavItem =
   | "Lineage"
   | "Models"
   | "Datasets"
+  | "Lifecycle"
   | "Tasks"
   | "Settings"
   /** No sidebar highlight (e.g. search overlay route). */
@@ -29,6 +30,7 @@ const navItems: Array<{ key: NavItem; href: string }> = [
   { key: "Lineage", href: "/lineage" },
   { key: "Models", href: "/models" },
   { key: "Datasets", href: "/datasets" },
+  { key: "Lifecycle", href: "/lifecycle" },
   { key: "Tasks", href: "/tasks" },
   { key: "Settings", href: "/settings" }
 ];

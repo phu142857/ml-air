@@ -115,6 +115,26 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertEqual(ev["type"], "training.completed")
         self.assertEqual(ev["resource_id"], "run-7")
 
+    def test_build_event_buffer_threshold_met(self) -> None:
+        ev = build_event(
+            event_type=EventType.BUFFER_THRESHOLD_MET,
+            tenant_id="t1",
+            project_id="p1",
+            resource_id="ds-88",
+            payload={
+                "dataset_id": "ds-88",
+                "source_type": "runtime_feedback",
+                "current_size": 1000,
+                "target_threshold": 1000,
+                "accumulation_strategy": "snapshot_on_threshold",
+                "window_status": "active",
+                "updated_at": 12.0,
+            },
+            trace_id="tr",
+        )
+        self.assertEqual(ev["type"], "buffer.threshold_met")
+        self.assertEqual(ev["resource_id"], "ds-88")
+
     def test_build_event_model_eligibility_updated(self) -> None:
         ev = build_event(
             event_type=EventType.MODEL_ELIGIBILITY_UPDATED,
@@ -133,6 +153,66 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertEqual(ev["type"], "model.eligibility.updated")
         self.assertEqual(ev["resource_id"], "m1")
         self.assertEqual(ev["payload"]["action"], "approval_updated")
+
+    def test_build_event_eligibility_updated_training_kind(self) -> None:
+        ev = build_event(
+            event_type=EventType.ELIGIBILITY_UPDATED,
+            tenant_id="t1",
+            project_id="p1",
+            resource_id="run-1",
+            payload={
+                "kind": "training",
+                "run_id": "run-1",
+                "dataset_id": "ds1",
+                "status": "eligible",
+                "ready": True,
+                "updated_at": 5.0,
+            },
+            trace_id="tr",
+        )
+        self.assertEqual(ev["type"], "eligibility.updated")
+        self.assertEqual(ev["payload"]["kind"], "training")
+
+    @patch("app.services.realtime_events.publish_mlair_event")
+    def test_emit_training_eligibility_dual_publish(self, mock_pub: MagicMock) -> None:
+        from datetime import datetime, timezone
+
+        from app.services.realtime_events import emit_training_eligibility_updated
+
+        emit_training_eligibility_updated(
+            tenant_id="t1",
+            project_id="p1",
+            run_id="run-1",
+            dataset_id="ds1",
+            status="blocked",
+            ready=False,
+            updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            trace_id="tr",
+        )
+        self.assertEqual(mock_pub.call_count, 2)
+        self.assertEqual(mock_pub.call_args_list[0].args[0]["type"], "training.eligibility.updated")
+        self.assertEqual(mock_pub.call_args_list[1].args[0]["type"], "eligibility.updated")
+        self.assertEqual(mock_pub.call_args_list[1].args[0]["payload"]["kind"], "training")
+
+    @patch("app.services.realtime_events.publish_mlair_event")
+    def test_emit_model_eligibility_dual_publish(self, mock_pub: MagicMock) -> None:
+        from datetime import datetime, timezone
+
+        from app.services.realtime_events import emit_model_eligibility_updated
+
+        emit_model_eligibility_updated(
+            tenant_id="t1",
+            project_id="p1",
+            model_id="m1",
+            action="approval_updated",
+            updated_at=datetime(2024, 1, 2, tzinfo=timezone.utc),
+            trace_id="tr",
+            version=2,
+        )
+        self.assertEqual(mock_pub.call_count, 2)
+        self.assertEqual(mock_pub.call_args_list[0].args[0]["type"], "model.eligibility.updated")
+        self.assertEqual(mock_pub.call_args_list[1].args[0]["type"], "eligibility.updated")
+        self.assertEqual(mock_pub.call_args_list[1].args[0]["payload"]["kind"], "model")
 
 
 if __name__ == "__main__":

@@ -66,6 +66,8 @@ type Envelope = {
     stage?: string;
     action?: string;
     approval_status?: string;
+    kind?: string;
+    ready?: boolean;
   };
 };
 
@@ -154,7 +156,7 @@ function keysForEvent(
     }
     return keys;
   }
-  if (t === "dataset.buffer.updated" || t === "dataset.version.created") {
+  if (t === "dataset.buffer.updated" || t === "dataset.version.created" || t === "buffer.threshold_met") {
     if (!rid) return [];
     return keysDatasetHubSurface(tenantId, projectId, rid);
   }
@@ -188,6 +190,45 @@ function keysForEvent(
       );
     }
     return keys;
+  }
+  if (t === "eligibility.updated") {
+    const kind = typeof ev.payload?.kind === "string" ? ev.payload.kind : "";
+    if (kind === "training") {
+      const keys: unknown[][] = [];
+      const targetRunId = runId || rid;
+      if (targetRunId) {
+        keys.push([...mlairKeys.run.readiness(targetRunId)], [...mlairKeys.run.detail(targetRunId)]);
+      }
+      const dsid = typeof ev.payload?.dataset_id === "string" ? ev.payload.dataset_id : undefined;
+      if (dsid) {
+        keys.push(
+          [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, dsid)],
+          [...mlairKeys.datasetRuns(tenantId, projectId, dsid)]
+        );
+      }
+      return keys;
+    }
+    if (kind === "model") {
+      const mid =
+        (typeof ev.payload?.model_id === "string" ? ev.payload.model_id : undefined) ||
+        (typeof rid === "string" ? rid : undefined);
+      const keys: unknown[][] = [[...mlairKeys.models.list(tenantId, projectId)]];
+      if (mid) {
+        keys.push(
+          [...mlairKeys.models.versions(tenantId, projectId, mid)],
+          [...mlairKeys.models.serving(tenantId, projectId, mid)],
+          [...mlairKeys.models.status(tenantId, projectId, mid)],
+          [...mlairKeys.models.resolvedPipeline(tenantId, projectId, mid)],
+          ["model-recent-runs", tenantId, projectId, mid]
+        );
+      }
+      keys.push([...mlairKeys.datasets.trainingEligibilityProjectPrefix(tenantId, projectId)]);
+      return keys;
+    }
+    return [
+      [...mlairKeys.datasets.trainingEligibilityProjectPrefix(tenantId, projectId)],
+      [...mlairKeys.runs.list(tenantId, projectId)]
+    ];
   }
   if (t === "training.triggered") {
     const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
