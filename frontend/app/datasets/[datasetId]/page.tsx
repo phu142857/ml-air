@@ -150,6 +150,8 @@ export default function DatasetHubPage() {
   const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
   /** When true, API requires `dataset_version_id` on `POST .../runs`, gated pipeline run, and check-readiness without declared inputs. */
   const [strictDatasetVersionAllPostRuns, setStrictDatasetVersionAllPostRuns] = useState(false);
+  /** When true, API allows implicit latest-head on dataset readiness when `dataset_version_id` is omitted (compat). */
+  const [readinessLegacyFallback, setReadinessLegacyFallback] = useState(false);
   const [evaluationPolicyFilter, setEvaluationPolicyFilter] = useState("all");
   const [evaluationSourceFilter, setEvaluationSourceFilter] = useState("all");
   const [accumulationThresholdDraft, setAccumulationThresholdDraft] = useState("");
@@ -191,8 +193,12 @@ export default function DatasetHubPage() {
         if (cancelled) return;
         setStrictDatasetVersionOnTrigger(rc.features?.strict_dataset_version_required !== false);
         setStrictDatasetVersionAllPostRuns(rc.features?.strict_dataset_version_all_post_runs === true);
+        setReadinessLegacyFallback(rc.features?.readiness_allow_legacy_fallback === true);
       } catch {
-        if (!cancelled) setStrictDatasetVersionOnTrigger(true);
+        if (!cancelled) {
+          setStrictDatasetVersionOnTrigger(true);
+          setReadinessLegacyFallback(false);
+        }
       }
     })();
     return () => {
@@ -202,10 +208,12 @@ export default function DatasetHubPage() {
 
   useEffect(() => {
     const items = versionsQuery.data?.items || [];
-    if (!items.length) return;
-    if (!selectedVersionId) return;
-    if (!items.some((v) => v.version_id === selectedVersionId)) {
-      setSelectedVersionId("");
+    if (!items.length) {
+      if (selectedVersionId) setSelectedVersionId("");
+      return;
+    }
+    if (!selectedVersionId || !items.some((v) => v.version_id === selectedVersionId)) {
+      setSelectedVersionId(String(items[0].version_id || ""));
     }
   }, [versionsQuery.data?.items, selectedVersionId]);
 
@@ -391,7 +399,10 @@ export default function DatasetHubPage() {
             value: v.version_id,
             label: `v${v.version}`
           }));
-    return [{ value: "", label: `Latest (v${head.version})` }, ...older];
+    return [
+      { value: head.version_id, label: `Head snapshot (v${head.version})` },
+      ...older
+    ];
   }, [versionsQuery.data?.items]);
   const policySelectOptions = useMemo(
     () =>
@@ -580,13 +591,11 @@ export default function DatasetHubPage() {
           className={`rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-secondary ${!selectedVersionForReadiness ? "pointer-events-none opacity-50" : ""}`}
           title={
             lineageVersionRow
-              ? `Open lineage for v${lineageVersionRow.version}${selectedVersionId ? " (explicit)" : " (latest default)"}`
+              ? `Open lineage for v${lineageVersionRow.version} (pinned dataset_version_id)`
               : undefined
           }
         >
-          {lineageVersionRow
-            ? `Lineage (v${lineageVersionRow.version}${selectedVersionId ? "" : " · latest"})`
-            : "Lineage"}
+          {lineageVersionRow ? `Lineage (v${lineageVersionRow.version})` : "Lineage"}
         </Link>
       </div>
 
@@ -741,9 +750,6 @@ export default function DatasetHubPage() {
               <div className="text-[11px] text-muted-foreground">
                 Version scope:{" "}
                 <span className="font-mono text-foreground">{selectedVersionForReadiness || "—"}</span>
-                {!selectedVersionId && selectedVersionForReadiness ? (
-                  <span className="text-muted-foreground"> (default: newest version)</span>
-                ) : null}
               </div>
               <div className="mt-2 space-y-2 text-xs">
                 {trainingEligibilityRows.length ? (
@@ -796,6 +802,13 @@ export default function DatasetHubPage() {
               poll). To append an audit row in the history table, use{" "}
               <span className="font-semibold text-foreground">Evaluate now (persist)</span> below.
             </p>
+            {readinessLegacyFallback ? (
+              <div className="mb-3 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                Runtime config: <span className="font-semibold text-foreground">readiness_allow_legacy_fallback</span> is on —{" "}
+                the API may resolve an implicit latest materialized head when <code className="font-mono text-foreground">dataset_version_id</code> is omitted.
+                Prefer an explicit version row below for reproducible audits.
+              </div>
+            ) : null}
             <div className="mb-3 grid gap-3 md:grid-cols-2">
               <label className="text-xs text-muted-foreground">
                 Version for readiness

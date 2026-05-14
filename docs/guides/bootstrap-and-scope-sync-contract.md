@@ -40,6 +40,7 @@ Response example:
     "dataset_hub_v2": true,
     "strict_dataset_version_required": true,
     "strict_dataset_version_all_post_runs": false,
+    "readiness_allow_legacy_fallback": false,
     "scope_debug_panel": true,
     "serving_slots_http": false
   },
@@ -53,6 +54,7 @@ Response example:
 Rules:
 
 - **`features.strict_dataset_version_*`** reflects dataset version pinning toggles (see [`docs/api/dataset-version-immutability.md`](../api/dataset-version-immutability.md)); UIs and integrators should not assume defaults without reading this object.
+- **`features.readiness_allow_legacy_fallback`** mirrors **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`**: when **`true`**, dataset-scoped readiness may resolve an implicit latest materialized head without **`dataset_version_id`**.
 - runtime config is non-secret and cacheable for short TTL (30-60s).
 - secrets remain server-side only.
 - if endpoint is unavailable, frontend falls back to injected `window.__ML_AIR_RUNTIME_CONFIG__`.

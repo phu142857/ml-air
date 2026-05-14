@@ -544,10 +544,9 @@ def trigger_run_by_model_dataset_v1(
         if not dv or str(dv.get("dataset_id") or "") != payload.dataset_id:
             raise HTTPException(status_code=404, detail="dataset_version_not_found")
     else:
-        versions = lineage_service.list_dataset_versions(tenant_id, project_id, payload.dataset_id)
-        if not versions:
+        dv = lineage_service.get_latest_materialized_dataset_version(tenant_id, project_id, payload.dataset_id)
+        if not dv:
             raise HTTPException(status_code=422, detail="dataset_has_no_versions")
-        dv = versions[0]
 
     rp = resolve_model_pipeline(tenant_id=tenant_id, project_id=project_id, model_id=payload.model_id)
     override_pid = str(payload.pipeline_id_override or "").strip() or None
@@ -1014,6 +1013,7 @@ def runtime_config_v1() -> dict:
         "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
         "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
         "strict_dataset_version_all_post_runs": _strict_dataset_version_all_post_runs(),
+        "readiness_allow_legacy_fallback": readiness_service.is_readiness_legacy_fallback_enabled(),
         "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
         "serving_slots_http": _serving_slots_http_enabled(),
     }

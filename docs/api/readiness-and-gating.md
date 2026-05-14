@@ -117,7 +117,7 @@ Optional filters:
 
 Use these APIs to formalize readiness threshold in policy instead of per-request random input.
 
-**Explicit version vs implicit “latest”:** **`dataset_version_id`** is required on dataset-scoped **`GET .../readiness`** / **`POST .../readiness/evaluate`** / **`GET .../eligibility`** unless **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** (implicit latest-head + aggregate fallback). Other implicit latest behavior is confined to **documented** paths (for example **`POST .../runs/trigger`** with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`**). Do not rely on silent mutable-head semantics for reproducible training.
+**Explicit version vs implicit “latest”:** **`dataset_version_id`** is required on dataset-scoped **`GET .../readiness`** / **`POST .../readiness/evaluate`** / **`GET .../eligibility`** unless **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** (implicit latest-head + aggregate fallback). Other implicit latest behavior is confined to **documented** paths (for example **`POST .../runs/trigger`** with **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`**). Do not rely on silent mutable-head semantics for reproducible training. Full surface list: [Dataset version immutability — engineering audit](./dataset-version-immutability.md#implicit-dataset-version-resolution-engineering-audit).
 
 ### 1.2) Policy templates (recommended defaults)
 

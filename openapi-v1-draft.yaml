@@ -16,6 +16,7 @@ info:
     **`strict_dataset_version_required`** mirrors **`ML_AIR_STRICT_DATASET_VERSION_REQUIRED`** (default `1`);
     **`strict_dataset_version_all_post_runs`** is true only when **`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1`**
     and base strict is on (generic **`POST .../runs`**, gated pipeline run, **`check-readiness`** require a pin even without declared inputs).
+    **`readiness_allow_legacy_fallback`** mirrors **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK`** (implicit latest-head on dataset readiness when **`dataset_version_id`** is omitted).
 
     **Runs, readiness, datasets, lineage, pipeline versions, tracking, search, and plugins** sections
     in this file are kept aligned with `api/app/api/routes/v1.py` (draft; prefer the running service

@@ -1397,6 +1397,53 @@ def get_dataset(tenant_id: str, project_id: str, dataset_id: str) -> dict | None
     }
 
 
+def _dataset_version_list_item_from_row(r: tuple[Any, ...]) -> dict:
+    st = r[5] or "manual_upload"
+    db_canon = r[6]
+    return {
+        "version_id": r[0],
+        "version": r[1],
+        "uri": r[2],
+        "checksum": r[3],
+        "created_at": r[4].isoformat(),
+        "source_type": st,
+        "canonical_source_type": (
+            str(db_canon) if db_canon is not None else canonical_dataset_source_type(str(st))
+        ),
+        "record_count": int(r[7] or 0),
+        "status": r[8] or "ready",
+        "quality_score": int(r[9] or 0),
+        "summary": r[10] or [],
+        "details": r[11] or [],
+    }
+
+
+def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dataset_id: str) -> dict | None:
+    """Newest ``dataset_versions`` row for this dataset (``ORDER BY created_at DESC LIMIT 1``).
+
+    Used only by **documented** compat paths (for example ``POST .../runs/trigger`` when
+    ``ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`` and the client omits ``dataset_version_id``).
+    Prefer passing an explicit ``dataset_version_id`` in all other integrations.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
+                     , dv.source_type, dv.canonical_source_type, dv.record_count
+                     , dv.status, dv.quality_score, dv.summary, dv.details
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
+                ORDER BY dv.created_at DESC
+                LIMIT 1
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
+            row = cur.fetchone()
+    return _dataset_version_list_item_from_row(row) if row else None
+
+
 def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> list[dict]:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -1413,27 +1460,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
                 (tenant_id, project_id, dataset_id),
             )
             rows = cur.fetchall()
-    return [
-        {
-            "version_id": r[0],
-            "version": r[1],
-            "uri": r[2],
-            "checksum": r[3],
-            "created_at": r[4].isoformat(),
-            "source_type": r[5] or "manual_upload",
-            "canonical_source_type": (
-                str(r[6])
-                if r[6] is not None
-                else canonical_dataset_source_type(str(r[5]) if r[5] is not None else "manual_upload")
-            ),
-            "record_count": int(r[7] or 0),
-            "status": r[8] or "ready",
-            "quality_score": int(r[9] or 0),
-            "summary": r[10] or [],
-            "details": r[11] or [],
-        }
-        for r in rows
-    ]
+    return [_dataset_version_list_item_from_row(r) for r in rows]
 
 
 def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dict | None:

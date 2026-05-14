@@ -27,6 +27,11 @@ def _allow_legacy_readiness_fallback() -> bool:
     return str(os.getenv("ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK", "0")).strip().lower() not in {"0", "false", "no", "off"}
 
 
+def is_readiness_legacy_fallback_enabled() -> bool:
+    """True when dataset-scoped readiness may use implicit latest-head (see ``ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK``)."""
+    return _allow_legacy_readiness_fallback()
+
+
 def _parse_inputs(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []

@@ -20,7 +20,7 @@ Downstream is any client (UI, script, or another service)—this page is product
 |-------|----------|------|--------|
 | `model_id` | yes | string | Must exist in registry for tenant/project. |
 | `dataset_id` | yes | string | Must exist. |
-| `dataset_version_id` | yes* | string | *Required when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` (default). If strict mode is off and this is omitted, server uses **latest** dataset version (first in list). |
+| `dataset_version_id` | yes* | string | *Required when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` (default). If strict mode is off and this is omitted, the server pins the **newest materialized** row (`dataset_versions.created_at` descending; implemented as `get_latest_materialized_dataset_version` in `lineage_service`). |
 | `pipeline_id_override` | no | string | Advanced: force `pipeline_id` while still resolving **base weights** from the model. |
 | `experiment_id` | no | string | Passed through to `create_run`. |
 | `context` | no | object | Merged into **`plugin_context`** (caller extensions). |

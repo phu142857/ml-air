@@ -267,7 +267,7 @@ See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, a
 ## API
 
 - **Base path:** `/v1`
-- **Contract draft:** [openapi-v1-draft.yaml](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls. **Dataset version strictness** for generic run APIs is reflected in **`features.strict_dataset_version_required`** and **`features.strict_dataset_version_all_post_runs`** (Hub Train tab reads the latter for a maintainer notice).
+- **Contract draft:** [openapi-v1-draft.yaml](openapi-v1-draft.yaml) — aligned with `api/app/api/routes/v1.py` for most paths (model **stages** `staging` / `production` / `archived`, per-version **approval**, **promote**). **Serving-slot** `GET|PUT .../models/{id}/serving` mounts when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** (API restart required); the Next.js models UI reads **`GET /v1/runtime-config`** → `features.serving_slots_http` to show slot controls. **Dataset version strictness** for generic run APIs is reflected in **`features.strict_dataset_version_required`** and **`features.strict_dataset_version_all_post_runs`** (Hub Train tab reads the latter for a maintainer notice). **Readiness strictness** is reflected in **`features.readiness_allow_legacy_fallback`** (Hub Readiness tab shows a notice when it is on).
 - **Narrative API docs:** [docs/api/](docs/api/)
 
 **Examples**

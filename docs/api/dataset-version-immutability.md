@@ -27,6 +27,19 @@ The service may **fill in or normalize** metadata that does not redefine the tra
 
 **Snapshot hash re-validation** on read is not implemented as a product toggle; checksum evidence is used in replay/gating paths where configured (see replay and manifest docs).
 
+## Implicit dataset version resolution (engineering audit)
+
+These are the **only** product paths where a **dataset** snapshot may be chosen without the caller passing `dataset_version_id` (all other train surfaces should pin explicitly or declare readiness inputs per [readiness and gating](./readiness-and-gating.md)):
+
+| Surface | When it applies | Rule |
+| --- | --- | --- |
+| `POST .../runs/trigger` | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0` and body omits `dataset_version_id` | Newest row: `get_latest_materialized_dataset_version` → `ORDER BY dataset_versions.created_at DESC LIMIT 1` ([`api/app/services/lineage_service.py`](../../api/app/services/lineage_service.py)). |
+| `GET .../datasets/{id}/readiness`, `POST .../readiness/evaluate`, `GET .../datasets/{id}/eligibility` | `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1` and query omits `dataset_version_id` | Same ordering rule inside [`api/app/services/readiness_service.py`](../../api/app/services/readiness_service.py) (`_load_latest_dataset_version_row`). |
+
+**Not dataset-version “latest”:** `use_latest_pipeline_version` on `POST .../runs` resolves a **pipeline version** head, not a dataset snapshot. `POST .../pipelines/{id}/check-readiness` clones from the **latest run** for that pipeline to recover pipeline config — it does not invent a dataset pin.
+
+**Automation:** the scheduler’s auto-trigger path sends `dataset_version_id` on `POST .../pipelines/{id}/run` only when the cloned model `override_config` contains a pin — there is no separate implicit dataset head resolver in the scheduler.
+
 ## Rollback and strictness levers (no calendar sunset yet)
 
 Version-centric behavior is controlled by environment variables; there is **no committed calendar sunset** for legacy modes in-repo — operators set policy in their own change windows.
@@ -38,4 +51,4 @@ Version-centric behavior is controlled by environment variables; there is **no c
 | `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS` | When `1`, `POST .../runs`, gated pipeline run, and `check-readiness` require declared `inputs` in override or pipeline version config. |
 | `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | When `0` (default), dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, and **`GET .../eligibility`** forbid implicit latest-head when materialized versions exist (**422** without `dataset_version_id`). When `1`, legacy implicit head + `datasets.current_size` when no versions — see [readiness-v2-cutover](../runbooks/readiness-v2-cutover.md). |
 
-For Hub UX, **“Latest (vN)”** in readiness selectors is an **evaluation convenience** (resolved head), not a substitute for pinning `dataset_version_id` on train — see [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).
+For Hub UX, the readiness version row labeled **Head snapshot (vN)** pins the list head’s **`version_id`** (explicit id in the selector), not a nameless default — train still uses row pins from the versions table — see [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).
