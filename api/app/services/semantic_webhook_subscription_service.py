@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,6 +24,29 @@ def _database_url() -> str:
 
 def delivery_enabled() -> bool:
     return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DELIVERY", "").strip() == "1"
+
+
+def dedupe_enabled() -> bool:
+    """When on, skip webhook POST if this ``(event_id, subscription_id)`` already succeeded once."""
+    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DEDUPE", "").strip() == "1"
+
+
+def retry_max_attempts() -> int:
+    raw = os.getenv("ML_AIR_SEMANTIC_WEBHOOK_MAX_ATTEMPTS", "3").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 3
+    return max(1, min(n, 8))
+
+
+def retry_backoff_initial_ms() -> int:
+    raw = os.getenv("ML_AIR_SEMANTIC_WEBHOOK_RETRY_BACKOFF_MS", "250").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 250
+    return max(50, min(n, 10_000))
 
 
 def webhook_allowed_hosts() -> list[str]:
@@ -223,15 +247,137 @@ def _event_matches_subscription(ev_type: str, event_types_raw: Any) -> bool:
     return ev_type in allowed
 
 
-def _post_one(url: str, body: bytes, *, secret: str | None) -> None:
+def webhook_http_status_retryable(code: int) -> bool:
+    if code in (408, 425, 429):
+        return True
+    return 500 <= int(code) <= 599
+
+
+def _was_delivery_acknowledged(event_id: str, subscription_id: str) -> bool:
+    from psycopg import connect
+
+    eid = str(event_id or "").strip()
+    sid = str(subscription_id or "").strip()
+    if not eid or not sid:
+        return False
+    try:
+        with connect(_database_url(), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM semantic_webhook_delivery_ack
+                    WHERE event_id = %s AND subscription_id = %s
+                    LIMIT 1
+                    """,
+                    (eid, sid),
+                )
+                return cur.fetchone() is not None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("semantic_webhook_dedupe_select_failed err=%s", exc)
+        return False
+
+
+def _record_delivery_ack(event_id: str, subscription_id: str) -> None:
+    from psycopg import connect
+
+    eid = str(event_id or "").strip()
+    sid = str(subscription_id or "").strip()
+    if not eid or not sid:
+        return
+    try:
+        with connect(_database_url(), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO semantic_webhook_delivery_ack (event_id, subscription_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (event_id, subscription_id) DO NOTHING
+                    """,
+                    (eid, sid),
+                )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("semantic_webhook_dedupe_insert_failed event_id=%s sub=%s err=%s", eid, sid, exc)
+
+
+def _post_one(
+    url: str,
+    body: bytes,
+    *,
+    secret: str | None,
+    extra_headers: dict[str, str] | None = None,
+) -> None:
     timeout = float(os.getenv("ML_AIR_SEMANTIC_WEBHOOK_TIMEOUT_SECONDS", "10"))
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if secret:
         sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
         headers["X-MLAir-Signature-256"] = f"sha256={sig}"
+    if extra_headers:
+        for k, v in extra_headers.items():
+            if v:
+                headers[str(k)] = str(v)
     req = urllib.request.Request(url, data=body, method="POST", headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
         resp.read(1024)
+
+
+def _post_one_with_retries(
+    url: str,
+    body: bytes,
+    *,
+    secret: str | None,
+    event_id: str,
+    subscription_id: str,
+) -> bool:
+    """POST with retries; returns True on HTTP success. Logs final failure."""
+    max_attempts = retry_max_attempts()
+    initial_ms = retry_backoff_initial_ms()
+    cap_ms = 5000
+    eid = str(event_id or "").strip()
+    for attempt in range(1, max_attempts + 1):
+        extra: dict[str, str] = {"X-MLAir-Delivery-Attempt": str(attempt)}
+        if eid:
+            extra["X-MLAir-Event-Id"] = eid
+        try:
+            _post_one(url, body, secret=secret, extra_headers=extra)
+            return True
+        except urllib.error.HTTPError as exc:
+            try:
+                exc.read()
+            except Exception:  # noqa: BLE001
+                pass
+            if attempt >= max_attempts or not webhook_http_status_retryable(int(exc.code)):
+                logger.warning(
+                    "semantic_webhook_http_error subscription_id=%s attempt=%s/%s code=%s",
+                    subscription_id,
+                    attempt,
+                    max_attempts,
+                    exc.code,
+                )
+                return False
+        except urllib.error.URLError as exc:
+            if attempt >= max_attempts:
+                logger.warning(
+                    "semantic_webhook_url_error subscription_id=%s attempt=%s/%s err=%s",
+                    subscription_id,
+                    attempt,
+                    max_attempts,
+                    exc.reason,
+                )
+                return False
+        except Exception as exc:  # noqa: BLE001
+            if attempt >= max_attempts:
+                logger.warning(
+                    "semantic_webhook_failed subscription_id=%s attempt=%s/%s err=%s",
+                    subscription_id,
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
+                return False
+        # backoff before next attempt
+        delay_ms = min(cap_ms, initial_ms * (2 ** (attempt - 1)))
+        time.sleep(delay_ms / 1000.0)
+    return False
 
 
 def _deliver_loop(event: dict[str, Any]) -> None:
@@ -249,6 +395,7 @@ def _deliver_loop(event: dict[str, Any]) -> None:
     if not rows:
         return
     body = json.dumps(event, separators=(",", ":"), default=str).encode("utf-8")
+    event_id = str(event.get("event_id") or "").strip()
     for sid, target_url, secret_raw, ev_types in rows:
         url = str(target_url or "").strip()
         if not is_target_host_allowlisted(url):
@@ -256,22 +403,27 @@ def _deliver_loop(event: dict[str, Any]) -> None:
             continue
         if not _event_matches_subscription(ev_type, ev_types):
             continue
-        secret = (str(secret_raw or "").strip() or None) if secret_raw else None
-        try:
-            _post_one(url, body, secret=secret)
-            logger.info("semantic_webhook_ok subscription_id=%s type=%s", sid, ev_type)
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="ignore")[:2000]
-            logger.warning(
-                "semantic_webhook_http_error subscription_id=%s code=%s detail=%s",
+        if dedupe_enabled() and event_id and _was_delivery_acknowledged(event_id, str(sid)):
+            logger.debug(
+                "semantic_webhook_skip_dedupe subscription_id=%s event_id=%s",
                 sid,
-                exc.code,
-                detail,
+                event_id,
             )
-        except urllib.error.URLError as exc:
-            logger.warning("semantic_webhook_url_error subscription_id=%s err=%s", sid, exc.reason)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("semantic_webhook_failed subscription_id=%s err=%s", sid, exc)
+            continue
+        secret = (str(secret_raw or "").strip() or None) if secret_raw else None
+        ok = _post_one_with_retries(
+            url,
+            body,
+            secret=secret,
+            event_id=event_id,
+            subscription_id=str(sid),
+        )
+        if ok:
+            logger.info("semantic_webhook_ok subscription_id=%s type=%s", sid, ev_type)
+            if dedupe_enabled() and event_id:
+                _record_delivery_ack(event_id, str(sid))
+        else:
+            logger.warning("semantic_webhook_exhausted subscription_id=%s type=%s", sid, ev_type)
 
 
 def schedule_deliver_semantic_webhooks(event: dict[str, Any]) -> None:

@@ -25,6 +25,8 @@ from app.metrics import (
     WS_ACTIVE,
 )
 
+from app.otel_api import init_realtime_otel
+
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -248,3 +250,6 @@ async def websocket_endpoint(
             await ping_task
         await manager.remove(key, websocket)
         WS_ACTIVE.dec()
+
+
+init_realtime_otel(app)

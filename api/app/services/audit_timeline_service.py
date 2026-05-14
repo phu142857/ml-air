@@ -198,21 +198,37 @@ def list_audit_timeline(
     )
     SELECT ts, kind, resource_type, resource_id, source, payload
     FROM timeline
-    WHERE (%(where_rt)s IS NULL OR (resource_type = %(where_rt)s AND resource_id = %(where_rid)s))
-      AND (%(where_kind)s IS NULL OR kind = %(where_kind)s)
-      AND (%(where_source)s IS NULL OR COALESCE(source, '') = %(where_source)s)
-      AND (%(where_policy_id)s IS NULL OR (
-            kind = 'dataset.readiness.evaluated'
-            AND (payload->>'policy_id') = %(where_policy_id)s
-          ))
-      AND (%(where_dataset_version_id)s IS NULL OR (
-            kind = 'dataset.readiness.evaluated'
-            AND (payload->>'dataset_version_id') = %(where_dataset_version_id)s
-          ))
-      AND (%(where_readiness_status)s IS NULL OR (
-            kind = 'dataset.readiness.evaluated'
-            AND LOWER(COALESCE(payload->>'status', '')) = %(where_readiness_status)s
-          ))
+    WHERE (
+            (%(where_rt)s)::text IS NULL
+            OR (%(where_rid)s)::text IS NULL
+            OR (resource_type = (%(where_rt)s)::text AND resource_id = (%(where_rid)s)::text)
+          )
+      AND ((%(where_kind)s)::text IS NULL OR kind = (%(where_kind)s)::text)
+      AND (
+            (%(where_source)s)::text IS NULL
+            OR COALESCE(source, '') = (%(where_source)s)::text
+          )
+      AND (
+            (%(where_policy_id)s)::text IS NULL
+            OR (
+              kind = 'dataset.readiness.evaluated'
+              AND (payload->>'policy_id') = (%(where_policy_id)s)::text
+            )
+          )
+      AND (
+            (%(where_dataset_version_id)s)::text IS NULL
+            OR (
+              kind = 'dataset.readiness.evaluated'
+              AND (payload->>'dataset_version_id') = (%(where_dataset_version_id)s)::text
+            )
+          )
+      AND (
+            (%(where_readiness_status)s)::text IS NULL
+            OR (
+              kind = 'dataset.readiness.evaluated'
+              AND LOWER(COALESCE(payload->>'status', '')) = (%(where_readiness_status)s)::text
+            )
+          )
     ORDER BY ts DESC
     LIMIT %(limit)s OFFSET %(offset)s
     """

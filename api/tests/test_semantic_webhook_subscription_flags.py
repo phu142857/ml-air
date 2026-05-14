@@ -36,6 +36,20 @@ class TestSemanticWebhookSubscriptionFlags(unittest.TestCase):
         self.assertTrue(sws.is_acceptable_target_url("https://hooks.example.com/rv1/hook"))
         self.assertFalse(sws.is_acceptable_target_url("ftp://hooks.example.com/x"))
 
+    def test_retry_max_attempts_clamped(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_SEMANTIC_WEBHOOK_MAX_ATTEMPTS": "99"}, clear=False):
+            self.assertEqual(sws.retry_max_attempts(), 8)
+
+    def test_dedupe_flag(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_SEMANTIC_WEBHOOK_DEDUPE": "1"}, clear=False):
+            self.assertTrue(sws.dedupe_enabled())
+
+    def test_webhook_http_retryable(self) -> None:
+        self.assertTrue(sws.webhook_http_status_retryable(503))
+        self.assertTrue(sws.webhook_http_status_retryable(429))
+        self.assertFalse(sws.webhook_http_status_retryable(404))
+        self.assertFalse(sws.webhook_http_status_retryable(400))
+
     def test_schedule_skips_when_delivery_off(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ML_AIR_SEMANTIC_WEBHOOK_DELIVERY", None)

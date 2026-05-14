@@ -362,6 +362,11 @@ def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_EXECUTOR_METRICS_PORT", "9103"))
     start_http_server(metrics_port)
     client = _redis()
+    from otel_bootstrap import ensure_worker_tracing, otel_span
+
+    ensure_worker_tracing(
+        service_name=os.getenv("OTEL_SERVICE_NAME", "mlair-executor").strip() or "mlair-executor"
+    )
     logger.info("executor_started metrics_port=%s", metrics_port)
     while True:
         message = client.blpop(["mlair:tasks:high", "mlair:tasks:default", "mlair:tasks:low"], timeout=2)
@@ -374,110 +379,121 @@ def main() -> None:
         tenant_id = task.get("tenant_id", "default")
         project_id = task.get("project_id", "default_project")
         trace_id = task.get("trace_id")
-        started_at = datetime.now(timezone.utc).isoformat()
-        ref_sleep_ms = (os.getenv("ML_AIR_REFERENCE_TASK_SLEEP_MS") or "").strip()
-        if ref_sleep_ms.isdigit():
-            duration = max(0.0, int(ref_sleep_ms) / 1000.0)
-        else:
-            duration = random.uniform(0.2, 0.7)
         pipeline_id = task.get("pipeline_id", "demo_pipeline")
-        if pipeline_id.startswith("slow"):
-            duration = 3.0
-        task_start = time.perf_counter()
-        cpu_start = time.process_time()
-        rss_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        time.sleep(duration)
-        finished_at = datetime.now(timezone.utc).isoformat()
-        status = "SUCCESS"
-        plugin_exec = None
-        # Deterministic failure mode to validate retry/backoff flow.
-        if pipeline_id.startswith("fail_once") and int(task.get("attempt", 1)) == 1:
-            status = "FAILED"
-        if pipeline_id.startswith("always_fail"):
-            status = "FAILED"
-        plugin_name = task.get("plugin_name")
-        if plugin_name:
-            plugin_exec = _run_plugin_subprocess(plugin_name=plugin_name, context=task.get("context", {}))
-            if not plugin_exec.get("ok"):
-                status = "FAILED"
+        with otel_span(
+            "mlair.executor",
+            "executor.execute_task",
+            mlair_run_id=str(task.get("run_id", "")),
+            mlair_task_id=str(task.get("task_id", "")),
+            mlair_trace_id=str(trace_id or ""),
+            mlair_pipeline_id=str(pipeline_id),
+            mlair_pipeline_version_id=str(task.get("pipeline_version_id") or ""),
+            mlair_tenant_id=str(tenant_id),
+            mlair_project_id=str(project_id),
+        ):
+            started_at = datetime.now(timezone.utc).isoformat()
+            ref_sleep_ms = (os.getenv("ML_AIR_REFERENCE_TASK_SLEEP_MS") or "").strip()
+            if ref_sleep_ms.isdigit():
+                duration = max(0.0, int(ref_sleep_ms) / 1000.0)
             else:
-                _log_plugin_tracking(task=task, plugin_result=plugin_exec)
-                _lineage_ingest(task=task, plugin_result=plugin_exec)
-        else:
+                duration = random.uniform(0.2, 0.7)
+            if pipeline_id.startswith("slow"):
+                duration = 3.0
+            task_start = time.perf_counter()
+            cpu_start = time.process_time()
+            rss_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            time.sleep(duration)
+            finished_at = datetime.now(timezone.utc).isoformat()
+            status = "SUCCESS"
+            plugin_exec = None
+            # Deterministic failure mode to validate retry/backoff flow.
+            if pipeline_id.startswith("fail_once") and int(task.get("attempt", 1)) == 1:
+                status = "FAILED"
+            if pipeline_id.startswith("always_fail"):
+                status = "FAILED"
+            plugin_name = task.get("plugin_name")
+            if plugin_name:
+                plugin_exec = _run_plugin_subprocess(plugin_name=plugin_name, context=task.get("context", {}))
+                if not plugin_exec.get("ok"):
+                    status = "FAILED"
+                else:
+                    _log_plugin_tracking(task=task, plugin_result=plugin_exec)
+                    _lineage_ingest(task=task, plugin_result=plugin_exec)
+            else:
+                logger.info(
+                    "reference_executor_stub_no_plugin run_id=%s task_id=%s pipeline_id=%s "
+                    "(sleep only; no ML/ETL. Pass plugin_name on the run or plug in a real worker.)",
+                    task.get("run_id"),
+                    task.get("task_id"),
+                    pipeline_id,
+                )
+            wall_seconds = time.perf_counter() - task_start
+            cpu_seconds = max(0.0, time.process_time() - cpu_start)
+            rss_end = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            rss_kb = int(max(rss_start, rss_end))
+            _post_manifest(task=task, plugin_result=plugin_exec, status=status)
+            TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
+            TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(wall_seconds)
             logger.info(
-                "reference_executor_stub_no_plugin run_id=%s task_id=%s pipeline_id=%s "
-                "(sleep only; no ML/ETL. Pass plugin_name on the run or plug in a real worker.)",
-                task.get("run_id"),
-                task.get("task_id"),
+                "task_finished run_id=%s task_id=%s status=%s attempt=%s pipeline_id=%s queue=%s trace_id=%s duration_ms=%s",
+                task["run_id"],
+                task["task_id"],
+                status,
+                task["attempt"],
                 pipeline_id,
+                queue_name,
+                trace_id,
+                int(wall_seconds * 1000),
             )
-        wall_seconds = time.perf_counter() - task_start
-        cpu_seconds = max(0.0, time.process_time() - cpu_start)
-        rss_end = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        rss_kb = int(max(rss_start, rss_end))
-        _post_manifest(task=task, plugin_result=plugin_exec, status=status)
-        TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
-        TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(wall_seconds)
-        logger.info(
-            "task_finished run_id=%s task_id=%s status=%s attempt=%s pipeline_id=%s queue=%s trace_id=%s duration_ms=%s",
-            task["run_id"],
-            task["task_id"],
-            status,
-            task["attempt"],
-            pipeline_id,
-            queue_name,
-            trace_id,
-            int(wall_seconds * 1000),
-        )
-        client.rpush(
-            f'mlair:logs:{task["run_id"]}',
-            json.dumps(
-                {
-                    "ts": finished_at,
-                    "level": "INFO" if status == "SUCCESS" else "ERROR",
-                    "message": f'task {task["task_id"]} finished with {status}',
-                    "payload": {
-                        "task_id": task["task_id"],
-                        "attempt": task["attempt"],
-                        "pipeline_id": pipeline_id,
-                        "priority": task.get("priority", "normal"),
-                        "tenant_id": tenant_id,
-                        "project_id": project_id,
-                        "trace_id": trace_id,
-                        "plugin_name": plugin_name,
-                        "plugin_exec": plugin_exec,
-                        "queue": queue_name,
-                    },
-                }
-            ),
-        )
-        done_payload = {
-            "event_type": "task_finished",
-            "run_id": task["run_id"],
-            "task_id": task["task_id"],
-            "status": status,
-            "attempt": task["attempt"],
-            "pipeline_id": pipeline_id,
-            "priority": task.get("priority", "normal"),
-            "tenant_id": tenant_id,
-            "project_id": project_id,
-            "trace_id": trace_id,
-            "plugin_name": plugin_name,
-            "plugin_exec": plugin_exec,
-            "context": task.get("context", {}),
-            "started_at": started_at,
-            "finished_at": finished_at,
-            "resource_usage": {
-                "duration_ms": int(wall_seconds * 1000),
-                "cpu_time_seconds": cpu_seconds,
-                "memory_rss_kb": rss_kb,
-            },
-            "pipeline_version_id": task.get("pipeline_version_id"),
-            "config_snapshot": task.get("config_snapshot"),
-            "replay_from_task_id": task.get("replay_from_task_id"),
-        }
-        client.rpush("mlair:tasks:done", json.dumps(done_payload))
-        QUEUE_INFLIGHT.labels(queue=queue_name).dec()
+            client.rpush(
+                f'mlair:logs:{task["run_id"]}',
+                json.dumps(
+                    {
+                        "ts": finished_at,
+                        "level": "INFO" if status == "SUCCESS" else "ERROR",
+                        "message": f'task {task["task_id"]} finished with {status}',
+                        "payload": {
+                            "task_id": task["task_id"],
+                            "attempt": task["attempt"],
+                            "pipeline_id": pipeline_id,
+                            "priority": task.get("priority", "normal"),
+                            "tenant_id": tenant_id,
+                            "project_id": project_id,
+                            "trace_id": trace_id,
+                            "plugin_name": plugin_name,
+                            "plugin_exec": plugin_exec,
+                            "queue": queue_name,
+                        },
+                    }
+                ),
+            )
+            done_payload = {
+                "event_type": "task_finished",
+                "run_id": task["run_id"],
+                "task_id": task["task_id"],
+                "status": status,
+                "attempt": task["attempt"],
+                "pipeline_id": pipeline_id,
+                "priority": task.get("priority", "normal"),
+                "tenant_id": tenant_id,
+                "project_id": project_id,
+                "trace_id": trace_id,
+                "plugin_name": plugin_name,
+                "plugin_exec": plugin_exec,
+                "context": task.get("context", {}),
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "resource_usage": {
+                    "duration_ms": int(wall_seconds * 1000),
+                    "cpu_time_seconds": cpu_seconds,
+                    "memory_rss_kb": rss_kb,
+                },
+                "pipeline_version_id": task.get("pipeline_version_id"),
+                "config_snapshot": task.get("config_snapshot"),
+                "replay_from_task_id": task.get("replay_from_task_id"),
+            }
+            client.rpush("mlair:tasks:done", json.dumps(done_payload))
+            QUEUE_INFLIGHT.labels(queue=queue_name).dec()
 
 
 if __name__ == "__main__":

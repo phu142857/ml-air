@@ -55,6 +55,7 @@ Each guide follows:
 - [Promote a Model](./guides/promote-model.md)
 - [Model-centric pipeline mapping and run trigger](./guides/model-centric-pipeline-mapping-and-trigger.md)
 - [Downstream model promote webhook (contract)](./guides/downstream-model-promote-webhook.md)
+- [Semantic event webhooks (lifecycle JSON) — cookbook](./guides/semantic-webhook-cookbook.md)
 - [End-to-end: control plane + external executor](./guides/downstream-executor-control-plane.md)
 - [Integrate an external executor / worker](./guides/integrate-external-executor.md)
 - [Consume MLAir from Compose (decoupled)](./guides/consume-mlair-from-compose.md)
@@ -76,6 +77,7 @@ Each guide follows:
 ### Observability
 
 - [View Metrics](./guides/view-metrics.md)
+- [OpenTelemetry (traces, OTLP)](./guides/opentelemetry.md)
 - [Set Up Prometheus](./guides/setup-prometheus.md)
 - [Debug with Grafana](./guides/debug-with-grafana.md)
 
@@ -91,6 +93,7 @@ Each guide follows:
 
 ## Concepts
 
+- [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md)
 - [Pipeline](./concepts/pipeline.md)
 - [Run](./concepts/run.md)
 - [Task](./concepts/task.md)
@@ -101,7 +104,7 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md) (datasets: **`POST .../datasets/{id}/materialize`**, buffer, readiness history)
-- [Realtime event envelope (v1)](./api/realtime-event-envelope.md) (Redis payload + `payload` field matrix)
+- [Realtime event envelope (v1)](./api/realtime-event-envelope.md) (Redis payload + `payload` field matrix; links to event-flow diagrams)
 - [POST /tenants/…/projects/registry](./api/post-tenant-projects-registry.md)
 - [POST /runs/trigger](./api/post-runs-trigger.md)
 - [Readiness and Gating API](./api/readiness-and-gating.md)
@@ -112,6 +115,7 @@ Each guide follows:
 
 ## External MLOps Integration
 
+- [Reference: external integration surfaces](./guides/reference-integrations.md)
 - [Integrate App with Plugin](./guides/integrate-app-with-plugin.md)
 - [Sync External Model Registry](./guides/sync-external-model-registry.md)
 

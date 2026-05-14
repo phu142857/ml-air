@@ -9,6 +9,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from app.api.routes.v1 import router as v1_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
+from app.otel_api import attach_mlair_trace_id_to_current_span, init_fastapi_otel
 from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
 from app.services.lineage_service import DatasetVersionSnapshotIntegrityError
@@ -84,6 +85,7 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
     elapsed = time.perf_counter() - started
     HTTP_REQUESTS_TOTAL.labels(method=request.method, path=route_path, status=str(response.status_code)).inc()
     HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, path=route_path).observe(elapsed)
+    attach_mlair_trace_id_to_current_span(trace_id)
     logger.info(
         "http_request method=%s path=%s status=%s trace_id=%s elapsed_ms=%d",
         request.method,
@@ -161,3 +163,6 @@ def health() -> dict[str, str]:
 @app.get("/metrics")
 def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+init_fastapi_otel(app)

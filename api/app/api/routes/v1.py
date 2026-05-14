@@ -1048,6 +1048,8 @@ def runtime_config_v1() -> dict:
         "serving_slots_http": _serving_slots_http_enabled(),
         "semantic_event_outbox": os.getenv("ML_AIR_EVENT_OUTBOX", "0") == "1",
         "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
+        "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
+        "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "0") == "1",
     }
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),

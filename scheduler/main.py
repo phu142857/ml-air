@@ -1293,6 +1293,11 @@ def main() -> None:
     next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
+    from otel_bootstrap import ensure_worker_tracing, otel_span
+
+    ensure_worker_tracing(
+        service_name=os.getenv("OTEL_SERVICE_NAME", "mlair-scheduler").strip() or "mlair-scheduler"
+    )
     logger.info("scheduler_started metrics_port=%s", metrics_port)
     while True:
         loop_started = time.perf_counter()
@@ -1321,105 +1326,86 @@ def main() -> None:
             _, raw_payload = run_msg
             run_event = json.loads(raw_payload)
             run_id = run_event["run_id"]
-            tenant_id = run_event.get("tenant_id", "default")
-            project_id = run_event.get("project_id", "default_project")
-            max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
-            if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
-                client.rpush("mlair:runs:new", raw_payload)
-                RUN_REQUEUED_TOTAL.inc()
-                time.sleep(0.2)
-            else:
-                _transition_run_status(run_id, "RUNNING", client)
-                plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
-                selected, skipped = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
-                replay_parent = run_event.get("replay_of_run_id")
-                if replay_parent:
-                    gating_ok = _init_replay_tasks_with_gating(
-                        run_id=run_id,
-                        parent_run_id=replay_parent,
-                        plan=plan,
-                        config_snapshot=run_event.get("config_snapshot"),
-                        selected=selected,
-                        skipped=skipped,
-                    )
-                    if not gating_ok:
-                        _transition_run_status(run_id, "FAILED", client)
-                        logger.error("replay_gating_failed run_id=%s parent_run_id=%s", run_id, replay_parent)
-                        continue
+            with otel_span(
+                "mlair.scheduler",
+                "scheduler.consume_run",
+                mlair_run_id=run_id,
+                mlair_tenant_id=str(run_event.get("tenant_id", "default")),
+                mlair_project_id=str(run_event.get("project_id", "default_project")),
+                mlair_trace_id=str(run_event.get("trace_id") or ""),
+            ):
+                tenant_id = run_event.get("tenant_id", "default")
+                project_id = run_event.get("project_id", "default_project")
+                max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
+                if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
+                    client.rpush("mlair:runs:new", raw_payload)
+                    RUN_REQUEUED_TOTAL.inc()
+                    time.sleep(0.2)
                 else:
-                    _init_run_tasks(run_id=run_id, plan=plan, selected=selected, skipped=skipped)
-                scheduled = _schedule_ready_tasks(client=client, run_event=run_event)
-                if scheduled > 0:
-                    RUN_SCHEDULED_TOTAL.inc()
-                PROJECT_RUNNING_TASKS.labels(tenant_id=tenant_id, project_id=project_id).set(
-                    _project_running_tasks(tenant_id=tenant_id, project_id=project_id)
-                )
-                logger.info("run_scheduled run_id=%s selected_tasks=%s first_wave=%s", run_id, len(selected), scheduled)
+                    _transition_run_status(run_id, "RUNNING", client)
+                    plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
+                    selected, skipped = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
+                    replay_parent = run_event.get("replay_of_run_id")
+                    if replay_parent:
+                        gating_ok = _init_replay_tasks_with_gating(
+                            run_id=run_id,
+                            parent_run_id=replay_parent,
+                            plan=plan,
+                            config_snapshot=run_event.get("config_snapshot"),
+                            selected=selected,
+                            skipped=skipped,
+                        )
+                        if not gating_ok:
+                            _transition_run_status(run_id, "FAILED", client)
+                            logger.error("replay_gating_failed run_id=%s parent_run_id=%s", run_id, replay_parent)
+                            continue
+                    else:
+                        _init_run_tasks(run_id=run_id, plan=plan, selected=selected, skipped=skipped)
+                    scheduled = _schedule_ready_tasks(client=client, run_event=run_event)
+                    if scheduled > 0:
+                        RUN_SCHEDULED_TOTAL.inc()
+                    PROJECT_RUNNING_TASKS.labels(tenant_id=tenant_id, project_id=project_id).set(
+                        _project_running_tasks(tenant_id=tenant_id, project_id=project_id)
+                    )
+                    logger.info("run_scheduled run_id=%s selected_tasks=%s first_wave=%s", run_id, len(selected), scheduled)
 
         done_msg = client.blpop("mlair:tasks:done", timeout=1)
         if done_msg:
             _, raw_done = done_msg
             done_event = json.loads(raw_done)
-            _upsert_or_transition_task(
-                task_id=done_event["task_id"],
-                run_id=done_event["run_id"],
-                next_status=done_event["status"],
-                attempt=int(done_event.get("attempt", 1)),
-            )
-            pex = done_event.get("plugin_exec")
-            err = None
-            if done_event.get("status") != "SUCCESS" and pex and isinstance(pex, dict):
-                err = pex.get("error") or pex.get("stderr") or "task_failed"
-            elif done_event.get("status") != "SUCCESS":
-                err = "task_failed"
-            _update_task_telemetry(
-                done_event["task_id"],
-                done_event.get("started_at"),
-                done_event.get("finished_at"),
-                err,
-                int((done_event.get("resource_usage") or {}).get("duration_ms")) if (done_event.get("resource_usage") or {}).get("duration_ms") is not None else None,
-                float((done_event.get("resource_usage") or {}).get("cpu_time_seconds")) if (done_event.get("resource_usage") or {}).get("cpu_time_seconds") is not None else None,
-                int((done_event.get("resource_usage") or {}).get("memory_rss_kb")) if (done_event.get("resource_usage") or {}).get("memory_rss_kb") is not None else None,
-            )
-            if done_event["status"] == "SUCCESS":
-                max_parallel_tasks, replay_from_task_id, replay_of_run_id = _load_run_replay_meta(done_event["run_id"])
-                run_event = {
-                    "run_id": done_event["run_id"],
-                    "tenant_id": done_event.get("tenant_id", "default"),
-                    "project_id": done_event.get("project_id", "default_project"),
-                    "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
-                    "priority": done_event.get("priority", "normal"),
-                    "trace_id": done_event.get("trace_id"),
-                    "plugin_name": done_event.get("plugin_name"),
-                    "context": done_event.get("context", {}),
-                    "pipeline_version_id": done_event.get("pipeline_version_id"),
-                    "config_snapshot": done_event.get("config_snapshot"),
-                    "replay_from_task_id": replay_from_task_id,
-                    "replay_of_run_id": replay_of_run_id,
-                    "max_parallel_tasks": max_parallel_tasks,
-                }
-                _schedule_ready_tasks(client=client, run_event=run_event)
-                plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
-                selected, _ = _apply_replay_filter(plan, replay_from_task_id, done_event["run_id"])
-                _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
-            else:
-                max_attempts, backoff_ms = _load_task_retry_policy(done_event["task_id"])
-                current_attempt = int(done_event.get("attempt", 1))
-                if current_attempt < max_attempts:
-                    retry_attempt = current_attempt + 1
-                    _upsert_or_transition_task(
-                        task_id=done_event["task_id"],
-                        run_id=done_event["run_id"],
-                        next_status="RETRY",
-                        attempt=retry_attempt,
-                    )
-                    delay_seconds = (backoff_ms * (2 ** (current_attempt - 1))) / 1000.0
-                    time.sleep(delay_seconds)
-                    retry_event = {
-                        "event_type": "task_ready",
+            with otel_span(
+                "mlair.scheduler",
+                "scheduler.task_done",
+                mlair_task_id=str(done_event.get("task_id", "")),
+                mlair_run_id=str(done_event.get("run_id", "")),
+                mlair_trace_id=str(done_event.get("trace_id") or ""),
+                mlair_task_status=str(done_event.get("status", "")),
+            ):
+                _upsert_or_transition_task(
+                    task_id=done_event["task_id"],
+                    run_id=done_event["run_id"],
+                    next_status=done_event["status"],
+                    attempt=int(done_event.get("attempt", 1)),
+                )
+                pex = done_event.get("plugin_exec")
+                err = None
+                if done_event.get("status") != "SUCCESS" and pex and isinstance(pex, dict):
+                    err = pex.get("error") or pex.get("stderr") or "task_failed"
+                elif done_event.get("status") != "SUCCESS":
+                    err = "task_failed"
+                _update_task_telemetry(
+                    done_event["task_id"],
+                    done_event.get("started_at"),
+                    done_event.get("finished_at"),
+                    err,
+                    int((done_event.get("resource_usage") or {}).get("duration_ms")) if (done_event.get("resource_usage") or {}).get("duration_ms") is not None else None,
+                    float((done_event.get("resource_usage") or {}).get("cpu_time_seconds")) if (done_event.get("resource_usage") or {}).get("cpu_time_seconds") is not None else None,
+                    int((done_event.get("resource_usage") or {}).get("memory_rss_kb")) if (done_event.get("resource_usage") or {}).get("memory_rss_kb") is not None else None,
+                )
+                if done_event["status"] == "SUCCESS":
+                    max_parallel_tasks, replay_from_task_id, replay_of_run_id = _load_run_replay_meta(done_event["run_id"])
+                    run_event = {
                         "run_id": done_event["run_id"],
-                        "task_id": done_event["task_id"],
-                        "attempt": retry_attempt,
                         "tenant_id": done_event.get("tenant_id", "default"),
                         "project_id": done_event.get("project_id", "default_project"),
                         "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
@@ -1429,43 +1415,78 @@ def main() -> None:
                         "context": done_event.get("context", {}),
                         "pipeline_version_id": done_event.get("pipeline_version_id"),
                         "config_snapshot": done_event.get("config_snapshot"),
-                        "replay_from_task_id": done_event.get("replay_from_task_id"),
-                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "replay_from_task_id": replay_from_task_id,
+                        "replay_of_run_id": replay_of_run_id,
+                        "max_parallel_tasks": max_parallel_tasks,
                     }
-                    retry_ok = _enqueue_task_event(
-                        client=client,
-                        run_event=retry_event,
-                        full_task_id=done_event["task_id"],
-                        attempt=retry_attempt,
-                    )
-                    if retry_ok:
-                        RETRY_ENQUEUED_TOTAL.inc()
-                        logger.warning(
-                            "retry_scheduled task_id=%s attempt=%s max_attempts=%s delay_seconds=%.2f",
-                            done_event["task_id"],
-                            retry_attempt,
-                            max_attempts,
-                            delay_seconds,
+                    _schedule_ready_tasks(client=client, run_event=run_event)
+                    plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
+                    selected, _ = _apply_replay_filter(plan, replay_from_task_id, done_event["run_id"])
+                    _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
+                else:
+                    max_attempts, backoff_ms = _load_task_retry_policy(done_event["task_id"])
+                    current_attempt = int(done_event.get("attempt", 1))
+                    if current_attempt < max_attempts:
+                        retry_attempt = current_attempt + 1
+                        _upsert_or_transition_task(
+                            task_id=done_event["task_id"],
+                            run_id=done_event["run_id"],
+                            next_status="RETRY",
+                            attempt=retry_attempt,
                         )
+                        delay_seconds = (backoff_ms * (2 ** (current_attempt - 1))) / 1000.0
+                        time.sleep(delay_seconds)
+                        retry_event = {
+                            "event_type": "task_ready",
+                            "run_id": done_event["run_id"],
+                            "task_id": done_event["task_id"],
+                            "attempt": retry_attempt,
+                            "tenant_id": done_event.get("tenant_id", "default"),
+                            "project_id": done_event.get("project_id", "default_project"),
+                            "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
+                            "priority": done_event.get("priority", "normal"),
+                            "trace_id": done_event.get("trace_id"),
+                            "plugin_name": done_event.get("plugin_name"),
+                            "context": done_event.get("context", {}),
+                            "pipeline_version_id": done_event.get("pipeline_version_id"),
+                            "config_snapshot": done_event.get("config_snapshot"),
+                            "replay_from_task_id": done_event.get("replay_from_task_id"),
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        retry_ok = _enqueue_task_event(
+                            client=client,
+                            run_event=retry_event,
+                            full_task_id=done_event["task_id"],
+                            attempt=retry_attempt,
+                        )
+                        if retry_ok:
+                            RETRY_ENQUEUED_TOTAL.inc()
+                            logger.warning(
+                                "retry_scheduled task_id=%s attempt=%s max_attempts=%s delay_seconds=%.2f",
+                                done_event["task_id"],
+                                retry_attempt,
+                                max_attempts,
+                                delay_seconds,
+                            )
+                        else:
+                            plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
+                            selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
+                            _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
                     else:
+                        client.rpush("mlair:tasks:dlq", raw_done)
+                        DLQ_PUSHED_TOTAL.inc()
                         plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
                         selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
                         _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
-                else:
-                    client.rpush("mlair:tasks:dlq", raw_done)
-                    DLQ_PUSHED_TOTAL.inc()
-                    plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
-                    selected, _ = _apply_replay_filter(plan, done_event.get("replay_from_task_id"), done_event["run_id"])
-                    _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
-                    logger.error("task_moved_to_dlq task_id=%s run_id=%s", done_event["task_id"], done_event["run_id"])
-            _emit_task_scheduler_realtime(client, done_event)
-            TASK_COMPLETED_TOTAL.labels(status=done_event["status"]).inc()
-            logger.info(
-                "task_completed task_id=%s status=%s run_id=%s",
-                done_event["task_id"],
-                done_event["status"],
-                done_event["run_id"],
-            )
+                        logger.error("task_moved_to_dlq task_id=%s run_id=%s", done_event["task_id"], done_event["run_id"])
+                _emit_task_scheduler_realtime(client, done_event)
+                TASK_COMPLETED_TOTAL.labels(status=done_event["status"]).inc()
+                logger.info(
+                    "task_completed task_id=%s status=%s run_id=%s",
+                    done_event["task_id"],
+                    done_event["status"],
+                    done_event["run_id"],
+                )
 
         time.sleep(0.05)
         LOOP_DURATION_SECONDS.observe(time.perf_counter() - loop_started)

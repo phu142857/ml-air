@@ -1,6 +1,6 @@
 """Semantic webhook subscriptions (per-tenant/project HTTP fan-out)
 
-Revision ID: 0026_semantic_webhook_subscriptions
+Revision ID: 0026_webhook_subscriptions
 Revises: 0025_evt_outbox
 Create Date: 2026-05-13
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0026_semantic_webhook_subscriptions"
+revision = "0026_webhook_subscriptions"
 down_revision = "0025_evt_outbox"
 branch_labels = None
 depends_on = None

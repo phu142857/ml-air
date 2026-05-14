@@ -143,6 +143,8 @@ Security requirements:
 
 Optional **downstream webhook** on promote: `MLAIR_MODEL_PROMOTE_*`.
 
+Optional **semantic lifecycle HTTP webhooks** (per-tenant/project subscriptions, host allowlist, retries): see [Reference integrations](docs/guides/reference-integrations.md).
+
 ### Extended governance (roadmap)
 
 Not yet in `/v1`: unified **audit timeline** API, promotion policy engine beyond approval+stage, and a single **`serving/route`** resolver that performs traffic splitting (use external LB + this slot metadata until then).
@@ -152,6 +154,7 @@ Not yet in `/v1`: unified **audit timeline** API, promotion policy engine beyond
 Observability baseline:
 
 - Logs: structured JSON, centralized collector (e.g. Loki/ELK).
+- **Traces (optional):** OpenTelemetry OTLP export when `ML_AIR_OTEL_ENABLED=1` — see [OpenTelemetry guide](docs/guides/opentelemetry.md).
 - Metrics: Prometheus for API/scheduler/worker and queue depth.
 - Tracing: end-to-end correlation id (`X-Trace-Id`) across services.
 - Dashboard: Grafana for run health, failure rate, queue backlog, worker liveness.

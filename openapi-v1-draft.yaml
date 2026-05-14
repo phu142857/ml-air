@@ -1199,6 +1199,9 @@ paths:
       description: |
         Maintainer-only. `target_url` host must be listed in `ML_AIR_WEBHOOK_ALLOWED_HOSTS`.
         Requires a non-empty allowlist env var on the API process.
+        Delivery (when `ML_AIR_SEMANTIC_WEBHOOK_DELIVERY=1`) sends the same JSON envelope as Redis with optional
+        `X-MLAir-Event-Id` / `X-MLAir-Delivery-Attempt` headers, retries on 5xx/429/etc., and optional dedupe
+        (`ML_AIR_SEMANTIC_WEBHOOK_DEDUPE` + migration `0027_webhook_delivery_ack`).
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"

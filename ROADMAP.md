@@ -156,8 +156,8 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 - [x] Keep Redis Pub/Sub for realtime UI
 - [x] Introduce durable outbox/event stream (**MVP:** Postgres `semantic_event_outbox` + optional Redis retry drain; `ML_AIR_EVENT_OUTBOX` / `ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Durable outbox)
-- [x] Add webhook subscriptions (**MVP:** Postgres `semantic_webhook_subscriptions`, `GET|POST|DELETE .../webhooks/subscriptions`, `ML_AIR_SEMANTIC_WEBHOOK_DELIVERY` + `ML_AIR_WEBHOOK_ALLOWED_HOSTS` + optional `ML_AIR_SEMANTIC_WEBHOOK_TIMEOUT_SECONDS`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Webhook subscriptions)
-- [ ] Add retry/idempotency
+- [x] Add webhook subscriptions (**MVP:** Postgres `semantic_webhook_subscriptions`, `GET|POST|DELETE .../webhooks/subscriptions`, `ML_AIR_SEMANTIC_WEBHOOK_DELIVERY` + `ML_AIR_WEBHOOK_ALLOWED_HOSTS` + optional `ML_AIR_SEMANTIC_WEBHOOK_TIMEOUT_SECONDS` / retry envs; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Webhook subscriptions)
+- [x] Add retry/idempotency (**MVP:** semantic webhook POST retries + `X-MLAir-Event-Id` / `X-MLAir-Delivery-Attempt`; optional Postgres dedupe `semantic_webhook_delivery_ack` + `ML_AIR_SEMANTIC_WEBHOOK_DEDUPE`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Webhook subscriptions)
 - [x] Add event replay tooling (**MVP:** `GET .../semantic-events/outbox` + `POST .../semantic-events/outbox/replay`; see [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md) § Outbox listing and manual replay)
 
 ### Frontend Event Integration
@@ -222,10 +222,10 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### OTel Foundation
 
-- [ ] Instrument FastAPI
-- [ ] Instrument scheduler
-- [ ] Instrument executor
-- [ ] Instrument realtime service
+- [x] Instrument FastAPI (**MVP:** `ML_AIR_OTEL_ENABLED`, OTLP gRPC + `FastAPIInstrumentor`, `mlair.trace_id` on span; [`api/app/otel_api.py`](api/app/otel_api.py); guide [`docs/guides/opentelemetry.md`](docs/guides/opentelemetry.md))
+- [x] Instrument scheduler (**MVP:** OTLP + spans `scheduler.consume_run` / `scheduler.task_done`; [`scheduler/otel_bootstrap.py`](scheduler/otel_bootstrap.py))
+- [x] Instrument executor (**MVP:** OTLP + span `executor.execute_task`; [`executor/otel_bootstrap.py`](executor/otel_bootstrap.py))
+- [x] Instrument realtime service (**MVP:** `realtime/app/otel_api.py` + `FastAPIInstrumentor`, `/healthz` excluded)
 
 ### Trace Propagation
 
@@ -234,15 +234,12 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [ ] scheduler → executor
   - [ ] executor → plugin
 - [ ] Replace manual trace-only flow (today: `X-Trace-Id` + `trace_id` on events/logs via [`api/app/services/trace_service.py`](api/app/services/trace_service.py))
+- [x] W3C TraceContext on API/realtime when OTel enabled (`TraceContextTextMapPropagator`); `mlair.trace_id` mirrored onto active HTTP server span from `X-Trace-Id` (**MVP**, complements manual `trace_id`)
 
 ### Lifecycle-Aware Traces
 
-- [ ] Add span attributes:
-  - [ ] dataset_version_id
-  - [ ] pipeline_version_id
-  - [ ] policy_id
-  - [ ] readiness_status
-  - [ ] model_id
+- [x] Add span attributes (**MVP subset:** executor + scheduler spans carry `mlair.run_id`, `mlair.task_id`, `mlair.trace_id`, `mlair.pipeline_id`, `mlair.pipeline_version_id`, `mlair.tenant_id`, `mlair.project_id` where applicable)
+- [ ] Add span attributes — **full** lifecycle on API routes: `dataset_version_id`, `pipeline_version_id`, `policy_id`, `readiness_status`, `model_id` (TBD)
 
 ### Trace Backend
 
@@ -314,8 +311,8 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Integration Ecosystem
 
-- [ ] Webhook cookbook
-- [ ] Reference integrations
+- [x] Webhook cookbook (**MVP:** [`docs/guides/semantic-webhook-cookbook.md`](docs/guides/semantic-webhook-cookbook.md) — semantic lifecycle JSON webhooks; cross-links [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md))
+- [x] Reference integrations (**MVP:** [`docs/guides/reference-integrations.md`](docs/guides/reference-integrations.md) — decision table + links to realtime, webhooks, outbox, audit, workers, metrics)
 - [ ] Vet-AI as sample consumer
 - [ ] Contract testing kit
 
@@ -348,7 +345,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 - [ ] Architecture diagrams
 - [ ] State machine diagrams
-- [ ] Event flow diagrams
+- [x] Event flow diagrams (**MVP:** Mermaid in [`docs/concepts/lifecycle-event-flow.md`](docs/concepts/lifecycle-event-flow.md); cross-links [realtime envelope](docs/api/realtime-event-envelope.md) + [webhook cookbook](docs/guides/semantic-webhook-cookbook.md))
 - [ ] Formal lifecycle proofs
 - [ ] Semantic observability model
 
