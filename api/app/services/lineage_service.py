@@ -660,196 +660,197 @@ def _materialize_runtime_feedback_if_needed(
     strategy_for_metrics = DEFAULT_ACCUMULATION_STRATEGY
     trace_id = get_trace_id()
     with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"{tenant_id}:{project_id}:{dataset_id}",))
-            cur.execute(
-                """
-                SELECT target_threshold, accumulation_strategy, current_size
-                FROM dataset_accumulation_buffers
-                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
-                FOR UPDATE
-                """,
-                (tenant_id, project_id, dataset_id),
-            )
-            row = cur.fetchone()
-            if not row:
-                return None, None
-            target_threshold = max(1, int(row[0] or 1000))
-            strategy = str(row[1] or DEFAULT_ACCUMULATION_STRATEGY)
-            strategy_for_metrics = strategy
-            if Counter:
-                MATERIALIZATION_ATTEMPT_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
-            current_size = max(0, int(row[2] or now_size))
-            if strategy not in SUPPORTED_ACCUMULATION_STRATEGIES:
-                if Counter:
-                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unsupported_strategy").inc()
-                return None, None
-            if not force and strategy != "snapshot_on_threshold":
-                if Counter:
-                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="strategy_not_auto").inc()
-                return None, None
-            if current_size <= 0:
-                if Counter:
-                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="empty_buffer").inc()
-                return None, None
-            if not force and current_size < target_threshold:
-                if Counter:
-                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="below_threshold").inc()
-                return None, None
-            idem_key = _materialization_idempotency_key(
-                dataset_id=dataset_id,
-                strategy=strategy,
-                target_threshold=target_threshold,
-                current_size=current_size,
-                source_type=source_type,
-                uri=uri,
-                checksum=checksum,
-            )
-            cur.execute(
-                "SELECT version_id, version FROM dataset_versions WHERE materialization_idempotency_key = %s",
-                (idem_key,),
-            )
-            existing = cur.fetchone()
-            if existing:
-                logger.info(
-                    "dataset_materialization_idempotent_hit dataset_id=%s strategy=%s idem_key=%s version_id=%s trace_id=%s",
-                    dataset_id,
-                    strategy,
-                    idem_key,
-                    existing[0],
-                    trace_id,
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"{tenant_id}:{project_id}:{dataset_id}",))
+                cur.execute(
+                    """
+                    SELECT target_threshold, accumulation_strategy, current_size
+                    FROM dataset_accumulation_buffers
+                    WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                    FOR UPDATE
+                    """,
+                    (tenant_id, project_id, dataset_id),
                 )
-                return str(existing[0]), str(existing[1])
-            version = _next_dataset_version_locked(cur, dataset_id)
-            version_id = str(uuid4())
-            insert_ok = False
-            for _ins_attempt in range(5):
-                try:
-                    cur.execute(
-                        """
-                        INSERT INTO dataset_versions
-                            (
-                                version_id, dataset_id, version, uri, checksum, source_type, canonical_source_type, record_count,
-                                status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
-                            )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
-                        """,
-                        (
-                            version_id,
-                            dataset_id,
-                            version,
-                            uri,
-                            checksum,
-                            "runtime_accumulation",
-                            canonical_dataset_source_type("runtime_accumulation"),
-                            current_size,
-                            [],
-                            json.dumps([]),
-                            idem_key,
-                        ),
-                    )
-                    insert_ok = True
-                    break
-                except Exception as exc:
-                    kind = _unique_violation_constraint_kind(exc)
-                    if kind is None:
-                        raise
-                    MATERIALIZATION_UNIQUE_VIOLATION_TOTAL.labels(constraint=kind).inc()
-                    if kind == "idempotency_key":
-                        cur.execute(
-                            "SELECT version_id, version FROM dataset_versions WHERE materialization_idempotency_key = %s",
-                            (idem_key,),
-                        )
-                        row_hit = cur.fetchone()
-                        if row_hit:
-                            logger.info(
-                                "dataset_materialization_unique_race_idempotency dataset_id=%s idem_key=%s version_id=%s trace_id=%s",
-                                dataset_id,
-                                idem_key,
-                                row_hit[0],
-                                trace_id,
-                            )
-                            return str(row_hit[0]), str(row_hit[1])
-                        version = _next_dataset_version_locked(cur, dataset_id)
-                        version_id = str(uuid4())
-                        continue
-                    if kind == "dataset_version":
-                        version = _next_dataset_version_locked(cur, dataset_id)
-                        version_id = str(uuid4())
-                        continue
-                    logger.warning(
-                        "dataset_materialization_unique_violation_unknown dataset_id=%s constraint_diag=%s err=%s trace_id=%s",
+                row = cur.fetchone()
+                if not row:
+                    return None, None
+                target_threshold = max(1, int(row[0] or 1000))
+                strategy = str(row[1] or DEFAULT_ACCUMULATION_STRATEGY)
+                strategy_for_metrics = strategy
+                if Counter:
+                    MATERIALIZATION_ATTEMPT_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
+                current_size = max(0, int(row[2] or now_size))
+                if strategy not in SUPPORTED_ACCUMULATION_STRATEGIES:
+                    if Counter:
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unsupported_strategy").inc()
+                    return None, None
+                if not force and strategy != "snapshot_on_threshold":
+                    if Counter:
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="strategy_not_auto").inc()
+                    return None, None
+                if current_size <= 0:
+                    if Counter:
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="empty_buffer").inc()
+                    return None, None
+                if not force and current_size < target_threshold:
+                    if Counter:
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="below_threshold").inc()
+                    return None, None
+                idem_key = _materialization_idempotency_key(
+                    dataset_id=dataset_id,
+                    strategy=strategy,
+                    target_threshold=target_threshold,
+                    current_size=current_size,
+                    source_type=source_type,
+                    uri=uri,
+                    checksum=checksum,
+                )
+                cur.execute(
+                    "SELECT version_id, version FROM dataset_versions WHERE materialization_idempotency_key = %s",
+                    (idem_key,),
+                )
+                existing = cur.fetchone()
+                if existing:
+                    logger.info(
+                        "dataset_materialization_idempotent_hit dataset_id=%s strategy=%s idem_key=%s version_id=%s trace_id=%s",
                         dataset_id,
-                        getattr(getattr(exc, "diag", None), "constraint_name", None),
-                        exc,
+                        strategy,
+                        idem_key,
+                        existing[0],
                         trace_id,
                     )
+                    return str(existing[0]), str(existing[1])
+                version = _next_dataset_version_locked(cur, dataset_id)
+                version_id = str(uuid4())
+                insert_ok = False
+                for _ins_attempt in range(5):
+                    try:
+                        cur.execute(
+                            """
+                            INSERT INTO dataset_versions
+                                (
+                                    version_id, dataset_id, version, uri, checksum, source_type, canonical_source_type, record_count,
+                                    status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key
+                                )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s)
+                            """,
+                            (
+                                version_id,
+                                dataset_id,
+                                version,
+                                uri,
+                                checksum,
+                                "runtime_accumulation",
+                                canonical_dataset_source_type("runtime_accumulation"),
+                                current_size,
+                                [],
+                                json.dumps([]),
+                                idem_key,
+                            ),
+                        )
+                        insert_ok = True
+                        break
+                    except Exception as exc:
+                        kind = _unique_violation_constraint_kind(exc)
+                        if kind is None:
+                            raise
+                        MATERIALIZATION_UNIQUE_VIOLATION_TOTAL.labels(constraint=kind).inc()
+                        if kind == "idempotency_key":
+                            cur.execute(
+                                "SELECT version_id, version FROM dataset_versions WHERE materialization_idempotency_key = %s",
+                                (idem_key,),
+                            )
+                            row_hit = cur.fetchone()
+                            if row_hit:
+                                logger.info(
+                                    "dataset_materialization_unique_race_idempotency dataset_id=%s idem_key=%s version_id=%s trace_id=%s",
+                                    dataset_id,
+                                    idem_key,
+                                    row_hit[0],
+                                    trace_id,
+                                )
+                                return str(row_hit[0]), str(row_hit[1])
+                            version = _next_dataset_version_locked(cur, dataset_id)
+                            version_id = str(uuid4())
+                            continue
+                        if kind == "dataset_version":
+                            version = _next_dataset_version_locked(cur, dataset_id)
+                            version_id = str(uuid4())
+                            continue
+                        logger.warning(
+                            "dataset_materialization_unique_violation_unknown dataset_id=%s constraint_diag=%s err=%s trace_id=%s",
+                            dataset_id,
+                            getattr(getattr(exc, "diag", None), "constraint_name", None),
+                            exc,
+                            trace_id,
+                        )
+                        if Counter:
+                            MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unique_violation_unknown").inc()
+                        return None, None
+                if not insert_ok:
                     if Counter:
-                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unique_violation_unknown").inc()
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="insert_exhausted_retries").inc()
                     return None, None
-            if not insert_ok:
+                cur.execute(
+                    """
+                    UPDATE dataset_accumulation_buffers
+                    SET current_size = 0,
+                        window_status = 'active',
+                        window_start = NOW(),
+                        window_end = NULL,
+                        last_materialized_version_id = %s,
+                        last_materialized_at = NOW(),
+                        updated_at = NOW()
+                    WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                    """,
+                    (version_id, tenant_id, project_id, dataset_id),
+                )
+                rt.emit_dataset_version_created(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    dataset_id=dataset_id,
+                    dataset_version_id=version_id,
+                    source_type="runtime_accumulation",
+                    record_count=current_size,
+                    updated_at=datetime.now(timezone.utc),
+                    trace_id=trace_id,
+                )
+                rt.emit_dataset_buffer_updated(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    dataset_id=dataset_id,
+                    source_type=source_type,
+                    current_size=0,
+                    target_threshold=target_threshold,
+                    window_status="active",
+                    updated_at=datetime.now(timezone.utc),
+                    trace_id=trace_id,
+                )
+                _observe_accumulation_gauges(
+                    strategy=strategy,
+                    source_type=source_type,
+                    window_status="active",
+                    current_size=0,
+                    target_threshold=target_threshold,
+                )
+                logger.info(
+                    "dataset_materialized dataset_id=%s strategy=%s source_type=%s version=%s version_id=%s threshold=%s current_size=%s idem_key=%s trace_id=%s",
+                    dataset_id,
+                    strategy,
+                    source_type,
+                    version,
+                    version_id,
+                    target_threshold,
+                    current_size,
+                    idem_key,
+                    trace_id,
+                )
                 if Counter:
-                    MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="insert_exhausted_retries").inc()
-                return None, None
-            cur.execute(
-                """
-                UPDATE dataset_accumulation_buffers
-                SET current_size = 0,
-                    window_status = 'active',
-                    window_start = NOW(),
-                    window_end = NULL,
-                    last_materialized_version_id = %s,
-                    last_materialized_at = NOW(),
-                    updated_at = NOW()
-                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
-                """,
-                (version_id, tenant_id, project_id, dataset_id),
-            )
-            rt.emit_dataset_version_created(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                dataset_id=dataset_id,
-                dataset_version_id=version_id,
-                source_type="runtime_accumulation",
-                record_count=current_size,
-                updated_at=datetime.now(timezone.utc),
-                trace_id=trace_id,
-            )
-            rt.emit_dataset_buffer_updated(
-                tenant_id=tenant_id,
-                project_id=project_id,
-                dataset_id=dataset_id,
-                source_type=source_type,
-                current_size=0,
-                target_threshold=target_threshold,
-                window_status="active",
-                updated_at=datetime.now(timezone.utc),
-                trace_id=trace_id,
-            )
-            _observe_accumulation_gauges(
-                strategy=strategy,
-                source_type=source_type,
-                window_status="active",
-                current_size=0,
-                target_threshold=target_threshold,
-            )
-            logger.info(
-                "dataset_materialized dataset_id=%s strategy=%s source_type=%s version=%s version_id=%s threshold=%s current_size=%s idem_key=%s trace_id=%s",
-                dataset_id,
-                strategy,
-                source_type,
-                version,
-                version_id,
-                target_threshold,
-                current_size,
-                idem_key,
-                trace_id,
-            )
-            if Counter:
-                MATERIALIZATION_CREATED_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
-            if Histogram:
-                MATERIALIZATION_LATENCY_SECONDS.labels(strategy=strategy).observe(max(0.0, time.perf_counter() - started))
-            return version_id, version
+                    MATERIALIZATION_CREATED_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
+                if Histogram:
+                    MATERIALIZATION_LATENCY_SECONDS.labels(strategy=strategy).observe(max(0.0, time.perf_counter() - started))
+                return version_id, version
     if Histogram:
         MATERIALIZATION_LATENCY_SECONDS.labels(strategy=strategy_for_metrics).observe(max(0.0, time.perf_counter() - started))
 

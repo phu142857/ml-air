@@ -11,4 +11,6 @@ MLAir **`dataset_accumulation_buffers.accumulation_strategy`** controls how muta
 
 **Concurrency:** materialization uses advisory locks and idempotency keys (`lineage_service._materialize_runtime_feedback_if_needed`); see integration test **`test_materialization_concurrency_db`** when **`ML_AIR_RUN_DB_INTEGRATION_TESTS=1`**.
 
+**Transactions:** automatic threshold materialization wraps buffer `SELECT … FOR UPDATE`, **`INSERT` into `dataset_versions`**, and buffer reset in one **`Connection.transaction()`** block (`psycopg` on `autocommit=True` connections). A failure after the insert attempt rolls back the whole unit so the buffer is not reset without a committed version row (and vice versa).
+
 **Related:** [`readiness-and-gating.md`](../api/readiness-and-gating.md) (source types), Dataset Hub **Accumulation** tab, [`manage-datasets-and-train-from-model.md`](./manage-datasets-and-train-from-model.md).
