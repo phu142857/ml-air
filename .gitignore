@@ -19,7 +19,6 @@ deploy/security/manifest-keys.local.json
 
 # Personal / scratch notes (not for the remote repo)
 startUpForRTS.md
-ROADMAP.md
 
 # --- Node / JavaScript ---
 # Dependency installs (always ignore; commit a lockfile for reproducible CI)

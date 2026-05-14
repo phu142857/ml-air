@@ -13,4 +13,6 @@ MLAir **`dataset_accumulation_buffers.accumulation_strategy`** controls how muta
 
 **Transactions:** automatic threshold materialization wraps buffer `SELECT … FOR UPDATE`, **`INSERT` into `dataset_versions`**, and buffer reset in one **`Connection.transaction()`** block (`psycopg` on `autocommit=True` connections). A failure after the insert attempt rolls back the whole unit so the buffer is not reset without a committed version row (and vice versa).
 
+**Decision vs effect:** pre-insert gating (strategy / threshold / empty buffer) lives in **`_materialization_gate_failure_reason`**; the transactional block applies the **effect** (idempotent read, insert, buffer reset).
+
 **Related:** [`readiness-and-gating.md`](../api/readiness-and-gating.md) (source types), Dataset Hub **Accumulation** tab, [`manage-datasets-and-train-from-model.md`](./manage-datasets-and-train-from-model.md).

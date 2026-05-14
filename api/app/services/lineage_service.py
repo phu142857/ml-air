@@ -643,6 +643,25 @@ def _unique_violation_constraint_kind(exc: BaseException) -> str | None:
     return "unknown"
 
 
+def _materialization_gate_failure_reason(
+    *,
+    strategy: str,
+    force: bool,
+    current_size: int,
+    target_threshold: int,
+) -> str | None:
+    """Pure **decision** step before side effects: return Prometheus ``reason`` if blocked, else ``None``."""
+    if strategy not in SUPPORTED_ACCUMULATION_STRATEGIES:
+        return "unsupported_strategy"
+    if not force and strategy != "snapshot_on_threshold":
+        return "strategy_not_auto"
+    if current_size <= 0:
+        return "empty_buffer"
+    if not force and current_size < target_threshold:
+        return "below_threshold"
+    return None
+
+
 def _materialize_runtime_feedback_if_needed(
     *,
     tenant_id: str,
@@ -681,21 +700,15 @@ def _materialize_runtime_feedback_if_needed(
                 if Counter:
                     MATERIALIZATION_ATTEMPT_TOTAL.labels(strategy=strategy, source_type=source_type).inc()
                 current_size = max(0, int(row[2] or now_size))
-                if strategy not in SUPPORTED_ACCUMULATION_STRATEGIES:
+                gate = _materialization_gate_failure_reason(
+                    strategy=strategy,
+                    force=force,
+                    current_size=current_size,
+                    target_threshold=target_threshold,
+                )
+                if gate is not None:
                     if Counter:
-                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="unsupported_strategy").inc()
-                    return None, None
-                if not force and strategy != "snapshot_on_threshold":
-                    if Counter:
-                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="strategy_not_auto").inc()
-                    return None, None
-                if current_size <= 0:
-                    if Counter:
-                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="empty_buffer").inc()
-                    return None, None
-                if not force and current_size < target_threshold:
-                    if Counter:
-                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason="below_threshold").inc()
+                        MATERIALIZATION_FAILURE_TOTAL.labels(strategy=strategy, reason=gate).inc()
                     return None, None
                 idem_key = _materialization_idempotency_key(
                     dataset_id=dataset_id,
