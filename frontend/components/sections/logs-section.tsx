@@ -44,20 +44,20 @@ export function LogsSection({
 
   const EmptyState = ({ message }: { message: string }) => (
     <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800 text-zinc-500">
         <Terminal size={20} />
       </div>
-      <p className="text-section font-semibold text-muted-foreground">{message}</p>
+      <p className="text-sm font-semibold text-zinc-500">{message}</p>
     </div>
   );
 
   return (
-    <section className="rounded-lg border border-obs-border bg-obs-surface p-4 transition-colors">
-      <h2 className="mb-2 text-section font-semibold text-foreground">Execution output</h2>
-      <p className="mb-3 text-caption text-muted-foreground">Logs, retries, and DLQ actions — observability-focused surface.</p>
+    <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 transition-colors">
+      <h2 className="mb-2 text-sm font-semibold text-zinc-100">Execution output</h2>
+      <p className="mb-3 text-xs text-zinc-500">Logs, retries, and DLQ actions — observability-focused surface.</p>
       
       {/* Tabs Navigation */}
-      <div className="mb-4 border-b border-border">
+      <div className="mb-4 border-b border-zinc-800">
         <div className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -66,8 +66,10 @@ export function LogsSection({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`tab-stable relative flex items-center gap-2 px-3 py-2 text-caption font-semibold uppercase tracking-wide transition-colors ${
-                  isActive ? "border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`tab-stable relative flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  isActive
+                    ? "border-b-2 border-sky-500 text-sky-400"
+                    : "border-b-2 border-transparent text-zinc-500 hover:text-zinc-200"
                 }`}
               >
                 <Icon size={14} />
@@ -87,12 +89,7 @@ export function LogsSection({
                 value={logKeyword}
                 onChange={(e) => onChangeLogKeyword(e.target.value)}
                 placeholder="Search logs..."
-                className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground"
-                style={{
-                  backgroundColor: 'var(--bg-surface)',
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--text-primary)'
-                }}
+                className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500"
               />
               <Button 
                 variant="secondary" 
@@ -102,7 +99,7 @@ export function LogsSection({
                 {streaming ? "Stop" : "Start"}
               </Button>
             </div>
-            <div className="h-96 overflow-y-auto whitespace-pre-wrap rounded-md border border-obs-border bg-obs-log p-3 font-mono text-xs text-foreground">
+            <div className="h-96 overflow-y-auto whitespace-pre-wrap rounded-md border border-zinc-800 bg-zinc-950/80 p-3 font-mono text-xs text-zinc-100">
               {logs.length ? logs.join("\n") : "No logs available"}
             </div>
           </div>
@@ -110,7 +107,7 @@ export function LogsSection({
 
         {activeTab === "details" && (
           <div className="space-y-4">
-            <div className="h-96 max-h-96 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-4 font-mono text-xs text-color-success">
+            <div className="h-96 max-h-96 overflow-y-auto whitespace-pre-wrap break-all rounded-lg border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-emerald-400">
               {JSON.stringify({ runId, taskId, runDetail, tasks }, null, 2)}
             </div>
           </div>
@@ -134,7 +131,7 @@ export function LogsSection({
                 Replay DLQ
               </Button>
             </div>
-            <div className="rounded-lg bg-muted p-4 text-center text-sm text-muted-foreground">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 text-center text-sm text-zinc-500">
               <p className="mb-2">Quick actions for run management</p>
               <p className="text-xs">Use these buttons to refresh run data or replay failed messages</p>
             </div>

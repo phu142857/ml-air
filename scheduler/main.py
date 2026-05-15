@@ -1165,6 +1165,10 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
         "replay_from_task_id": run_event.get("replay_from_task_id"),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    for _k in ("traceparent", "tracestate"):
+        _v = run_event.get(_k)
+        if isinstance(_v, str) and _v.strip():
+            task_event[_k] = _v.strip()
     client.rpush(queue_name, json.dumps(task_event))
     return True
 
@@ -1293,7 +1297,7 @@ def main() -> None:
     next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
-    from otel_bootstrap import ensure_worker_tracing, otel_span
+    from otel_bootstrap import ensure_worker_tracing, otel_remote_carrier_from_event, otel_span
 
     ensure_worker_tracing(
         service_name=os.getenv("OTEL_SERVICE_NAME", "mlair-scheduler").strip() or "mlair-scheduler"
@@ -1329,6 +1333,7 @@ def main() -> None:
             with otel_span(
                 "mlair.scheduler",
                 "scheduler.consume_run",
+                remote_carrier=otel_remote_carrier_from_event(run_event),
                 mlair_run_id=run_id,
                 mlair_tenant_id=str(run_event.get("tenant_id", "default")),
                 mlair_project_id=str(run_event.get("project_id", "default_project")),
@@ -1376,6 +1381,7 @@ def main() -> None:
             with otel_span(
                 "mlair.scheduler",
                 "scheduler.task_done",
+                remote_carrier=otel_remote_carrier_from_event(done_event),
                 mlair_task_id=str(done_event.get("task_id", "")),
                 mlair_run_id=str(done_event.get("run_id", "")),
                 mlair_trace_id=str(done_event.get("trace_id") or ""),
@@ -1419,6 +1425,10 @@ def main() -> None:
                         "replay_of_run_id": replay_of_run_id,
                         "max_parallel_tasks": max_parallel_tasks,
                     }
+                    for _k in ("traceparent", "tracestate"):
+                        _v = done_event.get(_k)
+                        if isinstance(_v, str) and _v.strip():
+                            run_event[_k] = _v.strip()
                     _schedule_ready_tasks(client=client, run_event=run_event)
                     plan = _build_task_plan(run_id=done_event["run_id"], config_snapshot=done_event.get("config_snapshot"))
                     selected, _ = _apply_replay_filter(plan, replay_from_task_id, done_event["run_id"])
@@ -1453,6 +1463,10 @@ def main() -> None:
                             "replay_from_task_id": done_event.get("replay_from_task_id"),
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         }
+                        for _k in ("traceparent", "tracestate"):
+                            _v = done_event.get(_k)
+                            if isinstance(_v, str) and _v.strip():
+                                retry_event[_k] = _v.strip()
                         retry_ok = _enqueue_task_event(
                             client=client,
                             run_event=retry_event,

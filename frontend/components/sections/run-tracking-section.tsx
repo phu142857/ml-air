@@ -110,10 +110,10 @@ function friendlyLabel(key: string): string {
 
 const EmptyState = ({ message }: { message: string }) => (
   <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
-    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800 text-zinc-500">
       <Search size={20} />
     </div>
-    <p className="text-section font-semibold text-muted-foreground">{message}</p>
+    <p className="text-sm font-semibold text-zinc-500">{message}</p>
   </div>
 );
 
@@ -148,11 +148,11 @@ export function RunTrackingSection({ tracking }: Props) {
   }, [tracking]);
 
   return (
-    <section className="rounded-lg border border-obs-border bg-obs-surface p-4 transition-colors">
-      <h2 className="mb-3 text-section font-semibold text-foreground">Tracking & Metadata</h2>
+    <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 transition-colors">
+      <h2 className="mb-3 text-sm font-semibold text-zinc-100">Tracking & Metadata</h2>
       
       {/* Tabs Navigation */}
-      <div className="mb-4 border-b border-border">
+      <div className="mb-4 border-b border-zinc-800">
         <div className="flex gap-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -161,8 +161,8 @@ export function RunTrackingSection({ tracking }: Props) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`tab-stable relative flex items-center gap-2 px-3 py-2 text-caption font-semibold uppercase tracking-wide transition-colors ${
-                  isActive ? "border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`tab-stable relative flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  isActive ? "border-b-2 border-sky-500 text-sky-400" : "border-b-2 border-transparent text-zinc-500 hover:text-zinc-200"
                 }`}
               >
                 <Icon size={14} />
@@ -188,10 +188,10 @@ export function RunTrackingSection({ tracking }: Props) {
                   visibleMetrics.map((metric, i) => (
                     <div
                       key={metric.key}
-                      className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
+                      className="group flex items-center justify-between border-b border-zinc-800 p-2 transition-colors last:border-0 hover:bg-zinc-900/50 rounded-lg"
                     >
-                      <span className="font-mono text-xs text-muted-foreground">{friendlyLabel(metric.key)}</span>
-                      <span className="rounded border border-color-info/40 bg-color-info/15 px-2 py-1 font-mono text-xs font-bold text-color-info">
+                      <span className="font-mono text-xs text-zinc-500">{friendlyLabel(metric.key)}</span>
+                      <span className="rounded border border-sky-500/40 bg-sky-500/15 px-2 py-1 font-mono text-xs font-bold text-sky-300">
                         {typeof metric.value === "number" ? metric.value.toFixed(4) : String(metric.value)}
                       </span>
                     </div>
@@ -209,10 +209,10 @@ export function RunTrackingSection({ tracking }: Props) {
                   visibleParams.map((param) => (
                     <div
                       key={param.key}
-                      className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
+                      className="group flex items-center justify-between border-b border-zinc-800 p-2 transition-colors last:border-0 hover:bg-zinc-900/50 rounded-lg"
                     >
-                      <span className="font-mono text-xs text-muted-foreground">{friendlyLabel(param.key)}</span>
-                      <span className="rounded border border-border bg-muted px-2 py-1 font-mono text-xs text-foreground max-w-[60%] truncate" title={String(param.value)}>
+                      <span className="font-mono text-xs text-zinc-500">{friendlyLabel(param.key)}</span>
+                      <span className="rounded border border-zinc-800 bg-zinc-950/60 px-2 py-1 font-mono text-xs text-zinc-100 max-w-[60%] truncate" title={String(param.value)}>
                         {String(param.value)}
                       </span>
                     </div>
@@ -230,10 +230,10 @@ export function RunTrackingSection({ tracking }: Props) {
                   tracking.artifacts.map((artifact, i) => (
                     <div
                       key={i}
-                      className="group flex items-center justify-between border-b border-border p-2 transition-colors last:border-0 hover:bg-muted/50 rounded-lg"
+                      className="group flex items-center justify-between border-b border-zinc-800 p-2 transition-colors last:border-0 hover:bg-zinc-900/50 rounded-lg"
                     >
-                      <span className="mr-2 flex-1 truncate font-mono text-xs text-muted-foreground">{artifact.path}</span>
-                      <span className="rounded border border-color-info/40 bg-color-info/15 px-2 py-1 font-mono text-xs font-bold text-color-info">
+                      <span className="mr-2 flex-1 truncate font-mono text-xs text-zinc-500">{artifact.path}</span>
+                      <span className="rounded border border-sky-500/40 bg-sky-500/15 px-2 py-1 font-mono text-xs font-bold text-sky-300">
                         {artifact.uri ? (
                           <a href={artifact.uri} target="_blank" rel="noreferrer" className="hover:underline">
                             VIEW

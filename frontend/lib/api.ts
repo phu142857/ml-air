@@ -7,6 +7,7 @@ type RuntimeConfigGlobal = {
     realtime_base_url?: string | null;
     environment?: string;
     features?: Record<string, boolean>;
+    observability?: { jaeger_ui_url?: string | null };
   } | null;
 };
 
@@ -168,6 +169,7 @@ export type RuntimeConfigResponse = {
   default_tenant_hint?: string | null;
   default_project_hint?: string | null;
   features?: Record<string, boolean>;
+  observability?: { jaeger_ui_url?: string | null };
   build?: { frontend_version?: string | null; frontend_commit?: string | null };
 };
 
@@ -450,6 +452,21 @@ async function resolveTenantIds(tenantId: string, token: string): Promise<string
   return tenantId === "all" ? fetchTenants(token) : [tenantId];
 }
 
+type ScopePair = { tenant_id: string; project_id: string };
+
+async function resolveScopePairs(tenantId: string, projectId: string, token: string): Promise<ScopePair[]> {
+  const tenantIds = await resolveTenantIds(tenantId, token);
+  const pairs: ScopePair[] = [];
+  for (const tid of tenantIds) {
+    const projectIds =
+      projectId === "all" ? await fetchProjectsForTenant(tid, token) : [normalizeProjectId(projectId)];
+    for (const pid of projectIds) {
+      if (pid) pairs.push({ tenant_id: tid, project_id: pid });
+    }
+  }
+  return pairs;
+}
+
 export async function fetchRuns(tenantId: string, projectId: string, token: string) {
   const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {
@@ -499,16 +516,12 @@ export type AuditTimelineItem = {
   payload: Record<string, unknown>;
 };
 
-/** Unified audit-ish timeline (readiness evals, model events, run/task snapshots). */
-export async function fetchAuditTimeline(
+async function fetchAuditTimelineForScope(
   tenantId: string,
   projectId: string,
   token: string,
   opts?: { limit?: number; filters?: AuditTimelineFilters }
-): Promise<{ items: AuditTimelineItem[] }> {
-  if (tenantId === "all" || projectId === "all") {
-    return { items: [] };
-  }
+): Promise<{ items: AuditTimelineItem[]; traceparent: string | null }> {
   const scopedProjectId = normalizeProjectId(projectId);
   const lim = Math.min(200, Math.max(1, opts?.limit ?? 25));
   const filters = opts?.filters ?? {};
@@ -520,8 +533,108 @@ export async function fetchAuditTimeline(
       cache: "no-store"
     }
   );
-  if (!res.ok) return { items: [] };
-  return (await res.json()) as { items: AuditTimelineItem[] };
+  const traceparent = res.headers.get("traceparent");
+  if (!res.ok) return { items: [], traceparent };
+  const data = (await res.json()) as { items?: AuditTimelineItem[] };
+  return { items: (data.items || []) as AuditTimelineItem[], traceparent };
+}
+
+/** Unified audit-ish timeline (readiness evals, model events, run/task snapshots). */
+export async function fetchAuditTimeline(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; filters?: AuditTimelineFilters }
+): Promise<{ items: AuditTimelineItem[]; traceparent: string | null }> {
+  const lim = Math.min(200, Math.max(1, opts?.limit ?? 25));
+  if (tenantId === "all" || projectId === "all") {
+    const pairs = await resolveScopePairs(tenantId, projectId, token);
+    const maxScopes = 12;
+    const batch = pairs.slice(0, maxScopes);
+    const perScope = Math.max(3, Math.ceil(lim / Math.max(batch.length, 1)));
+    const results = await Promise.all(
+      batch.map((p) =>
+        fetchAuditTimelineForScope(p.tenant_id, p.project_id, token, { ...opts, limit: perScope })
+      )
+    );
+    const items = results
+      .flatMap((r) => r.items)
+      .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")))
+      .slice(0, lim);
+    const traceparent = results.map((r) => r.traceparent).find(Boolean) ?? null;
+    return { items, traceparent };
+  }
+  return fetchAuditTimelineForScope(tenantId, projectId, token, opts);
+}
+
+async function exportAuditTimelineForScope(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { format?: "jsonl" | "json"; limit?: number; filters?: AuditTimelineFilters }
+): Promise<{ blob: Blob; filename: string }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const lim = Math.min(5000, Math.max(1, opts?.limit ?? 1000));
+  const format = opts?.format ?? "jsonl";
+  const filters = opts?.filters ?? {};
+  const qs = buildAuditTimelineSearchParams(filters, lim);
+  const p = new URLSearchParams(qs);
+  p.set("format", format);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/audit/timeline/export?${p.toString()}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store" }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("content-disposition") || "";
+  const match = /filename="?([^";\n]+)"?/i.exec(cd);
+  const ext = format === "json" ? "json" : "jsonl";
+  const filename =
+    match?.[1]?.trim() || `mlair-audit-timeline-${tenantId}-${scopedProjectId}.${ext}`;
+  return { blob, filename };
+}
+
+export async function exportAuditTimeline(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { format?: "jsonl" | "json"; limit?: number; filters?: AuditTimelineFilters }
+): Promise<{ blob: Blob; filename: string }> {
+  const format = opts?.format ?? "jsonl";
+  const lim = Math.min(5000, Math.max(1, opts?.limit ?? 1000));
+
+  if (tenantId === "all" || projectId === "all") {
+    const pairs = await resolveScopePairs(tenantId, projectId, token);
+    const maxScopes = 12;
+    const batch = pairs.slice(0, maxScopes);
+    const perScope = Math.max(50, Math.ceil(lim / Math.max(batch.length, 1)));
+    const lines: string[] = [];
+    for (const p of batch) {
+      try {
+        const { blob } = await exportAuditTimelineForScope(p.tenant_id, p.project_id, token, {
+          ...opts,
+          format: "jsonl",
+          limit: perScope,
+        });
+        const text = await blob.text();
+        for (const line of text.split("\n")) {
+          const row = line.trim();
+          if (row) lines.push(row);
+        }
+      } catch {
+        /* skip failed scope */
+      }
+    }
+    const body = lines.slice(0, lim).join("\n") + (lines.length ? "\n" : "");
+    const ext = format === "json" ? "json" : "jsonl";
+    const blob = new Blob([body], { type: format === "json" ? "application/json" : "application/x-ndjson" });
+    return { blob, filename: `mlair-audit-aggregate.${ext}` };
+  }
+
+  return exportAuditTimelineForScope(tenantId, projectId, token, opts);
 }
 
 export async function triggerRun(
@@ -738,6 +851,114 @@ export async function fetchTask(tenantId: string, projectId: string, taskId: str
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as TaskItem & { tenant_id: string; project_id: string; pipeline_id: string };
+}
+
+export type ResolvedTaskScope = {
+  tenant_id: string;
+  project_id: string;
+  method: "pinned" | "hint" | "run" | "fan-out";
+};
+
+export type ResolvedTask = TaskItem & {
+  tenant_id: string;
+  project_id: string;
+  pipeline_id?: string;
+  run_id?: string;
+  resolved_scope: ResolvedTaskScope;
+};
+
+function isPinnedScopePair(tenantId?: string | null, projectId?: string | null): boolean {
+  return Boolean(tenantId && projectId && tenantId !== "all" && projectId !== "all");
+}
+
+function isTaskNotFoundError(e: unknown): boolean {
+  const msg = String((e as Error)?.message || e);
+  return (
+    msg.includes("404") ||
+    msg.includes("task_not_found") ||
+    msg.includes("not_found") ||
+    msg.includes("Not Found")
+  );
+}
+
+export type TaskResolveHint = {
+  tenantId?: string;
+  projectId?: string;
+  runId?: string;
+};
+
+/** Load a task when header scope may be aggregate; optional URL hints avoid fan-out. */
+export async function fetchTaskResolved(
+  contextTenantId: string,
+  contextProjectId: string,
+  taskId: string,
+  token: string,
+  hint?: TaskResolveHint
+): Promise<ResolvedTask> {
+  const hintTenant = hint?.tenantId?.trim();
+  const hintProject = hint?.projectId?.trim();
+  const hintRun = hint?.runId?.trim();
+
+  if (isPinnedScopePair(hintTenant, hintProject)) {
+    const data = await fetchTask(hintTenant!, hintProject!, taskId, token);
+    return {
+      ...data,
+      resolved_scope: { tenant_id: hintTenant!, project_id: hintProject!, method: "hint" },
+    };
+  }
+
+  if (isPinnedScopePair(contextTenantId, contextProjectId)) {
+    const data = await fetchTask(contextTenantId, contextProjectId, taskId, token);
+    return {
+      ...data,
+      resolved_scope: {
+        tenant_id: contextTenantId,
+        project_id: contextProjectId,
+        method: "pinned",
+      },
+    };
+  }
+
+  if (hintRun) {
+    const runs = await fetchRuns(contextTenantId, contextProjectId, token);
+    const run = (runs.items ?? []).find((r) => r.run_id === hintRun);
+    if (run && isPinnedScopePair(run.tenant_id, run.project_id)) {
+      const data = await fetchTask(run.tenant_id, run.project_id, taskId, token);
+      return {
+        ...data,
+        run_id: hintRun,
+        resolved_scope: {
+          tenant_id: run.tenant_id,
+          project_id: run.project_id,
+          method: "run",
+        },
+      };
+    }
+  }
+
+  const pairs = await resolveScopePairs(contextTenantId, contextProjectId, token);
+  const maxScopes = 12;
+  for (const p of pairs.slice(0, maxScopes)) {
+    try {
+      const data = await fetchTask(p.tenant_id, p.project_id, taskId, token);
+      return {
+        ...data,
+        resolved_scope: {
+          tenant_id: p.tenant_id,
+          project_id: p.project_id,
+          method: "fan-out",
+        },
+      };
+    } catch (e) {
+      if (isTaskNotFoundError(e)) continue;
+      throw e;
+    }
+  }
+
+  throw new Error(
+    `Task "${taskId}" was not found across aggregate scope (checked up to ${maxScopes} projects). ` +
+      `Pin tenant + project in the header, or open from a run/tasks link with ?tenant=&project=.`
+  );
 }
 
 export async function fetchRunTracking(tenantId: string, projectId: string, runId: string, token: string) {
@@ -1374,9 +1595,10 @@ export async function triggerRunFromModelDataset(
 }
 
 export async function previewDatasetUpload(tenantId: string, projectId: string, token: string, file: File) {
+  const scopedProjectId = normalizeProjectId(projectId);
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/upload-preview`, {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/datasets/upload-preview`, {
     method: "POST",
     headers: authHeaders(token),
     body: form
@@ -1403,7 +1625,8 @@ export async function uploadDatasetCsv(
   if (payload.required_cols && payload.required_cols.length > 0) {
     form.append("required_cols", JSON.stringify(payload.required_cols));
   }
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/upload`, {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/datasets/upload`, {
     method: "POST",
     headers: authHeaders(token),
     body: form
@@ -1469,7 +1692,8 @@ export async function createModel(
   token: string,
   payload: { name: string; description?: string | null }
 ) {
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models`, {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
     body: JSON.stringify(payload)
@@ -1679,6 +1903,9 @@ export type SearchResultItem = {
   error_message?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  /** Set when results are merged from aggregate (all) scope fan-out. */
+  scope_tenant_id?: string;
+  scope_project_id?: string;
 };
 
 export type DatasetVersionExternalRef = { url: string; label?: string };
@@ -1703,16 +1930,18 @@ export type DatasetVersionItem = {
   external_refs?: DatasetVersionExternalRef[];
 };
 
-export async function searchApi(
+async function searchApiForScope(
   tenantId: string,
   projectId: string,
   token: string,
   q: string,
-  type: "all" | "run" | "task" | "dataset" = "all"
+  type: "all" | "run" | "task" | "dataset" = "all",
+  limit = 20
 ) {
-  const sp = new URLSearchParams({ q, type, limit: "20" });
+  const scopedProjectId = normalizeProjectId(projectId);
+  const sp = new URLSearchParams({ q, type, limit: String(limit) });
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/search?${sp.toString()}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/search?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
@@ -1720,9 +1949,47 @@ export async function searchApi(
   return data as { q: string; items: SearchResultItem[] };
 }
 
+export async function searchApi(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  q: string,
+  type: "all" | "run" | "task" | "dataset" = "all"
+) {
+  const trimmed = (q || "").trim();
+  if (!trimmed) return { q: trimmed, items: [] as SearchResultItem[], aggregate: false };
+
+  if (tenantId === "all" || projectId === "all") {
+    const pairs = await resolveScopePairs(tenantId, projectId, token);
+    const maxScopes = 8;
+    const batch = pairs.slice(0, maxScopes);
+    const perScope = Math.max(4, Math.ceil(20 / Math.max(batch.length, 1)));
+    const chunks = await Promise.all(
+      batch.map(async (p) => {
+        try {
+          const r = await searchApiForScope(p.tenant_id, p.project_id, token, trimmed, type, perScope);
+          return (r.items || []).map((it) => ({
+            ...it,
+            scope_tenant_id: p.tenant_id,
+            scope_project_id: p.project_id,
+          }));
+        } catch {
+          return [] as SearchResultItem[];
+        }
+      })
+    );
+    const items = chunks.flat().slice(0, 20);
+    return { q: trimmed, items, aggregate: true as const };
+  }
+
+  const data = await searchApiForScope(tenantId, projectId, token, trimmed, type);
+  return { ...data, aggregate: false as const };
+}
+
 export async function fetchLineageForRun(tenantId: string, projectId: string, runId: string, token: string) {
+  const scopedProjectId = normalizeProjectId(projectId);
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/lineage/runs/${runId}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/lineage/runs/${encodeURIComponent(runId)}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
@@ -1734,7 +2001,9 @@ export async function fetchLineageForRun(tenantId: string, projectId: string, ru
       task_id: string;
       input_version_id: string | null;
       output_version_id: string | null;
+      input_dataset_id?: string | null;
       input_dataset_name?: string | null;
+      output_dataset_id?: string | null;
       output_dataset_name?: string | null;
       input_version?: string | null;
       output_version?: string | null;
@@ -1755,8 +2024,9 @@ export async function fetchLineageNeighborhood(
     depth: String(depth),
     direction
   });
+  const scopedProjectId = normalizeProjectId(projectId);
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/lineage?${sp.toString()}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/lineage?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();

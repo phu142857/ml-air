@@ -26,7 +26,7 @@ export function TrainingGateFields({
 }: Props) {
   return (
     <div className={`grid gap-3 md:grid-cols-4 ${className}`}>
-      <label className="text-xs text-muted-foreground">
+      <label className="text-xs text-zinc-500">
         Training mode
         <SelectDropdown
           value={trainingMode}
@@ -37,12 +37,12 @@ export function TrainingGateFields({
           aria-label="Training mode"
         />
       </label>
-      <label className="text-xs text-muted-foreground md:col-span-2">
+      <label className="text-xs text-zinc-500 md:col-span-2">
         Required rows (input dataset)
         <input
           value={requiredSize}
           onChange={(e) => onRequiredSizeChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-border bg-muted px-2 py-2 text-xs text-foreground"
+          className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-2 text-xs text-zinc-100"
         />
       </label>
     </div>

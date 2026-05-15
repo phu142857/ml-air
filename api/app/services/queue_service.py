@@ -4,6 +4,8 @@ from typing import Any
 
 from redis import Redis
 
+from app.otel_api import inject_redis_trace_carrier
+
 
 def _redis_url() -> str:
     return os.getenv("ML_AIR_REDIS_URL", "redis://redis:6379/0")
@@ -14,12 +16,14 @@ def redis_client() -> Redis:
 
 
 def publish_run_event(event: dict[str, Any]) -> None:
+    inject_redis_trace_carrier(event)
     payload = json.dumps(event)
     redis_client().rpush("mlair:runs:new", payload)
 
 
 def publish_task_finished(event: dict[str, Any]) -> None:
     """Notify scheduler that a task finished (internal executor or external worker)."""
+    inject_redis_trace_carrier(event)
     redis_client().rpush("mlair:tasks:done", json.dumps(event))
 
 

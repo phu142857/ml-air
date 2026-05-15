@@ -229,23 +229,24 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Trace Propagation
 
-- [ ] Propagate context:
-  - [ ] API → scheduler
-  - [ ] scheduler → executor
-  - [ ] executor → plugin
+- [x] Propagate context:
+  - [x] API → scheduler (W3C `traceparent` / `tracestate` on `mlair:runs:new` + `mlair:tasks:done` JSON when OTel on API)
+  - [x] scheduler → executor (same keys copied onto task queue payloads; child spans in scheduler/executor when OTel on workers)
+  - [x] executor → plugin (`TRACEPARENT` / `TRACESTATE` env for `python -m` subprocess when OTel on executor; [`executor/main.py`](executor/main.py) + [`executor/otel_bootstrap.py`](executor/otel_bootstrap.py))
 - [ ] Replace manual trace-only flow (today: `X-Trace-Id` + `trace_id` on events/logs via [`api/app/services/trace_service.py`](api/app/services/trace_service.py))
 - [x] W3C TraceContext on API/realtime when OTel enabled (`TraceContextTextMapPropagator`); `mlair.trace_id` mirrored onto active HTTP server span from `X-Trace-Id` (**MVP**, complements manual `trace_id`)
 
 ### Lifecycle-Aware Traces
 
 - [x] Add span attributes (**MVP subset:** executor + scheduler spans carry `mlair.run_id`, `mlair.task_id`, `mlair.trace_id`, `mlair.pipeline_id`, `mlair.pipeline_version_id`, `mlair.tenant_id`, `mlair.project_id` where applicable)
-- [ ] Add span attributes — **full** lifecycle on API routes: `dataset_version_id`, `pipeline_version_id`, `policy_id`, `readiness_status`, `model_id` (TBD)
+- [x] Add span attributes — **full** lifecycle on API routes: `dataset_version_id`, `pipeline_version_id`, `policy_id`, `readiness_status`, `model_id` (**MVP:** middleware + [`mlair_http_span_attrs_from_url`](api/app/otel_api.py) maps common `/v1/tenants/.../projects/...` path segments and select query keys; not every body field)
 
 ### Trace Backend
 
-- [ ] Integrate:
-  - [ ] Tempo or Jaeger
-- [ ] Add trace links in UI
+- [x] Integrate:
+  - [x] Jaeger — optional **`--profile traces`** on [`deploy/docker-compose.quickstart.yml`](deploy/docker-compose.quickstart.yml) (`jaeger` OTLP gRPC **4317**, UI **16686**; see [`docs/guides/opentelemetry.md`](docs/guides/opentelemetry.md))
+  - [ ] Tempo (same OTLP exporter; compose snippet TBD)
+- [x] Add trace links in UI (**MVP:** `/lifecycle` “Open this request in Jaeger” when `ML_AIR_JAEGER_UI_URL` is set and API returns `traceparent`; [`frontend/app/lifecycle/page.tsx`](../../frontend/app/lifecycle/page.tsx))
 
 ---
 

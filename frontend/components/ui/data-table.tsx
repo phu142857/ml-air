@@ -7,7 +7,7 @@ export function DataTableShell({ className, ...props }: HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        "min-w-0 max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain rounded-lg border border-border bg-card [-webkit-overflow-scrolling:touch]",
+        "min-w-0 max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain rounded-lg border border-zinc-800 bg-zinc-950/50 [-webkit-overflow-scrolling:touch]",
         className
       )}
       {...props}

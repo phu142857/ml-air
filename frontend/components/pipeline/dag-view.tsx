@@ -57,7 +57,7 @@ export function DagView({ tasks, onClickTask }: Props) {
           </span>
         ))}
       </div>
-      <div className="h-[420px] w-full overflow-hidden rounded-xl border border-border bg-muted">
+      <div className="h-[420px] w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/50">
         <ReactFlow
           nodes={nodes}
           edges={edges}

@@ -9,7 +9,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from app.api.routes.v1 import router as v1_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
-from app.otel_api import attach_mlair_trace_id_to_current_span, init_fastapi_otel
+from app.otel_api import attach_mlair_trace_id_to_current_span, attach_otel_w3c_response_headers, enrich_http_span_from_request, init_fastapi_otel
 from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
 from app.services.lineage_service import DatasetVersionSnapshotIntegrityError
@@ -86,6 +86,8 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
     HTTP_REQUESTS_TOTAL.labels(method=request.method, path=route_path, status=str(response.status_code)).inc()
     HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, path=route_path).observe(elapsed)
     attach_mlair_trace_id_to_current_span(trace_id)
+    enrich_http_span_from_request(request)
+    attach_otel_w3c_response_headers(response)
     logger.info(
         "http_request method=%s path=%s status=%s trace_id=%s elapsed_ms=%d",
         request.method,
@@ -150,6 +152,17 @@ async def permissive_cors_bridge(request: Request, call_next):  # type: ignore[n
             response.headers.append("Vary", "Origin")
         else:
             response.headers["Access-Control-Allow-Origin"] = "*"
+    if origin and (response.headers.get("traceparent") or response.headers.get("tracestate")):
+        expose = {
+            h.strip()
+            for h in (response.headers.get("access-control-expose-headers") or "").split(",")
+            if h.strip()
+        }
+        for h in ("traceparent", "tracestate"):
+            if response.headers.get(h):
+                expose.add(h)
+        if expose:
+            response.headers["access-control-expose-headers"] = ", ".join(sorted(expose))
     return response
 
 

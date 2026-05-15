@@ -1,254 +1,98 @@
-"use client";
+"use client"
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useAppContext } from "@/lib/app-context";
-import { useTheme } from "@/lib/theme-context";
-import { clearScopeContext, switchScopeContext } from "@/lib/api";
+import { Suspense, useState, useCallback, useEffect } from "react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { Search, Command } from "lucide-react"
+import { ScopeSwitcher } from "@/components/mlops/scope-switcher"
+import { RealtimeIndicator } from "@/components/mlops/realtime-indicator"
+import { SidebarTrigger } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
 
-function ScopeDropdown({
-  value,
-  options,
-  disabled,
-  onPick,
-  placeholder
-}: {
-  value: string;
-  options: string[];
-  disabled: boolean;
-  onPick: (next: string) => void;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  const list = options.length ? Array.from(new Set(options)) : value ? [value] : [];
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocMouseDown = (e: MouseEvent) => {
-      const el = rootRef.current;
-      if (!el || el.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocMouseDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocMouseDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  return (
-    <div className="relative shrink-0" ref={rootRef}>
-      <button
-        type="button"
-        disabled={disabled}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        onClick={() => {
-          if (disabled) return;
-          setOpen((o) => !o);
-        }}
-        className="btn-glass-dropdown disabled:pointer-events-none"
-      >
-        <span className="truncate font-medium text-foreground">{value || placeholder}</span>
-        <span className="shrink-0 text-muted-foreground" aria-hidden>
-          ▾
-        </span>
-      </button>
-      {open && list.length ? (
-        <ul
-          role="listbox"
-          className="absolute left-0 top-[calc(100%+4px)] z-[200] max-h-56 min-w-full overflow-y-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
-        >
-          {list.map((opt) => (
-            <li key={opt} role="presentation">
-              <button
-                type="button"
-                role="option"
-                aria-selected={opt === value}
-                className={`w-full px-3 py-2 text-left text-sm hover:bg-muted ${
-                  opt === value ? "bg-muted/80 text-foreground" : "text-foreground"
-                }`}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setOpen(false);
-                  if (opt !== value) onPick(opt);
-                }}
-              >
-                {opt}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
+interface TopbarProps {
+  onOpenCommandPalette?: () => void
 }
 
-export function Topbar() {
-  const router = useRouter();
-  const {
-    tenantId,
-    projectId,
-    token,
-    mappingVersion,
-    isBootstrapped,
-    accessibleScopes,
-    tenantOptions,
-    projectOptions,
-    isScopeLoading,
-    setTenantId,
-    setProjectId,
-    setToken,
-    setMappingVersion,
-    refreshBootstrap
-  } = useAppContext();
-  const { theme, toggleTheme } = useTheme();
-  const [q, setQ] = useState("");
-  const [scopeTransactionLoading, setScopeTransactionLoading] = useState(false);
+function TopbarInner({ onOpenCommandPalette }: TopbarProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [query, setQuery] = useState("")
 
-  const switchScope = useCallback(
-    async (nextTenantId: string, nextProjectId: string) => {
-      if (!token.trim()) return;
-      setScopeTransactionLoading(true);
-      try {
-        try {
-          const out = await switchScopeContext(token, {
-            tenant_id: nextTenantId,
-            project_id: nextProjectId,
-            expected_mapping_version: mappingVersion
-          });
-          setTenantId(out.effective_scope.tenant_id);
-          setProjectId(out.effective_scope.project_id);
-          setMappingVersion(out.effective_scope.mapping_version || 1);
-        } catch (e: unknown) {
-          const msg = String((e as { message?: string })?.message || "");
-          if (msg.includes("mapping_version_stale")) {
-            await refreshBootstrap({ withSpinner: false });
-            const out = await switchScopeContext(token, { tenant_id: nextTenantId, project_id: nextProjectId });
-            setTenantId(out.effective_scope.tenant_id);
-            setProjectId(out.effective_scope.project_id);
-            setMappingVersion(out.effective_scope.mapping_version || 1);
-          } else {
-            throw e;
-          }
-        }
-        await refreshBootstrap({ withSpinner: false });
-      } catch (err) {
-        console.error("switchScope failed", err);
-        try {
-          await refreshBootstrap({ withSpinner: false });
-        } catch {
-          // ignore
-        }
-      } finally {
-        setScopeTransactionLoading(false);
-      }
-    },
-    [token, mappingVersion, setTenantId, setProjectId, setMappingVersion, refreshBootstrap]
-  );
+  useEffect(() => {
+    if (pathname === "/search") {
+      setQuery(searchParams.get("q") || "")
+    }
+  }, [pathname, searchParams])
 
-  const scopeBusy = isScopeLoading || scopeTransactionLoading;
-
-  const tenantList = tenantOptions.length ? tenantOptions : tenantId ? [tenantId] : ["default"];
-  const projectList = projectOptions.length ? projectOptions : projectId ? [projectId] : ["default_project"];
+  const submitSearch = useCallback(() => {
+    const q = query.trim()
+    if (q) {
+      router.push(`/search?q=${encodeURIComponent(q)}&type=all`)
+    } else {
+      onOpenCommandPalette?.()
+    }
+  }, [query, router, onOpenCommandPalette])
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 flex-nowrap items-center justify-between gap-2 overflow-visible border-b border-border bg-card/90 px-4 shadow-sm backdrop-blur-md md:px-6">
-      <div className="flex min-w-0 flex-1 shrink items-center gap-2 md:gap-3">
-        <div className="flex shrink-0 items-center gap-2 text-brand font-semibold tracking-tight text-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-primary" aria-hidden />
-          MLAir
-        </div>
-        <form
-          className="flex min-w-0 max-w-md flex-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!q.trim()) return;
-            router.push(`/search?q=${encodeURIComponent(q.trim())}&type=all`);
-          }}
-        >
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="h-9 w-full min-w-0 border-border bg-muted shadow-none"
-            placeholder="Search runs, tasks, datasets…"
-          />
-        </form>
-        <kbd
-          className="hidden shrink-0 rounded-md border border-border bg-muted px-2 py-1 font-mono text-overline text-muted-foreground lg:inline"
-          title="Open command palette (⌘K or Ctrl+K)"
-        >
-          ⌘/Ctrl+K
-        </kbd>
+    <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-zinc-800/50 bg-zinc-950/80 px-4 backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        <SidebarTrigger className="-ml-1 text-zinc-400 hover:text-zinc-100" />
+        <div className="h-4 w-px bg-zinc-800" />
+        <ScopeSwitcher />
       </div>
-      <div className="relative z-50 flex shrink-0 flex-nowrap items-center gap-2 md:gap-3">
-        <Button type="button" variant="secondary" size="sm" onClick={toggleTheme} title="Switch light/dark theme">
-          {theme === "dark" ? "Light" : "Dark"}
-        </Button>
-        <ScopeDropdown
-          value={tenantId}
-          options={tenantList}
-          disabled={scopeBusy}
-          placeholder="Tenant"
-          onPick={(t) => {
-            const nextProjects = accessibleScopes
-              .filter((s) => String(s.tenant_id || "").trim() === t)
-              .map((s) => String(s.project_id || "").trim())
-              .filter(Boolean);
-            const unique = Array.from(new Set(nextProjects));
-            const nextProject = unique.includes(projectId) ? projectId : unique[0] || "default_project";
-            void switchScope(t, nextProject);
-          }}
-        />
-        <ScopeDropdown
-          value={projectId}
-          options={projectList}
-          disabled={scopeBusy}
-          placeholder="Project"
-          onPick={(p) => {
-            void switchScope(tenantId, p);
-          }}
-        />
-        <Input
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          className="h-9 w-52 shrink-0 border-border bg-muted shadow-none md:w-64"
-          placeholder="Bearer token…"
-          title={!isBootstrapped ? "Loading scope from API…" : undefined}
-        />
-        <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={() => void refreshBootstrap()} disabled={scopeBusy}>
-          {scopeBusy ? "Loading…" : "Bootstrap"}
-        </Button>
-        <Button
+
+      <div className="flex items-center gap-3">
+        <div className="relative hidden w-72 sm:block">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                submitSearch()
+              }
+            }}
+            placeholder="Search runs, tasks, datasets…"
+            className={cn(
+              "h-8 w-full rounded-md border border-zinc-800 bg-zinc-900/50 py-1 pl-8 pr-[4.5rem] text-sm text-zinc-200",
+              "placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600",
+            )}
+            aria-label="Global search"
+          />
+          <button
+            type="button"
+            onClick={() => onOpenCommandPalette?.()}
+            className="absolute right-1 top-1/2 flex h-6 -translate-y-1/2 items-center gap-0.5 rounded border border-zinc-700 bg-zinc-800 px-1.5 font-mono text-[10px] text-zinc-400 hover:bg-zinc-700"
+            title="Command palette"
+          >
+            <Command className="h-3 w-3" />
+            K
+          </button>
+        </div>
+        <button
           type="button"
-          variant="secondary"
-          size="sm"
-          className="shrink-0"
-          disabled={scopeBusy}
-          title="Clear persisted scope override"
-          onClick={async () => {
-            setScopeTransactionLoading(true);
-            try {
-              await clearScopeContext(token);
-              await refreshBootstrap({ withSpinner: false });
-            } catch (err) {
-              console.error("clear scope failed", err);
-            } finally {
-              setScopeTransactionLoading(false);
-            }
-          }}
+          onClick={() => onOpenCommandPalette?.()}
+          className="flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/50 px-2.5 text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300 sm:hidden"
+          aria-label="Open command palette"
         >
-          Reset
-        </Button>
+          <Search className="h-3.5 w-3.5" />
+        </button>
+        <RealtimeIndicator />
       </div>
     </header>
-  );
+  )
+}
+
+export function Topbar(props: TopbarProps) {
+  return (
+    <Suspense
+      fallback={
+        <header className="sticky top-0 z-40 flex h-14 items-center border-b border-zinc-800/50 bg-zinc-950/80 px-4 backdrop-blur-sm" />
+      }
+    >
+      <TopbarInner {...props} />
+    </Suspense>
+  )
 }

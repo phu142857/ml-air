@@ -52,6 +52,9 @@ def _redis() -> Redis:
 def _run_plugin_subprocess(plugin_name: str, context: dict) -> dict:
     timeout_seconds = int(os.getenv("ML_AIR_PLUGIN_TIMEOUT_SECONDS", "120"))
     runner_module = os.getenv("ML_AIR_PLUGIN_RUNNER_MODULE", "mlair_runner")
+    from otel_bootstrap import otel_subprocess_env
+
+    child_env = {**os.environ, **otel_subprocess_env()}
     try:
         proc = subprocess.run(
             ["python", "-m", runner_module, plugin_name],
@@ -60,6 +63,7 @@ def _run_plugin_subprocess(plugin_name: str, context: dict) -> dict:
             text=True,
             timeout=timeout_seconds,
             check=False,
+            env=child_env,
         )
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"timeout_after_{timeout_seconds}s"}
@@ -362,7 +366,7 @@ def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_EXECUTOR_METRICS_PORT", "9103"))
     start_http_server(metrics_port)
     client = _redis()
-    from otel_bootstrap import ensure_worker_tracing, otel_span
+    from otel_bootstrap import ensure_worker_tracing, otel_remote_carrier_from_event, otel_span
 
     ensure_worker_tracing(
         service_name=os.getenv("OTEL_SERVICE_NAME", "mlair-executor").strip() or "mlair-executor"
@@ -383,6 +387,7 @@ def main() -> None:
         with otel_span(
             "mlair.executor",
             "executor.execute_task",
+            remote_carrier=otel_remote_carrier_from_event(task),
             mlair_run_id=str(task.get("run_id", "")),
             mlair_task_id=str(task.get("task_id", "")),
             mlair_trace_id=str(trace_id or ""),
@@ -492,6 +497,10 @@ def main() -> None:
                 "config_snapshot": task.get("config_snapshot"),
                 "replay_from_task_id": task.get("replay_from_task_id"),
             }
+            for _k in ("traceparent", "tracestate"):
+                _v = task.get(_k)
+                if isinstance(_v, str) and _v.strip():
+                    done_payload[_k] = _v.strip()
             client.rpush("mlair:tasks:done", json.dumps(done_payload))
             QUEUE_INFLIGHT.labels(queue=queue_name).dec()
 

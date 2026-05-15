@@ -1051,6 +1051,7 @@ def runtime_config_v1() -> dict:
         "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
         "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "0") == "1",
     }
+    jaeger_ui = os.getenv("ML_AIR_JAEGER_UI_URL", "").strip() or None
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
         "api_base_url": os.getenv("ML_AIR_RUNTIME_API_BASE_URL", "").strip() or None,
@@ -1058,6 +1059,9 @@ def runtime_config_v1() -> dict:
         "default_tenant_hint": os.getenv("ML_AIR_DEFAULT_TENANT", "default"),
         "default_project_hint": os.getenv("ML_AIR_DEFAULT_PROJECT", "default_project"),
         "features": features,
+        "observability": {
+            "jaeger_ui_url": jaeger_ui,
+        },
         "build": {
             "frontend_version": os.getenv("ML_AIR_FRONTEND_VERSION", "").strip() or None,
             "frontend_commit": os.getenv("ML_AIR_FRONTEND_COMMIT", "").strip() or None,

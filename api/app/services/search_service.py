@@ -106,7 +106,7 @@ def search(
                             "dataset_id": row[0],
                             "name": row[1],
                             "created_at": row[2].isoformat() if row[2] else None,
-                            "href": f"/lineage?datasetId={row[0]}",
+                            "href": f"/datasets/{row[0]}",
                         }
                     )
     if type_filter == "all":

@@ -64,14 +64,14 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
 
   if (!tasks.length) {
     return (
-      <div className="rounded-lg border border-obs-border bg-obs-surface p-4 text-body text-muted-foreground">
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-500">
         No tasks yet
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-obs-border bg-obs-surface p-4">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
       <div className="space-y-3">
         {tasks.map((t, i) => {
           const taskStatus = getStatus(t);
@@ -95,12 +95,16 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
             <div
               key={t.task_id + t.attempt}
               ref={isLastFailed ? failRef : undefined}
-              className={`rounded-xl border border-border p-3 transition ${
-                taskStatus === "error" ? "border-color-error bg-bg-error" :
-                taskStatus === "success" ? "border-color-success bg-bg-success" :
-                taskStatus === "running" ? "border-color-info bg-bg-info" :
-                taskStatus === "queued" ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)]" :
-                "border-border bg-muted"
+              className={`rounded-xl border p-3 transition ${
+                taskStatus === "error"
+                  ? "border-red-500/40 bg-red-500/10"
+                  : taskStatus === "success"
+                    ? "border-emerald-500/40 bg-emerald-500/10"
+                    : taskStatus === "running"
+                      ? "border-sky-500/40 bg-sky-500/10"
+                      : taskStatus === "queued"
+                        ? "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)]"
+                        : "border-zinc-800 bg-zinc-950/60"
               }`}
             >
               {/* Task Header */}
@@ -108,19 +112,17 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
                 <button
                   type="button"
                   onClick={() => onOpenTask(t.task_id)}
-                  className="font-mono text-caption text-foreground hover:text-color-primary hover:underline"
+                  className="font-mono text-xs text-zinc-200 hover:text-sky-300 hover:underline"
                 >
                   {t.task_id} · attempt {t.attempt}
                 </button>
                 <span
-                  className={`text-overline font-semibold px-2 py-0.5 rounded-full ${
-                    taskStatus === "error" && "bg-bg-error text-color-error"
-                  }${
-                    taskStatus === "success" && " bg-bg-success text-color-success"
-                  }${
-                    taskStatus === "running" && " bg-bg-info text-color-info"
-                  }${
-                    taskStatus === "queued" && " bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
+                  className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                    taskStatus === "error" && "bg-red-500/20 text-red-300"
+                  }${taskStatus === "success" && " bg-emerald-500/20 text-emerald-300"}${
+                    taskStatus === "running" && " bg-sky-500/20 text-sky-300"
+                  }${taskStatus === "queued" && " bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"}${
+                    taskStatus === "pending" && " bg-zinc-800 text-zinc-400"
                   }`}
                 >
                   {taskStatus}
@@ -129,28 +131,31 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
 
               {/* Per-task Progress Bar */}
               <div className="flex items-center gap-2 mb-2">
-                <div className="h-2 flex-1 bg-muted rounded-full overflow-hidden">
+                <div className="h-2 flex-1 rounded-full overflow-hidden bg-zinc-800">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ease-out ${
-                      taskStatus === "error" ? "bg-color-error" :
-                      pct >= 100 ? "bg-color-success" :
-                      pct > 0 ? "bg-color-info" :
-                      "bg-transparent"
+                      taskStatus === "error"
+                        ? "bg-red-400"
+                        : pct >= 100
+                          ? "bg-emerald-400"
+                          : pct > 0
+                            ? "bg-sky-400"
+                            : "bg-transparent"
                     }`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <span className={`font-mono text-xs font-bold shrink-0 w-8 text-right ${
-                  pct >= 100 ? "text-color-success" :
-                  pct > 0 ? "text-color-info" :
-                  "text-muted-foreground"
-                }`}>
+                <span
+                  className={`font-mono text-xs font-bold shrink-0 w-8 text-right ${
+                    pct >= 100 ? "text-emerald-400" : pct > 0 ? "text-sky-400" : "text-zinc-500"
+                  }`}
+                >
                   {pct}%
                 </span>
               </div>
 
               {/* Meta Info */}
-              <div className="flex gap-4 text-caption text-muted-foreground">
+              <div className="flex gap-4 text-xs text-zinc-500">
                 <span>wall: {t.duration_ms ?? "-"}ms</span>
                 <span>cpu: {t.cpu_time_seconds?.toFixed(4) ?? "-"}s</span>
                 <span>rss: {t.memory_rss_kb ?? "-"}KB</span>
@@ -158,7 +163,7 @@ export function RunTimelineSection({ tasks, tracking, onOpenTask }: Props) {
 
               {/* Error Message */}
               {t.error_message && (
-                <div className="mt-2 rounded-md bg-bg-error border border-color-error px-2 py-1 text-caption font-semibold text-color-error">
+                <div className="mt-2 rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-300">
                   {t.error_message}
                 </div>
               )}

@@ -1,0 +1,307 @@
+"use client"
+
+import { Component, type ReactNode } from "react"
+import { AlertTriangle, ServerCrash, FileQuestion, RefreshCw, Home, ArrowLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
+type ErrorType = "not-found" | "api-down" | "generic"
+
+interface ErrorState {
+  hasError: boolean
+  error: Error | null
+  errorType: ErrorType
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode
+  fallback?: ReactNode
+  onReset?: () => void
+}
+
+function getErrorType(error: Error): ErrorType {
+  const message = error.message.toLowerCase()
+  const status = (error as { status?: number }).status
+  
+  if (status === 404 || message.includes("404") || message.includes("not found")) {
+    return "not-found"
+  }
+  
+  if (
+    status === 500 || 
+    status === 502 || 
+    status === 503 || 
+    message.includes("500") || 
+    message.includes("api") || 
+    message.includes("server") ||
+    message.includes("network") ||
+    message.includes("fetch failed") ||
+    message.includes("econnrefused")
+  ) {
+    return "api-down"
+  }
+  
+  return "generic"
+}
+
+const errorConfig: Record<ErrorType, {
+  icon: typeof AlertTriangle
+  iconColor: string
+  iconBgColor: string
+  borderColor: string
+  title: string
+  description: string
+  statusCode: string
+}> = {
+  "not-found": {
+    icon: FileQuestion,
+    iconColor: "text-amber-400",
+    iconBgColor: "bg-amber-500/10",
+    borderColor: "border-amber-500/20",
+    title: "Resource Not Found",
+    description: "The requested resource could not be found. It may have been moved, deleted, or the URL might be incorrect.",
+    statusCode: "404",
+  },
+  "api-down": {
+    icon: ServerCrash,
+    iconColor: "text-red-400",
+    iconBgColor: "bg-red-500/10",
+    borderColor: "border-red-500/20",
+    title: "Service Unavailable",
+    description: "The API service is currently unavailable. This could be due to maintenance or temporary server issues.",
+    statusCode: "500",
+  },
+  "generic": {
+    icon: AlertTriangle,
+    iconColor: "text-red-400",
+    iconBgColor: "bg-red-500/10",
+    borderColor: "border-red-500/20",
+    title: "Something Went Wrong",
+    description: "An unexpected error occurred. Please try again or contact support if the problem persists.",
+    statusCode: "Error",
+  },
+}
+
+interface ErrorDisplayProps {
+  errorType: ErrorType
+  error: Error | null
+  onRetry?: () => void
+  onGoBack?: () => void
+  onGoHome?: () => void
+  className?: string
+}
+
+export function ErrorDisplay({ 
+  errorType, 
+  error, 
+  onRetry, 
+  onGoBack, 
+  onGoHome,
+  className 
+}: ErrorDisplayProps) {
+  const config = errorConfig[errorType]
+  const Icon = config.icon
+  
+  return (
+    <div className={cn(
+      "flex flex-col items-center justify-center min-h-[400px] p-8",
+      className
+    )}>
+      <div className="relative">
+        {/* Glow effect */}
+        <div className={cn(
+          "absolute inset-0 blur-2xl opacity-20 rounded-full",
+          errorType === "not-found" ? "bg-amber-500" : "bg-red-500"
+        )} />
+        
+        {/* Icon container */}
+        <div className={cn(
+          "relative flex h-20 w-20 items-center justify-center rounded-2xl border",
+          config.iconBgColor,
+          config.borderColor
+        )}>
+          <Icon className={cn("h-10 w-10", config.iconColor)} />
+        </div>
+      </div>
+      
+      {/* Status code badge */}
+      <div className={cn(
+        "mt-6 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono border",
+        config.iconBgColor,
+        config.borderColor,
+        config.iconColor
+      )}>
+        <span className="uppercase tracking-wider">Status</span>
+        <span className="font-bold">{config.statusCode}</span>
+      </div>
+      
+      {/* Error message */}
+      <h2 className="mt-4 text-xl font-semibold text-zinc-100">
+        {config.title}
+      </h2>
+      <p className="mt-2 text-sm text-zinc-500 text-center max-w-md">
+        {config.description}
+      </p>
+      
+      {/* Error details (collapsible) */}
+      {error && (
+        <details className="mt-4 w-full max-w-md">
+          <summary className="cursor-pointer text-xs text-zinc-600 hover:text-zinc-500 transition-colors">
+            Show technical details
+          </summary>
+          <div className="mt-2 rounded-lg bg-zinc-950 border border-zinc-800 p-3 overflow-x-auto">
+            <code className="text-xs font-mono text-zinc-500 break-all">
+              {error.message}
+            </code>
+            {error.stack && (
+              <pre className="mt-2 text-[10px] font-mono text-zinc-700 whitespace-pre-wrap">
+                {error.stack.split("\n").slice(1, 5).join("\n")}
+              </pre>
+            )}
+          </div>
+        </details>
+      )}
+      
+      {/* Action buttons */}
+      <div className="mt-6 flex items-center gap-3">
+        {onGoBack && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onGoBack}
+            className="h-9 gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Go Back
+          </Button>
+        )}
+        {onGoHome && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onGoHome}
+            className="h-9 gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+          >
+            <Home className="h-4 w-4" />
+            Home
+          </Button>
+        )}
+        {onRetry && (
+          <Button 
+            size="sm"
+            onClick={onRetry}
+            className={cn(
+              "h-9 gap-2",
+              errorType === "not-found" 
+                ? "bg-amber-600 hover:bg-amber-500 text-white"
+                : "bg-red-600 hover:bg-red-500 text-white"
+            )}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Try Again
+          </Button>
+        )}
+      </div>
+      
+      {/* Helpful links for API down */}
+      {errorType === "api-down" && (
+        <div className="mt-8 rounded-lg bg-zinc-900/50 border border-zinc-800 p-4 max-w-md w-full">
+          <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
+            Troubleshooting
+          </h3>
+          <ul className="mt-3 space-y-2">
+            <li className="flex items-start gap-2 text-xs text-zinc-500">
+              <span className="text-zinc-600">1.</span>
+              Check if the <code className="text-zinc-400 bg-zinc-800 px-1 rounded">/v1</code> proxy endpoint is running
+            </li>
+            <li className="flex items-start gap-2 text-xs text-zinc-500">
+              <span className="text-zinc-600">2.</span>
+              Verify your network connection
+            </li>
+            <li className="flex items-start gap-2 text-xs text-zinc-500">
+              <span className="text-zinc-600">3.</span>
+              Check the Jaeger service status
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false, error: null, errorType: "generic" }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorState {
+    return { 
+      hasError: true, 
+      error, 
+      errorType: getErrorType(error) 
+    }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[v0] ErrorBoundary caught an error:", error, errorInfo)
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null, errorType: "generic" })
+    this.props.onReset?.()
+  }
+
+  handleGoBack = () => {
+    window.history.back()
+  }
+
+  handleGoHome = () => {
+    window.location.href = "/"
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback
+      }
+      
+      return (
+        <ErrorDisplay
+          errorType={this.state.errorType}
+          error={this.state.error}
+          onRetry={this.handleRetry}
+          onGoBack={this.handleGoBack}
+          onGoHome={this.handleGoHome}
+        />
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+// Standalone error pages for use with Next.js error.tsx or not-found.tsx
+export function NotFoundError({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <ErrorDisplay
+      errorType="not-found"
+      error={null}
+      onRetry={onRetry}
+      onGoBack={() => window.history.back()}
+      onGoHome={() => window.location.href = "/"}
+    />
+  )
+}
+
+export function ApiDownError({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <ErrorDisplay
+      errorType="api-down"
+      error={null}
+      onRetry={onRetry}
+      onGoBack={() => window.history.back()}
+      onGoHome={() => window.location.href = "/"}
+    />
+  )
+}

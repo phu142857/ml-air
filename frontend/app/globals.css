@@ -1,535 +1,216 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";
+@source "../hooks/**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
-  --background: #fafafa;
-  --foreground: #2e2e2e;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: #2e2e2e;
+  --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: #2e2e2e;
-  --primary: #3ecf8e;
-  --primary-foreground: #06281b;
-  --secondary: #f2f2f2;
-  --secondary-foreground: #2e2e2e;
-  --muted: #f5f5f5;
-  --muted-foreground: #6b6b6b;
-  --accent: #eefaf4;
-  --accent-foreground: #1f3a2e;
-  --destructive: oklch(0.55 0.22 25);
-  --destructive-foreground: oklch(0.99 0.01 85);
-  --border: oklch(0.88 0.004 85);
-  --input: oklch(0.88 0.004 85);
-  --ring: #3ecf8e;
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
 
-  /* Legacy ML Air names (maps entire app to the preset above) */
-  --bg-page: var(--background);
-  --bg-surface: var(--card);
-  --bg-muted: var(--muted);
-  --text-primary: var(--foreground);
-  --text-secondary: var(--muted-foreground);
-  --text-disabled: oklch(0.65 0.01 85);
-  --text-warning-strong: oklch(0.4 0.1 55);
-  --text-error-strong: oklch(0.42 0.18 25);
-  --border-default: var(--border);
-  --border-strong: oklch(0.8 0.006 85);
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+  /* Legacy status chips (dataset / governance pages) — aligned with reDesign status palette */
+  --status-success-fg: oklch(0.78 0.14 162);
+  --status-success-bg: oklch(0.22 0.05 162 / 0.35);
+  --status-success-border: oklch(0.45 0.1 162 / 0.5);
+  --status-failed-fg: oklch(0.72 0.18 25);
+  --status-failed-bg: oklch(0.22 0.06 25 / 0.35);
+  --status-failed-border: oklch(0.48 0.14 25 / 0.5);
+  --status-pending-fg: oklch(0.82 0.14 86);
+  --status-pending-bg: oklch(0.26 0.05 86 / 0.35);
+  --status-pending-border: oklch(0.5 0.12 86 / 0.45);
+  --status-running-fg: oklch(0.82 0.12 240);
+  --status-running-bg: oklch(0.22 0.06 240 / 0.35);
+  --status-running-border: oklch(0.48 0.1 240 / 0.5);
+  --border-default: oklch(0.32 0.01 265);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter, "Inter"), "Inter Fallback", sans-serif;
+  --font-mono: var(--font-jetbrains-mono, "JetBrains Mono"), "JetBrains Mono Fallback", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
-  --color-success: #3ecf8e;
-  --color-error: var(--destructive);
-  --color-warning: oklch(0.65 0.16 75);
-  --color-info: oklch(0.48 0.12 250);
-  --bg-success: oklch(0.96 0.035 155);
-  --bg-error: oklch(0.96 0.04 25);
-  --bg-warning: oklch(0.97 0.04 85);
-  --bg-info: oklch(0.95 0.04 250);
-
-  /* Base palette (utilities / one-off) */
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
-  --blue-500: #3b82f6;
-  --blue-600: #2563eb;
-  --green-500: #22c55e;
-  --green-600: #16a34a;
-  --red-500: #ef4444;
-  --red-600: #dc2626;
-  --yellow-500: #f59e0b;
-
-  /* Pills / badges (WCAG-friendly on light surfaces; pairs from emerald/amber/rose scales) */
-  --pill-success-bg: #ecfdf5;
-  --pill-success-fg: #047857;
-  --pill-success-border: #6ee7b7;
-  --pill-warning-bg: #fffbeb;
-  --pill-warning-fg: #92400e;
-  --pill-warning-border: #fcd34d;
-  --pill-danger-bg: #fef2f2;
-  --pill-danger-fg: #b91c1c;
-  --pill-danger-border: #fca5a5;
-  --pill-neutral-bg: oklch(0.955 0.006 85);
-  --pill-neutral-fg: oklch(0.35 0.02 85);
-  --pill-neutral-border: oklch(0.85 0.008 85);
-
-  /* Status tones (SUCCESS/FAILED/RUNNING/PENDING) — shared across app */
-  --status-success-bg: var(--bg-success);
-  --status-success-fg: var(--color-success);
-  --status-success-border: color-mix(in oklch, var(--color-success) 55%, var(--border-default));
-  --status-failed-bg: var(--bg-error);
-  --status-failed-fg: var(--color-error);
-  --status-failed-border: color-mix(in oklch, var(--color-error) 55%, var(--border-default));
-  --status-running-bg: var(--bg-info);
-  --status-running-fg: var(--color-info);
-  --status-running-border: color-mix(in oklch, var(--color-info) 55%, var(--border-default));
-  --status-pending-bg: var(--bg-warning);
-  --status-pending-fg: var(--color-warning);
-  --status-pending-border: color-mix(in oklch, var(--color-warning) 55%, var(--border-default));
-
-  --banner-warn-bg: oklch(0.97 0.04 85);
-  --banner-warn-fg: oklch(0.38 0.09 55);
-  --banner-warn-border: oklch(0.72 0.14 75);
-
-  --pill-action-success-bg: #d1fae5;
-  --pill-action-success-fg: #065f46;
-  --pill-action-success-hover: #a7f3d0;
-  --pill-action-danger-bg: #fee2e2;
-  --pill-action-danger-fg: #991b1b;
-  --pill-action-danger-hover: #fecaca;
-
-  /* Elevation — low shadow usage (Supabase / operational calm) */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.06);
-
-  /* Radius scale (component spacing; --radius is shadcn baseline) */
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-
-  /* Light theme observability fallbacks (same structure as dark) */
-  --obs-canvas: #f4f4f5;
-  --obs-surface: #ececf0;
-  --obs-border: #d4d4dd;
-  --obs-muted: #e2e2ea;
-  --obs-log-bg: #fafafa;
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
-.dark {
-  /* Supabase-inspired dark product shell: near-black canvas, lifted cards, restrained emerald */
-  --background: #171717;
-  --foreground: #ededed;
-  --card: #1f1f1f;
-  --card-foreground: #ededed;
-  --popover: #202020;
-  --popover-foreground: #ededed;
-  --primary: #3ecf8e;
-  --primary-foreground: #171717;
-  --secondary: #262626;
-  --secondary-foreground: #ededed;
-  --muted: #212121;
-  --muted-foreground: #9a9a9a;
-  --accent: #1a2e24;
-  --accent-foreground: #b6f0d0;
-  --destructive: #c45c5a;
-  --destructive-foreground: oklch(0.99 0.01 85);
-  --border: #2f2f2f;
-  --input: #2c2c2c;
-  --ring: #3ecf8e;
-
-  /* Observability layer (Sentry-style density + incident tone; keep separate from hub cards) */
-  --obs-canvas: #141218;
-  --obs-surface: #1a1722;
-  --obs-border: #2e2840;
-  --obs-muted: #221e2e;
-  --obs-log-bg: #0f0e13;
-
-  --bg-page: var(--background);
-  --bg-surface: var(--card);
-  --bg-muted: var(--muted);
-  --text-primary: var(--foreground);
-  --text-secondary: var(--muted-foreground);
-  --text-disabled: oklch(0.5 0.015 265);
-  --text-warning-strong: oklch(0.9 0.09 90);
-  --text-error-strong: oklch(0.86 0.07 25);
-  --border-default: var(--border);
-  --border-strong: oklch(1 0 0 / 20%);
-  --color-primary: var(--primary);
-  --color-success: #3ecf8e;
-  --color-error: var(--destructive);
-  --color-warning: oklch(0.78 0.12 80);
-  --color-info: oklch(0.68 0.1 250);
-  --bg-success: oklch(0.3 0.06 155 / 0.4);
-  --bg-error: oklch(0.32 0.1 25 / 0.38);
-  --bg-warning: oklch(0.3 0.06 80 / 0.38);
-  --bg-info: oklch(0.28 0.06 250 / 0.38);
-
-  /* Status tones (SUCCESS/FAILED/RUNNING/PENDING) — shared across app */
-  --status-success-bg: var(--bg-success);
-  --status-success-fg: var(--color-success);
-  --status-success-border: color-mix(in oklch, var(--color-success) 50%, var(--border-default));
-  --status-failed-bg: var(--bg-error);
-  --status-failed-fg: var(--color-error);
-  --status-failed-border: color-mix(in oklch, var(--color-error) 50%, var(--border-default));
-  --status-running-bg: var(--bg-info);
-  --status-running-fg: var(--color-info);
-  --status-running-border: color-mix(in oklch, var(--color-info) 50%, var(--border-default));
-  --status-pending-bg: var(--bg-warning);
-  --status-pending-fg: var(--color-warning);
-  --status-pending-border: color-mix(in oklch, var(--color-warning) 50%, var(--border-default));
-
-  --pill-success-bg: rgba(6, 78, 59, 0.45);
-  --pill-success-fg: #ecfdf5;
-  --pill-success-border: rgba(52, 211, 153, 0.45);
-  --pill-warning-bg: rgba(120, 53, 15, 0.35);
-  --pill-warning-fg: #fef3c7;
-  --pill-warning-border: rgba(251, 191, 36, 0.45);
-  --pill-danger-bg: rgba(127, 29, 29, 0.4);
-  --pill-danger-fg: #fecaca;
-  --pill-danger-border: rgba(248, 113, 113, 0.45);
-  --pill-neutral-bg: oklch(0.32 0.015 265 / 0.65);
-  --pill-neutral-fg: oklch(0.92 0.01 85);
-  --pill-neutral-border: oklch(0.55 0.02 265 / 0.45);
-
-  --banner-warn-bg: oklch(0.32 0.06 70 / 0.45);
-  --banner-warn-fg: oklch(0.93 0.06 90);
-  --banner-warn-border: oklch(0.68 0.12 75 / 0.55);
-
-  --pill-action-success-bg: rgba(6, 95, 70, 0.55);
-  --pill-action-success-fg: #d1fae5;
-  --pill-action-success-hover: rgba(4, 120, 87, 0.65);
-  --pill-action-danger-bg: rgba(127, 29, 29, 0.55);
-  --pill-action-danger-fg: #fecaca;
-  --pill-action-danger-hover: rgba(153, 27, 27, 0.65);
+@theme inline {
+  --color-status-success: oklch(0.696 0.17 162.48);
+  --color-status-running: oklch(0.685 0.169 237.323);
+  --color-status-failed: oklch(0.637 0.237 25.331);
+  --color-status-pending: oklch(0.795 0.184 86.047);
+  --color-status-info: oklch(0.623 0.214 259.815);
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
-
-  html,
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
   }
 }
 
-/* Data tables: size + header/body colors (light + dark) */
-table {
-  font-size: 0.875rem;
-  line-height: 1.35rem;
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
 }
 
-table thead th {
-  font-size: 0.75rem;
-  line-height: 1.15rem;
-  color: var(--muted-foreground) !important;
-  font-weight: 600;
+/* Subtle highlight pulse for new timeline items */
+@keyframes highlight-pulse {
+  0% {
+    background-color: oklch(0.685 0.169 237.323 / 0.15);
+    box-shadow: 0 0 0 0 oklch(0.685 0.169 237.323 / 0.4);
+  }
+  50% {
+    background-color: oklch(0.685 0.169 237.323 / 0.08);
+    box-shadow: 0 0 0 4px oklch(0.685 0.169 237.323 / 0);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 oklch(0.685 0.169 237.323 / 0);
+  }
 }
 
-table tbody td {
-  color: var(--foreground) !important;
+/* Breathing glow for live indicator */
+@keyframes breathe-glow {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 4px 1px oklch(0.696 0.17 162.48 / 0.5);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 8px 2px oklch(0.696 0.17 162.48 / 0.3);
+  }
 }
 
-/* Component Rules */
-.card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+/* Slide in from top for new items */
+@keyframes slide-in-highlight {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.button-primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
+.animate-highlight-pulse {
+  animation: highlight-pulse 2s ease-out forwards;
 }
 
-.button-secondary {
-  background: var(--bg-muted);
-  color: var(--text-primary);
+.animate-breathe-glow {
+  animation: breathe-glow 2s ease-in-out infinite;
 }
 
-/* Stable action-button widths to prevent layout jumping */
-.action-btn-xs {
-  min-width: 72px;
-}
-
-.action-btn-sm {
-  min-width: 92px;
-}
-
-.action-btn-md {
-  min-width: 132px;
-}
-
-/* Glass-style action buttons (SaaS dashboard preset — light + .dark) */
-.btn-action-primary,
-.btn-action-enable {
-  @apply relative inline-flex select-none items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.98];
-  @apply border-emerald-500/40 bg-emerald-100/60 text-emerald-700;
-  @apply hover:border-emerald-500/60 hover:bg-emerald-100/80 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)];
-  @apply dark:border-emerald-500/30 dark:bg-emerald-950/20 dark:text-emerald-400;
-  @apply dark:hover:border-emerald-500/50 dark:hover:bg-emerald-950/30 dark:hover:shadow-[0_0_20px_rgba(16,185,129,0.15)];
-}
-
-.btn-action-delete {
-  @apply relative inline-flex select-none items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.98];
-  @apply border-red-500/40 bg-red-100/60 text-red-700;
-  @apply hover:border-red-500/60 hover:bg-red-100/80 hover:shadow-[0_0_20px_rgba(239,68,68,0.2)];
-  @apply dark:border-red-500/30 dark:bg-red-950/20 dark:text-red-400;
-  @apply dark:hover:border-red-500/50 dark:hover:bg-red-950/30 dark:hover:shadow-[0_0_20px_rgba(239,68,68,0.15)];
-}
-
-.btn-action-promote,
-.btn-action-rollback,
-.btn-action-cancel,
-.btn-glass-dropdown {
-  @apply relative inline-flex select-none items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm backdrop-blur-md transition-all duration-200 ease-out active:scale-[0.98];
-  @apply border-zinc-400/30 bg-zinc-900/5 text-zinc-700;
-  @apply hover:border-zinc-400/50 hover:bg-zinc-900/10 hover:shadow-[0_0_20px_rgba(0,0,0,0.08)];
-  @apply dark:border-white/20 dark:bg-white/5 dark:text-zinc-100;
-  @apply dark:hover:border-white/30 dark:hover:bg-white/10 dark:hover:shadow-[0_0_20px_rgba(255,255,255,0.1)];
-}
-
-.btn-glass-dropdown {
-  @apply min-w-[10.5rem] max-w-[14rem] justify-between gap-2 py-2 text-left text-sm;
-}
-
-.btn-action-primary:disabled,
-.btn-action-promote:disabled,
-.btn-action-rollback:disabled,
-.btn-action-delete:disabled,
-.btn-action-enable:disabled,
-.btn-action-cancel:disabled,
-.btn-glass-dropdown:disabled {
-  @apply cursor-not-allowed opacity-50;
-}
-
-/* Stable hover highlight without layout reflow */
-.interactive-row {
-  border-left: 4px solid transparent;
-}
-
-.interactive-row:hover {
-  border-left-color: var(--primary);
-}
-
-.interactive-item {
-  border-left: 4px solid transparent;
-}
-
-.interactive-item:hover {
-  border-left-color: var(--primary);
-}
-
-.tab-stable {
-  border-bottom: 2px solid transparent;
-}
-
-.status-badge.success {
-  color: var(--status-success-fg);
-  background: var(--status-success-bg);
-  border: 1px solid var(--status-success-border);
-}
-
-.status-badge.error {
-  color: var(--status-failed-fg);
-  background: var(--status-failed-bg);
-  border: 1px solid var(--status-failed-border);
-}
-
-.status-badge.warning {
-  color: var(--status-pending-fg);
-  background: var(--status-pending-bg);
-  border: 1px solid var(--status-pending-border);
-}
-
-.status-badge.info {
-  color: var(--status-running-fg);
-  background: var(--status-running-bg);
-  border: 1px solid var(--status-running-border);
-}
-
-/* Model governance / inline status pills — same tokens in light & dark */
-.approval-pill {
-  display: inline-block;
-  max-width: 100%;
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.375rem;
-  font-size: 0.625rem;
-  line-height: 1.25;
-  font-weight: 500;
-  border: 1px solid transparent;
-}
-
-.approval-pill--success {
-  background-color: var(--pill-success-bg);
-  color: var(--pill-success-fg);
-  border-color: var(--pill-success-border);
-}
-
-.approval-pill--warning {
-  background-color: var(--pill-warning-bg);
-  color: var(--pill-warning-fg);
-  border-color: var(--pill-warning-border);
-}
-
-.approval-pill--danger {
-  background-color: var(--pill-danger-bg);
-  color: var(--pill-danger-fg);
-  border-color: var(--pill-danger-border);
-}
-
-.approval-pill--neutral {
-  background-color: var(--pill-neutral-bg);
-  color: var(--pill-neutral-fg);
-  border-color: var(--pill-neutral-border);
-}
-
-.approval-action-btn {
-  @apply relative inline-flex cursor-pointer select-none items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[0.625rem] font-medium leading-tight backdrop-blur-sm transition-all duration-200 ease-out active:scale-[0.98];
-}
-
-.approval-action-btn:disabled {
-  @apply cursor-not-allowed opacity-50;
-}
-
-.approval-action-btn--approve {
-  @apply border-emerald-500/40 bg-emerald-100/60 text-emerald-800;
-  @apply hover:bg-emerald-100/90 dark:border-emerald-500/35 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/45;
-}
-
-.approval-action-btn--reject {
-  @apply border-red-500/40 bg-red-100/60 text-red-800;
-  @apply hover:bg-red-100/90 dark:border-red-500/35 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/45;
-}
-
-.version-inline-banner {
-  max-width: min(100%, 42rem);
-  word-break: break-word;
-  border-radius: 0.25rem;
-  border: 1px solid var(--banner-warn-border);
-  background-color: var(--banner-warn-bg);
-  color: var(--banner-warn-fg);
-  padding: 0.25rem 0.5rem;
-  font-size: 0.6875rem;
-  line-height: 1.35;
-}
-
-.progress-bar .track {
-  background: var(--bg-muted);
-}
-
-.progress-bar .fill-success {
-  background: var(--color-success);
-}
-
-.progress-bar .fill-error {
-  background: var(--color-error);
-}
-
-/*
- * Legacy Tailwind slate/blue → MLflow 3.x semantic surfaces (light: gray shell, white cards, orange primary).
- */
-.bg-bg-main {
-  background-color: var(--bg-page) !important;
-}
-
-.bg-bg-card {
-  background-color: var(--card) !important;
-}
-
-.bg-bg-muted {
-  background-color: var(--muted) !important;
-}
-
-/* Panels / table chrome / form wells */
-.bg-slate-900 {
-  background-color: var(--muted) !important;
-}
-
-.bg-slate-950 {
-  background-color: var(--secondary) !important;
-}
-
-/* Secondary controls, inactive nav chips */
-.bg-slate-800,
-.bg-slate-700 {
-  background-color: var(--secondary) !important;
-}
-
-.border-slate-700,
-.border-slate-600,
-.border-slate-800 {
-  border-color: var(--border-default) !important;
-}
-
-/* Row / nav selection tint (replaces blue-900/20) */
-.bg-blue-900\/20 {
-  background-color: color-mix(in oklch, var(--primary) 16%, transparent) !important;
-}
-
-.text-slate-100,
-.text-slate-200,
-.text-slate-300 {
-  color: var(--text-primary) !important;
-}
-
-.text-slate-400,
-.text-slate-500,
-.text-slate-600 {
-  color: var(--text-secondary) !important;
-}
-
-.text-amber-100,
-.text-amber-200,
-.text-amber-300,
-.text-amber-400,
-.text-yellow-100,
-.text-yellow-200,
-.text-yellow-300,
-.text-yellow-400 {
-  color: var(--text-warning-strong) !important;
-}
-
-.text-red-300,
-.text-red-400 {
-  color: var(--text-error-strong) !important;
-}
-
-.placeholder\:text-slate-400::placeholder,
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-secondary) !important;
-}
-
-/* Guard against accidental overlay/cascade regressions blocking native dropdowns. */
-select {
-  position: relative;
-  z-index: 20;
-  pointer-events: auto;
-  -webkit-appearance: menulist !important;
-  appearance: auto !important;
-}
-
-option {
-  pointer-events: auto;
-}
-
-.bg-blue-600 {
-  background-color: var(--primary) !important;
-}
-
-.hover\:bg-slate-700:hover,
-.hover\:bg-slate-800:hover {
-  filter: brightness(0.96);
-}
-
-.hover\:bg-blue-500:hover {
-  filter: brightness(0.92);
+.animate-slide-in-highlight {
+  animation: slide-in-highlight 0.3s ease-out forwards, highlight-pulse 2s ease-out 0.3s forwards;
 }

@@ -15,25 +15,25 @@ type Props = {
 
 export function RunsHistorySection({ rows, onSelectRun, selectedForCompare = [], onToggleCompare }: Props) {
   return (
-    <Card className="p-4">
-      <CardContent className="space-y-0">
+    <Card className="gap-4 border-zinc-800 bg-zinc-900/40 py-4 shadow-none">
+      <CardContent className="space-y-0 px-4">
         <DataTableShell>
           <DataTable className="text-sm">
-          <thead className="bg-muted">
+          <thead className="border-b border-zinc-800 bg-zinc-900/80">
             <tr>
-              <th className="px-3 py-2 text-left">Compare</th>
-              <th className="px-3 py-2 text-left">Run ID</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Duration</th>
-              <th className="px-3 py-2 text-left">Training Mode</th>
-              <th className="px-3 py-2 text-left">Updated At</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Compare</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Run ID</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Duration</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Training Mode</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Updated At</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr
                 key={row.run_id}
-                className="interactive-row cursor-pointer border-t border-border"
+                className="interactive-row cursor-pointer border-t border-zinc-800"
                 onClick={() => onSelectRun(row.run_id)}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>

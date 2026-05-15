@@ -37,7 +37,7 @@ export function ConfirmDeleteDialog({
       }}
     >
       <DialogContent
-        hideClose
+        showCloseButton={false}
         className="max-w-md"
         onPointerDownOutside={(e) => {
           if (isLoading) e.preventDefault();

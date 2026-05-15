@@ -28,6 +28,28 @@ export function formatDateTimeCompact(input?: string | null): string {
   return `${hh}:${mm}:${ss} ${dd}/${mo}/${yyyy} (${utc})`;
 }
 
+export function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+export function formatRowCount(count?: number | null): string {
+  if (count == null || !Number.isFinite(count)) return "—";
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+  return String(count);
+}
+
 /** Turn thrown API client errors (often `Error(JSON.stringify(body))`) into a short user-facing string. */
 export function formatApiClientError(err: unknown): string {
   const raw =
@@ -58,4 +80,17 @@ export function formatApiClientError(err: unknown): string {
     /* message is not JSON */
   }
   return trimmed;
+}
+
+/** Trigger a browser download for a Blob (audit export, etc.). */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

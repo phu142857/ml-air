@@ -22,13 +22,14 @@ export function normalizeStatus(raw: string | null | undefined): StatusTone {
   return ALIASES[key] || "PENDING";
 }
 
+/** Tailwind chip classes (pair with `rounded-full border px-2 …`). */
 export function statusBadgeClass(status: string | null | undefined): string {
   const s = normalizeStatus(status);
-  if (s === "SUCCESS") return "status-badge success";
-  if (s === "FAILED") return "status-badge error";
-  if (s === "RUNNING") return "status-badge info";
-  if (s === "QUEUED") return "status-badge warning";
-  return "status-badge warning";
+  if (s === "SUCCESS") return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
+  if (s === "FAILED") return "border-red-500/40 bg-red-500/15 text-red-300";
+  if (s === "RUNNING") return "border-sky-500/40 bg-sky-500/15 text-sky-300";
+  if (s === "QUEUED") return "border-amber-500/40 bg-amber-500/15 text-amber-300";
+  return "border-zinc-600 bg-zinc-800/80 text-zinc-400";
 }
 
 export function normalizeDatasetStatus(raw: string | null | undefined): DatasetStatusTone {
@@ -43,7 +44,7 @@ export function normalizeDatasetStatus(raw: string | null | undefined): DatasetS
 
 export function datasetStatusBadgeClass(status: string | null | undefined): string {
   const s = normalizeDatasetStatus(status);
-  if (s === "FAILED") return "status-badge error";
-  if (s === "WARNING") return "status-badge warning";
-  return "status-badge success";
+  if (s === "FAILED") return "border-red-500/40 bg-red-500/15 text-red-300";
+  if (s === "WARNING") return "border-amber-500/40 bg-amber-500/15 text-amber-300";
+  return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
 }

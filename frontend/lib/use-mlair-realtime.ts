@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 import { getRealtimeWsBase, type DatasetItem, type ModelItem, type RunItem, type TaskItem } from "./api";
 import { useAppContext } from "./app-context";
+import { setMlairRealtimeUiStatus } from "./mlair-realtime-status";
 import { mlairKeys } from "./query-keys";
 
 const DEBOUNCE_MS = 300;
@@ -409,7 +410,12 @@ export function useMlairRealtime() {
   const shouldHaltRef = useRef(false);
 
   useEffect(() => {
-    if (tenantId === "all" || projectId === "all") return;
+    if (tenantId === "all" || projectId === "all") {
+      setMlairRealtimeUiStatus({ kind: "inactive" });
+      return () => {
+        setMlairRealtimeUiStatus({ kind: "inactive" });
+      };
+    }
 
     shouldHaltRef.current = false;
 
@@ -427,7 +433,11 @@ export function useMlairRealtime() {
     const connect = () => {
       if (shouldHaltRef.current) return;
       const base = getRealtimeWsBase();
-      if (!base) return;
+      if (!base) {
+        setMlairRealtimeUiStatus({ kind: "polling" });
+        return;
+      }
+      setMlairRealtimeUiStatus({ kind: "connecting" });
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -439,6 +449,7 @@ export function useMlairRealtime() {
 
       ws.onopen = () => {
         backoffRef.current = BASE_BACKOFF_MS;
+        setMlairRealtimeUiStatus({ kind: "connected" });
       };
 
       ws.onmessage = (evt) => {
@@ -474,8 +485,10 @@ export function useMlairRealtime() {
         const fatalPolicy = ev.code === 1008;
         if (fatalPolicy) {
           shouldHaltRef.current = true;
+          setMlairRealtimeUiStatus({ kind: "fatal", code: ev.code });
           return;
         }
+        setMlairRealtimeUiStatus({ kind: "reconnecting" });
         const delay =
           backoffRef.current + Math.floor(Math.random() * 400);
         backoffRef.current = Math.min(MAX_BACKOFF_MS, Math.floor(backoffRef.current * 1.7));
@@ -505,6 +518,7 @@ export function useMlairRealtime() {
       reconnectTimer.current = null;
       wsRef.current?.close();
       wsRef.current = null;
+      setMlairRealtimeUiStatus({ kind: "polling" });
     };
   }, [tenantId, projectId, token, queryClient]);
 }

@@ -20,7 +20,7 @@ export const mlairKeys = {
     readiness: (runId: string) => ["run-readiness", runId] as const
   },
   task: {
-    detail: (taskId: string) => ["task", taskId] as const
+    detail: (taskId: string, scopeKey = "") => ["task", taskId, scopeKey] as const
   },
   datasets: {
     list: (tenantId: string, projectId: string) => ["datasets", tenantId, projectId] as const,
@@ -91,5 +91,8 @@ export const mlairKeys = {
       ["audit-timeline", tenantId, projectId, auditTimelineFilterKey(filters)] as const
   },
   search: (tenantId: string, projectId: string, q: string, type: string) =>
-    ["search", q, type, tenantId, projectId] as const
+    ["search", q, type, tenantId, projectId] as const,
+  lifecycle: (tenantId: string, projectId: string) =>
+    ["lifecycle", tenantId, projectId] as const,
+  jaegerStatus: (jaegerUrl: string) => ["jaeger", "status", jaegerUrl] as const
 };

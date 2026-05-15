@@ -49,7 +49,7 @@ export function datasetVersionSourceBadge(version: {
   return datasetSourceTypeBadge(version.source_type);
 }
 
-/** Badge for version rows / overview (canonical label + stable color). */
+/** Badge for version rows / overview (canonical label + zinc shell colors). */
 export function datasetSourceTypeBadge(sourceType: string | null | undefined): { label: string; className: string } {
   const k = normalizeDatasetSourceType(sourceType);
   const raw = String(sourceType || "").trim();
@@ -59,12 +59,12 @@ export function datasetSourceTypeBadge(sourceType: string | null | undefined): {
     case "import":
       return {
         label: `IMPORT${suffix}`,
-        className: "border-primary/40 bg-primary/10 text-primary"
+        className: "border-sky-500/35 bg-sky-500/10 text-sky-300"
       };
     case "runtime_accumulated":
       return {
         label: `RUNTIME ACCUMULATED${suffix}`,
-        className: "border-border bg-secondary text-muted-foreground"
+        className: "border-zinc-600 bg-zinc-800/80 text-zinc-400"
       };
     case "manual":
       return {
@@ -79,7 +79,7 @@ export function datasetSourceTypeBadge(sourceType: string | null | undefined): {
     default:
       return {
         label: (raw || "UNKNOWN").toUpperCase().replace(/_/g, " "),
-        className: "border-border bg-muted text-muted-foreground"
+        className: "border-zinc-700 bg-zinc-900 text-zinc-500"
       };
   }
 }

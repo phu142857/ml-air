@@ -72,12 +72,12 @@ export function SelectDropdown({
           setOpen((o) => !o);
         }}
         className={cn(
-          "flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50",
+          "flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-left text-sm text-zinc-100 disabled:pointer-events-none disabled:opacity-50",
           buttonClassName
         )}
       >
         <span className="min-w-0 flex-1 truncate">{buttonLabel}</span>
-        <span className="shrink-0 text-muted-foreground" aria-hidden>
+        <span className="shrink-0 text-zinc-500" aria-hidden>
           ▾
         </span>
       </button>
@@ -85,7 +85,7 @@ export function SelectDropdown({
         <ul
           role="listbox"
           className={cn(
-            "absolute left-0 top-[calc(100%+4px)] z-[200] max-h-60 min-w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg",
+            "absolute left-0 top-[calc(100%+4px)] z-[200] max-h-60 min-w-full overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-lg",
             listClassName
           )}
         >
@@ -96,8 +96,8 @@ export function SelectDropdown({
                 role="option"
                 aria-selected={opt.value === value}
                 className={cn(
-                  "w-full px-3 py-2 text-left text-sm hover:bg-muted",
-                  opt.value === value ? "bg-muted/80 text-foreground" : "text-foreground"
+                  "w-full px-3 py-2 text-left text-sm text-zinc-100 hover:bg-zinc-800/80",
+                  opt.value === value ? "bg-zinc-800 text-zinc-100" : "text-zinc-200"
                 )}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
