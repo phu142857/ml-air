@@ -4,7 +4,7 @@ import logging
 import os
 import re
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Body, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 from prometheus_client import Counter
 from pydantic import BaseModel, Field
 
@@ -49,6 +49,7 @@ from app.domains.lifecycle import realtime_events as rt
 from app.domains.observability import semantic_metrics
 from app.domains.observability import audit_timeline_service
 from app.domains.observability import event_outbox_service
+from app.domains.observability import event_signing_service
 from app.domains.governance import semantic_webhook_subscription_service
 from app.domains.orchestration.run_service import (
     create_replay_run,
@@ -2045,6 +2046,45 @@ def export_audit_timeline_v1(
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/semantic-events/verify")
+def verify_semantic_event_envelope_v1(
+    payload: dict = Body(...),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Validate envelope JSON Schema and optional ``integrity`` HMAC (viewer)."""
+    from jsonschema import ValidationError
+
+    from app.domains.lifecycle.semantic_event_contract import validate_semantic_event
+
+    principal = authenticate_bearer(authorization)
+    authorize_scope(
+        principal,
+        tenant_id=principal.tenant_id or "default",
+        project_id="default_project",
+        min_role="viewer",
+    )
+    schema_valid = False
+    schema_detail: str | None = None
+    try:
+        validate_semantic_event(payload)
+        schema_valid = True
+    except ValidationError as exc:
+        schema_detail = exc.message
+
+    integrity = payload.get("integrity")
+    integrity_valid: bool | None = None
+    if isinstance(integrity, dict) and integrity:
+        integrity_valid = event_signing_service.verify_event(payload)
+
+    valid = schema_valid and integrity_valid is not False
+    out: dict = {"valid": valid, "schema_valid": schema_valid}
+    if schema_detail:
+        out["schema_detail"] = schema_detail
+    if integrity_valid is not None:
+        out["integrity_valid"] = integrity_valid
+    return out
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox")

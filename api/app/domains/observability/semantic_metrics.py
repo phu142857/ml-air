@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.domains.observability.metric_labels import normalize_label
+
 try:
     from prometheus_client import Counter as _PrometheusCounter
 except Exception:  # pragma: no cover - optional in lightweight dev/test envs
@@ -43,8 +45,7 @@ _ALLOWED_AUDIT_SOURCES = frozenset({"manual", "scheduler", "pre_training", "auto
 
 
 def normalize_audit_source(source: str | None) -> str:
-    s = str(source or "manual").strip().lower() or "manual"
-    return s if s in _ALLOWED_AUDIT_SOURCES else "other"
+    return normalize_label(str(source or "manual"), _ALLOWED_AUDIT_SOURCES, default="other")
 
 
 def primary_eligibility_denial_reason(result: dict[str, Any]) -> str:
@@ -67,9 +68,7 @@ def primary_eligibility_denial_reason(result: dict[str, Any]) -> str:
 
 
 def record_readiness_blocked(*, path: str) -> None:
-    p = str(path or "").strip().lower()
-    if p not in _ALLOWED_READINESS_PATHS:
-        p = "pipeline_run"
+    p = normalize_label(path, _ALLOWED_READINESS_PATHS, default="pipeline_run")
     READINESS_BLOCKED_TOTAL.labels(path=p).inc()
 
 

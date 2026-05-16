@@ -15,6 +15,7 @@ MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.
 | `timestamp` | yes | Unix epoch seconds (float) |
 | `trace_id` | optional | Correlates with API logs when set |
 | `payload` | yes | Type-specific object (may be empty `{}`) |
+| `integrity` | optional | HMAC block when **`ML_AIR_SEMANTIC_EVENT_SIGNING=1`** — see [Production maturity](../guides/production-maturity.md) |
 
 `dataset_version_id`, `policy_id`, `model_id`, and `run_id` are **not** top-level envelope fields; when present they appear under **`payload`** (see matrix). This keeps the envelope small while allowing lifecycle-heavy payloads.
 
@@ -51,6 +52,8 @@ Validate payloads against the **v1 JSON Schema** before wiring production webhoo
 - CLI: `python scripts/validate_semantic_event.py path/to/event.json` (exit **0** = valid).
 
 **API strict mode:** set **`ML_AIR_SEMANTIC_EVENT_VALIDATE=1`** on the API process to reject invalid envelopes at `publish_mlair_event` (log + skip publish). Default **off** so legacy tests and partial fixtures are unaffected.
+
+**Verify API:** `POST /v1/semantic-events/verify` with the envelope JSON body returns `schema_valid`, optional `integrity_valid`, and `valid` (viewer auth).
 
 **CI:** [`api/tests/test_semantic_event_contract.py`](../../api/tests/test_semantic_event_contract.py) asserts `build_event` output matches the schema for all shipped `EventType` values.
 

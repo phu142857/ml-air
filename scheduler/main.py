@@ -1466,17 +1466,25 @@ def main() -> None:
                     selected, _ = _apply_replay_filter(plan, replay_from_task_id, done_event["run_id"])
                     _sync_run_status_after_task(done_event["run_id"], plan, selected, client)
                 else:
+                    from sdk.retry_policy import (
+                        compute_retry_delay_seconds,
+                        next_retry_attempt,
+                        should_schedule_retry,
+                    )
+
                     max_attempts, backoff_ms = _load_task_retry_policy(done_event["task_id"])
                     current_attempt = int(done_event.get("attempt", 1))
-                    if current_attempt < max_attempts:
-                        retry_attempt = current_attempt + 1
+                    if should_schedule_retry(
+                        current_attempt=current_attempt, max_attempts=max_attempts
+                    ):
+                        retry_attempt = next_retry_attempt(current_attempt)
                         _upsert_or_transition_task(
                             task_id=done_event["task_id"],
                             run_id=done_event["run_id"],
                             next_status="RETRY",
                             attempt=retry_attempt,
                         )
-                        delay_seconds = (backoff_ms * (2 ** (current_attempt - 1))) / 1000.0
+                        delay_seconds = compute_retry_delay_seconds(backoff_ms, current_attempt)
                         time.sleep(delay_seconds)
                         retry_event = {
                             "event_type": "task_ready",

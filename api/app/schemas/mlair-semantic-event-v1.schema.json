@@ -42,6 +42,16 @@
     "resource_id": { "type": ["string", "null"], "maxLength": 256 },
     "timestamp": { "type": "number" },
     "trace_id": { "type": ["string", "null"], "maxLength": 128 },
-    "payload": { "type": "object" }
+    "payload": { "type": "object" },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "signature"],
+      "properties": {
+        "algorithm": { "type": "string", "const": "hmac-sha256" },
+        "key_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "signature": { "type": "string", "minLength": 64, "maxLength": 128 }
+      }
+    }
   }
 }

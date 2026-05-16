@@ -15,7 +15,9 @@ from typing import Any
 from app.domains.shared.queue_service import redis_client
 from app.domains.observability.trace_service import get_trace_id
 import app.domains.observability.event_outbox_service as event_outbox_service
+import app.domains.observability.event_signing_service as event_signing_service
 import app.domains.governance.semantic_webhook_subscription_service as semantic_webhook_subs
+from app.domains.observability.metric_labels import sanitize_label_value
 
 try:
     from prometheus_client import Counter as _PrometheusCounter
@@ -100,7 +102,7 @@ def dt_to_unix(dt: datetime | None) -> float:
 
 def record_lifecycle_model_promoted(*, stage: str) -> None:
     """Low-cardinality counter aligned with ``emit_model_promoted``."""
-    s = re.sub(r"[^a-z0-9_]+", "_", str(stage or "").strip().lower()) or "unknown"
+    s = sanitize_label_value(stage or "unknown")
     LIFECYCLE_MODEL_PROMOTED_TOTAL.labels(stage=s).inc()
 
 
@@ -136,6 +138,18 @@ def build_event(
 
 def publish_mlair_event(event: dict[str, Any]) -> None:
     from app.domains.lifecycle.semantic_event_contract import validate_semantic_event_if_enabled
+
+    event = dict(event)
+    if event_signing_service.signing_enabled():
+        try:
+            event = event_signing_service.sign_event(event)
+        except ValueError:
+            logger.warning(
+                "realtime_publish_skip reason=signing_key_missing type=%s event_id=%s",
+                event.get("type"),
+                event.get("event_id"),
+            )
+            return
 
     if not validate_semantic_event_if_enabled(event):
         return
@@ -455,7 +469,7 @@ def emit_buffer_threshold_met(
             },
         )
     )
-    safe_strat = re.sub(r"[^a-zA-Z0-9_]+", "_", str(accumulation_strategy or "unknown").strip())[:64] or "unknown"
+    safe_strat = sanitize_label_value(accumulation_strategy or "unknown")
     LIFECYCLE_BUFFER_THRESHOLD_MET_TOTAL.labels(accumulation_strategy=safe_strat).inc()
 
 

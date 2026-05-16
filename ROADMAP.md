@@ -357,26 +357,26 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Reliability
 
 - [ ] Chaos testing
-- [ ] Retry correctness (scheduler/worker retries exist; formal proof / suite TBD)
+- [x] Retry correctness ([`sdk/retry_policy.py`](sdk/retry_policy.py) + [`api/tests/test_retry_policy.py`](api/tests/test_retry_policy.py); scheduler uses shared backoff)
 - [x] Materialization recovery tests ([`api/tests/test_materialization_concurrency_db.py`](api/tests/test_materialization_concurrency_db.py) exercises contention / idempotency path)
 
 ### Scalability
 
-- [ ] Queue partitioning
+- [x] Queue partitioning (priority queues `mlair:tasks:high|default|low` — [`scheduler/main.py`](scheduler/main.py), [`executor/main.py`](executor/main.py))
 - [ ] Multi-worker orchestration
-- [ ] Cardinality-safe telemetry
+- [x] Cardinality-safe telemetry ([`api/app/domains/observability/metric_labels.py`](api/app/domains/observability/metric_labels.py); wired in semantic + lifecycle counters)
 
 ### Security
 
-- [ ] Secret rotation
+- [x] Secret rotation (manifest + semantic event keys — [`docs/guides/rotate-keys.md`](docs/guides/rotate-keys.md), [`docs/guides/production-maturity.md`](docs/guides/production-maturity.md))
 - [x] Audit export (**MVP:** `GET .../audit/timeline/export?format=jsonl|json` — SIEM NDJSON; see [`api/app/api/routes/v1.py`](api/app/api/routes/v1.py))
-- [ ] Signed event payloads
+- [x] Signed event payloads (`ML_AIR_SEMANTIC_EVENT_SIGNING=1`, [`sdk/event_signing.py`](sdk/event_signing.py), `POST /v1/semantic-events/verify`)
 
 ### Multi-Tenant
 
-- [ ] Tenant-scoped dashboards
+- [x] Tenant-scoped dashboards (Hub scope `tenantId`/`projectId` + aggregate mode — [`frontend/app/(dashboard)/dashboard/page.tsx`](frontend/app/(dashboard)/dashboard/page.tsx))
 - [ ] Tenant-aware alerts
-- [ ] Noisy-neighbor protection
+- [x] Noisy-neighbor protection (Phase 7 tenant quotas — [`docs/api/tenant-quotas.md`](docs/api/tenant-quotas.md))
 
 ---
 
