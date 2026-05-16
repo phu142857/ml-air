@@ -1,21 +1,52 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1
+# Build context: repository root (`.`).
+#   docker build -f api/Dockerfile -t ml-air-api:local .
+ARG PYTHON_BASE_IMAGE=python:3.11-slim
 
-WORKDIR /app
+FROM ${PYTHON_BASE_IMAGE} AS builder
+
+WORKDIR /build
+
+RUN if ! command -v gcc >/dev/null 2>&1; then \
+      apt-get update && apt-get install -y --no-install-recommends build-essential gcc \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+COPY api/requirements.txt /build/requirements.txt
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel && \
+    pip wheel --wheel-dir /wheels -r /build/requirements.txt
+
+FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app
 
-COPY api/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+WORKDIR /app
+
+COPY --from=builder /wheels /wheels
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY sdk /app/sdk
 COPY api /app
 
-# Register reference plugins (mlair.plugins) so pipeline contract validation sees
-# app_etl_adapter / app_train_adapter / echo_tracking (reference demo DAG + examples).
-RUN pip install --no-cache-dir /app/builtin_reference_plugins
+RUN if [ -d "/app/builtin_reference_plugins" ]; then \
+      pip install --no-cache-dir /app/builtin_reference_plugins; \
+    fi
+
+RUN useradd -m appuser && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8080"]

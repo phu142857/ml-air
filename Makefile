@@ -24,7 +24,16 @@ ifneq ($(strip $(BACKFILL_PROJECT_ID)),)
 BACKFILL_ARGS += --project-id $(BACKFILL_PROJECT_ID)
 endif
 
-.PHONY: build
+CONTAINER_ENGINE ?= docker
+ML_AIR_PYTHON_BASE_IMAGE ?= ml-air-python-base:local
+
+.PHONY: build-base build-images build
+build-base:
+	$(CONTAINER_ENGINE) build -t $(ML_AIR_PYTHON_BASE_IMAGE) -f docker/python-base.Dockerfile .
+
+build-images: build-base
+	ML_AIR_PYTHON_BASE_IMAGE=$(ML_AIR_PYTHON_BASE_IMAGE) CONTAINER_ENGINE=$(CONTAINER_ENGINE) ML_AIR_BUILD_PYTHON_BASE=0 bash scripts/build-images.sh
+
 build:
 	docker compose -f $(COMPOSE_FILE) build
 

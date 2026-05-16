@@ -1,25 +1,56 @@
+# syntax=docker/dockerfile:1
+# Build context: frontend/ directory (not repo root).
+#   docker build -f Dockerfile -t ml-air-frontend:local ./frontend
 FROM node:20-alpine AS deps
+
 WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
 COPY package.json package-lock.json* ./
-RUN npm install
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 FROM node:20-alpine AS builder
+
 WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ARG NEXT_PUBLIC_MLAIR_REALTIME_WS=
+
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_PUBLIC_MLAIR_REALTIME_WS=${NEXT_PUBLIC_MLAIR_REALTIME_WS}
+
 COPY --from=deps /app/node_modules ./node_modules
+
 COPY . .
+
 RUN npm run build
 
 FROM node:20-alpine AS runner
+
 WORKDIR /app
-ARG MLAIR_NEXT_INTERNAL_API_URL=http://api:8080
+
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+ARG MLAIR_NEXT_INTERNAL_API_URL=http://api:8080
 ENV MLAIR_NEXT_INTERNAL_API_URL=${MLAIR_NEXT_INTERNAL_API_URL}
+
+RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
+
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+USER nextjs
+
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000',(r)=>{r.resume();process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+
 CMD ["node", "server.js"]

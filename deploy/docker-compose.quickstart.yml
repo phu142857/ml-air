@@ -25,6 +25,8 @@ services:
     build:
       context: ..
       dockerfile: api/Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
     container_name: ml-air-api
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -91,8 +93,10 @@ services:
 
   realtime:
     build:
-      context: ../realtime
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: realtime/Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
     container_name: ml-air-realtime
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -117,6 +121,8 @@ services:
     build:
       context: ..
       dockerfile: scheduler/Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
     container_name: ml-air-scheduler
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -152,6 +158,8 @@ services:
     build:
       context: ..
       dockerfile: executor/Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
     container_name: ml-air-executor
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
