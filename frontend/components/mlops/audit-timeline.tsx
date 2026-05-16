@@ -86,7 +86,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
   return (
     <div className={cn(
       "relative flex gap-4 pb-6 last:pb-0",
-      isNew && "animate-in fade-in slide-in-from-left-2 duration-500"
+      isNew && "rounded-lg ring-1 ring-sky-500/25 bg-sky-500/[0.04] animate-highlight-pulse"
     )}>
       {/* Timeline line */}
       {!isLast && (

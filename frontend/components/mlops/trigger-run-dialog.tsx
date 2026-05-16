@@ -124,7 +124,7 @@ export function TriggerRunDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-border bg-muted/30 text-foreground sm:max-w-md">
+      <DialogContent className="border-border bg-card sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{gated ? "Trigger pipeline (gated)" : "Start a run"}</DialogTitle>
           <DialogDescription className="text-muted-foreground">

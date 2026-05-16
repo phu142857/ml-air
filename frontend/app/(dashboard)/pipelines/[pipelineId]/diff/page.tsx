@@ -19,6 +19,7 @@ import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { cn } from "@/lib/utils";
 
 const sectionClass = "max-w-[1400px]";
 
@@ -46,14 +47,12 @@ function DiffPageInner() {
   });
   const items = listQuery.data?.items ?? [];
   const versionPickOptions = useMemo(
-    () => [
-      { value: "", label: "—" },
-      ...items.map((v) => ({
+    () =>
+      items.map((v) => ({
         value: v.version_id,
-        label: `v${v.version} ${v.version_id.slice(0, 8)}…`
-      }))
-    ],
-    [items]
+        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`,
+      })),
+    [items],
   );
   const [leftId, setLeftId] = useState(qLeft);
   const [rightId, setRightId] = useState(qRight);
@@ -61,6 +60,13 @@ function DiffPageInner() {
     if (qLeft) setLeftId(qLeft);
     if (qRight) setRightId(qRight);
   }, [qLeft, qRight]);
+
+  useEffect(() => {
+    if (!items.length || qLeft || qRight) return;
+    const sorted = [...items].sort((a, b) => b.version - a.version);
+    if (sorted[0]) setRightId(sorted[0].version_id);
+    if (sorted[1]) setLeftId(sorted[1].version_id);
+  }, [items, qLeft, qRight]);
 
   const canDiff = leftId && rightId && leftId !== rightId;
   const diffQuery = useQuery({
@@ -133,25 +139,36 @@ function DiffPageInner() {
       />
       <div className="flex-1 space-y-6 overflow-auto p-6">
         {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
-        <DetailSection title="Version selector" accentBorder="amber" className={sectionClass}>
-          <div className="flex flex-wrap items-end gap-4">
-            <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              Left
+        <DetailSection
+          title="Version selector"
+          accentBorder="amber"
+          className={cn(sectionClass, "overflow-visible")}
+          bodyClassName="overflow-visible"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm text-muted-foreground">
+              Left (older)
               <SelectDropdown
                 value={leftId}
                 onChange={setLeftId}
                 options={versionPickOptions}
-                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm text-foreground"
+                className="mt-1"
+                disabled={!versionPickOptions.length}
+                placeholder={listQuery.isLoading ? "Loading…" : "No versions"}
+                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1.5 text-sm text-foreground"
                 aria-label="Left version for diff"
               />
             </label>
-            <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              Right
+            <label className="block text-sm text-muted-foreground">
+              Right (newer)
               <SelectDropdown
                 value={rightId}
                 onChange={setRightId}
                 options={versionPickOptions}
-                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm text-foreground"
+                className="mt-1"
+                disabled={!versionPickOptions.length}
+                placeholder={listQuery.isLoading ? "Loading…" : "No versions"}
+                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1.5 text-sm text-foreground"
                 aria-label="Right version for diff"
               />
             </label>

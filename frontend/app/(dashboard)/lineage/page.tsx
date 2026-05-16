@@ -382,6 +382,12 @@ function LineagePageInner() {
           ? lineageNbQuery.isLoading
           : false
 
+  const runLoading = mode === "run" && (lineageRunQuery.isLoading || lineageRunQuery.isFetching)
+  const dvLoading = mode === "datasetVersion" && (lineageNbQuery.isLoading || lineageNbQuery.isFetching)
+
+  const loadBtnClass =
+    "h-8 shrink-0 gap-2 border-border bg-card text-xs text-muted-foreground hover:text-foreground"
+
   const applyRun = () => {
     const r = runInput.trim()
     if (!r) return
@@ -416,7 +422,15 @@ function LineagePageInner() {
                 className="h-8 min-w-[200px] border-border bg-card font-mono text-xs"
                 disabled={!canScope}
               />
-              <Button type="button" size="sm" className="h-8 shrink-0" onClick={applyRun} disabled={!runInput.trim() || !canScope}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={loadBtnClass}
+                onClick={applyRun}
+                disabled={!runInput.trim() || !canScope || runLoading}
+              >
+                {runLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Load
               </Button>
             </div>
@@ -433,16 +447,34 @@ function LineagePageInner() {
               />
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
-                variant="secondary"
-                className="h-8 shrink-0"
+                className={loadBtnClass}
                 onClick={applyDatasetVersion}
-                disabled={!dvInput.trim() || !canScope}
+                disabled={!dvInput.trim() || !canScope || dvLoading}
               >
+                {dvLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Load
               </Button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
+        <div className="flex flex-wrap items-center gap-6">
+          <span className="text-xs text-muted-foreground">Node types:</span>
+          {Object.entries(nodeTypeConfig).map(([type, config]) => {
+            const Icon = config.icon
+            return (
+              <div key={type} className="flex items-center gap-1.5">
+                <div className={cn("rounded bg-gradient-to-br p-1", config.color)}>
+                  <Icon className="h-3 w-3 text-white" />
+                </div>
+                <span className="text-xs capitalize text-muted-foreground">{type}</span>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -477,23 +509,6 @@ function LineagePageInner() {
           />
         </div>
       ) : null}
-
-      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
-        <div className="flex flex-wrap items-center gap-6">
-          <span className="text-xs text-muted-foreground">Node types:</span>
-          {Object.entries(nodeTypeConfig).map(([type, config]) => {
-            const Icon = config.icon
-            return (
-              <div key={type} className="flex items-center gap-1.5">
-                <div className={cn("rounded bg-gradient-to-br p-1", config.color)}>
-                  <Icon className="h-3 w-3 text-white" />
-                </div>
-                <span className="text-xs capitalize text-muted-foreground">{type}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
 
       <div className="flex min-h-0 flex-1 flex-col bg-background">
         {!canScope ? (

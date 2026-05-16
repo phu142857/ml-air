@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useState, useMemo, useEffect, useCallback } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { 
   History, 
   RefreshCw, 
@@ -19,12 +19,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
-import { 
-  AuditTimelineSkeleton, 
-  StatsCardsSkeleton, 
-  JaegerSidebarSkeleton,
-  LifecyclePageSkeleton 
-} from "@/components/mlops/audit-timeline-skeleton"
+import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
 import { EventFilters, type EventType, type Severity, type TimeRange } from "@/components/mlops/event-filters"
 import { JaegerLink } from "@/components/mlops/jaeger-link"
 import { ErrorBoundary, ErrorDisplay } from "@/components/error-boundary"
@@ -44,14 +39,6 @@ import { useLifecycle } from "@/hooks/use-lifecycle"
 import { useToast } from "@/hooks/use-toast"
 import { exportAuditTimeline } from "@/lib/api"
 import { auditEventsToCsv } from "@/lib/audit-event"
-import { LifecycleSemanticFiltersBar } from "@/components/mlops/lifecycle-semantic-filters"
-import {
-  applySemanticFiltersToSearchParams,
-  countActiveSemanticFilters,
-  lifecycleSemanticFiltersFromSearchParams,
-  toAuditTimelineFilters,
-  type LifecycleSemanticFilters,
-} from "@/lib/lifecycle-filters"
 import { useAppContext } from "@/lib/app-context"
 import { useJaegerUiUrl } from "@/lib/use-jaeger-ui-url"
 import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
@@ -62,8 +49,6 @@ function LifecycleContent() {
   const { toast } = useToast()
   const { tenantId, projectId, token } = useAppContext()
   const searchParams = useSearchParams()
-  const pathname = usePathname()
-  const router = useRouter()
   const runtimeJaegerUrl = useJaegerUiUrl()
   const [exporting, setExporting] = useState(false)
 
@@ -72,10 +57,6 @@ function LifecycleContent() {
   const [timeRange, setTimeRange] = useState<TimeRange>("24h")
   const [searchQuery, setSearchQuery] = useState("")
   const [jaegerUrl, setJaegerUrl] = useState("http://localhost:16686")
-  const [semanticFilters, setSemanticFilters] = useState<LifecycleSemanticFilters>(() =>
-    lifecycleSemanticFiltersFromSearchParams(searchParams),
-  )
-
   useEffect(() => {
     if (runtimeJaegerUrl) setJaegerUrl(runtimeJaegerUrl)
   }, [runtimeJaegerUrl])
@@ -83,19 +64,7 @@ function LifecycleContent() {
   useEffect(() => {
     const trace = (searchParams.get("trace") || "").trim()
     if (trace) setSearchQuery(trace)
-    setSemanticFilters(lifecycleSemanticFiltersFromSearchParams(searchParams))
   }, [searchParams])
-
-  useEffect(() => {
-    const nextParams = applySemanticFiltersToSearchParams(searchParams, semanticFilters)
-    const current = searchParams.toString()
-    const next = nextParams.toString()
-    if (next === current) return
-    const href = next ? `${pathname}?${next}` : pathname
-    router.replace(href, { scroll: false })
-  }, [semanticFilters, pathname, router, searchParams])
-
-  const apiTimelineFilters = useMemo(() => toAuditTimelineFilters(semanticFilters), [semanticFilters])
 
   // Data fetching via custom hook
   const {
@@ -113,7 +82,7 @@ function LifecycleContent() {
     refreshJaeger,
     toggleLive,
     scopePinned,
-  } = useLifecycle({ jaegerUrl, semanticFilters })
+  } = useLifecycle({ jaegerUrl })
 
   const handleExport = useCallback(async () => {
     if (!token.trim()) {
@@ -129,7 +98,6 @@ function LifecycleContent() {
       const { blob, filename } = await exportAuditTimeline(tenantId, projectId, token, {
         format: "jsonl",
         limit: 1000,
-        filters: apiTimelineFilters,
       })
       downloadBlob(blob, filename)
       toast({
@@ -145,7 +113,7 @@ function LifecycleContent() {
     } finally {
       setExporting(false)
     }
-  }, [apiTimelineFilters, scopePinned, token, tenantId, projectId, toast])
+  }, [scopePinned, token, tenantId, projectId, toast])
 
   // Filter events based on UI state (defensive: timeline data must be an array)
   const filteredEvents = useMemo(() => {
@@ -202,14 +170,12 @@ function LifecycleContent() {
     toast({ title: "Exported", description: `${filteredEvents.length} rows (current view)` })
   }, [filteredEvents, toast])
 
-  const semanticFilterCount = countActiveSemanticFilters(semanticFilters)
   const activeFilters =
     [
       eventType !== "all",
       severity !== "all",
       timeRange !== "24h",
       searchQuery !== "",
-      semanticFilterCount > 0,
     ].filter(Boolean).length
 
   const handleClearFilters = () => {
@@ -217,7 +183,6 @@ function LifecycleContent() {
     setSeverity("all")
     setTimeRange("24h")
     setSearchQuery("")
-    setSemanticFilters({})
   }
 
   // Show full page skeleton on initial load
@@ -456,10 +421,12 @@ function LifecycleContent() {
             <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} />
           </div>
         ) : null}
-        {isRefreshing ? (
-          <StatsCardsSkeleton />
-        ) : (
-          <div className="grid grid-cols-5 gap-4">
+        <div
+          className={cn(
+            "grid grid-cols-5 gap-4 transition-opacity duration-300",
+            isRefreshing && "opacity-80",
+          )}
+        >
             <Card className="bg-card/80 border-border">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -529,8 +496,7 @@ function LifecycleContent() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Filters toolbar */}
@@ -558,26 +524,18 @@ function LifecycleContent() {
             />
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground/80">
-            {isLive && (
-              <span className="flex items-center gap-1.5">
-                <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400 animate-breathe-glow" />
-                <span className="text-emerald-400/80">Live</span>
+            {isRefreshing ? (
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                Updating…
               </span>
-            )}
+            ) : null}
             <span>
               Showing <span className="text-muted-foreground font-medium">{filteredEvents.length}</span> of{" "}
               <span className="text-muted-foreground">{(Array.isArray(events) ? events : []).length}</span> events
-              {semanticFilterCount > 0 ? (
-                <span className="text-muted-foreground/70"> · {semanticFilterCount} API filter(s)</span>
-              ) : null}
             </span>
           </div>
         </div>
-        <LifecycleSemanticFiltersBar
-          filters={semanticFilters}
-          onChange={setSemanticFilters}
-          disabled={isLoading}
-        />
       </div>
 
       {/* Main: timeline + Jaeger sidebar */}
@@ -585,8 +543,14 @@ function LifecycleContent() {
         <div className="flex min-h-0 min-w-0 flex-1">
           <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-6">
             {isRefreshing ? (
-              <AuditTimelineSkeleton count={6} />
-            ) : filteredEvents.length === 0 ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-border"
+                aria-hidden
+              >
+                <div className="h-full w-1/3 animate-pulse bg-sky-500/70" />
+              </div>
+            ) : null}
+            {filteredEvents.length === 0 ? (
               <MlopsEmptyState
                 icon={History}
                 title="No audit events in this scope"
@@ -597,14 +561,23 @@ function LifecycleContent() {
                 }
               />
             ) : (
-              <AuditTimeline events={filteredEvents} newEventIds={newEventIds} />
+              <div
+                className={cn(
+                  "transition-opacity duration-300",
+                  isRefreshing && "opacity-95",
+                )}
+              >
+                <AuditTimeline events={filteredEvents} newEventIds={newEventIds} />
+              </div>
             )}
-        </div>
+          </div>
 
-          <div className="min-h-0 w-80 shrink-0 self-stretch overflow-y-auto border-l border-border bg-card/20 p-4">
-            {isRefreshing ? (
-              <JaegerSidebarSkeleton />
-            ) : (
+          <div
+            className={cn(
+              "min-h-0 w-80 shrink-0 self-stretch overflow-y-auto border-l border-border bg-card/20 p-4 transition-opacity duration-300",
+              isRefreshing && "opacity-90",
+            )}
+          >
               <div className="space-y-4">
                 {/* Jaeger status card */}
                 <Card className="bg-card/80 border-border">
@@ -657,7 +630,7 @@ function LifecycleContent() {
                         key={trace.id}
                         className={cn(
                           "space-y-2 rounded-md border border-border bg-background p-3 transition-all",
-                          trace.isNew && "animate-slide-in-highlight"
+                          trace.isNew && "ring-1 ring-sky-500/25 bg-sky-500/5"
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -716,7 +689,6 @@ function LifecycleContent() {
                   </CardContent>
                 </Card>
               </div>
-            )}
           </div>
         </div>
       </div>

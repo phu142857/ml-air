@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Play } from "lucide-react";
+import { Box, FolderUp, Play } from "lucide-react";
 import { ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -43,13 +43,17 @@ import { SCOPE_AGGREGATE_MODEL_DETAIL } from "@/lib/scope-messages";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import {
   canPromoteVersionToStage,
+  modelApprovalDisplayLabel,
   modelApprovalPillClass,
+  modelStageIndicator,
+  modelStagePillClass,
   promotionBlockMessage,
   type PromotionGovernanceFeatures,
 } from "@/lib/model-governance-ui";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
+import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
@@ -98,6 +102,7 @@ export default function ModelDetailPage() {
   const [versionBanner, setVersionBanner] = useState("");
   const [servingSlotDraft, setServingSlotDraft] = useState<Record<string, string>>({});
   const [tab, setTab] = useState("overview");
+  const [importVersionOpen, setImportVersionOpen] = useState(false);
   const isTabLoading = useTabLoading(tab);
   const [promotionFeatures, setPromotionFeatures] = useState<PromotionGovernanceFeatures | null>(
     () => getRuntimeConfig()?.features ?? null
@@ -165,6 +170,10 @@ export default function ModelDetailPage() {
   const model = useMemo(() => modelsQuery.data?.items.find((x) => x.model_id === modelId) ?? null, [modelsQuery.data, modelId]);
 
   const allVersions = versionsQuery.data?.items ?? [];
+  const productionVersion = useMemo(() => {
+    if (model?.production_version != null) return model.production_version;
+    return allVersions.find((v) => v.stage === "production")?.version ?? null;
+  }, [model?.production_version, allVersions]);
   const filteredVersions = useMemo(() => {
     if (stageFilter === "all") return allVersions;
     return allVersions.filter((v) => v.stage === stageFilter);
@@ -297,33 +306,22 @@ export default function ModelDetailPage() {
         id: "stage",
         header: "Stage",
         cell: (v) => (
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
-              v.stage === "production"
-                ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                : "border-border bg-muted/40 text-foreground"
-            }`}
-          >
-            {v.stage === "production" ? "●" : "○"} {v.stage}
+          <span className={modelStagePillClass(v.stage)}>
+            {modelStageIndicator(v.stage)} {v.stage}
           </span>
         ),
       },
       {
         id: "approval",
         header: "Approval",
-        cell: (v) => (
-          <div className="flex flex-col gap-1">
-            <span
-              className={`inline-block w-fit max-w-full truncate ${modelApprovalPillClass(v.approval_status)}`}
-              title={v.approval_reason || undefined}
-            >
-              {v.approval_status || "—"}
-            </span>
-            {projectId !== "all" && v.approval_status === "pending_manual_approval" ? (
+        cell: (v) => {
+          const status = v.approval_status;
+          if (status === "pending_manual_approval" && projectId !== "all") {
+            return (
               <div className="flex flex-nowrap gap-1">
                 <button
                   type="button"
-                  className="approval-action-btn approval-action-btn--approve"
+                  className="rounded-md bg-sky-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-60"
                   disabled={approvalMutation.isPending}
                   onClick={() => approvalMutation.mutate({ version: v.version, approval_status: "approved" })}
                 >
@@ -331,16 +329,25 @@ export default function ModelDetailPage() {
                 </button>
                 <button
                   type="button"
-                  className="approval-action-btn approval-action-btn--reject"
+                  className="rounded-md bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-60"
                   disabled={approvalMutation.isPending}
                   onClick={() => approvalMutation.mutate({ version: v.version, approval_status: "rejected" })}
                 >
                   Reject
                 </button>
               </div>
-            ) : null}
-          </div>
-        ),
+            );
+          }
+          const label = modelApprovalDisplayLabel(status);
+          if (!label) {
+            return <span className="text-xs text-muted-foreground">—</span>;
+          }
+          return (
+            <span className={modelApprovalPillClass(status)} title={v.approval_reason || undefined}>
+              {label}
+            </span>
+          );
+        },
       },
       {
         id: "run",
@@ -489,7 +496,19 @@ export default function ModelDetailPage() {
                   </span>
                 ),
               },
-              { label: "Model ID", value: modelId, mono: true },
+              {
+                label: "Model ID",
+                value: (
+                  <span className="inline-flex flex-wrap items-center gap-x-2">
+                    <span className="font-mono text-xs">{modelId}</span>
+                    {productionVersion != null ? (
+                      <span className="rounded-full border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-1.5 py-0.5 text-[color:var(--status-success-fg)]">
+                        v{productionVersion}
+                      </span>
+                    ) : null}
+                  </span>
+                ),
+              },
               { label: "Name", value: model?.name ?? "—" },
               { label: "Description", value: model?.description ?? "—" },
             ]}
@@ -643,20 +662,32 @@ export default function ModelDetailPage() {
         description="Registry versions with stage filters and lifecycle actions."
         accentBorder="violet"
         headerActions={
-          <FilterChips
-            variant="violet"
-            options={[
-              { id: "all", label: "All" },
-              { id: "production", label: "Production" },
-              { id: "staging", label: "Staging" },
-              { id: "archived", label: "Archived" },
-            ]}
-            value={stageFilter}
-            onChange={(id) => {
-              setStageFilter(id);
-              setCurrentPage(1);
-            }}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 gap-1.5 bg-violet-600 text-white hover:bg-violet-500 hover:text-white disabled:text-white/90"
+              disabled={!scopePinned}
+              onClick={() => setImportVersionOpen(true)}
+            >
+              <FolderUp className="h-3.5 w-3.5" />
+              Import from local
+            </Button>
+            <FilterChips
+              variant="violet"
+              options={[
+                { id: "all", label: "All" },
+                { id: "production", label: "Production" },
+                { id: "staging", label: "Staging" },
+                { id: "archived", label: "Archived" },
+              ]}
+              value={stageFilter}
+              onChange={(id) => {
+                setStageFilter(id);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
         }
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -694,7 +725,7 @@ export default function ModelDetailPage() {
           <MlopsEmptyState
             icon={Box}
             title="No versions for this filter"
-            description="Change the stage filter or register a new model version from a training run."
+            description="Import from local, change the stage filter, or register a version from a training run."
           />
         ) : (
           <MlopsDataTable
@@ -709,6 +740,16 @@ export default function ModelDetailPage() {
         </>
         )}
       </div>
+      <ImportModelDialog
+        open={importVersionOpen}
+        onOpenChange={setImportVersionOpen}
+        existingModelId={modelId}
+        existingModelName={model?.name}
+        onSuccess={() => {
+          setVersionBanner("Version imported from local files.");
+          setTab("versions");
+        }}
+      />
       <ConfirmDeleteDialog
         open={confirmOpen}
         title={confirmTitle}

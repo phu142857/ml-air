@@ -1,10 +1,9 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchAuditTimeline, fetchRuns } from "@/lib/api"
 import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
-import { toAuditTimelineFilters, type LifecycleSemanticFilters } from "@/lib/lifecycle-filters"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
@@ -55,13 +54,10 @@ interface UseLifecycleOptions {
   jaegerUrl?: string
   /** Poll interval when live mode is on (ms). */
   livePollMs?: number
-  /** Server-side audit timeline filters (`GET .../audit/timeline`). */
-  semanticFilters?: LifecycleSemanticFilters
 }
 
 export function useLifecycle(options: UseLifecycleOptions = {}) {
-  const { jaegerUrl = "", livePollMs = 15_000, semanticFilters = {} } = options
-  const apiFilters = useMemo(() => toAuditTimelineFilters(semanticFilters), [semanticFilters])
+  const { jaegerUrl = "", livePollMs = 15_000 } = options
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { tenantId, projectId, token } = useAppContext()
@@ -74,16 +70,16 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   const hasSeededRef = useRef(false)
 
   const lifecycleQuery = useQuery({
-    queryKey: mlairKeys.audit.timeline(tenantId, projectId, apiFilters),
+    queryKey: mlairKeys.audit.timeline(tenantId, projectId),
     queryFn: async () => {
       const { items } = await fetchAuditTimeline(tenantId, projectId, token, {
         limit: 100,
-        filters: apiFilters,
       })
       return mapAuditTimelineItems(items)
     },
     enabled,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
     refetchInterval: isLive && enabled ? livePollMs : false,
     retry: 2,
   })

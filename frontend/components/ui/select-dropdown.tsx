@@ -19,8 +19,8 @@ type Props = {
 };
 
 /**
- * Button + listbox menu (not native &lt;select&gt;). Avoids browser bugs when ancestors use
- * overflow, sticky layers, or backdrop-blur that break native menu hit-testing.
+ * Button + listbox menu (not native &lt;select&gt;). Menu uses fixed positioning so it is not
+ * clipped by DetailSection overflow or page scroll containers.
  */
 export function SelectDropdown({
   value,
@@ -32,13 +32,40 @@ export function SelectDropdown({
   buttonClassName,
   listClassName,
   id,
-  "aria-label": ariaLabel
+  "aria-label": ariaLabel,
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
   const selected = options.find((o) => o.value === value);
   const buttonLabel = selected?.label ?? (value ? value : placeholder);
+
+  const syncMenuPosition = () => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: r.bottom + 4,
+      left: r.left,
+      minWidth: r.width,
+      zIndex: 200,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    syncMenuPosition();
+    const onScrollOrResize = () => syncMenuPosition();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,8 +86,9 @@ export function SelectDropdown({
   }, [open]);
 
   return (
-    <div className={cn("relative", className)} ref={rootRef}>
+    <div className={cn("relative w-full min-w-[12rem]", className)} ref={rootRef}>
       <button
+        ref={buttonRef}
         id={id}
         type="button"
         disabled={disabled}
@@ -73,7 +101,7 @@ export function SelectDropdown({
         }}
         className={cn(
           "flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card/80 px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50",
-          buttonClassName
+          buttonClassName,
         )}
       >
         <span className="min-w-0 flex-1 truncate">{buttonLabel}</span>
@@ -84,9 +112,10 @@ export function SelectDropdown({
       {open && !disabled && options.length ? (
         <ul
           role="listbox"
+          style={menuStyle}
           className={cn(
-            "absolute left-0 top-[calc(100%+4px)] z-[200] max-h-60 min-w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg",
-            listClassName
+            "max-h-60 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg",
+            listClassName,
           )}
         >
           {options.map((opt) => (
@@ -97,7 +126,7 @@ export function SelectDropdown({
                 aria-selected={opt.value === value}
                 className={cn(
                   "w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted/80",
-                  opt.value === value ? "bg-muted text-foreground" : "text-foreground"
+                  opt.value === value ? "bg-muted text-foreground" : "text-foreground",
                 )}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {

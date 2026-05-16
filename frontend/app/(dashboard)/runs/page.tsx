@@ -4,7 +4,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { Play, Clock, CheckCircle2, XCircle, Loader2, Ban, Bot } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
@@ -169,32 +168,14 @@ export default function RunsPage() {
         accent="sky"
         title="Runs"
         subtitle={isAggregate ? `All projects · ${rows.length} runs` : `${rows.length} runs`}
-        actions={
-          <>
-            <span
-              className="inline-flex"
-              title={!scopePinned ? "Select a specific tenant and project to start a run." : undefined}
-            >
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 gap-2 bg-sky-600 text-white hover:bg-sky-500"
-                disabled={!token.trim() || !scopePinned}
-                onClick={() => openTrigger()}
-              >
-                <Play className="h-3.5 w-3.5" />
-                Trigger run
-              </Button>
-            </span>
-            <TriggerRunDialog
-              open={triggerOpen}
-              onOpenChange={setTriggerOpen}
-              defaultPipelineId={triggerPipelineId}
-              mode={triggerMode}
-              onSuccess={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
-            />
-          </>
-        }
+      />
+
+      <TriggerRunDialog
+        open={triggerOpen}
+        onOpenChange={setTriggerOpen}
+        defaultPipelineId={triggerPipelineId}
+        mode={triggerMode}
+        onSuccess={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
       />
 
       <div className="flex-1 space-y-6 overflow-auto p-6">
@@ -206,7 +187,7 @@ export default function RunsPage() {
           isEmpty={rows.length === 0}
           emptyIcon={Play}
           emptyTitle="No runs in this scope"
-          emptyDescription="Trigger a run or pick a workspace in the header."
+          emptyDescription="Start a run from Pipelines or pick a workspace in the header."
         >
           <MlopsDataTable
             columns={runListColumns}

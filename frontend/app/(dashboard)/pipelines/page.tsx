@@ -188,32 +188,6 @@ export default function PipelinesPage() {
         accent="amber"
         title="Pipelines"
         subtitle={isAggregate ? `All projects · ${items.length} pipelines` : `${items.length} pipelines`}
-        actions={
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 gap-2 border-border bg-card"
-              disabled={!scopePinned}
-              onClick={() => openGatedTrigger()}
-            >
-              <Play className="h-3.5 w-3.5" />
-              Trigger run
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 gap-2 bg-amber-600 text-white hover:bg-amber-500"
-              disabled={!selectedId}
-              title={!selectedId ? "Select a pipeline to add a config version" : undefined}
-              onClick={() => router.push(`/pipelines/${encodeURIComponent(selectedId!)}/versions`)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New version
-            </Button>
-          </>
-        }
       />
 
       <div className="flex-1 space-y-6 overflow-auto p-6">
@@ -317,6 +291,17 @@ export default function PipelinesPage() {
                           Open detail
                         </Link>
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 gap-2 bg-amber-600 text-white hover:bg-amber-500 hover:text-white disabled:bg-amber-600/50 disabled:text-white/90"
+                        disabled={!selectedId}
+                        title={!selectedId ? "Select a pipeline to add a config version" : undefined}
+                        onClick={() => router.push(`/pipelines/${encodeURIComponent(selectedId!)}/versions`)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        New version
+                      </Button>
                       <span
                         className="inline-flex"
                         title={
@@ -330,12 +315,12 @@ export default function PipelinesPage() {
                         <Button
                           type="button"
                           size="sm"
-                          className="gap-2 bg-sky-600 hover:bg-sky-500"
+                          className="gap-2 bg-sky-600 text-white hover:bg-sky-500 hover:text-white disabled:bg-sky-600/50 disabled:text-white/90"
                           disabled={!token.trim() || !scopePinned || !selectedId}
                           onClick={() => openGatedTrigger(selectedId || undefined)}
                         >
                           <Play className="h-3.5 w-3.5" />
-                          Trigger
+                          Trigger run
                         </Button>
                       </span>
                     </div>

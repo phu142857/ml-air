@@ -158,6 +158,21 @@ def _version_row_to_dict(row: tuple) -> dict:
 
 
 def create_model(tenant_id: str, project_id: str, name: str, description: str | None = None) -> dict:
+    name_norm = str(name or "").strip()
+    if not name_norm:
+        raise ValueError("model_name_required")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT model_id FROM models
+                WHERE tenant_id = %s AND project_id = %s AND name = %s
+                LIMIT 1
+                """,
+                (tenant_id, project_id, name_norm),
+            )
+            if cur.fetchone():
+                raise ValueError("model_name_exists")
     model_id = str(uuid4())
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -167,7 +182,7 @@ def create_model(tenant_id: str, project_id: str, name: str, description: str | 
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING model_id, tenant_id, project_id, name, description, created_at, updated_at
                 """,
-                (model_id, tenant_id, project_id, name, description),
+                (model_id, tenant_id, project_id, name_norm, description),
             )
             row = cur.fetchone()
     return {
@@ -188,10 +203,24 @@ def list_models(tenant_id: str, project_id: str, limit: int = 100, offset: int =
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT model_id, tenant_id, project_id, name, description, created_at, updated_at
-                FROM models
-                WHERE tenant_id = %s AND project_id = %s
-                ORDER BY created_at DESC
+                SELECT
+                    m.model_id,
+                    m.tenant_id,
+                    m.project_id,
+                    m.name,
+                    m.description,
+                    m.created_at,
+                    m.updated_at,
+                    (
+                        SELECT mv.version
+                        FROM model_versions mv
+                        WHERE mv.model_id = m.model_id AND mv.stage = 'production'
+                        ORDER BY mv.version DESC
+                        LIMIT 1
+                    ) AS production_version
+                FROM models m
+                WHERE m.tenant_id = %s AND m.project_id = %s
+                ORDER BY m.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
                 (tenant_id, project_id, safe_limit, safe_offset),
@@ -206,6 +235,7 @@ def list_models(tenant_id: str, project_id: str, limit: int = 100, offset: int =
             "description": row[4],
             "created_at": row[5].isoformat(),
             "updated_at": row[6].isoformat(),
+            "production_version": int(row[7]) if row[7] is not None else None,
         }
         for row in rows
     ]

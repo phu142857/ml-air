@@ -144,6 +144,7 @@ export type ModelItem = {
   description?: string | null;
   created_at: string;
   updated_at: string;
+  production_version?: number | null;
 };
 
 export type DatasetItem = {

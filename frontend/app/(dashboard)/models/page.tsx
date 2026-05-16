@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Box, Plus, Loader2 } from "lucide-react"
+import { Box, FolderUp, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,6 +26,7 @@ import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_MODELS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { useToast } from "@/hooks/use-toast"
+import { ImportModelDialog } from "@/components/mlops/import-model-dialog"
 
 const modelColumns: DataTableColumn<ModelItem>[] = [
   {
@@ -36,7 +37,16 @@ const modelColumns: DataTableColumn<ModelItem>[] = [
   {
     id: "model_id",
     header: "Model ID",
-    cell: (m) => <span className="font-mono text-xs text-muted-foreground">{m.model_id}</span>,
+    cell: (m) => (
+      <span className="inline-flex flex-wrap items-center gap-x-1.5 font-mono text-xs">
+        <span className="text-muted-foreground">{m.model_id}</span>
+        {m.production_version != null ? (
+          <span className="rounded-full border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-1.5 py-0.5 text-[color:var(--status-success-fg)]">
+            v{m.production_version}
+          </span>
+        ) : null}
+      </span>
+    ),
   },
   {
     id: "description",
@@ -66,6 +76,7 @@ export default function ModelsPage() {
   const scopePinned = isScopePinned(tenantId, projectId)
   const isAggregate = !scopePinned
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
 
@@ -104,17 +115,31 @@ export default function ModelsPage() {
         title="Models"
         subtitle={isAggregate ? `All projects · ${items.length} models` : `${items.length} models`}
         actions={
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 gap-2 bg-violet-600 text-white hover:bg-violet-500"
-            disabled={!token.trim() || !scopePinned}
-            title={!scopePinned ? "Select a specific tenant and project" : undefined}
-            onClick={() => setRegisterOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Register model
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-2 border-border bg-card"
+              disabled={!token.trim() || !scopePinned}
+              title={!scopePinned ? "Select a specific tenant and project" : undefined}
+              onClick={() => setRegisterOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Register model
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 gap-2 bg-violet-600 text-white hover:bg-violet-500 hover:text-white disabled:text-white/90"
+              disabled={!token.trim() || !scopePinned}
+              title={!scopePinned ? "Select a specific tenant and project" : undefined}
+              onClick={() => setImportOpen(true)}
+            >
+              <FolderUp className="h-3.5 w-3.5" />
+              Import from local
+            </Button>
+          </div>
         }
       />
 
@@ -123,7 +148,7 @@ export default function ModelsPage() {
           <DialogHeader>
             <DialogTitle>Register model</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Creates a model registry entry (maintainer role). Import versions from the model detail page.
+              Creates an empty registry entry. Use Import from local to add weights in the same step.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -162,6 +187,12 @@ export default function ModelsPage() {
         </DialogContent>
       </Dialog>
 
+      <ImportModelDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={(model) => router.push(`/models/${encodeURIComponent(model.model_id)}`)}
+      />
+
       <div className="flex-1 space-y-6 overflow-auto p-6">
         {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODELS} /> : null}
         <ScopedListContent
@@ -171,7 +202,7 @@ export default function ModelsPage() {
           isEmpty={items.length === 0}
           emptyIcon={Box}
           emptyTitle="No models in this scope"
-          emptyDescription="Register from a training run or pick a workspace in the header."
+          emptyDescription="Import from local, register a model, or pick a workspace in the header."
           skeletonRows={5}
         >
           <MlopsDataTable

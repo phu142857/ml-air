@@ -2706,10 +2706,22 @@ def replay_run_v1(
 def create_model_v1(
     tenant_id: str, project_id: str, payload: CreateModelIn, authorization: str | None = Header(default=None)
 ) -> dict:
+    from psycopg import errors as pg_errors
+
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     _enforce_tenant_quota(tenant_id, "models", project_id=project_id)
-    return create_model(tenant_id=tenant_id, project_id=project_id, name=payload.name, description=payload.description)
+    try:
+        return create_model(tenant_id=tenant_id, project_id=project_id, name=payload.name, description=payload.description)
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "model_name_exists":
+            raise HTTPException(status_code=409, detail=detail) from exc
+        if detail == "model_name_required":
+            raise HTTPException(status_code=422, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+    except pg_errors.UniqueViolation as exc:
+        raise HTTPException(status_code=409, detail="model_name_exists") from exc
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models")
