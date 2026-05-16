@@ -1,12 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Settings, Key, Globe, Building2, FolderKanban, Save, Eye, EyeOff, Copy, Check, ExternalLink, Puzzle, Loader2, RefreshCw } from "lucide-react"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { Settings, Key, Globe, Building2, FolderKanban, Save, Eye, EyeOff, Copy, Check, ExternalLink, Puzzle, Loader2, RefreshCw, Palette } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { DesignTokensSlide } from "@/components/mlops/design-tokens-slide"
+import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
+import { DetailSection, DetailTabList, ResourcePageHeader } from "@/components/mlops/layout"
+import { ListTableSkeleton } from "@/components/mlops/list-table-skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import {
   applyRuntimeConfigPatch,
@@ -16,12 +21,28 @@ import {
   writeRuntimeConfigOverride,
 } from "@/lib/runtime-config"
 import { PluginsSettingsTab } from "@/components/settings/plugins-settings-tab"
-import { useAppContext } from "@/lib/app-context"
+import { useAppContext, type AccessibleScopeRow } from "@/lib/app-context"
 import { switchScopeContext } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
-export default function SettingsPage() {
+const SETTINGS_TABS = ["runtime", "api", "scope", "plugins", "design-tokens"] as const
+
+function SettingsPageContent() {
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get("tab")
+  const initialTab =
+    tabParam && SETTINGS_TABS.includes(tabParam as (typeof SETTINGS_TABS)[number])
+      ? tabParam
+      : "runtime"
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  useEffect(() => {
+    if (tabParam && SETTINGS_TABS.includes(tabParam as (typeof SETTINGS_TABS)[number])) {
+      setActiveTab(tabParam)
+    }
+  }, [tabParam])
+
   const { toast } = useToast()
   const {
     tenantId,
@@ -100,6 +121,42 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const scopeTableColumns: DataTableColumn<AccessibleScopeRow>[] = useMemo(
+    () => [
+      {
+        id: "tenant",
+        header: "Tenant",
+        cell: (r) => <span className="font-mono text-foreground">{r.tenant_id}</span>,
+      },
+      {
+        id: "project",
+        header: "Project",
+        cell: (r) => <span className="font-mono text-foreground/90">{r.project_id}</span>,
+      },
+      {
+        id: "role",
+        header: "Role",
+        cell: (r) => <span className="text-muted-foreground">{r.role || "—"}</span>,
+      },
+      {
+        id: "state",
+        header: "",
+        className: "w-[88px] text-right",
+        cell: (row) => {
+          const active = row.tenant_id === tenantId && row.project_id === projectId
+          return active ? (
+            <Badge variant="outline" className="text-[10px] border-sky-500/30 text-sky-400">
+              active
+            </Badge>
+          ) : (
+            <span className="text-[10px] text-muted-foreground/80">Switch</span>
+          )
+        },
+      },
+    ],
+    [tenantId, projectId],
+  )
+
   const maskedPreview = (t: string) => {
     const s = t.trim()
     if (!s) return "—"
@@ -108,89 +165,74 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div className="border-b border-zinc-800 bg-zinc-950/50 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-zinc-500/20 to-zinc-600/10 border border-zinc-500/20">
-            <Settings className="h-5 w-5 text-zinc-400" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-zinc-100">Settings</h1>
-            <p className="text-xs text-zinc-500">Configure your ML-Air Hub environment</p>
-          </div>
-        </div>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ResourcePageHeader
+        icon={Settings}
+        accent="zinc"
+        title="Settings"
+        subtitle="Configure your ML-Air Hub environment"
+      />
 
       {/* Content */}
-      <Tabs defaultValue="runtime" className="flex-1 flex flex-col">
-        <div className="border-b border-zinc-800 px-6">
-          <TabsList className="bg-transparent h-10 p-0 gap-4">
-            <TabsTrigger value="runtime" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-sky-500 rounded-none px-0 pb-3 text-sm">
-              <Globe className="h-3.5 w-3.5 mr-1.5" />
-              Runtime Config
-            </TabsTrigger>
-            <TabsTrigger value="api" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-sky-500 rounded-none px-0 pb-3 text-sm">
-              <Key className="h-3.5 w-3.5 mr-1.5" />
-              Session
-            </TabsTrigger>
-            <TabsTrigger value="scope" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-sky-500 rounded-none px-0 pb-3 text-sm">
-              <Building2 className="h-3.5 w-3.5 mr-1.5" />
-              Scope Management
-            </TabsTrigger>
-            <TabsTrigger value="plugins" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-sky-500 rounded-none px-0 pb-3 text-sm">
-              <Puzzle className="h-3.5 w-3.5 mr-1.5" />
-              Plugins
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+        <DetailTabList
+          accent="sky"
+          tabs={[
+            { id: "runtime", label: "Runtime Config", icon: <Globe className="h-3.5 w-3.5" /> },
+            { id: "api", label: "Session", icon: <Key className="h-3.5 w-3.5" /> },
+            { id: "scope", label: "Scope Management", icon: <Building2 className="h-3.5 w-3.5" /> },
+            { id: "plugins", label: "Plugins", icon: <Puzzle className="h-3.5 w-3.5" /> },
+            { id: "design-tokens", label: "Design Tokens", icon: <Palette className="h-3.5 w-3.5" /> },
+          ]}
+        />
 
         <div className="flex-1 overflow-auto p-6">
           <TabsContent value="runtime" className="mt-0 space-y-6">
-            <div className="max-w-2xl">
-              <div className="rounded-lg border border-zinc-800 p-6 space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-200 mb-1">Runtime Configuration</h3>
-                  <p className="text-xs text-zinc-500">Configure external service URLs and environment settings</p>
-                </div>
-
+            <div className="max-w-2xl space-y-6">
+              <DetailSection
+                title="Runtime configuration"
+                description="Configure external service URLs and environment settings."
+                accentBorder="sky"
+              >
                 <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-xs">
                   <div className="font-medium text-sky-200">Active API scope</div>
-                  <div className="mt-1 font-mono text-zinc-200">
-                    {tenantId} <span className="text-zinc-600">/</span> {projectId}
+                  <div className="mt-1 font-mono text-foreground">
+                    {tenantId} <span className="text-muted-foreground/80">/</span> {projectId}
                   </div>
-                  <div className="mt-1 text-[10px] text-zinc-500">
+                  <div className="mt-1 text-[10px] text-muted-foreground">
                     mapping v{mappingVersion} · <span className="font-mono">{bootstrapSource}</span>
                     {!isBootstrapped ? " · resolving…" : null}
                   </div>
-                  <p className="mt-2 text-[10px] leading-relaxed text-zinc-600">
-                    Switch tenant/project from the top bar. Values here reflect the UI session used for API calls.
+                  <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/80">
+                    Scope matches the header selector for API calls.
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="jaeger-url" className="text-sm text-zinc-400">Jaeger Base URL</Label>
+                    <Label htmlFor="jaeger-url" className="text-sm text-muted-foreground">
+                      Jaeger Base URL
+                    </Label>
                     <div className="flex gap-2">
                       <Input
                         id="jaeger-url"
                         value={jaegerUrl}
                         onChange={(e) => setJaegerUrl(e.target.value)}
                         placeholder="https://jaeger.example.com"
-                        className="bg-zinc-900 border-zinc-800 font-mono text-sm"
+                        className="bg-card border-border font-mono text-sm"
                       />
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="shrink-0 gap-1.5 bg-zinc-900 border-zinc-800"
+                        className="shrink-0 gap-1.5 bg-card border-border"
                         onClick={() => {
                           const raw = jaegerUrl.trim().replace(/\/$/, "")
                           if (!raw) {
                             toast({
                               variant: "destructive",
                               title: "Empty URL",
-                              description: "Enter a Jaeger UI base URL first."
+                              description: "Enter a Jaeger UI base URL first.",
                             })
                             return
                           }
@@ -201,23 +243,25 @@ export default function SettingsPage() {
                         Test
                       </Button>
                     </div>
-                    <p className="text-[10px] text-zinc-600">Used for deep-linking traces from audit events</p>
+                    <p className="text-[10px] text-muted-foreground/80">Used for deep-linking traces from audit events</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="api-url" className="text-sm text-zinc-400">API Base URL</Label>
+                    <Label htmlFor="api-url" className="text-sm text-muted-foreground">
+                      API Base URL
+                    </Label>
                     <Input
                       id="api-url"
                       value={apiBaseUrl}
                       onChange={(e) => setApiBaseUrl(e.target.value)}
                       placeholder="/v1"
-                      className="bg-zinc-900 border-zinc-800 font-mono text-sm"
+                      className="bg-card border-border font-mono text-sm"
                     />
-                    <p className="text-[10px] text-zinc-600">Base path for API proxy endpoints</p>
+                    <p className="text-[10px] text-muted-foreground/80">Base path for API proxy endpoints</p>
                   </div>
                 </div>
 
-                <div className="space-y-2 border-t border-zinc-800 pt-4">
+                <div className="space-y-2 border-t border-border pt-4">
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
@@ -244,7 +288,7 @@ export default function SettingsPage() {
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="border-zinc-700 bg-zinc-900"
+                      className="border-border bg-card"
                       disabled={!hasLocalOverride}
                       onClick={() => {
                         clearRuntimeConfigOverride()
@@ -254,48 +298,46 @@ export default function SettingsPage() {
                       Reset to deploy defaults
                     </Button>
                   </div>
-                  <p className="text-[10px] text-zinc-600">
-                    Overrides are stored in <span className="font-mono text-zinc-500">localStorage</span> for operator
+                  <p className="text-[10px] text-muted-foreground/80">
+                    Overrides are stored in <span className="font-mono text-muted-foreground">localStorage</span> for operator
                     preview. Production URLs should still come from{" "}
-                    <span className="font-mono text-zinc-500">mlair-runtime-config.js</span> or{" "}
-                    <span className="font-mono text-zinc-500">GET /v1/runtime-config</span>.
+                    <span className="font-mono text-muted-foreground">mlair-runtime-config.js</span> or{" "}
+                    <span className="font-mono text-muted-foreground">GET /v1/runtime-config</span>.
                     {hasLocalOverride ? (
                       <span className="mt-1 block text-amber-500/90">A local override is active.</span>
                     ) : null}
                   </p>
                 </div>
-              </div>
+              </DetailSection>
 
-              <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+              <DetailSection
+                title="Environment variable"
+                description="Configuration is also exposed as window.__ML_AIR_RUNTIME_CONFIG__."
+                accentBorder="none"
+                bodyClassName="pt-4"
+              >
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-md bg-amber-500/10 text-amber-400">
+                  <div className="rounded-md bg-amber-500/10 p-2 text-amber-400">
                     <Globe className="h-4 w-4" />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-zinc-300">Environment Variable</h4>
-                    <p className="text-xs text-zinc-500 mt-1">
-                      Configuration is also available via <code className="text-amber-400 bg-zinc-800 px-1 rounded">window.__ML_AIR_RUNTIME_CONFIG__</code>
-                    </p>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    See <code className="rounded bg-muted px-1 text-amber-400">window.__ML_AIR_RUNTIME_CONFIG__</code> in the
+                    browser console for the merged runtime object.
+                  </p>
                 </div>
-              </div>
+              </DetailSection>
             </div>
           </TabsContent>
 
           <TabsContent value="api" className="mt-0 space-y-6">
             <div className="max-w-2xl">
-              <div className="rounded-lg border border-zinc-800 p-6 space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-200 mb-1">Session bearer token</h3>
-                  <p className="text-xs text-zinc-500">
-                    Token sent as <code className="text-zinc-400">Authorization: Bearer</code> for API requests from
-                    this browser. Persisted in <span className="font-mono text-zinc-400">localStorage</span> with
-                    tenant/project scope.
-                  </p>
-                </div>
-
+              <DetailSection
+                title="Session bearer token"
+                description="Token sent as Authorization: Bearer for API requests. Stored in localStorage with tenant/project scope."
+                accentBorder="violet"
+              >
                 <div className="space-y-2">
-                  <Label htmlFor="session-token" className="text-sm text-zinc-400">
+                  <Label htmlFor="session-token" className="text-sm text-muted-foreground">
                     Token value
                   </Label>
                   <Textarea
@@ -303,7 +345,7 @@ export default function SettingsPage() {
                     value={draftToken}
                     onChange={(e) => setDraftToken(e.target.value)}
                     spellCheck={false}
-                    className="min-h-[88px] resize-y bg-zinc-950 border-zinc-800 font-mono text-xs text-zinc-100"
+                    className="min-h-[88px] resize-y border-border bg-muted/30 font-mono text-xs text-foreground"
                     placeholder="Paste bearer token…"
                   />
                   <div className="flex flex-wrap items-center gap-2">
@@ -319,7 +361,7 @@ export default function SettingsPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="border-zinc-700 bg-zinc-900"
+                      className="border-border bg-card"
                       onClick={() => setDraftToken(token)}
                     >
                       Reset to active
@@ -327,24 +369,24 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/80 p-4">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <Key className="h-5 w-5 shrink-0 text-zinc-500" />
+                    <Key className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-zinc-200">Preview</span>
-                        <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400">
+                        <span className="text-sm font-medium text-foreground">Preview</span>
+                        <Badge variant="outline" className="border-emerald-500/30 text-[10px] text-emerald-400">
                           {token.trim() ? "active" : "empty"}
                         </Badge>
                       </div>
                       <div className="mt-1 flex items-center gap-2">
-                        <code className="truncate text-xs font-mono text-zinc-400">
+                        <code className="truncate font-mono text-xs text-muted-foreground">
                           {showApiKey ? draftToken || "—" : maskedPreview(draftToken)}
                         </code>
                         <button
                           type="button"
                           onClick={() => setShowApiKey(!showApiKey)}
-                          className="shrink-0 text-zinc-500 hover:text-zinc-300"
+                          className="shrink-0 text-muted-foreground hover:text-foreground/90"
                           aria-label={showApiKey ? "Hide token" : "Reveal token"}
                         >
                           {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -352,7 +394,7 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={handleCopy}
-                          className="shrink-0 text-zinc-500 hover:text-zinc-300"
+                          className="shrink-0 text-muted-foreground hover:text-foreground/90"
                           aria-label="Copy token"
                         >
                           {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -362,30 +404,26 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <p className="text-[10px] text-zinc-600">
-                  Token minting and revocation are managed by your identity / API service — this UI only stores the
-                  secret locally for development and operator workflows.
+                <p className="text-[10px] text-muted-foreground/80">
+                  Token minting and revocation are managed by your identity / API service — this UI only stores the secret
+                  locally for development and operator workflows.
                 </p>
-              </div>
+              </DetailSection>
             </div>
           </TabsContent>
 
           <TabsContent value="scope" className="mt-0 space-y-6">
             <div className="max-w-3xl">
-              <div className="rounded-lg border border-zinc-800 p-6 space-y-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-medium text-zinc-200 mb-1">Tenant &amp; project access</h3>
-                    <p className="text-xs text-zinc-500">
-                      Rows from bootstrap <code className="text-zinc-400">/v1/bootstrap/context</code>. Change the
-                      active pair from the top bar scope switcher.
-                    </p>
-                  </div>
+              <DetailSection
+                title="Tenant & project access"
+                description="Rows from bootstrap /v1/bootstrap/context. Change the active pair from the top bar scope switcher."
+                accentBorder="amber"
+                headerActions={
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="shrink-0 gap-2 border-zinc-700 bg-zinc-900"
+                    className="shrink-0 gap-2 border-border bg-card"
                     disabled={!token.trim() || isScopeLoading}
                     onClick={() => void refreshBootstrap()}
                   >
@@ -396,94 +434,96 @@ export default function SettingsPage() {
                     )}
                     Refresh access
                   </Button>
-                </div>
-
+                }
+              >
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="p-4 rounded-lg border border-zinc-800 bg-zinc-900/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Building2 className="h-4 w-4 text-zinc-500" />
-                      <span className="text-sm font-medium text-zinc-300">Active tenant</span>
+                  <div className="rounded-lg border border-border bg-card/80 p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground/90">Active tenant</span>
                     </div>
-                    <p className="font-mono text-sm text-zinc-100">{tenantId}</p>
+                    <p className="font-mono text-sm text-foreground">{tenantId}</p>
                   </div>
-                  <div className="p-4 rounded-lg border border-zinc-800 bg-zinc-900/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FolderKanban className="h-4 w-4 text-zinc-500" />
-                      <span className="text-sm font-medium text-zinc-300">Active project</span>
+                  <div className="rounded-lg border border-border bg-card/80 p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <FolderKanban className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground/90">Active project</span>
                     </div>
-                    <p className="font-mono text-sm text-zinc-100">{projectId}</p>
+                    <p className="font-mono text-sm text-foreground">{projectId}</p>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Accessible scopes</h4>
+                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Accessible scopes
+                  </h4>
                   {accessibleScopes.length === 0 ? (
-                    <p className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-4 text-sm text-zinc-500">
+                    <p className="rounded-lg border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
                       {isBootstrapped
                         ? "No scope rows returned — token may lack cross-project visibility or bootstrap returned an empty list."
                         : "Loading bootstrap context…"}
                     </p>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border border-zinc-800">
-                      <table className="w-full text-left text-xs">
-                        <thead className="border-b border-zinc-800 bg-zinc-900/80">
-                          <tr>
-                            <th className="px-3 py-2 font-medium text-zinc-400">Tenant</th>
-                            <th className="px-3 py-2 font-medium text-zinc-400">Project</th>
-                            <th className="px-3 py-2 font-medium text-zinc-400">Role</th>
-                            <th className="px-3 py-2 font-medium text-zinc-400"> </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {accessibleScopes.map((row, idx) => {
-                            const active = row.tenant_id === tenantId && row.project_id === projectId
-                            return (
-                              <tr
-                                key={`${row.tenant_id}-${row.project_id}-${row.role}-${idx}`}
-                                className={cn(
-                                  "border-t border-zinc-800",
-                                  !active && !scopeSwitching && "cursor-pointer hover:bg-zinc-900/60",
-                                  scopeSwitching && "opacity-60",
-                                )}
-                                onClick={() => {
-                                  if (active || scopeSwitching) return
-                                  void switchToScope(row.tenant_id, row.project_id)
-                                }}
-                              >
-                                <td className="px-3 py-2 font-mono text-zinc-200">{row.tenant_id}</td>
-                                <td className="px-3 py-2 font-mono text-zinc-300">{row.project_id}</td>
-                                <td className="px-3 py-2 text-zinc-400">{row.role || "—"}</td>
-                                <td className="px-3 py-2 text-right">
-                                  {active ? (
-                                    <Badge variant="outline" className="text-[10px] border-sky-500/30 text-sky-400">
-                                      active
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-[10px] text-zinc-600">Switch</span>
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    <MlopsDataTable
+                      columns={scopeTableColumns}
+                      data={accessibleScopes}
+                      keyExtractor={(row) => `${row.tenant_id}-${row.project_id}-${row.role}`}
+                      onRowClick={(row) => {
+                        if (row.tenant_id === tenantId && row.project_id === projectId) return
+                        if (scopeSwitching) return
+                        void switchToScope(row.tenant_id, row.project_id)
+                      }}
+                      rowClassName={(row) =>
+                        cn(
+                          row.tenant_id === tenantId && row.project_id === projectId && "bg-sky-500/5",
+                          !scopeSwitching &&
+                            !(row.tenant_id === tenantId && row.project_id === projectId) &&
+                            "cursor-pointer",
+                          scopeSwitching && "pointer-events-none opacity-60",
+                        )
+                      }
+                      emptyMessage="No scopes."
+                    />
                   )}
                 </div>
 
-                <p className="text-[10px] text-zinc-600">
-                  Creating tenants or projects is not available in this UI — use your platform API or provisioning
-                  flow.
+                <p className="text-[10px] text-muted-foreground/80">
+                  Creating tenants or projects is not available in this UI — use your platform API or provisioning flow.
                 </p>
-              </div>
+              </DetailSection>
             </div>
           </TabsContent>
 
           <TabsContent value="plugins" className="mt-0 space-y-6">
             <PluginsSettingsTab />
           </TabsContent>
+
+          <TabsContent value="design-tokens" className="mt-0">
+            <DetailSection
+              title="Design tokens"
+              description="Semantic palette and radii used across the Hub."
+              accentBorder="violet"
+              bodyClassName="space-y-4"
+            >
+              <DesignTokensSlide />
+            </DetailSection>
+          </TabsContent>
         </div>
       </Tabs>
     </div>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-0 flex-1 flex-col p-6">
+          <ListTableSkeleton rows={8} />
+        </div>
+      }
+    >
+      <SettingsPageContent />
+    </Suspense>
   )
 }

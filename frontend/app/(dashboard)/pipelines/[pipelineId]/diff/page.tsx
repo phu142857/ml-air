@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -8,16 +8,23 @@ import { FileDiff } from "lucide-react";
 import { getPipelineVersionDiff, listPipelineVersionsApi } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
-import { ResourcePageHeader } from "@/components/layout/page-chrome";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import {
+  DetailSection,
+  MlopsEmptyState,
+  ResourcePageHeader,
+  ScopePinnedInline,
+  SubpageBreadcrumb,
+} from "@/components/mlops/layout";
+import { isScopePinned } from "@/lib/scope";
+import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
+import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 
-const cardClass = "border-zinc-800 bg-zinc-900/50";
+const sectionClass = "max-w-[1400px]";
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-64 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-2 font-mono text-xs text-zinc-300">
+    <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs text-foreground/90">
       {value === undefined || value === null ? "—" : JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -28,6 +35,7 @@ function DiffPageInner() {
   const pipelineId = decodeURIComponent(params.pipelineId);
   const sp = useSearchParams();
   const { tenantId, projectId, token } = useAppContext();
+  const scopePinned = isScopePinned(tenantId, projectId);
   const qLeft = sp.get("left") || "";
   const qRight = sp.get("right") || "";
 
@@ -61,19 +69,50 @@ function DiffPageInner() {
     enabled: Boolean(canDiff && token)
   });
 
-  const details = diffQuery.data?.details ?? [];
+  type DiffRow = { key: string; left: unknown; right: unknown }
+  const details = (diffQuery.data?.details ?? []) as DiffRow[]
   const summary = useMemo(
     () => (diffQuery.data ? `${diffQuery.data.changed_keys.length} key(s) differ` : ""),
     [diffQuery.data]
-  );
+  )
+
+  const diffColumns: DataTableColumn<DiffRow>[] = useMemo(
+    () => [
+      {
+        id: "key",
+        header: "Key",
+        className: "w-[28%]",
+        cell: (row) => <span className="font-mono text-xs text-amber-400/90">{row.key}</span>,
+      },
+      {
+        id: "left",
+        header: "Left",
+        cell: (row) => <JsonBlock value={row.left} />,
+      },
+      {
+        id: "right",
+        header: "Right",
+        cell: (row) => <JsonBlock value={row.right} />,
+      },
+    ],
+    [],
+  )
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SubpageBreadcrumb
+        segments={[
+          { label: "Pipelines", href: "/pipelines" },
+          { label: pipelineId, href: `/pipelines/${encodeURIComponent(pipelineId)}`, mono: true },
+          { label: "Versions", href: `/pipelines/${encodeURIComponent(pipelineId)}/versions` },
+          { label: "Diff", mono: true },
+        ]}
+      />
       <ResourcePageHeader
         icon={FileDiff}
         accent="amber"
         title="Config diff"
-        subtitle={`${pipelineId} · top-level keys from pipeline config JSONB`}
+        subtitle="Top-level config keys"
         actions={
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Link
@@ -82,76 +121,70 @@ function DiffPageInner() {
             >
               ← Versions
             </Link>
-            <span className="text-zinc-600">|</span>
+            <span className="text-muted-foreground/80">|</span>
             <Link
               href={`/pipelines/${encodeURIComponent(pipelineId)}`}
-              className="text-zinc-500 hover:text-zinc-300 hover:underline"
+              className="text-muted-foreground hover:text-foreground/90 hover:underline"
             >
               DAG
             </Link>
           </div>
         }
       />
-      <div className="flex-1 overflow-auto p-6">
-        <Card className={`mb-6 ${cardClass}`}>
-          <CardHeader>
-            <CardTitle className="text-zinc-200">Version selector</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-4">
-            <label className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
+      <div className="flex-1 space-y-6 overflow-auto p-6">
+        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+        <DetailSection title="Version selector" accentBorder="amber" className={sectionClass}>
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               Left
               <SelectDropdown
                 value={leftId}
                 onChange={setLeftId}
                 options={versionPickOptions}
-                buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm text-foreground"
                 aria-label="Left version for diff"
               />
             </label>
-            <label className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               Right
               <SelectDropdown
                 value={rightId}
                 onChange={setRightId}
                 options={versionPickOptions}
-                buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm text-foreground"
                 aria-label="Right version for diff"
               />
             </label>
-          </CardContent>
-        </Card>
+          </div>
+        </DetailSection>
         {canDiff ? (
-          <p className="mb-2 text-sm text-amber-200/90">
+          <p className="text-sm text-amber-600 dark:text-amber-400/90">
             {diffQuery.isLoading ? "Loading diff…" : diffQuery.isError ? "Failed to load diff" : summary}
           </p>
         ) : null}
-        {!canDiff ? <p className="text-sm text-zinc-500">Select two different versions to compare.</p> : null}
-        {canDiff && !diffQuery.isLoading && details.length > 0 ? (
-          <DataTableShell>
-            <DataTable className="text-left text-sm text-zinc-200">
-              <thead className="border-b border-zinc-800 bg-zinc-950/80">
-                <tr>
-                  <th className="w-1/4 px-3 py-2 font-medium text-zinc-500">Key</th>
-                  <th className="px-3 py-2 font-medium text-zinc-500">Left</th>
-                  <th className="px-3 py-2 font-medium text-zinc-500">Right</th>
-                </tr>
-              </thead>
-              <tbody>
-                {details.map((row) => (
-                  <tr key={row.key} className="border-t border-zinc-800">
-                    <td className="align-top p-2 font-mono text-xs text-zinc-300">{row.key}</td>
-                    <td className="align-top p-2">
-                      <JsonBlock value={row.left} />
-                    </td>
-                    <td className="align-top p-2">
-                      <JsonBlock value={row.right} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-          </DataTableShell>
-        ) : null}
+        {!canDiff ? (
+          <p className="text-sm text-muted-foreground">Select two different versions to compare.</p>
+        ) : diffQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading diff…</p>
+        ) : diffQuery.isError ? (
+          <p className="text-sm text-red-300">Failed to load diff.</p>
+        ) : details.length === 0 ? (
+          <MlopsEmptyState
+            icon={FileDiff}
+            title="No differences"
+            description="Selected versions have identical top-level config keys (or no changed keys returned)."
+          />
+        ) : (
+          <DetailSection title="Changed keys" accentBorder="amber" bodyClassName="p-0">
+            <DataTable
+              columns={diffColumns}
+              data={details}
+              keyExtractor={(row) => row.key}
+              emptyMessage="No diff rows."
+              className="border-0 rounded-none"
+            />
+          </DetailSection>
+        )}
       </div>
     </div>
   );
@@ -161,8 +194,8 @@ export default function PipelineDiffPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full flex-col p-6">
-          <p className="text-sm text-zinc-500">Loading…</p>
+        <div className="flex min-h-0 flex-1 flex-col p-6">
+          <p className="text-sm text-muted-foreground">Loading…</p>
         </div>
       }
     >

@@ -49,13 +49,13 @@ function ActorBadge({ actor }: { actor: AuditEvent["actor"] }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs">
       {isUser ? (
-        <User className="h-3 w-3 text-zinc-500" />
+        <User className="h-3 w-3 text-muted-foreground" />
       ) : (
-        <Bot className="h-3 w-3 text-zinc-500" />
+        <Bot className="h-3 w-3 text-muted-foreground" />
       )}
       <span className={cn(
         "font-medium",
-        isUser ? "text-zinc-300" : "text-zinc-500"
+        isUser ? "text-foreground/90" : "text-muted-foreground"
       )}>
         {actor.name}
       </span>
@@ -74,7 +74,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
   
   // FIX: Thêm Fallback Icon và Color để tránh lỗi 'undefined' khi gặp eventType lạ
   const Icon = eventTypeIcons[event.eventType] || HelpCircle
-  const iconColor = eventTypeColors[event.eventType] || "text-zinc-400 bg-zinc-500/10"
+  const iconColor = eventTypeColors[event.eventType] || "text-muted-foreground bg-muted"
   
   const statusMap: Record<string, "success" | "failed" | "running" | "pending"> = {
     success: "success",
@@ -90,12 +90,12 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
     )}>
       {/* Timeline line */}
       {!isLast && (
-        <div className="absolute left-[19px] top-10 bottom-0 w-px bg-zinc-800" />
+        <div className="absolute left-[19px] top-10 bottom-0 w-px bg-muted" />
       )}
       
       {/* Event icon */}
       <div className={cn(
-        "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950",
+        "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background",
         iconColor
       )}>
         <Icon className="h-4 w-4" />
@@ -105,18 +105,18 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
       <div className="flex-1 min-w-0">
         <div
           className={cn(
-            "rounded-lg border border-zinc-800 bg-zinc-900/50 transition-all duration-200",
-            expanded && "border-zinc-700 bg-zinc-900 shadow-lg shadow-black/20"
+            "rounded-lg border border-border bg-card/80 transition-all duration-200",
+            expanded && "border-border bg-card shadow-lg shadow-black/20"
           )}
         >
           {/* Header Button */}
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full flex items-start gap-3 p-3 text-left hover:bg-zinc-800/30 transition-colors rounded-lg"
+            className="w-full flex items-start gap-3 p-3 text-left hover:bg-muted/50 transition-colors rounded-lg"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h3 className="text-sm font-medium text-zinc-100 truncate">
+                <h3 className="text-sm font-medium text-foreground truncate">
                   {event.title}
                 </h3>
                 <StatusBadge status={statusMap[event.status] || "pending"} size="sm" />
@@ -131,73 +131,73 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-500 line-clamp-1">
+              <p className="text-xs text-muted-foreground line-clamp-1">
                 {event.description}
               </p>
             </div>
             
             <div className="flex items-center gap-3 shrink-0 ml-2">
               <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[10px] font-mono text-zinc-500">
+                <span className="text-[10px] font-mono text-muted-foreground">
                   {formatDateTimeCompact(event.timestamp)}
                 </span>
-                <span className="text-[10px] text-zinc-600">
+                <span className="text-[10px] text-muted-foreground/80">
                   {formatRelativeTime(event.timestamp)}
                 </span>
               </div>
               {expanded ? (
-                <ChevronDown className="h-4 w-4 text-zinc-500" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="h-4 w-4 text-zinc-500" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
               )}
             </div>
           </button>
           
           {/* Expanded content */}
           {expanded && (
-            <div className="border-t border-zinc-800 p-4 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="border-t border-border p-4 space-y-4 animate-in zoom-in-95 duration-200">
               <div>
-                <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Description</label>
-                <p className="text-sm text-zinc-300 mt-1">{event.description}</p>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Description</label>
+                <p className="text-sm text-foreground/90 mt-1">{event.description}</p>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Actor</label>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Actor</label>
                   <div className="mt-1">
                     <ActorBadge actor={event.actor} />
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Event Type</label>
-                  <p className="text-sm text-zinc-300 mt-1 capitalize">{event.eventType}</p>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Event Type</label>
+                  <p className="text-sm text-foreground/90 mt-1 capitalize">{event.eventType}</p>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Exact Timestamp</label>
-                  <p className="text-sm font-mono text-zinc-400 mt-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Exact Timestamp</label>
+                  <p className="text-sm font-mono text-muted-foreground mt-1">
                     {new Date(event.timestamp).toISOString()}
                   </p>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Event ID</label>
-                  <p className="text-sm font-mono text-zinc-500 mt-1">{event.id}</p>
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Event ID</label>
+                  <p className="text-sm font-mono text-muted-foreground mt-1">{event.id}</p>
                 </div>
               </div>
               
               {event.metadata && Object.keys(event.metadata).length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Metadata</label>
-                  <pre className="mt-1 text-xs font-mono text-zinc-400 bg-zinc-950/50 border border-zinc-800 rounded-md p-3 overflow-x-auto">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Metadata</label>
+                  <pre className="mt-1 text-xs font-mono text-muted-foreground bg-background/50 border border-border rounded-md p-3 overflow-x-auto">
                     {JSON.stringify(event.metadata, null, 2)}
                   </pre>
                 </div>
               )}
               
               {event.traceId && (
-                <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
+                <div className="flex items-center justify-between pt-3 border-t border-border/50">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-zinc-600 tracking-wider">Trace ID</label>
-                    <p className="text-sm font-mono text-zinc-500 mt-0.5">{event.traceId}</p>
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Trace ID</label>
+                    <p className="text-sm font-mono text-muted-foreground mt-0.5">{event.traceId}</p>
                   </div>
                   <JaegerLink traceId={event.traceId} />
                 </div>
@@ -213,12 +213,12 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
 export function AuditTimeline({ events, newEventIds }: AuditTimelineProps) {
   if (!events || events.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-zinc-800 rounded-xl bg-zinc-900/20">
-        <div className="h-12 w-12 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
-          <Clock className="h-6 w-6 text-zinc-700" />
+      <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-xl bg-card/20">
+        <div className="h-12 w-12 rounded-full bg-card flex items-center justify-center mb-4">
+          <Clock className="h-6 w-6 text-muted-foreground" />
         </div>
-        <p className="text-sm font-medium text-zinc-400">No events found</p>
-        <p className="text-xs text-zinc-600 mt-1 max-w-[200px]">
+        <p className="text-sm font-medium text-muted-foreground">No events found</p>
+        <p className="text-xs text-muted-foreground/80 mt-1 max-w-[200px]">
           Audit events will appear here as the system processes tasks
         </p>
       </div>

@@ -64,7 +64,7 @@ export function datasetSourceTypeBadge(sourceType: string | null | undefined): {
     case "runtime_accumulated":
       return {
         label: `RUNTIME ACCUMULATED${suffix}`,
-        className: "border-zinc-600 bg-zinc-800/80 text-zinc-400"
+        className: "border-border bg-muted/80 text-muted-foreground"
       };
     case "manual":
       return {
@@ -79,7 +79,7 @@ export function datasetSourceTypeBadge(sourceType: string | null | undefined): {
     default:
       return {
         label: (raw || "UNKNOWN").toUpperCase().replace(/_/g, " "),
-        className: "border-zinc-700 bg-zinc-900 text-zinc-500"
+        className: "border-border bg-card text-muted-foreground"
       };
   }
 }

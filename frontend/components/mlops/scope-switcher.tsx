@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronDown, Building2, FolderKanban, Loader2 } from "lucide-react"
+import { ChevronDown, Building2, FolderKanban, Globe, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -140,27 +140,30 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!tenantIds.length || busy}
-            className="h-8 max-w-[200px] gap-2 text-zinc-300 hover:bg-zinc-800/50 hover:text-zinc-100"
+            className="h-8 max-w-[200px] gap-2 text-foreground/90 hover:text-foreground hover:bg-muted/80"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-500" /> : null}
-            <Building2 className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
+            <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium font-mono">{tenantId || "—"}</span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-zinc-500" />
+            {aggregateActive ? (
+              <Globe className="h-3 w-3 shrink-0 text-amber-400" aria-hidden />
+            ) : null}
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56 border-zinc-800 bg-zinc-950">
-          <DropdownMenuLabel className="text-xs text-zinc-500">Tenant</DropdownMenuLabel>
-          <DropdownMenuSeparator className="bg-zinc-800" />
+        <DropdownMenuContent align="start" className="w-56 bg-card border-border">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">Tenant</DropdownMenuLabel>
+          <DropdownMenuSeparator className="bg-muted" />
           {!isBootstrapped && !tenantIds.length ? (
-            <div className="px-2 py-2 text-xs text-zinc-500">Loading scope…</div>
+            <div className="px-2 py-2 text-xs text-muted-foreground">Loading scope…</div>
           ) : null}
           {tenantIds.length > 1 ? (
             <DropdownMenuItem
               disabled={busy}
               onClick={onPickAggregate}
-              className={aggregateActive ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-300"}
+              className={aggregateActive ? "bg-muted/80 text-foreground" : "text-foreground/90"}
             >
-              <Building2 className="mr-2 h-3.5 w-3.5 shrink-0" />
+              <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-amber-400" />
               <span className="font-mono text-xs">all (aggregate)</span>
             </DropdownMenuItem>
           ) : null}
@@ -169,7 +172,7 @@ export function ScopeSwitcher() {
               key={tid}
               disabled={busy}
               onClick={() => onPickTenant(tid)}
-              className={tid === tenantId ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-300"}
+              className={tid === tenantId ? "bg-muted/80 text-foreground" : "text-foreground/90"}
             >
               <Building2 className="mr-2 h-3.5 w-3.5 shrink-0" />
               <span className="font-mono text-xs">{tid}</span>
@@ -178,7 +181,9 @@ export function ScopeSwitcher() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <span className="text-zinc-700">/</span>
+      <span className="text-muted-foreground" aria-hidden>
+        /
+      </span>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -186,25 +191,32 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!projectsForTenant.length || busy}
-            className="h-8 max-w-[220px] gap-2 text-zinc-300 hover:bg-zinc-800/50 hover:text-zinc-100"
+            className="h-8 max-w-[220px] gap-2 text-foreground/90 hover:text-foreground hover:bg-muted/80"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-500" /> : null}
-            <FolderKanban className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
+            <FolderKanban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium font-mono">{projectId || "—"}</span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-zinc-500" />
+            {tenantId !== "all" && projectId === "all" ? (
+              <Globe className="h-3 w-3 shrink-0 text-amber-400" aria-hidden />
+            ) : null}
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64 border-zinc-800 bg-zinc-950">
-          <DropdownMenuLabel className="text-xs text-zinc-500">Project</DropdownMenuLabel>
-          <DropdownMenuSeparator className="bg-zinc-800" />
+        <DropdownMenuContent align="start" className="w-64 bg-card border-border">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">Project</DropdownMenuLabel>
+          <DropdownMenuSeparator className="bg-muted" />
           {projectsForTenant.map((pid) => (
             <DropdownMenuItem
               key={pid}
               disabled={busy}
               onClick={() => onPickProject(pid)}
-              className={pid === projectId ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-300"}
+              className={pid === projectId ? "bg-muted/80 text-foreground" : "text-foreground/90"}
             >
-              <FolderKanban className="mr-2 h-3.5 w-3.5 shrink-0" />
+              {pid === "all" ? (
+                <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-amber-400" />
+              ) : (
+                <FolderKanban className="mr-2 h-3.5 w-3.5 shrink-0" />
+              )}
               <span className="font-mono text-xs">{pid}</span>
             </DropdownMenuItem>
           ))}

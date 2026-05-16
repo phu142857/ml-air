@@ -38,7 +38,7 @@ export function EventFilters({
 }: EventFiltersProps) {
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      <div className="flex items-center gap-2 text-sm text-zinc-500">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Filter className="h-4 w-4" />
         <span>Filters</span>
         {activeFilters > 0 && (
@@ -49,7 +49,7 @@ export function EventFilters({
       </div>
 
       <Select value={eventType} onValueChange={(v) => onEventTypeChange(v as EventType)}>
-        <SelectTrigger className="w-[140px] h-8 text-xs bg-zinc-900 border-zinc-800">
+        <SelectTrigger className="w-[140px] h-8 text-xs bg-card border-border">
           <SelectValue placeholder="Event Type" />
         </SelectTrigger>
         <SelectContent>
@@ -63,7 +63,7 @@ export function EventFilters({
       </Select>
 
       <Select value={severity} onValueChange={(v) => onSeverityChange(v as Severity)}>
-        <SelectTrigger className="w-[130px] h-8 text-xs bg-zinc-900 border-zinc-800">
+        <SelectTrigger className="w-[130px] h-8 text-xs bg-card border-border">
           <SelectValue placeholder="Severity" />
         </SelectTrigger>
         <SelectContent>
@@ -76,7 +76,7 @@ export function EventFilters({
       </Select>
 
       <Select value={timeRange} onValueChange={(v) => onTimeRangeChange(v as TimeRange)}>
-        <SelectTrigger className="w-[120px] h-8 text-xs bg-zinc-900 border-zinc-800">
+        <SelectTrigger className="w-[120px] h-8 text-xs bg-card border-border">
           <SelectValue placeholder="Time Range" />
         </SelectTrigger>
         <SelectContent>
@@ -93,7 +93,7 @@ export function EventFilters({
           variant="ghost"
           size="sm"
           onClick={onClearFilters}
-          className="h-8 text-xs text-zinc-500 hover:text-zinc-300"
+          className="h-8 text-xs text-muted-foreground hover:text-foreground"
         >
           <X className="h-3 w-3 mr-1" />
           Clear

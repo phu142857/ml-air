@@ -5,14 +5,28 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ListTodo, Loader2 } from "lucide-react"
-import { fetchTaskResolved } from "@/lib/api"
+import { fetchTaskResolved, normalizeProjectId } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { Button } from "@/components/ui/button"
-import { ResourcePageHeader } from "@/components/layout/page-chrome"
+import {
+  MetadataGrid,
+  MlopsEmptyState,
+  ResourcePageHeader,
+  ScopePinnedInline,
+  SubpageBreadcrumb,
+} from "@/components/mlops/layout"
+import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
+import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
-import { formatApiClientError } from "@/lib/utils"
+import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
+import { statusToMlopsBadge } from "@/lib/status-style"
+
+function taskPayloadRecord(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {}
+  return data as Record<string, unknown>
+}
 
 function TaskDetailContent() {
   const router = useRouter()
@@ -38,19 +52,58 @@ function TaskDetailContent() {
   const resolved = data?.resolved_scope
   const scopePinned = isScopePinned(tenantId, projectId)
   const runId = data?.run_id ?? hint.runId
+  const payload = taskPayloadRecord(data)
+
+  if (!isLoading && !isError && !data) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SubpageBreadcrumb
+          segments={[
+            { label: "Tasks", href: "/tasks" },
+            { label: taskId, mono: true },
+          ]}
+        />
+        <ResourcePageHeader accent="violet" icon={ListTodo} title="Task not found" subtitle={taskId} />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <MlopsEmptyState
+            icon={ListTodo}
+            title="Task not found"
+            description="This task could not be resolved. Return to the list or pin tenant/project scope."
+            action={
+              <Button asChild size="sm" variant="outline" className="border-border bg-card">
+                <Link href="/tasks">Back to tasks</Link>
+              </Button>
+            }
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SubpageBreadcrumb
+        segments={[
+          { label: "Tasks", href: "/tasks" },
+          { label: taskId, mono: true },
+        ]}
+      />
       <ResourcePageHeader
         icon={ListTodo}
         accent="violet"
         title={`Task · ${taskId}`}
         subtitle={
-          resolved
-            ? `${resolved.tenant_id} / ${resolved.project_id}${
-                resolved.method === "fan-out" ? " (resolved from aggregate scope)" : ""
-              }`
-            : "Operational detail — JSON payload, attempts, and worker metadata"
+          isError
+            ? "Could not load task"
+            : resolved
+              ? scopePinned
+                ? resolved.method === "fan-out"
+                  ? "Resolved via cross-project fan-out"
+                  : undefined
+                : `${resolved.tenant_id} / ${resolved.project_id}${resolved.method === "fan-out" ? " · fan-out" : ""}`
+              : isLoading
+                ? "Loading task…"
+                : undefined
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -59,7 +112,7 @@ function TaskDetailContent() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
                 asChild
               >
                 <Link href={`/runs/${encodeURIComponent(runId)}`}>View run</Link>
@@ -69,7 +122,7 @@ function TaskDetailContent() {
               type="button"
               variant="outline"
               size="sm"
-              className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+              className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
               onClick={() => router.push("/tasks")}
             >
               All tasks
@@ -77,7 +130,10 @@ function TaskDetailContent() {
           </div>
         }
       />
-      <div className="flex-1 overflow-auto p-6 space-y-4">
+      <div className="flex-1 space-y-6 overflow-auto p-6">
+        {!scopePinned ? (
+          <ScopePinnedInline message="Task resolution may span multiple workspaces." />
+        ) : null}
         {!scopePinned && resolved?.method === "fan-out" ? (
           <p className="text-sm text-amber-400/90">
             Scope was resolved automatically across projects. For faster loads next time, pin{" "}
@@ -89,31 +145,71 @@ function TaskDetailContent() {
           </p>
         ) : null}
 
-        <section className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-200">Task payload</h2>
-          <p className="mb-3 text-xs text-zinc-500">
-            Dense, debuggable view for incident review without leaving the shell.
-          </p>
-          {isLoading ? (
-            <div className="space-y-2" aria-busy="true" aria-label="Loading task">
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Resolving task scope…
-              </div>
-              <div className="h-4 w-2/3 max-w-md animate-pulse rounded-md bg-zinc-800" />
-              <div className="h-4 w-full animate-pulse rounded-md bg-zinc-800" />
-              <div className="h-48 animate-pulse rounded-md border border-zinc-800 bg-zinc-950" />
+        {isLoading ? (
+          <div className="rounded-lg border border-border bg-card/80 p-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Resolving task scope…
             </div>
-          ) : isError ? (
+          </div>
+        ) : isError ? (
+          <div className="rounded-lg border border-border bg-card/80 p-4">
             <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
               {formatApiClientError(error)}
             </div>
-          ) : (
-            <div className="max-h-[min(70vh,520px)] overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-200">
-              <pre className="whitespace-pre-wrap break-all">{JSON.stringify(data, null, 2)}</pre>
+          </div>
+        ) : data ? (
+          <>
+            <div className="rounded-lg border border-border bg-card/80 p-4">
+              <h2 className="mb-4 text-sm font-medium text-foreground/90">Summary</h2>
+              <MetadataGrid
+                columns={2}
+                items={[
+                  { label: "Task ID", value: data.task_id, mono: true },
+                  {
+                    label: "Status",
+                    value: <StatusBadge status={statusToMlopsBadge(data.status)} label={data.status} size="sm" />,
+                  },
+                  { label: "Attempt", value: String(data.attempt ?? "—") },
+                  {
+                    label: "Run",
+                    value: runId ? (
+                      <Link href={`/runs/${encodeURIComponent(runId)}`} className="font-mono text-xs text-sky-400 hover:text-sky-300">
+                        {runId}
+                      </Link>
+                    ) : (
+                      "—"
+                    ),
+                    mono: Boolean(runId),
+                  },
+                  {
+                    label: "Created",
+                    value: data.created_at ? formatDateTimeCompact(data.created_at) : "—",
+                    mono: true,
+                  },
+                  {
+                    label: "Updated",
+                    value: data.updated_at ? formatDateTimeCompact(data.updated_at) : "—",
+                    mono: true,
+                  },
+                  ...(scopePinned &&
+                  resolved &&
+                  String(resolved.tenant_id || "").trim() === String(tenantId || "").trim() &&
+                  normalizeProjectId(String(resolved.project_id || "")) === normalizeProjectId(String(projectId || ""))
+                    ? []
+                    : [
+                        {
+                          label: "Scope",
+                          value: resolved ? `${resolved.tenant_id} / ${resolved.project_id}` : "—",
+                          mono: true,
+                        },
+                      ]),
+                ]}
+              />
             </div>
-          )}
-        </section>
+            <JsonPayloadPanel title="Task payload" data={payload} className="border-border bg-card/80" />
+          </>
+        ) : null}
       </div>
     </div>
   )
@@ -123,7 +219,7 @@ export default function TaskDetailPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full items-center justify-center gap-2 text-sm text-zinc-500">
+        <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading task…
         </div>

@@ -1,12 +1,10 @@
 "use client"
 
-import { use } from "react"
+import { use, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
-  ArrowLeft,
   Play,
   Clock,
   CheckCircle2,
@@ -16,13 +14,34 @@ import {
   Terminal,
   BarChart3,
   FileBox,
-  GitBranch,
   Network,
+  ListTodo,
+  Activity,
+  FileDown,
 } from "lucide-react"
+import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { JaegerLink } from "@/components/mlops/jaeger-link"
+import { AuditTimeline } from "@/components/mlops/audit-timeline"
+import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
+import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton"
+import { StatusBadge } from "@/components/mlops/status-badge"
+import {
+  DetailSection,
+  DetailTabList,
+  MetadataGrid,
+  MlopsEmptyState,
+  ResourcePageHeader,
+  ScopePinnedInline,
+  SubpageBreadcrumb,
+} from "@/components/mlops/layout"
+import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
+import { isScopePinned } from "@/lib/scope"
+import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
+import { statusToMlopsBadge } from "@/lib/status-style"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { useAppContext } from "@/lib/app-context"
 import {
@@ -30,21 +49,59 @@ import {
   fetchRunTasks,
   fetchRunLogs,
   fetchRunTracking,
+  fetchRunReadiness,
+  fetchAuditTimeline,
+  normalizeProjectId,
   type RunItem,
   type TaskItem,
+  type RunReadiness,
+  type ReadinessItem,
 } from "@/lib/api"
-import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
+import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { normalizeStatus } from "@/lib/status-style"
+import { useTabLoading } from "@/hooks/use-tab-loading"
+import { useChartTheme } from "@/hooks/use-chart-theme"
+
+const RUN_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "tasks", label: "Tasks", icon: <ListTodo className="h-3.5 w-3.5" /> },
+  { id: "logs", label: "Logs", icon: <Terminal className="h-3.5 w-3.5" /> },
+  { id: "metrics", label: "Metrics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
+  { id: "artifacts", label: "Artifacts", icon: <FileBox className="h-3.5 w-3.5" /> },
+  { id: "timeline", label: "Timeline", icon: <Clock className="h-3.5 w-3.5" /> },
+] as const
+
+const RUN_TAB_SKELETON: Record<string, "grid" | "table" | "terminal" | "chart"> = {
+  overview: "grid",
+  tasks: "table",
+  logs: "terminal",
+  metrics: "chart",
+  artifacts: "table",
+  timeline: "grid",
+}
+
+function RunTabPanel({
+  loading,
+  variant,
+  children,
+}: {
+  loading: boolean
+  variant: "grid" | "table" | "terminal" | "chart"
+  children: React.ReactNode
+}) {
+  if (loading) return <DetailTabSkeleton variant={variant} />
+  return <>{children}</>
+}
 
 const statusConfig = {
-  idle: { icon: Clock, label: "Idle", color: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-700", animate: false },
+  idle: { icon: Clock, label: "Idle", color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", animate: false },
   pending: { icon: Clock, label: "Pending", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", animate: false },
-  queued: { icon: Clock, label: "Queued", color: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-700", animate: false },
+  queued: { icon: Clock, label: "Queued", color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", animate: false },
   running: { icon: Loader2, label: "Running", color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30", animate: true },
   success: { icon: CheckCircle2, label: "Success", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", animate: false },
   failed: { icon: XCircle, label: "Failed", color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30", animate: false },
-  cancelled: { icon: Ban, label: "Cancelled", color: "text-zinc-500", bg: "bg-zinc-500/10", border: "border-zinc-700", animate: false },
+  cancelled: { icon: Ban, label: "Cancelled", color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", animate: false },
 }
 
 function runStatusRowKey(status: string): keyof typeof statusConfig {
@@ -75,23 +132,71 @@ function pickTraceId(run: RunItem): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null
 }
 
-function mapTaskStatus(raw: string): keyof typeof statusConfig {
-  const t = normalizeStatus(raw)
-  if (t === "SUCCESS") return "success"
-  if (t === "FAILED") return "failed"
-  if (t === "RUNNING") return "running"
-  if (t === "QUEUED") return "queued"
-  if (t === "PENDING") return "pending"
-  return "idle"
+function taskStatusForBadge(status: string) {
+  const t = normalizeStatus(status)
+  if (t === "SUCCESS") return "success" as const
+  if (t === "FAILED") return "failed" as const
+  if (t === "RUNNING") return "running" as const
+  if (t === "QUEUED" || t === "PENDING") return "pending" as const
+  return "pending" as const
 }
+
+interface GateResultRow {
+  id: string
+  gate: string
+  result: "pass" | "fail" | "pending"
+  observed: string
+  required: string
+}
+
+function readinessItemResult(item: ReadinessItem): GateResultRow["result"] {
+  const s = String(item.status || "").toLowerCase()
+  if (s.includes("ready") || s.includes("pass") || s.includes("ok")) return "pass"
+  if (s.includes("block") || s.includes("fail") || s.includes("deny")) return "fail"
+  return "pending"
+}
+
+function readinessToGateRows(readiness: RunReadiness | undefined): GateResultRow[] {
+  if (!readiness) return []
+  const rows = [...(readiness.details || []), ...(readiness.blocking_datasets || [])]
+  return rows.map((item, i) => ({
+    id: `${item.dataset}-${item.role}-${i}`,
+    gate: item.role ? `${item.dataset} (${item.role})` : item.dataset,
+    result: readinessItemResult(item),
+    observed: item.actual_size != null ? item.actual_size.toLocaleString() : "—",
+    required: item.required_size != null ? `${item.required_size.toLocaleString()} rows` : "—",
+  }))
+}
+
+function buildMetricsChartSeries(metrics: Array<{ key: string; value: number; step: number }>) {
+  const byStep = new Map<number, Record<string, number | string>>()
+  for (const m of metrics) {
+    const step = m.step ?? 0
+    if (!byStep.has(step)) byStep.set(step, { step: String(step) })
+    byStep.get(step)![m.key] = m.value
+  }
+  return [...byStep.values()].sort((a, b) => Number(a.step) - Number(b.step))
+}
+
+function metricChartKeys(metrics: Array<{ key: string; value: number; step: number }>): string[] {
+  const keys = new Set<string>()
+  for (const m of metrics) keys.add(m.key)
+  return [...keys].slice(0, 4)
+}
+
+const CHART_COLORS = ["#38bdf8", "#a78bfa", "#34d399", "#fbbf24"]
 
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params)
   const router = useRouter()
   const queryClient = useQueryClient()
   const { tenantId, projectId, token } = useAppContext()
-  const canScope = tenantId !== "all" && projectId !== "all"
+  const canScope = isScopePinned(tenantId, projectId)
+  const isAggregate = !canScope
   const enabled = Boolean(token?.trim()) && canScope
+  const [tab, setTab] = useState("overview")
+  const isTabLoading = useTabLoading(tab)
+  const chartTheme = useChartTheme()
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
 
@@ -120,116 +225,278 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     retry: false,
   })
 
+  const readinessQuery = useQuery({
+    queryKey: [...mlairKeys.run.detail(runId), "readiness"] as const,
+    queryFn: () => fetchRunReadiness(tenantId, projectId, runId, token),
+    enabled: enabled && Boolean(runQuery.data),
+    retry: false,
+  })
+
+  const timelineQuery = useQuery({
+    queryKey: [...mlairKeys.run.detail(runId), "audit-timeline"] as const,
+    queryFn: () =>
+      fetchAuditTimeline(tenantId, projectId, token, {
+        limit: 50,
+        filters: { resourceType: "run", resourceId: runId },
+      }),
+    enabled: enabled && Boolean(runQuery.data),
+  })
+
   const run = runQuery.data
   const sk = run ? runStatusRowKey(run.status) : "pending"
   const status = statusConfig[sk]
-  const StatusIcon = status.icon
   const traceId = run ? pickTraceId(run) : null
   const tasks = tasksQuery.data?.items ?? []
+  const gateResults = useMemo(() => readinessToGateRows(readinessQuery.data), [readinessQuery.data])
+  const timelineEvents = useMemo(
+    () => mapAuditTimelineItems(timelineQuery.data?.items ?? []),
+    [timelineQuery.data],
+  )
+  const metricsSeries = useMemo(
+    () => buildMetricsChartSeries(trackingQuery.data?.metrics ?? []),
+    [trackingQuery.data],
+  )
+  const chartMetricKeys = useMemo(
+    () => metricChartKeys(trackingQuery.data?.metrics ?? []),
+    [trackingQuery.data],
+  )
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-zinc-800 bg-zinc-950/50 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" asChild className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-100">
-              <Link href="/runs">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg border", status.bg, status.border)}>
-                <StatusIcon className={cn("h-5 w-5", status.color, status.animate && "animate-spin")} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-mono text-lg font-semibold text-zinc-100">{runId}</h1>
-                  {run ? (
-                    <div
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium",
-                        status.bg,
-                        status.color,
-                      )}
-                    >
-                      {status.label}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                  <GitBranch className="h-3 w-3 shrink-0" />
-                  <span className="font-mono text-zinc-400">{run?.pipeline_id ?? "—"}</span>
-                  <span className="text-zinc-700">|</span>
-                  <span>
-                    Started{" "}
-                    {run?.created_at ? formatDateTimeCompact(run.created_at) : runQuery.isLoading ? "…" : "—"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+  const gateColumns: DataTableColumn<GateResultRow>[] = useMemo(
+    () => [
+      {
+        id: "gate",
+        header: "Gate",
+        cell: (row) => <span className="font-mono text-xs text-foreground/90">{row.gate}</span>,
+      },
+      {
+        id: "result",
+        header: "Result",
+        cell: (row) => (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[10px] capitalize",
+              row.result === "pass" && "border-emerald-500/40 text-emerald-400",
+              row.result === "fail" && "border-red-500/40 text-red-400",
+              row.result === "pending" && "border-amber-500/40 text-amber-400",
+            )}
+          >
+            {row.result}
+          </Badge>
+        ),
+      },
+      {
+        id: "observed",
+        header: "Observed",
+        cell: (row) => <span className="text-xs text-muted-foreground">{row.observed}</span>,
+      },
+      {
+        id: "required",
+        header: "Required",
+        cell: (row) => <span className="text-xs text-muted-foreground">{row.required}</span>,
+      },
+    ],
+    [],
+  )
 
-          <div className="flex items-center gap-2">
-            {traceId ? <JaegerLink traceId={traceId} /> : null}
-            {canScope ? (
-              <Button variant="outline" size="sm" asChild className="h-8 gap-2 border-zinc-800 bg-zinc-900 text-xs">
-                <Link href={`/lineage?run=${encodeURIComponent(runId)}`}>
-                  <Network className="h-3.5 w-3.5" />
-                  Lineage
-                </Link>
+  const taskColumns: DataTableColumn<TaskItem>[] = useMemo(
+    () => [
+      {
+        id: "id",
+        header: "Task",
+        cell: (row) => (
+          <Link
+            className="font-mono text-xs text-sky-400 hover:text-sky-300"
+            href={buildTaskDetailHref(row.task_id, {
+              tenant_id: run?.tenant_id ?? tenantId,
+              project_id: run?.project_id ?? projectId,
+              run_id: runId,
+            })}
+          >
+            {row.task_id}
+          </Link>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <StatusBadge status={taskStatusForBadge(row.status)} label={row.status} size="sm" />
+        ),
+      },
+      {
+        id: "attempt",
+        header: "Attempt",
+        cell: (row) => (
+          <span className="text-xs text-muted-foreground tabular-nums">{row.attempt ?? "—"}</span>
+        ),
+      },
+      {
+        id: "updated",
+        header: "Updated",
+        cell: (row) => (
+          <span className="text-xs text-muted-foreground">
+            {row.updated_at ? formatDateTimeCompact(row.updated_at) : "—"}
+          </span>
+        ),
+      },
+    ],
+    [run, runId, tenantId, projectId],
+  )
+
+  const runOverviewMetadataItems = useMemo(() => {
+    if (!run) return []
+    const scopeMatches =
+      canScope &&
+      String(run.tenant_id || "").trim() === String(tenantId || "").trim() &&
+      normalizeProjectId(String(run.project_id || "")) === normalizeProjectId(String(projectId || ""))
+    const items: Array<{ label: string; value: ReactNode; mono?: boolean }> = [
+      { label: "Run ID", value: run.run_id, mono: true },
+      { label: "Pipeline", value: run.pipeline_id, mono: true },
+    ]
+    if (!scopeMatches) {
+      items.push({
+        label: "Tenant / project",
+        value: `${run.tenant_id} / ${run.project_id}`,
+        mono: true,
+      })
+    }
+    items.push(
+      {
+        label: "Status",
+        value: <StatusBadge status={statusToMlopsBadge(run.status)} label={status.label} />,
+      },
+      {
+        label: "Created",
+        value: run.created_at ? formatDateTimeCompact(run.created_at) : "—",
+        mono: true,
+      },
+      {
+        label: "Updated",
+        value: run.updated_at ? formatDateTimeCompact(run.updated_at) : "—",
+        mono: true,
+      },
+      { label: "Duration", value: runDuration(run) },
+      { label: "Training mode", value: run.training_mode ?? "—" },
+      {
+        label: "Trace",
+        value: traceId ? (
+          <JaegerLink traceId={traceId} variant="link" />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      },
+    )
+    return items
+  }, [run, canScope, tenantId, projectId, status.label, traceId])
+
+  if (runQuery.isFetched && !runQuery.isLoading && !run && !runQuery.isError) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SubpageBreadcrumb
+          segments={[
+            { label: "Runs", href: "/runs" },
+            { label: runId, mono: true },
+          ]}
+        />
+        <ResourcePageHeader accent="sky" icon={Play} title="Run not found" subtitle={runId} className="border-b-0" />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <MlopsEmptyState
+            icon={Activity}
+            title="Run not found"
+            description="This run id could not be loaded. Check scope pinning and open Runs to pick a listed execution."
+            action={
+              <Button asChild size="sm" variant="outline" className="border-border bg-card">
+                <Link href="/runs">Back to runs</Link>
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-2 border-zinc-800 bg-zinc-900 text-xs"
-              disabled={!canScope || !run?.pipeline_id}
-              title={!run?.pipeline_id ? "Pipeline id unavailable" : "POST /runs with same pipeline"}
-              onClick={() => {
-                setRerunMode("simple")
-                setRerunOpen(true)
-              }}
-            >
-              <Play className="h-3.5 w-3.5" />
-              Re-run
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-2 border-amber-800/50 bg-zinc-900 text-xs text-amber-300"
-              disabled={!canScope || !run?.pipeline_id}
-              onClick={() => {
-                setRerunMode("gated")
-                setRerunOpen(true)
-              }}
-            >
-              Gated re-run
-            </Button>
-            <TriggerRunDialog
-              open={rerunOpen}
-              onOpenChange={setRerunOpen}
-              defaultPipelineId={run?.pipeline_id}
-              mode={rerunMode}
-              lockPipeline
-              onSuccess={async (newRun) => {
-                await queryClient.invalidateQueries({
-                  queryKey: mlairKeys.runs.list(tenantId, projectId),
-                  exact: false,
-                })
-                router.push(`/runs/${encodeURIComponent(newRun.run_id)}`)
-              }}
-            />
-          </div>
+            }
+          />
         </div>
       </div>
+    )
+  }
 
-      {!canScope ? (
-        <div className="mx-6 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Pick a specific tenant and project in the header to load this run from the API.
-        </div>
-      ) : null}
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-border bg-background/50">
+        <SubpageBreadcrumb
+          className="border-b border-border/80"
+          segments={[
+            { label: "Runs", href: "/runs" },
+            { label: runId, mono: true },
+          ]}
+        />
+        <ResourcePageHeader
+          accent="sky"
+          icon={Play}
+          title={runId}
+          subtitle={
+            run
+              ? `${run.pipeline_id} · started ${run.created_at ? formatDateTimeCompact(run.created_at) : "—"} · ${runDuration(run)}`
+              : runQuery.isLoading
+                ? "Loading run…"
+                : "Pipeline run detail"
+          }
+          className="border-b-0"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {run ? (
+                <StatusBadge status={statusToMlopsBadge(run.status)} label={status.label} size="sm" />
+              ) : null}
+              {traceId ? <JaegerLink traceId={traceId} /> : null}
+              {canScope ? (
+                <Button variant="outline" size="sm" asChild className="h-8 gap-2 border-border bg-card text-xs">
+                  <Link href={`/lineage?run=${encodeURIComponent(runId)}`}>
+                    <Network className="h-3.5 w-3.5" />
+                    Lineage
+                  </Link>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2 border-border bg-card text-xs"
+                disabled={!canScope || !run?.pipeline_id}
+                onClick={() => {
+                  setRerunMode("simple")
+                  setRerunOpen(true)
+                }}
+              >
+                <Play className="h-3.5 w-3.5" />
+                Re-run
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2 border-amber-500/30 bg-card text-xs text-amber-300"
+                disabled={!canScope || !run?.pipeline_id}
+                onClick={() => {
+                  setRerunMode("gated")
+                  setRerunOpen(true)
+                }}
+              >
+                Gated re-run
+              </Button>
+              <TriggerRunDialog
+                open={rerunOpen}
+                onOpenChange={setRerunOpen}
+                defaultPipelineId={run?.pipeline_id}
+                mode={rerunMode}
+                lockPipeline
+                onSuccess={async (newRun) => {
+                  await queryClient.invalidateQueries({
+                    queryKey: mlairKeys.runs.list(tenantId, projectId),
+                    exact: false,
+                  })
+                  router.push(`/runs/${encodeURIComponent(newRun.run_id)}`)
+                }}
+              />
+            </div>
+          }
+        />
+      </div>
 
       {runQuery.isError ? (
         <div className="mx-6 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -237,265 +504,242 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         </div>
       ) : null}
 
-      <Tabs defaultValue="overview" className="flex flex-1 flex-col">
-        <div className="border-b border-zinc-800 px-6">
-          <TabsList className="h-10 gap-4 bg-transparent p-0">
-            <TabsTrigger
-              value="overview"
-              className="rounded-none px-0 pb-3 text-sm data-[state=active]:border-b-2 data-[state=active]:border-sky-500 data-[state=active]:bg-transparent"
-            >
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="logs"
-              className="rounded-none px-0 pb-3 text-sm data-[state=active]:border-b-2 data-[state=active]:border-sky-500 data-[state=active]:bg-transparent"
-            >
-              <Terminal className="mr-1.5 h-3.5 w-3.5" />
-              Logs
-            </TabsTrigger>
-            <TabsTrigger
-              value="metrics"
-              className="rounded-none px-0 pb-3 text-sm data-[state=active]:border-b-2 data-[state=active]:border-sky-500 data-[state=active]:bg-transparent"
-            >
-              <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-              Metrics
-            </TabsTrigger>
-            <TabsTrigger
-              value="artifacts"
-              className="rounded-none px-0 pb-3 text-sm data-[state=active]:border-b-2 data-[state=active]:border-sky-500 data-[state=active]:bg-transparent"
-            >
-              <FileBox className="mr-1.5 h-3.5 w-3.5" />
-              Artifacts
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+        <DetailTabList accent="sky" tabs={[...RUN_TABS]} />
 
-        <TabsContent value="overview" className="mt-0 flex-1 overflow-auto p-6">
-          {runQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading run…
-            </div>
-          ) : run ? (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="space-y-4 rounded-lg border border-zinc-800 p-4">
-                <h3 className="text-sm font-medium text-zinc-300">Run details</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Run ID</span>
-                    <span className="font-mono text-zinc-200">{run.run_id}</span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Pipeline</span>
-                    <span className="font-mono text-zinc-200">{run.pipeline_id}</span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Tenant / project</span>
-                    <span className="font-mono text-xs text-zinc-200">
-                      {run.tenant_id} / {run.project_id}
+        {isAggregate ? (
+          <div className="shrink-0 px-6 pt-4">
+            <ScopePinnedInline message={SCOPE_AGGREGATE_RUN_DETAIL} />
+          </div>
+        ) : null}
+
+        <TabsContent value="overview" className="flex-1 overflow-auto p-6 mt-0 space-y-6">
+          <RunTabPanel loading={isTabLoading && !runQuery.isLoading} variant={RUN_TAB_SKELETON.overview}>
+            {runQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading run…
+              </div>
+            ) : run ? (
+              <>
+                <DetailSection
+                  title="Run metadata"
+                  description="Identifiers, timing, and execution context."
+                  accentBorder="sky"
+                >
+                  <MetadataGrid columns={2} items={runOverviewMetadataItems} />
+                </DetailSection>
+
+                {readinessQuery.isSuccess && gateResults.length > 0 ? (
+                  <DetailSection
+                    title="Readiness gates"
+                    description="Dataset readiness evaluated for this run."
+                    accentBorder="sky"
+                  >
+                    <DataTable columns={gateColumns} data={gateResults} keyExtractor={(r) => r.id} />
+                  </DetailSection>
+                ) : null}
+              </>
+            ) : null}
+          </RunTabPanel>
+        </TabsContent>
+
+        <TabsContent value="tasks" className="flex-1 overflow-auto p-6 mt-0">
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.tasks}>
+            <DetailSection title="Tasks" description="Units of work recorded for this run.">
+              {tasksQuery.isError ? (
+                <p className="text-sm text-red-300">{formatApiClientError(tasksQuery.error)}</p>
+              ) : (
+                <DataTable
+                  columns={taskColumns}
+                  data={tasks}
+                  keyExtractor={(r) => r.task_id}
+                  emptyMessage="No tasks returned for this run."
+                />
+              )}
+            </DetailSection>
+          </RunTabPanel>
+        </TabsContent>
+
+        <TabsContent value="logs" className="flex-1 overflow-auto p-6 mt-0">
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.logs}>
+            <DetailSection
+              title="Runner logs"
+              description="Log tail from the API."
+              bodyClassName="p-0"
+            >
+              <div className="flex items-center justify-between border-b border-border bg-background/80 px-4 py-2">
+                <span className="text-xs text-muted-foreground">stdout / stderr</span>
+                <div className="flex min-w-0 items-center gap-3">
+                  {logsQuery.isFetching ? (
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Refreshing
                     </span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Training mode</span>
-                    <span className="text-zinc-200">{run.training_mode ?? "—"}</span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Created</span>
-                    <span className="font-mono text-xs text-zinc-200">
-                      {run.created_at ? formatDateTimeCompact(run.created_at) : "—"}
+                  ) : null}
+                  {run ? (
+                    <span className="max-w-[min(280px,45vw)] truncate font-mono text-xs text-muted-foreground/80">
+                      {run.run_id}
                     </span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Updated</span>
-                    <span className="font-mono text-xs text-zinc-200">
-                      {run.updated_at ? formatDateTimeCompact(run.updated_at) : "—"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Duration (wall)</span>
-                    <span className="font-mono text-zinc-200">{runDuration(run)}</span>
-                  </div>
-                  <div>
-                    <span className="mb-1 block text-xs text-zinc-500">Priority</span>
-                    <span className="text-zinc-200">{run.priority ?? "—"}</span>
-                  </div>
+                  ) : null}
                 </div>
               </div>
-
-              <div className="space-y-4 rounded-lg border border-zinc-800 p-4">
-                <h3 className="text-sm font-medium text-zinc-300">Tasks</h3>
-                {tasksQuery.isLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-zinc-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading tasks…
-                  </div>
-                ) : tasksQuery.isError ? (
-                  <p className="text-sm text-red-300">{formatApiClientError(tasksQuery.error)}</p>
-                ) : tasks.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No tasks returned for this run.</p>
+              <div className="max-h-[min(520px,55vh)] space-y-1 overflow-auto bg-muted/30 p-4 font-mono text-xs leading-relaxed">
+                {logsQuery.isError ? (
+                  <p className="text-red-300">{formatApiClientError(logsQuery.error)}</p>
+                ) : (logsQuery.data?.items ?? []).length === 0 ? (
+                  <p className="text-muted-foreground">No log lines yet.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {tasks.map((task: TaskItem, index: number) => {
-                      const tsk = mapTaskStatus(task.status)
-                      const st = statusConfig[tsk] || statusConfig.pending
-                      const TI = st.icon
-                      return (
-                        <div key={task.task_id} className="flex items-center gap-3">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-xs text-zinc-500">
-                            {index + 1}
-                          </div>
-                          <div className="flex flex-1 items-center justify-between gap-2">
-                            <Link
-                              href={buildTaskDetailHref(task.task_id, {
-                                tenant_id: runQuery.data?.tenant_id ?? tenantId,
-                                project_id: runQuery.data?.project_id ?? projectId,
-                                run_id: runId,
-                              })}
-                              className="truncate font-mono text-sm text-sky-400 hover:underline"
-                            >
-                              {task.task_id}
-                            </Link>
-                            <div
-                              className={cn(
-                                "inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-xs",
-                                st.bg,
-                                st.color,
-                              )}
-                            >
-                              <TI className={cn("h-3 w-3", st.animate && "animate-spin")} />
-                              {st.label}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  (logsQuery.data?.items ?? []).map((log, index) => (
+                    <div key={`${log.ts}-${index}`} className="flex gap-3">
+                      <span className="w-[84px] shrink-0 tabular-nums text-muted-foreground/80">
+                        {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
+                      </span>
+                      <span
+                        className={cn(
+                          "w-14 shrink-0",
+                          String(log.level).toUpperCase() === "INFO" && "text-sky-400",
+                          String(log.level).toUpperCase() === "DEBUG" && "text-violet-400",
+                          String(log.level).toUpperCase() === "WARN" && "text-amber-400",
+                          String(log.level).toUpperCase() === "ERROR" && "text-red-400",
+                        )}
+                      >
+                        [{log.level}]
+                      </span>
+                      <span className="min-w-0 break-words text-foreground/90">{log.message}</span>
+                    </div>
+                  ))
                 )}
               </div>
-            </div>
-          ) : null}
+            </DetailSection>
+          </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="logs" className="mt-0 flex-1 overflow-auto p-6">
-          <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
-            <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-              <span className="text-xs text-zinc-500">Run logs</span>
-              {logsQuery.isFetching ? (
-                <span className="flex items-center gap-2 text-xs text-zinc-500">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Refreshing
-                </span>
-              ) : null}
-            </div>
-            <div className="max-h-[500px] space-y-1 overflow-auto p-4 font-mono text-xs">
-              {logsQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-zinc-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading logs…
+        <TabsContent value="metrics" className="flex-1 overflow-auto p-6 mt-0">
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.metrics}>
+            <DetailSection title="Training metrics" description="Logged metrics for this run.">
+              {trackingQuery.isError ? (
+                <p className="text-sm text-muted-foreground">{formatApiClientError(trackingQuery.error)}</p>
+              ) : metricsSeries.length > 1 && chartMetricKeys.length > 0 ? (
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={metricsSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
+                      <XAxis dataKey="step" stroke={chartTheme.axisStroke} tick={{ fontSize: 11 }} />
+                      <YAxis stroke={chartTheme.axisStroke} tick={{ fontSize: 11 }} width={36} />
+                      <Tooltip
+                        contentStyle={{ ...chartTheme.tooltipStyle, borderRadius: 8, fontSize: 12 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      {chartMetricKeys.map((key, i) => (
+                        <Line
+                          key={key}
+                          type="monotone"
+                          dataKey={key}
+                          name={key}
+                          stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
-              ) : logsQuery.isError ? (
-                <p className="text-red-300">{formatApiClientError(logsQuery.error)}</p>
-              ) : (logsQuery.data?.items ?? []).length === 0 ? (
-                <p className="text-zinc-500">No log lines yet.</p>
+              ) : (trackingQuery.data?.metrics ?? []).length > 0 ? (
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-card/80 text-left text-xs text-muted-foreground">
+                        <th className="px-4 py-2">Key</th>
+                        <th className="px-4 py-2">Value</th>
+                        <th className="px-4 py-2">Step</th>
+                        <th className="px-4 py-2">Logged</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(trackingQuery.data?.metrics ?? []).map((m, i) => (
+                        <tr key={`${m.key}-${m.step}-${i}`} className="border-b border-border last:border-0">
+                          <td className="px-4 py-2 font-mono text-xs">{m.key}</td>
+                          <td className="px-4 py-2 font-mono">{m.value}</td>
+                          <td className="px-4 py-2 text-muted-foreground">{m.step}</td>
+                          <td className="px-4 py-2 text-xs text-muted-foreground">
+                            {formatDateTimeCompact(m.logged_at)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                (logsQuery.data?.items ?? []).map((log, index) => (
-                  <div key={`${log.ts}-${index}`} className="flex gap-4">
-                    <span className="shrink-0 text-zinc-600">
-                      {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
-                    </span>
-                    <span
-                      className={cn(
-                        "w-12 shrink-0",
-                        String(log.level).toUpperCase() === "INFO" && "text-sky-400",
-                        String(log.level).toUpperCase() === "WARN" && "text-amber-400",
-                        String(log.level).toUpperCase() === "ERROR" && "text-red-400",
-                      )}
-                    >
-                      [{log.level}]
-                    </span>
-                    <span className="text-zinc-300">{log.message}</span>
-                  </div>
-                ))
+                <MlopsEmptyState
+                  icon={BarChart3}
+                  title="No metrics"
+                  description="No logged metrics for this run yet."
+                />
               )}
-            </div>
-          </div>
+            </DetailSection>
+          </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="metrics" className="mt-0 flex-1 overflow-auto p-6">
-          {trackingQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading metrics…
-            </div>
-          ) : trackingQuery.isError ? (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-6 text-center text-sm text-zinc-400">
-              {formatApiClientError(trackingQuery.error)}
-            </div>
-          ) : (trackingQuery.data?.metrics ?? []).length === 0 ? (
-            <div className="flex h-64 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/30 text-zinc-500">
-              <div className="text-center">
-                <BarChart3 className="mx-auto mb-2 h-10 w-10 text-zinc-700" />
-                <p className="text-sm">No logged metrics for this run.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-zinc-800">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-800 bg-zinc-900/50 text-left text-xs text-zinc-500">
-                    <th className="px-4 py-2">Key</th>
-                    <th className="px-4 py-2">Value</th>
-                    <th className="px-4 py-2">Step</th>
-                    <th className="px-4 py-2">Logged</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(trackingQuery.data?.metrics ?? []).map((m, i) => (
-                    <tr key={`${m.key}-${m.step}-${i}`} className="border-b border-zinc-800 last:border-0">
-                      <td className="px-4 py-2 font-mono text-xs text-zinc-300">{m.key}</td>
-                      <td className="px-4 py-2 font-mono text-zinc-200">{m.value}</td>
-                      <td className="px-4 py-2 text-zinc-400">{m.step}</td>
-                      <td className="px-4 py-2 text-xs text-zinc-500">{formatDateTimeCompact(m.logged_at)}</td>
-                    </tr>
+        <TabsContent value="artifacts" className="flex-1 overflow-auto p-6 mt-0">
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.artifacts}>
+            <DetailSection title="Artifacts" description="Output blobs produced by the runner.">
+              {trackingQuery.isError ? (
+                <p className="text-sm text-muted-foreground">{formatApiClientError(trackingQuery.error)}</p>
+              ) : (trackingQuery.data?.artifacts ?? []).length === 0 ? (
+                <MlopsEmptyState
+                  icon={FileBox}
+                  title="No artifacts"
+                  description="No artifacts recorded for this run."
+                />
+              ) : (
+                <ul className="space-y-2">
+                  {(trackingQuery.data?.artifacts ?? []).map((a) => (
+                    <li key={a.artifact_id}>
+                      {a.uri ? (
+                        <a
+                          href={a.uri}
+                          className="group inline-flex items-center gap-2 text-sm text-sky-400 hover:text-sky-300 hover:underline"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <FileDown className="h-3.5 w-3.5 shrink-0 opacity-60 group-hover:opacity-100" />
+                          {a.path || a.uri}
+                        </a>
+                      ) : (
+                        <span className="font-mono text-sm text-foreground/90">{a.path}</span>
+                      )}
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {formatDateTimeCompact(a.logged_at)}
+                      </p>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                </ul>
+              )}
+            </DetailSection>
+          </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="artifacts" className="mt-0 flex-1 overflow-auto p-6">
-          {trackingQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading artifacts…
-            </div>
-          ) : trackingQuery.isError ? (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-6 text-center text-sm text-zinc-400">
-              {formatApiClientError(trackingQuery.error)}
-            </div>
-          ) : (trackingQuery.data?.artifacts ?? []).length === 0 ? (
-            <div className="flex h-64 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/30 text-zinc-500">
-              <div className="text-center">
-                <FileBox className="mx-auto mb-2 h-10 w-10 text-zinc-700" />
-                <p className="text-sm">No artifacts recorded for this run.</p>
-              </div>
-            </div>
-          ) : (
-            <ul className="space-y-2 rounded-lg border border-zinc-800 p-4">
-              {(trackingQuery.data?.artifacts ?? []).map((a) => (
-                <li key={a.artifact_id} className="flex flex-col gap-1 border-b border-zinc-800/80 py-2 last:border-0">
-                  <span className="font-mono text-xs text-zinc-300">{a.path}</span>
-                  {a.uri ? (
-                    <a href={a.uri} className="text-xs text-sky-400 hover:underline" target="_blank" rel="noreferrer">
-                      {a.uri}
-                    </a>
-                  ) : null}
-                  <span className="text-[10px] text-zinc-600">{formatDateTimeCompact(a.logged_at)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+        <TabsContent value="timeline" className="flex-1 overflow-auto p-6 mt-0">
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.timeline}>
+            <DetailSection
+              title="Audit timeline"
+              description="Semantic events for this run from the audit API."
+            >
+              {timelineQuery.isError ? (
+                <p className="text-sm text-red-300">{formatApiClientError(timelineQuery.error)}</p>
+              ) : timelineEvents.length === 0 ? (
+                <MlopsEmptyState
+                  icon={Clock}
+                  title="No timeline events"
+                  description="No audit events matched this run id."
+                />
+              ) : (
+                <AuditTimeline events={timelineEvents} />
+              )}
+            </DetailSection>
+          </RunTabPanel>
         </TabsContent>
       </Tabs>
     </div>

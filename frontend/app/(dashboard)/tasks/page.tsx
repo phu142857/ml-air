@@ -1,29 +1,24 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { ListTodo, Loader2 } from "lucide-react"
+import { ListTodo } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { ResourcePageHeader } from "@/components/layout/page-chrome"
-import { ScopePinnedInline } from "@/components/mlops/scope-pinned-banner"
+import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
+import { StatusBadge } from "@/components/mlops/status-badge"
+import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { ScopedListContent } from "@/components/mlops/scoped-list-content"
+import { SCOPE_AGGREGATE_TASKS } from "@/lib/scope-messages"
 import { useAppContext } from "@/lib/app-context"
 import { fetchRunTasks, fetchRuns, type TaskItem } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { isScopePinned } from "@/lib/scope"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
-import { cn, formatApiClientError, formatRelativeTime } from "@/lib/utils"
-import { normalizeStatus, statusBadgeClass } from "@/lib/status-style"
+import { formatApiClientError, formatRelativeTime } from "@/lib/utils"
+import { normalizeStatus, statusToMlopsBadge } from "@/lib/status-style"
 
 type TaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string }
 
@@ -31,6 +26,7 @@ export default function TasksPage() {
   const router = useRouter()
   const { tenantId, projectId, token } = useAppContext()
   const scopePinned = isScopePinned(tenantId, projectId)
+  const isAggregate = !scopePinned
   const [taskId, setTaskId] = useState("")
 
   const runsQuery = useQuery({
@@ -75,118 +71,154 @@ export default function TasksPage() {
       return batches
         .flat()
         .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
-        .slice(0, 40)
+        .slice(0, 28)
     },
     enabled: Boolean(token?.trim()) && recentRuns.length > 0,
   })
 
   const rows = recentTasksQuery.data ?? []
 
+  const taskColumns: DataTableColumn<TaskRow>[] = useMemo(
+    () => [
+      {
+        id: "task_id",
+        header: "Task ID",
+        cell: (row) => (
+          <Link
+            href={buildTaskDetailHref(row.task_id, {
+              tenant_id: row.tenant_id,
+              project_id: row.project_id,
+              run_id: row.run_id,
+            })}
+            className="font-mono text-sm text-sky-400 hover:text-sky-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {row.task_id}
+          </Link>
+        ),
+      },
+      {
+        id: "run_id",
+        header: "Run",
+        cell: (row) => (
+          <Link
+            href={`/runs/${encodeURIComponent(row.run_id)}`}
+            className="font-mono text-xs text-sky-400 hover:text-sky-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {row.run_id}
+          </Link>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <StatusBadge status={statusToMlopsBadge(row.status)} label={normalizeStatus(row.status)} size="sm" />
+        ),
+      },
+      {
+        id: "attempt",
+        header: "Attempt",
+        cell: (row) => <span className="text-sm tabular-nums text-foreground/90">{row.attempt}</span>,
+      },
+      {
+        id: "updated",
+        header: "Updated",
+        cell: (row) => (
+          <span className="text-xs text-muted-foreground">{formatRelativeTime(row.updated_at)}</span>
+        ),
+      },
+    ],
+    [],
+  )
+
+  const openTask = useCallback(
+    (row: TaskRow) => {
+      router.push(
+        buildTaskDetailHref(row.task_id, {
+          tenant_id: row.tenant_id,
+          project_id: row.project_id,
+          run_id: row.run_id,
+        }),
+      )
+    },
+    [router],
+  )
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
+        className="shrink-0"
         icon={ListTodo}
         accent="violet"
         title="Tasks"
-        subtitle="Open a task by id or browse tasks from recent runs"
+        subtitle={isAggregate ? "Fan-out across workspaces — pin scope to filter" : "Attempts, payloads, and worker metadata"}
       />
-      <div className="flex-1 overflow-auto p-6 space-y-6">
-        <div className="max-w-xl rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <h2 className="mb-3 text-sm font-medium text-zinc-300">Task id</h2>
-          <div className="flex flex-wrap items-center gap-2">
+
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6">
+        {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_TASKS} /> : null}
+        <div className="max-w-xl shrink-0 rounded-lg border border-border bg-card/80 p-4">
+          <div className="mb-3">
+            <h3 className="text-sm font-medium text-foreground">Open by task id</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">Jump straight to a task detail URL.</p>
+          </div>
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const id = taskId.trim()
+              if (!id) return
+              router.push(`/tasks/${encodeURIComponent(id)}`)
+            }}
+          >
             <Input
               value={taskId}
               onChange={(e) => setTaskId(e.target.value)}
               placeholder="task_id"
-              className="h-9 max-w-xs border-zinc-800 bg-zinc-950 font-mono text-sm text-zinc-100"
+              className="h-9 max-w-xs border-border bg-background font-mono text-sm"
+              aria-label="Task id"
             />
-            <Button
-              className="h-9 bg-violet-600 text-white hover:bg-violet-500"
-              disabled={!taskId.trim()}
-              onClick={() => {
-                if (!taskId.trim()) return
-                router.push(`/tasks/${encodeURIComponent(taskId.trim())}`)
-              }}
-            >
+            <Button type="submit" className="h-9 bg-violet-600 text-white hover:bg-violet-500" disabled={!taskId.trim()}>
               Open task
             </Button>
-          </div>
+          </form>
         </div>
 
-        {!scopePinned ? (
-          <ScopePinnedInline message="Aggregate scope — recent tasks are sampled from runs across projects (each run uses its own tenant/project)." />
-        ) : null}
-
-        <div className="rounded-lg border border-zinc-800 overflow-hidden">
-          <div className="border-b border-zinc-800 bg-zinc-900/50 px-4 py-3">
-            <h2 className="text-sm font-medium text-zinc-300">Recent tasks</h2>
-            <p className="text-xs text-zinc-500">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+          <div className="shrink-0">
+            <h3 className="text-sm font-medium text-foreground">Recent tasks</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
               From {recentRuns.length} recent run{recentRuns.length === 1 ? "" : "s"}
-              {!scopePinned ? " (aggregate scope)" : ""}
+              {isAggregate ? " (aggregate scope)" : ""}.
             </p>
           </div>
-          {runsQuery.isLoading || recentTasksQuery.isLoading ? (
-            <div className="flex items-center gap-2 px-4 py-8 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading tasks…
-            </div>
-          ) : runsQuery.isError ? (
-            <p className="px-4 py-6 text-sm text-red-300">{formatApiClientError(runsQuery.error)}</p>
-          ) : recentTasksQuery.isError ? (
-            <p className="px-4 py-6 text-sm text-red-300">{formatApiClientError(recentTasksQuery.error)}</p>
-          ) : rows.length === 0 ? (
-            <p className="px-4 py-8 text-sm text-zinc-500">No tasks in recent runs for this scope.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-zinc-800 hover:bg-transparent">
-                  <TableHead className="text-zinc-500">Task</TableHead>
-                  <TableHead className="text-zinc-500">Run</TableHead>
-                  <TableHead className="text-zinc-500">Status</TableHead>
-                  <TableHead className="text-zinc-500">Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.task_id} className="border-zinc-800">
-                    <TableCell>
-                      <Link
-                        href={buildTaskDetailHref(row.task_id, {
-                          tenant_id: row.tenant_id,
-                          project_id: row.project_id,
-                          run_id: row.run_id,
-                        })}
-                        className="font-mono text-sm text-sky-400 hover:underline"
-                      >
-                        {row.task_id}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        href={`/runs/${encodeURIComponent(row.run_id)}`}
-                        className="font-mono text-xs text-zinc-400 hover:text-zinc-200"
-                      >
-                        {row.run_id.slice(0, 12)}…
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          "rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                          statusBadgeClass(row.status),
-                        )}
-                      >
-                        {normalizeStatus(row.status)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-zinc-500">
-                      {formatRelativeTime(row.updated_at)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            <ScopedListContent
+              isLoading={runsQuery.isLoading || recentTasksQuery.isLoading}
+              isError={runsQuery.isError || recentTasksQuery.isError}
+              errorMessage={
+                runsQuery.error
+                  ? formatApiClientError(runsQuery.error)
+                  : recentTasksQuery.error
+                    ? formatApiClientError(recentTasksQuery.error)
+                    : undefined
+              }
+              isEmpty={rows.length === 0}
+              emptyIcon={ListTodo}
+              emptyTitle="No tasks in recent runs"
+              emptyDescription="Trigger a run or open a task by id above."
+              skeletonRows={5}
+            >
+              <DataTable
+                columns={taskColumns}
+                data={rows}
+                keyExtractor={(row) => `${row.tenant_id}:${row.project_id}:${row.task_id}`}
+                onRowClick={openTask}
+                emptyMessage="No tasks in recent runs."
+              />
+            </ScopedListContent>
+          </div>
         </div>
       </div>
     </div>

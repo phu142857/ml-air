@@ -23,7 +23,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09090b"
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1a1f" },
+  ],
 };
 
 export default function RootLayout({
@@ -32,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark" className="dark bg-zinc-950" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="bg-background">
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <Script src="/mlair-runtime-config.js" strategy="beforeInteractive" />
         <AppProviders>

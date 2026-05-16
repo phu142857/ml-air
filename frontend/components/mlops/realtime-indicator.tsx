@@ -61,7 +61,7 @@ export function RealtimeIndicator() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-zinc-800/50 transition-colors">
+          <button className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/80">
             <div className="relative">
               <div
                 className={cn(
@@ -90,7 +90,7 @@ export function RealtimeIndicator() {
         <TooltipContent side="bottom" className="max-w-xs">
           <div className="flex flex-col gap-1">
             <span className="font-medium">{config.label}</span>
-            <span className="text-xs text-zinc-400">{config.description}</span>
+            <span className="text-xs text-muted-foreground">{config.description}</span>
           </div>
         </TooltipContent>
       </Tooltip>

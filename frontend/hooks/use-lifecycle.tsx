@@ -121,7 +121,7 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
       toast({
         title: "New update",
         description: first.title,
-        className: "bg-zinc-900 border-zinc-700 text-zinc-100",
+        className: "bg-card border-border text-foreground",
       })
     }
     const t = setTimeout(() => {
@@ -212,7 +212,7 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
         toast({
           title: "Live updates enabled",
           description: "Timeline refreshes from the audit API on an interval.",
-          className: "bg-zinc-900 border-zinc-700 text-zinc-100",
+          className: "bg-card border-border text-foreground",
         })
       }
       return next

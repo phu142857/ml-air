@@ -51,9 +51,9 @@ const statusConfig: Record<StatusType, {
   },
   cancelled: {
     icon: XCircle,
-    bg: "bg-zinc-500/10",
-    text: "text-zinc-400",
-    border: "border-zinc-500/20",
+    bg: "bg-muted",
+    text: "text-muted-foreground",
+    border: "border-border",
   },
   info: {
     icon: Info,

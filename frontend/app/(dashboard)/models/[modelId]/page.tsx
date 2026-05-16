@@ -1,17 +1,26 @@
 "use client";
 
-import { Box } from "lucide-react";
-import { ResourcePageHeader } from "@/components/layout/page-chrome";
+import { Box, Play } from "lucide-react";
+import { ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import {
+  DetailSection,
+  DetailTabBar,
+  FilterChips,
+  MetadataGrid,
+  MlopsEmptyState,
+} from "@/components/mlops/layout";
+import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
+import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table";
+import type { ModelVersionItem } from "@/lib/api";
+import { StatusBadge } from "@/components/mlops/status-badge";
+import { useTabLoading } from "@/hooks/use-tab-loading";
 import { Button } from "@/components/ui/button";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
-import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   deleteModel,
   deleteModelVersion,
@@ -28,6 +37,8 @@ import {
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
+import { isScopePinned } from "@/lib/scope";
+import { SCOPE_AGGREGATE_MODEL_DETAIL } from "@/lib/scope-messages";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { modelApprovalPillClass } from "@/lib/model-governance-ui";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
@@ -35,14 +46,29 @@ import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
-const MODEL_STAGE_FILTER_OPTIONS = [
-  { value: "all", label: "stage: all" },
-  { value: "production", label: "stage: production" },
-  { value: "staging", label: "stage: staging" },
-  { value: "archived", label: "stage: archived" }
-];
+const MODEL_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "policy", label: "Trigger policy" },
+  { id: "versions", label: "Versions" },
+  { id: "runs", label: "Recent runs" },
+] as const;
+
+const MODEL_TAB_SKELETON: Record<string, "grid" | "table"> = {
+  overview: "grid",
+  policy: "grid",
+  versions: "table",
+  runs: "table",
+};
 
 const VERSIONS_PAGE_SIZE = 20;
+
+function runStatusForBadge(status: string) {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("success") || s.includes("complete")) return <StatusBadge status="success" label={status} size="sm" />;
+  if (s.includes("fail") || s.includes("error")) return <StatusBadge status="failed" label={status} size="sm" />;
+  if (s.includes("run")) return <StatusBadge status="running" label={status} size="sm" />;
+  return <StatusBadge status="pending" label={status} size="sm" />;
+}
 
 export default function ModelDetailPage() {
   const params = useParams<{ modelId: string }>();
@@ -51,6 +77,7 @@ export default function ModelDetailPage() {
   const queryClient = useQueryClient();
   const servingSlotsUi = useServingSlotsHttpFeature();
   const { tenantId, projectId, token } = useAppContext();
+  const scopePinned = isScopePinned(tenantId, projectId);
   const [stageFilter, setStageFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule">("manual");
@@ -63,6 +90,8 @@ export default function ModelDetailPage() {
   const [confirmAction, setConfirmAction] = useState<null | (() => Promise<void>)>(null);
   const [versionBanner, setVersionBanner] = useState("");
   const [servingSlotDraft, setServingSlotDraft] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState("overview");
+  const isTabLoading = useTabLoading(tab);
 
   const modelsQuery = useQuery({
     queryKey: mlairKeys.models.list(tenantId, projectId),
@@ -219,8 +248,140 @@ export default function ModelDetailPage() {
   const effectiveDebounce = triggerPolicyQuery.data?.debounce_minutes ?? Math.max(1, Number.parseInt(debounceMinutes || "10", 10) || 10);
   const effectiveCron = triggerPolicyQuery.data?.schedule_cron || scheduleCron || "0 */6 * * *";
 
+  const versionColumns: DataTableColumn<ModelVersionItem>[] = useMemo(
+    () => [
+      {
+        id: "version",
+        header: "Version",
+        cell: (v) => <span className="font-mono text-sm">v{v.version}</span>,
+      },
+      {
+        id: "stage",
+        header: "Stage",
+        cell: (v) => (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+              v.stage === "production"
+                ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+                : "border-border bg-muted/40 text-foreground"
+            }`}
+          >
+            {v.stage === "production" ? "●" : "○"} {v.stage}
+          </span>
+        ),
+      },
+      {
+        id: "approval",
+        header: "Approval",
+        cell: (v) => (
+          <div className="flex flex-col gap-1">
+            <span
+              className={`inline-block w-fit max-w-full truncate ${modelApprovalPillClass(v.approval_status)}`}
+              title={v.approval_reason || undefined}
+            >
+              {v.approval_status || "—"}
+            </span>
+            {projectId !== "all" && v.approval_status === "pending_manual_approval" ? (
+              <div className="flex flex-nowrap gap-1">
+                <button
+                  type="button"
+                  className="approval-action-btn approval-action-btn--approve"
+                  disabled={approvalMutation.isPending}
+                  onClick={() => approvalMutation.mutate({ version: v.version, approval_status: "approved" })}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="approval-action-btn approval-action-btn--reject"
+                  disabled={approvalMutation.isPending}
+                  onClick={() => approvalMutation.mutate({ version: v.version, approval_status: "rejected" })}
+                >
+                  Reject
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: "run",
+        header: "Run",
+        cell: (v) =>
+          v.run_id ? (
+            <Link
+              href={`/runs/${encodeURIComponent(v.run_id)}`}
+              className="inline-block max-w-full truncate font-mono text-xs text-sky-400 hover:text-sky-300"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {v.run_id}
+            </Link>
+          ) : (
+            <span className="font-mono text-xs text-muted-foreground">—</span>
+          ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        className: "text-right",
+        cell: (v) => (
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
+              className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+              disabled={promoteMutation.isPending || v.stage === "production"}
+            >
+              Promote
+            </button>
+            <button
+              type="button"
+              onClick={() => promoteMutation.mutate({ version: v.version, stage: "staging" })}
+              className="action-btn-md btn-action-rollback rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+              disabled={promoteMutation.isPending || v.stage === "staging"}
+            >
+              Rollback
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                openConfirm(
+                  "Delete version",
+                  `Delete version v${v.version} of model "${model?.name || modelId}"?`,
+                  async () => {
+                    await deleteVersionMutation.mutateAsync(v.version);
+                    setConfirmOpen(false);
+                  },
+                )
+              }
+              className="action-btn-xs btn-action-delete rounded-lg px-2 py-1 text-xs disabled:opacity-60"
+              disabled={deleteVersionMutation.isPending}
+            >
+              Delete
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [
+      projectId,
+      modelId,
+      model?.name,
+      approvalMutation,
+      promoteMutation,
+      deleteVersionMutation,
+      openConfirm,
+    ],
+  );
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SubpageBreadcrumb
+        segments={[
+          { label: "Models", href: "/models" },
+          { label: model?.name ?? modelId, mono: true },
+        ]}
+      />
       <ResourcePageHeader
         icon={Box}
         accent="violet"
@@ -231,7 +392,7 @@ export default function ModelDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+              className="border-border bg-card text-foreground/90 hover:bg-muted"
               onClick={() => router.push("/models")}
             >
               All models
@@ -256,38 +417,45 @@ export default function ModelDetailPage() {
           </div>
         }
       />
-      <ConfirmDeleteDialog
-        open={confirmOpen}
-        title={confirmTitle}
-        body={confirmBody}
-        onCancel={() => setConfirmOpen(false)}
-        onDelete={() => {
-          if (confirmAction) void confirmAction();
-        }}
-        isLoading={deleteModelMutation.isPending || deleteVersionMutation.isPending}
-      />
-      <div className="flex-1 overflow-auto p-6">
-      <Card className="border-zinc-800 bg-zinc-900/50">
-          <CardContent className="pt-4">
-          <div className="mb-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs">
-          <div className="text-zinc-100">
-            Status:{" "}
-            <span
-              className={
-                modelStatusQuery.data?.status === "READY"
-                  ? "text-[color:var(--status-success-fg)]"
-                  : "text-[color:var(--status-pending-fg)]"
-              }
-            >
-              {modelStatusQuery.data?.status || "UNKNOWN"}
-            </span>
-          </div>
-        </div>
-
-        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-          <h3 className="mb-2 text-xs font-semibold text-zinc-100">Auto Trigger Config</h3>
+      <DetailTabBar accent="violet" tabs={[...MODEL_TABS]} value={tab} onValueChange={setTab} />
+      <div className="flex-1 space-y-6 overflow-auto p-6">
+        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODEL_DETAIL} /> : null}
+        {isTabLoading ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON[tab] ?? "grid"} />
+        ) : (
+        <>
+        {tab === "overview" && (
+      <DetailSection title="Registry status" description="Model registry health." accentBorder="violet">
+          <MetadataGrid
+            columns={2}
+            items={[
+              {
+                label: "Status",
+                value: (
+                  <span
+                    className={
+                      modelStatusQuery.data?.status === "READY"
+                        ? "text-[color:var(--status-success-fg)]"
+                        : "text-[color:var(--status-pending-fg)]"
+                    }
+                  >
+                    {modelStatusQuery.data?.status || "UNKNOWN"}
+                  </span>
+                ),
+              },
+              { label: "Model ID", value: modelId, mono: true },
+              { label: "Name", value: model?.name ?? "—" },
+              { label: "Description", value: model?.description ?? "—" },
+            ]}
+          />
+      </DetailSection>
+        )}
+        {tab === "policy" && (
+      <DetailSection title="Trigger policy" accentBorder="violet">
+        <div className="mb-4 rounded-xl border border-border bg-muted/40 p-3">
+          <h3 className="mb-2 text-xs font-semibold text-foreground">Auto Trigger Config</h3>
           <div className="grid gap-3 md:grid-cols-3">
-            <label className="flex items-center gap-2 text-xs text-zinc-100">
+            <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
                 name="trigger-mode"
@@ -296,7 +464,7 @@ export default function ModelDetailPage() {
               />
               Manual
             </label>
-            <label className="flex items-center gap-2 text-xs text-zinc-100">
+            <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
                 name="trigger-mode"
@@ -305,7 +473,7 @@ export default function ModelDetailPage() {
               />
               Auto when READY
             </label>
-            <label className="flex items-center gap-2 text-xs text-zinc-100">
+            <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
                 name="trigger-mode"
@@ -316,29 +484,29 @@ export default function ModelDetailPage() {
             </label>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <label className="text-xs text-zinc-500">
+            <label className="text-xs text-muted-foreground">
               Debounce (minutes)
               <input
                 value={debounceMinutes}
                 onChange={(e) => setDebounceMinutes(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-2 text-xs text-zinc-100"
+                className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 text-xs text-foreground"
               />
             </label>
-            <label className="text-xs text-zinc-500">
+            <label className="text-xs text-muted-foreground">
               Cron
               <input
                 value={scheduleCron}
                 onChange={(e) => setScheduleCron(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-2 text-xs text-zinc-100"
+                className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 text-xs text-foreground"
               />
             </label>
           </div>
-          <div className="mt-2 text-xs text-zinc-500">
-            Applied mode: <span className="text-zinc-100">{effectiveTriggerMode}</span> · debounce:{" "}
-            <span className="text-zinc-100">{effectiveDebounce}m</span>
+          <div className="mt-2 text-xs text-muted-foreground">
+            Applied mode: <span className="text-foreground">{effectiveTriggerMode}</span> · debounce:{" "}
+            <span className="text-foreground">{effectiveDebounce}m</span>
             {effectiveTriggerMode === "schedule" ? (
               <>
-                {" · "}cron: <span className="text-zinc-100">{effectiveCron}</span>
+                {" · "}cron: <span className="text-foreground">{effectiveCron}</span>
               </>
             ) : null}
           </div>
@@ -350,33 +518,38 @@ export default function ModelDetailPage() {
             >
               Save Trigger Policy
             </Button>
-            {policyMsg ? <span className="text-xs text-zinc-100">{policyMsg}</span> : null}
+            {policyMsg ? <span className="text-xs text-foreground">{policyMsg}</span> : null}
           </div>
         </div>
-
-        {!!(recentRunsQuery.data || []).length && (
-          <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-            <h3 className="mb-2 text-xs font-semibold text-zinc-100">Recent Runs</h3>
-            <div className="space-y-1 text-xs text-zinc-100">
-              {(recentRunsQuery.data || []).map((r) => (
-                <div key={r.run_id} className="flex items-center justify-between rounded border border-zinc-800 px-2 py-1">
-                  <span className="font-mono">{r.run_id}</span>
-                  <span>
-                    {r.status} | {r.training_mode || "full"} | {formatDateTimeCompact(r.updated_at)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 text-xs text-zinc-500">
-              Lineage context: use run detail and model versions for traceability.
-            </div>
-          </div>
+      </DetailSection>
         )}
 
-        {projectId !== "all" && servingSlotsUi ? (
-          <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-            <h3 className="mb-2 text-xs font-semibold text-zinc-100">Serving slots</h3>
-            <p className="mb-2 text-xs text-zinc-500">
+        {tab === "runs" && (
+      <DetailSection title="Recent runs" description="Latest pipeline executions for this model." accentBorder="violet">
+        {!(recentRunsQuery.data || []).length ? (
+          <MlopsEmptyState icon={Play} title="No recent runs" description="No runs linked from model versions yet." />
+        ) : (
+          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+            {(recentRunsQuery.data || []).map((r) => (
+              <li key={r.run_id} className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2.5">
+                <Link href={`/runs/${encodeURIComponent(r.run_id)}`} className="font-mono text-xs text-sky-400 hover:text-sky-300">
+                  {r.run_id}
+                </Link>
+                <div className="flex items-center gap-2">
+                  {runStatusForBadge(r.status)}
+                  <span className="text-xs text-muted-foreground">{formatDateTimeCompact(r.updated_at)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DetailSection>
+        )}
+
+        {tab === "overview" && projectId !== "all" && servingSlotsUi && (
+      <DetailSection title="Serving slots" description="Map registry versions to routing roles." accentBorder="violet">
+            <h3 className="mb-2 text-xs font-semibold text-foreground">Serving slots</h3>
+            <p className="mb-2 text-xs text-muted-foreground">
               Map a registry version to champion / candidate / challenger / canary for routing metadata.
             </p>
             <div className="grid gap-2 md:grid-cols-2">
@@ -385,10 +558,10 @@ export default function ModelDetailPage() {
                 return (
                   <div
                     key={slot}
-                    className="flex flex-wrap items-center gap-2 rounded border border-zinc-800 px-2 py-2 text-xs"
+                    className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-2 text-xs"
                   >
-                    <span className="font-medium capitalize text-zinc-100">{slot}</span>
-                    <span className="text-zinc-500">{cur ? `v${cur.version}` : "—"}</span>
+                    <span className="font-medium capitalize text-foreground">{slot}</span>
+                    <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
                     <input
                       type="number"
                       min={1}
@@ -397,11 +570,11 @@ export default function ModelDetailPage() {
                         setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
                       }
                       placeholder="ver"
-                      className="w-20 rounded border border-zinc-800 bg-zinc-800 px-2 py-1 text-zinc-100"
+                      className="w-20 rounded border border-border bg-muted px-2 py-1 text-foreground"
                     />
                     <button
                       type="button"
-                      className="rounded-lg bg-zinc-800 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-950/60 disabled:opacity-60"
+                      className="rounded-lg bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/40 disabled:opacity-60"
                       disabled={servingAssignMutation.isPending}
                       onClick={() => {
                         const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
@@ -415,33 +588,43 @@ export default function ModelDetailPage() {
                 );
               })}
             </div>
-          </div>
-        ) : null}
+      </DetailSection>
+        )}
 
+        {tab === "versions" && (
+      <DetailSection
+        title="Versions"
+        description="Registry versions with stage filters and lifecycle actions."
+        accentBorder="violet"
+        headerActions={
+          <FilterChips
+            variant="violet"
+            options={[
+              { id: "all", label: "All" },
+              { id: "production", label: "Production" },
+              { id: "staging", label: "Staging" },
+              { id: "archived", label: "Archived" },
+            ]}
+            value={stageFilter}
+            onChange={(id) => {
+              setStageFilter(id);
+              setCurrentPage(1);
+            }}
+          />
+        }
+      >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-zinc-100">Versions</h2>
             {versionBanner ? (
               <span className="version-inline-banner">{versionBanner}</span>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted-foreground">
               Showing {filteredVersions.length === 0 ? 0 : (currentPage - 1) * VERSIONS_PAGE_SIZE + 1}-
               {Math.min(currentPage * VERSIONS_PAGE_SIZE, filteredVersions.length)} of{" "}
               {filteredVersions.length} versions
             </span>
-            <SelectDropdown
-              value={stageFilter}
-              onChange={(v) => {
-                setStageFilter(v);
-                setCurrentPage(1);
-              }}
-              options={MODEL_STAGE_FILTER_OPTIONS}
-              buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-xs"
-              className="min-w-[9rem]"
-              aria-label="Filter versions by stage"
-            />
             <Button
               variant="secondary"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
@@ -449,7 +632,7 @@ export default function ModelDetailPage() {
             >
               {"<<"}
             </Button>
-            <span className="px-3 text-sm text-zinc-100">
+            <span className="px-3 text-sm text-foreground">
               Page {currentPage} / {totalPages}
             </span>
             <Button
@@ -461,118 +644,35 @@ export default function ModelDetailPage() {
             </Button>
           </div>
         </div>
-        <DataTableShell>
-          <DataTable className="text-sm">
-            <thead className="bg-zinc-950/60">
-              <tr>
-                <th className="px-3 py-2 text-left">Version</th>
-                <th className="px-3 py-2 text-left">Stage</th>
-                <th className="px-3 py-2 text-left">Approval</th>
-                <th className="px-3 py-2 text-left">Run</th>
-                <th className="whitespace-nowrap px-3 py-2 text-left">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedVersions.map((v) => (
-                <tr key={v.version_id} className="interactive-row border-t border-zinc-800 transition-colors">
-                  <td className="px-3 py-2">v{v.version}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
-                      v.stage === "production"
-                        ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                        : "border-zinc-800 bg-zinc-950/60 text-zinc-100"
-                    }`}>
-                      {v.stage === "production" ? "●" : "○"} {v.stage}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    <div className="flex flex-col gap-1">
-                      <span
-                        className={`inline-block w-fit max-w-full truncate ${modelApprovalPillClass(
-                          v.approval_status
-                        )}`}
-                        title={v.approval_reason || undefined}
-                      >
-                        {v.approval_status || "—"}
-                      </span>
-                      {projectId !== "all" && v.approval_status === "pending_manual_approval" ? (
-                        <div className="flex flex-nowrap gap-1">
-                          <button
-                            type="button"
-                            className="approval-action-btn approval-action-btn--approve"
-                            disabled={approvalMutation.isPending}
-                            onClick={() =>
-                              approvalMutation.mutate({ version: v.version, approval_status: "approved" })
-                            }
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="approval-action-btn approval-action-btn--reject"
-                            disabled={approvalMutation.isPending}
-                            onClick={() =>
-                              approvalMutation.mutate({ version: v.version, approval_status: "rejected" })
-                            }
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className="inline-block w-full truncate font-mono text-xs">{v.run_id || "-"}</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-nowrap gap-2">
-                      <button
-                        onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
-                        className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-                        disabled={promoteMutation.isPending || v.stage === "production"}
-                      >
-                        Promote
-                      </button>
-                      <button
-                        onClick={() => promoteMutation.mutate({ version: v.version, stage: "staging" })}
-                        className="action-btn-md btn-action-rollback rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-                        disabled={promoteMutation.isPending || v.stage === "staging"}
-                      >
-                        Rollback to staging
-                      </button>
-                      <button
-                        onClick={() =>
-                          openConfirm(
-                            "Delete version",
-                            `Delete version v${v.version} of model "${model?.name || modelId}"?`,
-                            async () => {
-                              await deleteVersionMutation.mutateAsync(v.version);
-                              setConfirmOpen(false);
-                            }
-                          )
-                        }
-                        className="action-btn-xs btn-action-delete rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-                        disabled={deleteVersionMutation.isPending}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!paginatedVersions.length && (
-                <tr>
-                  <td className="px-3 py-3 text-zinc-500" colSpan={5}>
-                    No versions for current filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </DataTable>
-        </DataTableShell>
-      </CardContent>
-      </Card>
+        {paginatedVersions.length === 0 ? (
+          <MlopsEmptyState
+            icon={Box}
+            title="No versions for this filter"
+            description="Change the stage filter or register a new model version from a training run."
+          />
+        ) : (
+          <MlopsDataTable
+            columns={versionColumns}
+            data={paginatedVersions}
+            keyExtractor={(v) => v.version_id}
+            emptyMessage="No versions for current filter."
+          />
+        )}
+      </DetailSection>
+        )}
+        </>
+        )}
       </div>
+      <ConfirmDeleteDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        body={confirmBody}
+        onCancel={() => setConfirmOpen(false)}
+        onDelete={() => {
+          if (confirmAction) void confirmAction();
+        }}
+        isLoading={deleteModelMutation.isPending || deleteVersionMutation.isPending}
+      />
     </div>
   );
 }

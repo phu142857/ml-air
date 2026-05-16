@@ -1,7 +1,7 @@
 "use client";
 
-import { GitBranch, Play } from "lucide-react";
-import { ResourcePageHeader } from "@/components/layout/page-chrome";
+import { GitBranch, GitCompare, History, Play } from "lucide-react";
+import { ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -9,18 +9,34 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog";
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync";
-import { ScopePinnedBanner } from "@/components/mlops/scope-pinned-banner";
 import { isScopePinned } from "@/lib/scope";
+import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { DagView } from "@/components/pipeline/dag-view";
 import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { DetailSection } from "@/components/mlops/layout";
+import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { checkPipelineReadiness, fetchPipelineDag, normalizeProjectId } from "@/lib/api";
+import {
+  checkPipelineReadiness,
+  fetchPipelineDag,
+  fetchPipelineVersions,
+  fetchPipelines,
+  normalizeProjectId,
+} from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
+import { formatRelativeTime } from "@/lib/utils";
 
 const LS_PIPELINE_EXEC_GATE = "mlair:pipeline-execution-gate-tools";
+
+type GateDetailRow = {
+  dataset: string;
+  role?: string;
+  actual_size: number;
+  required_size: number;
+  status: string;
+};
 
 export default function PipelineDetailPage() {
   const router = useRouter();
@@ -45,16 +61,39 @@ export default function PipelineDetailPage() {
     enabled: Boolean(token?.trim()) && scopePinned,
   });
 
+  const { data: pipelinesList } = useQuery({
+    queryKey: mlairKeys.pipelines.list(tenantId, projectId),
+    queryFn: () => fetchPipelines(tenantId, projectId, token),
+    enabled: Boolean(token?.trim()) && scopePinned,
+  });
+
+  const { data: versionsData } = useQuery({
+    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId),
+    queryFn: () => fetchPipelineVersions(tenantId, projectId, pipelineId, token),
+    enabled: Boolean(token?.trim()) && scopePinned,
+  });
+
+  const pipelineRow = useMemo(
+    () => pipelinesList?.items?.find((p) => p.pipeline_id === pipelineId),
+    [pipelinesList, pipelineId],
+  );
+
+  const latestConfigVersion = useMemo(() => {
+    const items = versionsData?.items ?? [];
+    if (!items.length) return null;
+    return items.reduce((a, b) => (a.version >= b.version ? a : b));
+  }, [versionsData]);
+
   const tasks = useMemo(
     () => (data?.nodes ?? []).map((node) => ({ task_id: node.id, status: node.status, attempt: 1 })),
-    [data]
+    [data],
   );
 
   const scopeRole = useMemo(() => {
     const t = String(tenantId || "").trim();
     const np = normalizeProjectId(String(projectId || "").trim());
     const row = accessibleScopes.find(
-      (s) => String(s.tenant_id || "").trim() === t && normalizeProjectId(String(s.project_id || "").trim()) === np
+      (s) => String(s.tenant_id || "").trim() === t && normalizeProjectId(String(s.project_id || "").trim()) === np,
     );
     return String(row?.role || accessibleScopes[0]?.role || "").trim();
   }, [accessibleScopes, tenantId, projectId]);
@@ -70,6 +109,36 @@ export default function PipelineDetailPage() {
       .toLowerCase() === "open";
 
   const [gateToolsOpen, setGateToolsOpen] = useState(gateDefaultOpen);
+
+  const gateColumns: DataTableColumn<GateDetailRow>[] = useMemo(
+    () => [
+      {
+        id: "dataset",
+        header: "Dataset",
+        cell: (row) => <span className="font-mono text-xs">{row.dataset}</span>,
+      },
+      {
+        id: "actual",
+        header: "Actual",
+        cell: (row) => <span className="tabular-nums">{row.actual_size}</span>,
+      },
+      {
+        id: "required",
+        header: "Required",
+        cell: (row) => <span className="tabular-nums">{row.required_size}</span>,
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <Badge variant="outline" className="text-[10px] capitalize">
+            {row.status}
+          </Badge>
+        ),
+      },
+    ],
+    [],
+  );
 
   useEffect(() => {
     if (gateDefaultOpen) return;
@@ -95,8 +164,15 @@ export default function PipelineDetailPage() {
     }
   };
 
+  const resolvedPipelineId = data?.pipeline_id ?? pipelineId;
+  const latestRunId = pipelineRow?.latest_run_id?.trim() || data?.run_id?.trim() || "";
+
+  const headerSubtitle = pipelineRow
+    ? `${pipelineRow.total_runs} total runs · last ${String(pipelineRow.latest_status || "—")}${pipelineRow.updated_at ? ` · updated ${formatRelativeTime(pipelineRow.updated_at)}` : ""}`
+    : "Orchestration and debugging — lifecycle training uses Dataset Hub";
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <TriggerRunUrlSync enabled={scopePinned} onOpen={() => setTriggerOpen(true)} />
       <TriggerRunDialog
         open={triggerOpen}
@@ -106,31 +182,31 @@ export default function PipelineDetailPage() {
         lockPipeline
         onSuccess={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
       />
+      <SubpageBreadcrumb
+        segments={[
+          { label: "Pipelines", href: "/pipelines" },
+          { label: pipelineId, mono: true },
+        ]}
+      />
       <ResourcePageHeader
         icon={GitBranch}
         accent="amber"
         title={`Pipeline · ${pipelineId}`}
-        subtitle="Orchestration, replay, and debugging — lifecycle trains from Dataset Hub"
+        subtitle={headerSubtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+              className="h-8 border-border bg-card text-foreground/90 hover:bg-muted"
               onClick={() => router.push("/pipelines")}
             >
               All pipelines
             </Button>
-            <Button variant="outline" size="sm" className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800" asChild>
-              <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>Versions</Link>
-            </Button>
-            <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-500" asChild>
-              <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/diff`}>Config diff</Link>
-            </Button>
             <Button
               type="button"
               size="sm"
-              className="gap-2 bg-sky-600 text-white hover:bg-sky-500"
+              className="h-8 gap-2 bg-sky-600 text-white hover:bg-sky-500"
               disabled={!token.trim() || !scopePinned}
               title={!scopePinned ? "Select a specific tenant and project to trigger a run." : undefined}
               onClick={() => setTriggerOpen(true)}
@@ -141,177 +217,222 @@ export default function PipelineDetailPage() {
           </div>
         }
       />
-      <div className="flex-1 overflow-auto p-6">
-      <ScopePinnedBanner className="mb-4" message="Pin tenant and project in the header to load this pipeline DAG and start gated runs." />
-      <Card className="border-zinc-800 bg-zinc-900/50">
-        <CardHeader>
-          <CardTitle className="text-zinc-200">DAG</CardTitle>
-        </CardHeader>
-        <CardContent>
-        <DagView tasks={tasks} />
-        </CardContent>
-      </Card>
-      <Card className="mt-6 border-zinc-800 bg-zinc-900/50">
-        <CardHeader>
-          <CardTitle className="text-zinc-200">Execution gate (advanced / compatibility)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-500">
-            <span className="font-semibold text-zinc-100">Dataset Readiness</span> and{" "}
-            <span className="font-semibold text-zinc-100">Training Eligibility</span> are evaluated on the{" "}
-            <Link href="/datasets" className="font-medium text-sky-400 underline hover:text-zinc-100">
-              Dataset Hub
+      <div className="flex-1 space-y-6 overflow-auto p-6">
+        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 border-border bg-background/50 text-foreground hover:bg-card"
+          >
+            <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>
+              <History className="h-3.5 w-3.5 text-amber-400" />
+              Versions
             </Link>
-            . This card is the pipeline <span className="font-semibold text-zinc-100">Execution Gate</span>{" "}
-            (run-level compatibility checks against a synthetic run — API requires maintainer).
-          </div>
-          {!isMaintainer ? (
-            <p className="text-xs text-zinc-500">
-              Execution gate tools are hidden for non-maintainer roles. Ask a maintainer to run checks, or use Dataset Hub
-              for lifecycle readiness and training.
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 border-border bg-background/50 text-foreground hover:bg-card"
+          >
+            <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/diff`}>
+              <GitCompare className="h-3.5 w-3.5 text-amber-400" />
+              Config diff
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="rounded-lg border border-border bg-card/40 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest config</p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {latestConfigVersion != null ? (
+                <>
+                  v{latestConfigVersion.version}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-sky-400 hover:underline">
+                      View versions
+                    </Link>
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </p>
-          ) : gateToolsOpen ? (
-            <>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] text-zinc-500">
-                  Preference is saved in this browser ({LS_PIPELINE_EXEC_GATE}).
-                </span>
-                <Button type="button" variant="secondary" className="px-3 py-1 text-xs" onClick={() => persistGateToolsOpen(false)}>
-                  Hide execution gate tools
-                </Button>
-              </div>
-              <p className="mb-3 text-xs text-zinc-500">
-                Scope: tenant <span className="text-zinc-100">{tenantId}</span> · project{" "}
-                <span className="text-zinc-100">{normalizeProjectId(projectId)}</span>. Use the exact{" "}
-                <code className="text-zinc-100">dataset</code> string from this pipeline version readiness (see Versions →
-                config <code className="text-zinc-100">tasks</code>). Each project or app chooses its own dataset names;
-                MLAir does not generate them here.
-              </p>
-              <div className="mb-3">
-                <label className="text-xs text-zinc-500">
-                  Execution gate input dataset name
-                  <input
-                    value={readinessDatasetInput}
-                    onChange={(e) => setReadinessDatasetInput(e.target.value)}
-                    placeholder="Must match pipeline readiness inputs[].dataset"
-                    className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-2 text-xs text-zinc-100"
-                  />
-                </label>
-              </div>
-              <div className="mb-3">
-                <label className="text-xs text-zinc-500">
-                  Optional dataset version id (immutable snapshot)
-                  <input
-                    value={readinessDatasetVersionId}
-                    onChange={(e) => setReadinessDatasetVersionId(e.target.value)}
-                    placeholder="dataset_versions.version_id — leave empty to use mutable aggregate size"
-                    className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-2 font-mono text-xs text-zinc-100"
-                  />
-                </label>
-              </div>
-              <TrainingGateFields
-                trainingMode={trainingMode}
-                onTrainingModeChange={setTrainingMode}
-                requiredSize={requiredSize}
-                onRequiredSizeChange={setRequiredSize}
-                className="mb-3"
-              />
-              <div className="flex flex-wrap items-end gap-2">
-                <Button
-                  disabled={isChecking || !readinessDatasetInput.trim()}
-                  onClick={async () => {
-                    setGateError("");
-                    const datasetName = readinessDatasetInput.trim();
-                    if (!datasetName) {
-                      setGateError("Enter the execution gate dataset name (must match pipeline version inputs[].dataset).");
-                      return;
-                    }
-                    setIsChecking(true);
-                    try {
-                      const required = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
-                      const vid = readinessDatasetVersionId.trim();
-                      const res = await checkPipelineReadiness(tenantId, projectId, pipelineId, token, {
-                        training_mode: trainingMode,
-                        ...(vid ? { dataset_version_id: vid } : {}),
-                        override_config: {
-                          inputs: [{ dataset: datasetName, required_size: required }]
-                        }
-                      });
-                      setGateResult(res);
-                    } catch (e: any) {
-                      setGateError(String(e?.message || e));
-                    } finally {
-                      setIsChecking(false);
-                    }
-                  }}
-                  variant="secondary"
-                  className="px-3 py-2 text-xs"
+          </div>
+          <div className="rounded-lg border border-border bg-card/40 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline id</p>
+            <p className="mt-1 truncate font-mono text-sm text-foreground/90">{resolvedPipelineId}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card/40 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest run</p>
+            <p className="mt-1 text-sm text-foreground/90">
+              {latestRunId ? (
+                <Link
+                  className="font-mono text-sky-400 hover:underline"
+                  href={`/runs/${encodeURIComponent(latestRunId)}`}
                 >
-                  Run execution gate check
-                </Button>
-              </div>
-              <p className="mt-2 text-xs text-zinc-500">
-                Train from{" "}
-                <Link href="/datasets" className="font-medium text-sky-400 hover:underline">
-                  Dataset Hub
-                </Link>{" "}
-                for lifecycle-centric flow.
-              </p>
-              {gateError ? (
-                <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {gateError}
-                </div>
-              ) : null}
-              {gateResult ? (
-                <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                  <div className="mb-2 text-xs text-zinc-100">
-                    Ready:{" "}
-                    <span
-                      className={
-                        gateResult.ready
-                          ? "text-[color:var(--status-success-fg)]"
-                          : "text-[color:var(--status-failed-fg)]"
-                      }
-                    >
-                      {String(gateResult.ready)}
-                    </span>
-                    {" · "}Mode: {gateResult.training_mode}
-                  </div>
-                  <DataTableShell>
-                    <DataTable className="text-xs">
-                      <thead className="bg-zinc-950/60 text-zinc-500">
-                        <tr>
-                          <th className="px-2 py-1 text-left">Dataset</th>
-                          <th className="px-2 py-1 text-left">Actual</th>
-                          <th className="px-2 py-1 text-left">Required</th>
-                          <th className="px-2 py-1 text-left">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(gateResult.details || []).map((d: any) => (
-                          <tr key={`${d.dataset}-${d.role}`} className="border-t border-zinc-800">
-                            <td className="px-2 py-1">{d.dataset}</td>
-                            <td className="px-2 py-1">{d.actual_size}</td>
-                            <td className="px-2 py-1">{d.required_size}</td>
-                            <td className="px-2 py-1">{d.status}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </DataTable>
-                  </DataTableShell>
-                </div>
-              ) : null}
-            </>
+                  {latestRunId}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </p>
+          </div>
+        </div>
+
+        <DetailSection
+          title="Pipeline DAG"
+          description="Stages and dependency shape from the live DAG endpoint."
+          accentBorder="amber"
+        >
+          <div className="min-h-[280px]">
+            <DagView tasks={tasks} />
+          </div>
+        </DetailSection>
+
+        <DetailSection
+          title="Execution gate"
+          description="Maintainer-only check-readiness. Readiness and training live on Dataset Hub."
+          accentBorder="amber"
+          bodyClassName="p-0"
+        >
+          <div className="border-b border-border/80 px-4 py-3 text-xs text-muted-foreground">
+            Use the <code className="text-foreground">dataset</code> string from this pipeline’s version config (
+            <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-sky-400 hover:underline">
+              Versions
+            </Link>
+            ).{" "}
+            <Link href="/datasets" className="text-sky-400 hover:underline">
+              Dataset Hub
+            </Link>{" "}
+            covers lifecycle readiness.
+          </div>
+
+          {!isMaintainer ? (
+            <div className="p-4 text-xs text-muted-foreground">
+              Maintainer-only. Use{" "}
+              <Link href="/datasets" className="text-sky-400 hover:underline">
+                Dataset Hub
+              </Link>{" "}
+              for readiness and training.
+            </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" className="px-3 py-2 text-xs" variant="secondary" onClick={() => persistGateToolsOpen(true)}>
-                Show execution gate tools
-              </Button>
-              <span className="text-[11px] text-zinc-500">Maintainer-only · optional local persistence</span>
+            <div className="p-4 pt-3">
+              <details
+                className="rounded-lg border border-border bg-muted/20 px-3 py-2"
+                open={gateToolsOpen}
+                onToggle={(e) => persistGateToolsOpen(e.currentTarget.open)}
+              >
+                <summary className="cursor-pointer select-none text-xs font-medium text-foreground hover:text-foreground/90">
+                  <span className="text-sky-400">{gateToolsOpen ? "Less" : "More"}</span>
+                  <span className="text-muted-foreground"> · </span>
+                  gate parameters &amp; check results
+                </summary>
+                <div className="mt-3 space-y-4 border-t border-border/70 pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    Preference for open/closed is saved in this browser ({LS_PIPELINE_EXEC_GATE}).
+                  </p>
+                <div>
+                  <label className="text-xs text-muted-foreground">
+                    Execution gate input dataset name
+                    <input
+                      value={readinessDatasetInput}
+                      onChange={(e) => setReadinessDatasetInput(e.target.value)}
+                      placeholder="Must match pipeline readiness inputs[].dataset"
+                      className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 text-xs text-foreground"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">
+                    Optional dataset version id (immutable snapshot)
+                    <input
+                      value={readinessDatasetVersionId}
+                      onChange={(e) => setReadinessDatasetVersionId(e.target.value)}
+                      placeholder="dataset_versions.version_id — leave empty to use mutable aggregate size"
+                      className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 font-mono text-xs text-foreground"
+                    />
+                  </label>
+                </div>
+                <TrainingGateFields
+                  trainingMode={trainingMode}
+                  onTrainingModeChange={setTrainingMode}
+                  requiredSize={requiredSize}
+                  onRequiredSizeChange={setRequiredSize}
+                />
+                <div className="flex flex-wrap items-end gap-2">
+                  <Button
+                    disabled={isChecking || !readinessDatasetInput.trim()}
+                    onClick={async () => {
+                      setGateError("");
+                      const datasetName = readinessDatasetInput.trim();
+                      if (!datasetName) {
+                        setGateError(
+                          "Enter the execution gate dataset name (must match pipeline version inputs[].dataset).",
+                        );
+                        return;
+                      }
+                      setIsChecking(true);
+                      try {
+                        const required = Math.max(1, Number.parseInt(requiredSize || "0", 10) || 1);
+                        const vid = readinessDatasetVersionId.trim();
+                        const res = await checkPipelineReadiness(tenantId, projectId, pipelineId, token, {
+                          training_mode: trainingMode,
+                          ...(vid ? { dataset_version_id: vid } : {}),
+                          override_config: {
+                            inputs: [{ dataset: datasetName, required_size: required }],
+                          },
+                        });
+                        setGateResult(res);
+                      } catch (e: any) {
+                        setGateError(String(e?.message || e));
+                      } finally {
+                        setIsChecking(false);
+                      }
+                    }}
+                    variant="secondary"
+                    className="px-3 py-2 text-xs"
+                  >
+                    Run execution gate check
+                  </Button>
+                </div>
+                {gateError ? (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {gateError}
+                  </div>
+                ) : null}
+                {gateResult ? (
+                  <div className="rounded-xl border border-border bg-muted/40 p-3">
+                    <div className="mb-2 text-xs text-foreground">
+                      Ready:{" "}
+                      <span
+                        className={
+                          gateResult.ready
+                            ? "text-[color:var(--status-success-fg)]"
+                            : "text-[color:var(--status-failed-fg)]"
+                        }
+                      >
+                        {String(gateResult.ready)}
+                      </span>
+                      {" · "}Mode: {gateResult.training_mode}
+                    </div>
+                    <DataTable
+                      columns={gateColumns}
+                      data={(gateResult.details || []) as GateDetailRow[]}
+                      keyExtractor={(row) => `${row.dataset}-${row.role ?? ""}`}
+                      emptyMessage="No gate detail rows."
+                    />
+                  </div>
+                ) : null}
+                </div>
+              </details>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </DetailSection>
       </div>
     </div>
   );

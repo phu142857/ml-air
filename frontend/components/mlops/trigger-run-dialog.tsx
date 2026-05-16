@@ -124,10 +124,10 @@ export function TriggerRunDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-zinc-800 bg-zinc-950 text-zinc-100 sm:max-w-md">
+      <DialogContent className="border-border bg-muted/30 text-foreground sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{gated ? "Trigger pipeline (gated)" : "Start a run"}</DialogTitle>
-          <DialogDescription className="text-zinc-500">
+          <DialogDescription className="text-muted-foreground">
             {gated
               ? "Starts a run via the pipeline execution gate (readiness / dataset inputs may block)."
               : "POST a new run for the selected pipeline in the current tenant/project."}
@@ -135,9 +135,9 @@ export function TriggerRunDialog({
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div className="space-y-2">
-            <Label className="text-zinc-400">Pipeline</Label>
+            <Label className="text-muted-foreground">Pipeline</Label>
             {lockPipeline && effectivePipelineId ? (
-              <p className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-200">
+              <p className="rounded-md border border-border bg-card px-3 py-2 font-mono text-sm text-foreground">
                 {effectivePipelineId}
               </p>
             ) : pipelineOptions.length ? (
@@ -148,7 +148,7 @@ export function TriggerRunDialog({
                 aria-label="Pipeline for new run"
               />
             ) : pipelinesQuery.isLoading ? (
-              <p className="text-xs text-zinc-500">Loading pipelines…</p>
+              <p className="text-xs text-muted-foreground">Loading pipelines…</p>
             ) : (
               <p className="text-xs text-amber-400">No pipelines found in this scope.</p>
             )}
@@ -158,7 +158,7 @@ export function TriggerRunDialog({
           <Button
             type="button"
             variant="outline"
-            className="border-zinc-700 bg-zinc-900"
+            className="border-border bg-card"
             onClick={() => onOpenChange(false)}
           >
             Cancel

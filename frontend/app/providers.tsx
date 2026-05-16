@@ -3,7 +3,7 @@
 import { PropsWithChildren, useEffect } from "react";
 import { QueryProvider } from "@/lib/query-provider";
 import { AppContextProvider } from "@/lib/app-context";
-import { ThemeProvider } from "@/lib/theme-context";
+import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMlairRealtime } from "@/lib/use-mlair-realtime";
 import { fetchRuntimeConfig } from "@/lib/api";
@@ -36,7 +36,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <ThemeProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="ml-air-theme">
       <TooltipProvider delayDuration={200}>
         <AppContextProvider>
           <QueryProvider>

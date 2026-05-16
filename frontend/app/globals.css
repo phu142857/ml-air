@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @source "../app/**/*.{ts,tsx}";
 @source "../components/**/*.{ts,tsx}";
@@ -9,45 +9,59 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.004 265);
+  --foreground: oklch(0.21 0.02 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.02 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.21 0.02 265);
+  --primary: oklch(0.28 0.04 265);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.008 265);
+  --secondary-foreground: oklch(0.28 0.04 265);
+  --muted: oklch(0.955 0.01 265);
+  --muted-foreground: oklch(0.5 0.02 265);
+  --accent: oklch(0.94 0.015 265);
+  --accent-foreground: oklch(0.25 0.03 265);
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.9 0.012 265);
+  --input: oklch(0.92 0.012 265);
+  --ring: oklch(0.55 0.08 250);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.99 0.003 265);
+  --sidebar-foreground: oklch(0.25 0.03 265);
+  --sidebar-primary: oklch(0.55 0.12 250);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.015 265);
+  --sidebar-accent-foreground: oklch(0.25 0.03 265);
+  --sidebar-border: oklch(0.9 0.012 265);
+  --sidebar-ring: oklch(0.55 0.08 250);
+  /* Pipeline DAG / status nodes — light shell */
+  --status-success-fg: oklch(0.32 0.1 162);
+  --status-success-bg: oklch(0.94 0.04 162 / 0.55);
+  --status-success-border: oklch(0.58 0.11 162 / 0.42);
+  --status-failed-fg: oklch(0.42 0.18 25);
+  --status-failed-bg: oklch(0.96 0.04 25 / 0.5);
+  --status-failed-border: oklch(0.62 0.15 25 / 0.42);
+  --status-pending-fg: oklch(0.42 0.11 86);
+  --status-pending-bg: oklch(0.96 0.05 86 / 0.45);
+  --status-pending-border: oklch(0.62 0.13 86 / 0.38);
+  --status-running-fg: oklch(0.35 0.09 240);
+  --status-running-bg: oklch(0.94 0.04 240 / 0.5);
+  --status-running-border: oklch(0.55 0.11 240 / 0.42);
+  --border-default: oklch(0.9 0.012 265);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
+  --background: oklch(0.13 0.015 265);
+  --foreground: oklch(0.97 0.005 265);
+  --card: oklch(0.17 0.015 265);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -77,7 +91,7 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
-  /* Legacy status chips (dataset / governance pages) — aligned with reDesign status palette */
+  /* Legacy status chips (dataset / governance pages) — aligned with ML-Air status palette */
   --status-success-fg: oklch(0.78 0.14 162);
   --status-success-bg: oklch(0.22 0.05 162 / 0.35);
   --status-success-border: oklch(0.45 0.1 162 / 0.5);
@@ -94,8 +108,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-inter, "Inter"), "Inter Fallback", sans-serif;
-  --font-mono: var(--font-jetbrains-mono, "JetBrains Mono"), "JetBrains Mono Fallback", monospace;
+  --font-sans: var(--font-inter, 'Inter'), 'Inter Fallback', sans-serif;
+  --font-mono: var(--font-jetbrains-mono, 'JetBrains Mono'), 'JetBrains Mono Fallback', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -149,6 +163,60 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* reactflow v11 (dag-view): edges, zoom controls, attribution in app dark mode */
+  .dark .react-flow .react-flow__edge-path,
+  .dark .react-flow .react-flow__connection-path {
+    stroke: var(--border);
+  }
+  .dark .react-flow .react-flow__edge.selected .react-flow__edge-path,
+  .dark .react-flow .react-flow__edge:focus .react-flow__edge-path,
+  .dark .react-flow .react-flow__edge:focus-visible .react-flow__edge-path {
+    stroke: var(--muted-foreground);
+  }
+  .dark .react-flow .react-flow__edge-textbg {
+    fill: var(--card);
+  }
+  .dark .react-flow .react-flow__controls {
+    box-shadow: 0 0 2px 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+  }
+  .dark .react-flow .react-flow__controls-button {
+    background: var(--muted);
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .dark .react-flow .react-flow__controls-button:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .dark .react-flow .react-flow__controls-button svg {
+    fill: currentColor;
+  }
+  .dark .react-flow .react-flow__attribution {
+    background: color-mix(in oklch, var(--card) 88%, transparent);
+  }
+  .dark .react-flow .react-flow__attribution a {
+    color: var(--muted-foreground);
+  }
+
+  /* @xyflow/react: map built-in .dark shell to semantic tokens (arrowheads use --xy-edge-stroke-default) */
+  .dark .react-flow.dark {
+    --xy-edge-stroke-default: var(--border);
+    --xy-edge-stroke-selected-default: var(--muted-foreground);
+    --xy-background-color-default: transparent;
+    --xy-background-pattern-dots-color-default: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+    --xy-background-pattern-lines-color-default: var(--border);
+    --xy-background-pattern-cross-color-default: var(--border);
+    --xy-controls-button-background-color-default: var(--muted);
+    --xy-controls-button-background-color-hover-default: var(--accent);
+    --xy-controls-button-color-default: var(--muted-foreground);
+    --xy-controls-button-color-hover-default: var(--foreground);
+    --xy-controls-button-border-color-default: var(--border);
+    --xy-controls-box-shadow-default: 0 0 2px 1px color-mix(in oklch, var(--foreground) 12%, transparent);
+    --xy-edge-label-background-color-default: var(--card);
+    --xy-edge-label-color-default: var(--foreground);
+    --xy-node-boxshadow-selected-default: 0 0 0 0.5px var(--ring);
+  }
 }
 
 @keyframes pulse-ring {
@@ -180,8 +248,7 @@
 
 /* Breathing glow for live indicator */
 @keyframes breathe-glow {
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
     box-shadow: 0 0 4px 1px oklch(0.696 0.17 162.48 / 0.5);
   }

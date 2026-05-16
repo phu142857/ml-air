@@ -4,6 +4,7 @@ import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
 import "reactflow/dist/style.css";
 import { TaskItem } from "@/lib/api";
 import { normalizeStatus, statusBadgeClass } from "@/lib/status-style";
+import { useChartTheme } from "@/hooks/use-chart-theme";
 
 type Props = {
   tasks: TaskItem[];
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function DagView({ tasks, onClickTask }: Props) {
+  const { flowBackground } = useChartTheme();
   const sourceTasks = tasks.length
     ? tasks
     : [
@@ -57,7 +59,7 @@ export function DagView({ tasks, onClickTask }: Props) {
           </span>
         ))}
       </div>
-      <div className="h-[420px] w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/50">
+      <div className="h-[420px] w-full overflow-hidden rounded-xl border border-border bg-muted/30">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -66,7 +68,7 @@ export function DagView({ tasks, onClickTask }: Props) {
             if (onClickTask) onClickTask(node.id);
           }}
         >
-          <Background color="var(--border-default)" gap={16} />
+          <Background color={flowBackground} gap={16} />
           <Controls />
         </ReactFlow>
       </div>

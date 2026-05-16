@@ -3,5 +3,5 @@ export function isScopePinned(tenantId: string, projectId: string): boolean {
   return tenantId !== "all" && projectId !== "all"
 }
 
-export const SCOPE_PIN_HINT =
-  "Select a specific tenant and project in the top bar. Aggregate “all” works for list pages only."
+/** @deprecated Use SCOPE_PIN_DEFAULT from @/lib/scope-messages */
+export { SCOPE_PIN_DEFAULT as SCOPE_PIN_HINT } from "@/lib/scope-messages"

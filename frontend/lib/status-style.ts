@@ -22,14 +22,15 @@ export function normalizeStatus(raw: string | null | undefined): StatusTone {
   return ALIASES[key] || "PENDING";
 }
 
-/** Tailwind chip classes (pair with `rounded-full border px-2 …`). */
+/** Tailwind chip classes — light/dark aligned with reDesign StatusBadge. */
 export function statusBadgeClass(status: string | null | undefined): string {
   const s = normalizeStatus(status);
-  if (s === "SUCCESS") return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
-  if (s === "FAILED") return "border-red-500/40 bg-red-500/15 text-red-300";
-  if (s === "RUNNING") return "border-sky-500/40 bg-sky-500/15 text-sky-300";
-  if (s === "QUEUED") return "border-amber-500/40 bg-amber-500/15 text-amber-300";
-  return "border-zinc-600 bg-zinc-800/80 text-zinc-400";
+  if (s === "SUCCESS")
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  if (s === "FAILED") return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400";
+  if (s === "RUNNING") return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400";
+  if (s === "QUEUED") return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-400";
+  return "border-border bg-muted text-muted-foreground";
 }
 
 export function normalizeDatasetStatus(raw: string | null | undefined): DatasetStatusTone {
@@ -44,7 +45,19 @@ export function normalizeDatasetStatus(raw: string | null | undefined): DatasetS
 
 export function datasetStatusBadgeClass(status: string | null | undefined): string {
   const s = normalizeDatasetStatus(status);
-  if (s === "FAILED") return "border-red-500/40 bg-red-500/15 text-red-300";
-  if (s === "WARNING") return "border-amber-500/40 bg-amber-500/15 text-amber-300";
-  return "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
+  if (s === "FAILED") return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400";
+  if (s === "WARNING") return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-400";
+  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+}
+
+/** Map API status strings to `StatusBadge` variants. */
+export function statusToMlopsBadge(
+  raw: string | null | undefined,
+): "success" | "failed" | "running" | "pending" | "cancelled" | "warning" {
+  const s = normalizeStatus(raw);
+  if (s === "SUCCESS") return "success";
+  if (s === "FAILED") return "failed";
+  if (s === "RUNNING") return "running";
+  if (s === "QUEUED") return "pending";
+  return "pending";
 }

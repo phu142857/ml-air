@@ -23,7 +23,7 @@ const darkColorStyles: Record<ColorVariant, string> = {
     "hover:shadow-[0_0_20px_rgba(234,179,8,0.15)]"
   ),
   white: cn(
-    "bg-white/5 border-white/20 text-zinc-100",
+    "bg-white/5 border-white/20 text-foreground",
     "hover:bg-white/10 hover:border-white/30",
     "hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
   ),
@@ -56,8 +56,8 @@ const lightColorStyles: Record<ColorVariant, string> = {
     "hover:shadow-[0_0_20px_rgba(234,179,8,0.2)]"
   ),
   white: cn(
-    "bg-zinc-900/5 border-zinc-400/30 text-zinc-700",
-    "hover:bg-zinc-900/10 hover:border-zinc-400/50",
+    "bg-card/5 border-border/40 text-muted-foreground",
+    "hover:bg-card/10 hover:border-border/60",
     "hover:shadow-[0_0_20px_rgba(0,0,0,0.08)]"
   ),
   purple: cn(

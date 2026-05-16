@@ -1,15 +1,26 @@
 "use client";
 
-import { Database } from "lucide-react";
-import { ResourcePageHeader } from "@/components/layout/page-chrome";
+import { ChevronRight, Database, GitBranch } from "lucide-react";
+import {
+  DetailSection,
+  DetailTabBar,
+  FilterChips,
+  MetadataGrid,
+  MlopsEmptyState,
+  ResourcePageHeader,
+  ScopePinnedInline,
+  SubpageBreadcrumb,
+} from "@/components/mlops/layout";
+import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
+import { useTabLoading } from "@/hooks/use-tab-loading";
+import { Badge } from "@/components/ui/badge";
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -34,7 +45,8 @@ import {
   fetchPipelineVersions,
   fetchRuntimeConfig,
   upsertDatasetTrainingPolicy,
-  normalizeProjectId
+  normalizeProjectId,
+  type DatasetVersionItem
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
@@ -42,7 +54,17 @@ import { datasetSourceTypeBadge, datasetVersionSourceBadge } from "@/lib/dataset
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
 import { executeTrainingIntent } from "@/lib/training-intent";
 import { useAppContext } from "@/lib/app-context";
-import { formatDateTimeCompact } from "@/lib/utils";
+import { isScopePinned } from "@/lib/scope";
+import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
+import { cn, formatDateTimeCompact } from "@/lib/utils";
+
+const DATASET_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "versions", label: "Versions" },
+  { id: "readiness", label: "Readiness" },
+  { id: "accumulation", label: "Accumulation" },
+  { id: "training", label: "Training" },
+] as const;
 
 function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string; className: string } {
   if (kind === "readiness") {
@@ -134,12 +156,15 @@ const READINESS_EVAL_SOURCE_FILTER_OPTIONS = [
 
 const READINESS_EVALUATIONS_PAGE_SIZE = 20;
 
+type ReadinessEvaluationRow = Awaited<ReturnType<typeof fetchDatasetReadinessEvaluations>>["items"][number];
+
 export default function DatasetHubPage() {
   const params = useParams<{ datasetId: string }>();
   const datasetId = decodeURIComponent(params.datasetId);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { tenantId, projectId, token, accessibleScopes } = useAppContext();
+  const scopePinned = isScopePinned(tenantId, projectId);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [trainingMode, setTrainingMode] = useState("standard");
@@ -147,6 +172,15 @@ export default function DatasetHubPage() {
   const [trainMsg, setTrainMsg] = useState("");
   const [policyMsg, setPolicyMsg] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "versions" | "readiness" | "accumulation" | "training">("overview");
+  const isTabLoading = useTabLoading(activeTab);
+
+  const DATASET_TAB_SKELETON: Record<string, "grid" | "table"> = {
+    overview: "grid",
+    versions: "table",
+    readiness: "table",
+    accumulation: "grid",
+    training: "grid",
+  };
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
   const [policyRequiredSizeDraft, setPolicyRequiredSizeDraft] = useState("1000");
   const [newPolicyTriggerMode, setNewPolicyTriggerMode] = useState("manual");
@@ -528,6 +562,85 @@ export default function DatasetHubPage() {
     if (!hasPlugin) return { ok: false, reason: "Task plugin is missing in pipeline config" };
     return { ok: true, reason: "" };
   }, [effectivePipeline, pipelineVersionsQuery.data]);
+
+  const trainingVersionColumns: DataTableColumn<DatasetVersionItem>[] = useMemo(
+    () => [
+      {
+        id: "version",
+        header: "Version",
+        cell: (v) => <span className="whitespace-nowrap font-mono text-xs">{v.version}</span>,
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (v) => (
+          <span
+            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
+          >
+            {normalizeDatasetStatus(v.status)}
+          </span>
+        ),
+      },
+      {
+        id: "action",
+        header: "Action",
+        cell: (v) => (
+          <Button
+            type="button"
+            className="px-3 py-1 text-xs"
+            disabled={
+              !selectedModelId ||
+              normalizeDatasetStatus(v.status) === "FAILED" ||
+              !pluginPrecheck.ok ||
+              pipelineVersionsQuery.isLoading
+            }
+            title={pluginPrecheck.ok ? "Train" : pluginPrecheck.reason}
+            onClick={(e) => {
+              e.stopPropagation();
+              setTrainMsg("");
+              setSelectedVersionId(v.version_id);
+              void (async () => {
+                try {
+                  const scopedPid = normalizeProjectId(String(projectId || "").trim());
+                  const runContext: Record<string, string> = {};
+                  if (scopedPid.startsWith("clinic_")) {
+                    runContext.clinic_id = scopedPid.slice("clinic_".length);
+                  }
+                  runContext.mlair_model_id = selectedModelId;
+                  const res = await executeTrainingIntent(tenantId, projectId, token, {
+                    kind: "model_dataset",
+                    modelId: selectedModelId,
+                    datasetId,
+                    datasetVersionId: v.version_id,
+                    idempotencyKey: `dataset-hub-train-${Date.now()}`,
+                    trainingMode,
+                    context: Object.keys(runContext).length ? runContext : undefined,
+                  });
+                  if (res.run_id) router.push(`/runs/${res.run_id}`);
+                } catch (err) {
+                  setTrainMsg(describeTrainError(err));
+                }
+              })();
+            }}
+          >
+            Train
+          </Button>
+        ),
+      },
+    ],
+    [
+      datasetId,
+      pipelineVersionsQuery.isLoading,
+      pluginPrecheck,
+      projectId,
+      router,
+      selectedModelId,
+      tenantId,
+      token,
+      trainingMode,
+    ],
+  );
+
   const allEvaluationItems = readinessEvaluationsQuery.data?.items ?? [];
   const filteredEvaluations = useMemo(() => {
     return allEvaluationItems.filter((row) => {
@@ -551,6 +664,76 @@ export default function DatasetHubPage() {
       ),
     [filteredEvaluations, evaluationCurrentPage]
   );
+
+  const evaluationColumns: DataTableColumn<ReadinessEvaluationRow>[] = useMemo(
+    () => [
+      {
+        id: "status",
+        header: "Status",
+        cell: (row) => (
+          <span
+            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+              row.status === "eligible"
+                ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+                : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
+            }`}
+          >
+            {String(row.status || "blocked").toUpperCase()}
+          </span>
+        ),
+      },
+      {
+        id: "sizes",
+        header: "Current / Required",
+        cell: (row) => (
+          <span>
+            {Number(row.current_size || 0)} / {Number(row.required_size || 0)}
+          </span>
+        ),
+      },
+      {
+        id: "dataset_version",
+        header: "Version",
+        cell: (row) => (
+          <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+            {row.dataset_version_id || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "source",
+        header: "Source",
+        cell: (row) => (
+          <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+            {String(row.source || "manual")}
+          </span>
+        ),
+      },
+      {
+        id: "why",
+        header: "Why blocked",
+        className: "max-w-[14rem]",
+        cell: (row) => (
+          <div className="text-xs text-muted-foreground" title={formatEvaluationReasons(row.reasons)}>
+            {String(row.status || "").toLowerCase() === "eligible" ? (
+              <span className="text-muted-foreground">—</span>
+            ) : (
+              <span className="line-clamp-2 text-[color:var(--status-pending-fg)]/90">
+                {formatEvaluationReasons(row.reasons) || "—"}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "evaluated",
+        header: "Evaluated",
+        cell: (row) => <span>{formatDateTimeCompact(row.evaluated_at)}</span>,
+      },
+    ],
+    [],
+  );
+
   useEffect(() => {
     setEvaluationCurrentPage((p) => Math.min(p, evaluationTotalPages));
   }, [evaluationTotalPages]);
@@ -611,9 +794,166 @@ export default function DatasetHubPage() {
     const r = String(role || "").toLowerCase();
     return r === "maintainer" || r === "admin";
   }, [accessibleScopes, tenantId, projectId]);
-  const datasetSubtitle = dataset
-    ? `dataset_id: ${dataset.dataset_id} · updated: ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)} · readiness + eligibility + train live here · buffer strategies: docs/guides/dataset-accumulation-strategies.md`
-    : "Primary surface for versions, readiness, eligibility matrix, and intent-driven train (pipeline = advanced execution gate) · buffer strategies: docs/guides/dataset-accumulation-strategies.md";
+
+  const versionColumns: DataTableColumn<DatasetVersionItem>[] = useMemo(() => {
+    const cols: DataTableColumn<DatasetVersionItem>[] = [
+      {
+        id: "version",
+        header: "Version",
+        cell: (v) => <span className="whitespace-nowrap font-mono text-xs">{v.version}</span>,
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (v) => (
+          <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}>
+            {normalizeDatasetStatus(v.status)}
+          </span>
+        ),
+      },
+      {
+        id: "source",
+        header: "Source",
+        cell: (v) => {
+          const b = datasetVersionSourceBadge(v);
+          return (
+            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
+              {b.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "rows",
+        header: "Rows",
+        cell: (v) => <>{Number(v.record_count || 0)}</>,
+      },
+      {
+        id: "tags",
+        header: "Tags",
+        className: "max-w-[12rem]",
+        cell: (v) => (
+          <div className="flex flex-wrap gap-1">
+            {(Array.isArray(v.tags) ? v.tags : []).length ? (
+              (Array.isArray(v.tags) ? v.tags : []).map((t) => (
+                <span
+                  key={`${v.version_id}:${t}`}
+                  className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-foreground"
+                >
+                  {t}
+                </span>
+              ))
+            ) : (
+              <span className="text-[10px] text-muted-foreground">—</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: "refs",
+        header: "Refs",
+        className: "max-w-[10rem]",
+        cell: (v) => (
+          <div className="text-[10px] text-muted-foreground">
+            {(Array.isArray(v.external_refs) ? v.external_refs : []).length ? (
+              <ul className="list-inside list-disc space-y-0.5">
+                {(Array.isArray(v.external_refs) ? v.external_refs : []).slice(0, 2).map((r, idx) => {
+                  const url = typeof r?.url === "string" ? r.url : "";
+                  const lab = typeof r?.label === "string" && r.label ? r.label : url.slice(0, 24);
+                  return (
+                    <li key={`${v.version_id}:ref:${idx}`} className="truncate">
+                      {url ? (
+                        <a href={url} target="_blank" rel="noreferrer" className="text-sky-600 underline dark:text-sky-400">
+                          {lab}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              "—"
+            )}
+            {(Array.isArray(v.external_refs) ? v.external_refs : []).length > 2 ? (
+              <div className="text-[10px]">
+                +{(Array.isArray(v.external_refs) ? v.external_refs : []).length - 2} more
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: "created",
+        header: "Created",
+        cell: (v) => <span className="whitespace-nowrap">{formatDateTimeCompact(v.created_at)}</span>,
+      },
+    ];
+    if (canEditVersionMetadata) {
+      cols.push({
+        id: "metadata",
+        header: "Metadata",
+        cell: (v) => (
+          <Button
+            type="button"
+            variant="secondary"
+            className="px-2 py-1 text-[10px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setVersionMetaMsg("");
+              setVersionMetaId(v.version_id);
+              setVersionMetaLabel(String(v.version));
+              setVersionMetaTagInput("");
+              setVersionMetaRefUrl("");
+              setVersionMetaRefLabel("");
+              setVersionMetaOpen(true);
+            }}
+          >
+            Edit metadata
+          </Button>
+        ),
+      });
+    }
+    return cols;
+  }, [canEditVersionMetadata]);
+
+  const datasetSubtitle = dataset ? `Updated ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)}` : "";
+
+  const lifecycleStages = ["Buffer", "Version", "Readiness", "Eligibility"] as const;
+  const lifecycleStageIndex = useMemo(() => {
+    const st = String(readinessQuery.data?.status || "pending").toLowerCase();
+    if (st === "eligible" || st === "ready") return 3;
+    if (st === "blocked") return 2;
+    return 1;
+  }, [readinessQuery.data?.status]);
+
+  const overviewSummaryItems = useMemo(() => {
+    const latest = versionsQuery.data?.items?.[0];
+    const srcBadge = datasetVersionSourceBadge(latest || {});
+    return [
+      { label: "Latest version", value: latest?.version ?? "—", mono: true },
+      {
+        label: "Latest source",
+        value: (
+          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${srcBadge.className}`}>
+            {srcBadge.label}
+          </span>
+        ),
+      },
+      { label: "Total versions", value: String((versionsQuery.data?.items || []).length) },
+      { label: "Current size", value: String(Number(dataset?.current_size || 0)), mono: true },
+      {
+        label: "Readiness",
+        value: (
+          <span className="inline-flex items-center gap-2">
+            <DomainChip kind="readiness" />
+            <span>{String(readinessQuery.data?.status || "pending")}</span>
+          </span>
+        ),
+      },
+    ];
+  }, [versionsQuery.data?.items, dataset?.current_size, readinessQuery.data?.status]);
 
   const lineageVersionRow = useMemo(() => {
     const items = versionsQuery.data?.items || [];
@@ -623,196 +963,168 @@ export default function DatasetHubPage() {
   }, [versionsQuery.data?.items, selectedVersionForReadiness]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SubpageBreadcrumb
+        segments={[
+          { label: "Datasets", href: "/datasets" },
+          { label: dataset?.name ?? datasetId, mono: true },
+        ]}
+      />
       <ResourcePageHeader
         icon={Database}
         accent="emerald"
         title={dataset ? `Dataset · ${dataset.name}` : "Dataset"}
         subtitle={datasetSubtitle}
-      />
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Link
-          href="/datasets"
-          className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-800"
-        >
-          ← All datasets
-        </Link>
-        <Link
-          href={`/lineage?datasetVersion=${encodeURIComponent(selectedVersionForReadiness || "")}`}
-          className={`rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-800 ${!selectedVersionForReadiness ? "pointer-events-none opacity-50" : ""}`}
-          title={
-            lineageVersionRow
-              ? `Open lineage for v${lineageVersionRow.version} (pinned dataset_version_id)`
-              : undefined
-          }
-        >
-          {lineageVersionRow ? `Lineage (v${lineageVersionRow.version})` : "Lineage"}
-        </Link>
-      </div>
-
-      {datasetQuery.isError && datasetQuery.isFetched ? (
-        <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
-          Could not load dataset (check scope or id).
-        </div>
-      ) : null}
-
-      <div className="mb-4 border-b border-zinc-800">
-        <div className="flex flex-wrap gap-1">
-          {[
-            { id: "overview", label: "Overview" },
-            { id: "versions", label: "Versions" },
-            { id: "readiness", label: "Readiness" },
-            { id: "accumulation", label: "Accumulation" },
-            { id: "training", label: "Training" }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`tab-stable border-b-2 px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
-                activeTab === tab.id
-                  ? "border-sky-500 text-sky-400"
-                  : "border-transparent text-zinc-500 hover:text-zinc-200"
-              }`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" asChild className="h-8 border-border bg-card text-xs">
+              <Link href="/datasets">All datasets</Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild={Boolean(selectedVersionForReadiness)}
+              disabled={!selectedVersionForReadiness}
+              className="h-8 gap-1.5 border-border bg-card text-xs disabled:opacity-40"
+              title={
+                lineageVersionRow
+                  ? `Open lineage for v${lineageVersionRow.version} (pinned dataset_version_id)`
+                  : undefined
+              }
             >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+              {selectedVersionForReadiness ? (
+                <Link href={`/lineage?datasetVersion=${encodeURIComponent(selectedVersionForReadiness)}`}>
+                  <GitBranch className="h-3.5 w-3.5" />
+                  {lineageVersionRow ? `Lineage (v${lineageVersionRow.version})` : "Lineage"}
+                </Link>
+              ) : (
+                <>
+                  <GitBranch className="h-3.5 w-3.5" />
+                  Lineage
+                </>
+              )}
+            </Button>
+          </div>
+        }
+      />
 
-      {activeTab === "overview" ? (
-        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-          <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle>Lifecycle Layers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-xs text-zinc-500">
-                <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1">
-                  <span className="font-semibold text-zinc-100">Buffer</span>: mutable accumulation state (not trainable snapshot).
-                </div>
-                <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1">
-                  <span className="font-semibold text-zinc-100">Version</span>: immutable dataset snapshot (`vN`) used for training.
-                </div>
-                <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1">
-                  <span className="font-semibold text-zinc-100">Readiness</span>: evaluate (`dataset_version`, `policy`) {"->"} eligible/blocked.
-                </div>
-                <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1">
-                  <span className="font-semibold text-zinc-100">Eligibility</span>: policy decision shown in readiness criteria and run gate.
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle>Dataset Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-xs text-zinc-500">
-                <div>Latest version: <span className="font-semibold text-zinc-100">{versionsQuery.data?.items?.[0]?.version || "—"}</span></div>
-                <div>
-                  Latest source:{" "}
-                  {(() => {
-                    const b = datasetVersionSourceBadge(versionsQuery.data?.items?.[0] || {});
-                    return (
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
-                        {b.label}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <div>Total versions: <span className="font-semibold text-zinc-100">{(versionsQuery.data?.items || []).length}</span></div>
-                <div>Current size: <span className="font-semibold text-zinc-100">{Number(dataset?.current_size || 0)}</span></div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <DomainChip kind="readiness" />
-                  <span className="font-semibold text-zinc-100">{String(readinessQuery.data?.status || "pending")}</span>
-                </div>
-                {bufferMaterializationHints ? (
-                  <div className="space-y-1 border-t border-zinc-800 pt-2">
-                    <div className="font-semibold text-zinc-100">Buffer / materialization</div>
-                    <div>
-                      Strategy:{" "}
-                      <span className="font-mono text-xs text-zinc-100">{bufferMaterializationHints.strat}</span>
-                    </div>
-                    {bufferMaterializationHints.lastVid ? (
-                      <div>
-                        Last materialized:{" "}
-                        <span className="text-zinc-100">
-                          {bufferMaterializationHints.lastVersionLabel || bufferMaterializationHints.lastVid.slice(0, 8)}
-                        </span>
-                        {bufferMaterializationHints.lastAt ? (
-                          <span className="text-zinc-500"> · {bufferMaterializationHints.lastAt}</span>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="text-zinc-500">Last materialized: —</div>
-                    )}
-                    {bufferMaterializationHints.strat === "rolling_accumulate" ? (
-                      <p className="text-[color:var(--status-pending-fg)]/90">
-                        Rolling: buffer grows without auto <span className="font-mono">vN</span> snapshots — see Accumulation.
-                      </p>
-                    ) : bufferMaterializationHints.rowsToThreshold != null ? (
-                      <div>
-                        ~Rows until threshold:{" "}
-                        <span className="font-semibold text-zinc-100">{bufferMaterializationHints.rowsToThreshold}</span>{" "}
-                        <span className="text-zinc-500">(buffer {bufferMaterializationHints.cur}</span>
-                        <span className="text-zinc-500"> / {bufferMaterializationHints.tgt})</span>
-                      </div>
+      <DetailTabBar
+        accent="emerald"
+        tabs={[...DATASET_TABS]}
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+      />
+
+      <div className="flex-1 space-y-6 overflow-auto p-6">
+        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASET_DETAIL} /> : null}
+
+        {datasetQuery.isError && datasetQuery.isFetched ? (
+          <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
+            Could not load dataset (check scope or id).
+          </div>
+        ) : null}
+
+        {isTabLoading ? (
+          <DetailTabSkeleton variant={DATASET_TAB_SKELETON[activeTab] ?? "grid"} />
+        ) : (
+        <>
+        {activeTab === "overview" ? (
+          <div className="grid min-w-0 max-w-[1400px] grid-cols-1 gap-4 lg:grid-cols-2">
+            <DetailSection title="Lifecycle layers" accentBorder="emerald">
+              <div className="flex flex-wrap items-center gap-2">
+                {lifecycleStages.map((label, i) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[11px] font-medium",
+                        i <= lifecycleStageIndex
+                          ? "border-emerald-500/50 text-emerald-600 bg-emerald-500/5 dark:text-emerald-300"
+                          : "border-border text-muted-foreground/80"
+                      )}
+                    >
+                      {label}
+                    </Badge>
+                    {i < lifecycleStages.length - 1 ? (
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/80" aria-hidden />
                     ) : null}
                   </div>
-                ) : null}
+                ))}
               </div>
-            </CardContent>
-          </Card>
-          <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="flex flex-wrap items-center gap-2">
-                Eligibility Snapshot
-                <DomainChip kind="eligibility" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(readinessQuery.data?.eligibility_criteria || []).length ? (
-                <div className="space-y-2 text-xs">
-                  {(readinessQuery.data?.eligibility_criteria || []).map((c) => (
-                    <div key={c.code} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-1">
-                      <span className="text-zinc-500">{c.label}</span>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                          c.status === "pass"
-                            ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                            : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
-                        }`}
-                      >
-                        {c.status === "pass" ? "PASS" : "FAIL"}
+            </DetailSection>
+
+            <DetailSection title="Dataset summary" accentBorder="emerald">
+              <MetadataGrid columns={2} items={overviewSummaryItems} />
+              {bufferMaterializationHints ? (
+                <div className="mt-4 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Buffer / materialization</p>
+                  <p>
+                    Strategy:{" "}
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.strat}</span>
+                  </p>
+                  {bufferMaterializationHints.lastVid ? (
+                    <p>
+                      Last materialized:{" "}
+                      <span className="text-foreground">
+                        {bufferMaterializationHints.lastVersionLabel || bufferMaterializationHints.lastVid.slice(0, 8)}
                       </span>
-                    </div>
-                  ))}
+                      {bufferMaterializationHints.lastAt ? (
+                        <span> · {bufferMaterializationHints.lastAt}</span>
+                      ) : null}
+                    </p>
+                  ) : (
+                    <p>Last materialized: —</p>
+                  )}
+                  {bufferMaterializationHints.strat === "rolling_accumulate" ? (
+                    <p className="text-[color:var(--status-pending-fg)]/90">
+                      Rolling: buffer grows without auto vN snapshots — see Accumulation.
+                    </p>
+                  ) : bufferMaterializationHints.rowsToThreshold != null ? (
+                    <p>
+                      ~Rows until threshold:{" "}
+                      <span className="font-semibold text-foreground">{bufferMaterializationHints.rowsToThreshold}</span>{" "}
+                      <span className="text-muted-foreground/80">
+                        (buffer {bufferMaterializationHints.cur} / {bufferMaterializationHints.tgt})
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
-              ) : (
-                <p className="text-xs text-zinc-500">No eligibility checks yet.</p>
-              )}
-            </CardContent>
-          </Card>
-          <Card className="min-w-0 lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Training Eligibility Matrix</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-[11px] text-zinc-500">
-                Version scope:{" "}
-                <span className="font-mono text-zinc-100">{selectedVersionForReadiness || "—"}</span>
-              </div>
-              <div className="mt-2 space-y-2 text-xs">
+              ) : null}
+              {(readinessQuery.data?.eligibility_criteria || []).length ? (
+                <div className="mt-4 space-y-2 border-t border-border pt-3">
+                  <p className="text-[11px] font-medium text-foreground">Gates (current policy / version)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(readinessQuery.data?.eligibility_criteria || []).map((c) => (
+                      <Badge
+                        key={c.code}
+                        variant="outline"
+                        className={cn(
+                          "text-[11px]",
+                          c.status === "pass"
+                            ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                            : "border-red-500/40 text-red-600 dark:text-red-400"
+                        )}
+                      >
+                        {c.status === "pass" ? "PASS" : "FAIL"} · {c.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </DetailSection>
+
+            <DetailSection
+              title="Training eligibility"
+              accentBorder="violet"
+              className="lg:col-span-2"
+              description="Per policy vs pinned version — same scope as Readiness tab."
+            >
+              <div className="space-y-2 text-xs">
                 {trainingEligibilityRows.length ? (
                   trainingEligibilityRows.map((r) => (
-                    <div key={r.policyId} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                    <div key={r.policyId} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="flex flex-wrap items-center gap-2">
-                          <DomainChip kind="eligibility" />
-                          <span className="font-mono text-zinc-100">{r.policyId}</span>
-                        </span>
+                        <span className="min-w-0 truncate font-mono text-foreground">{r.policyId}</span>
                         <span
                           className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             r.eligible
@@ -823,59 +1135,61 @@ export default function DatasetHubPage() {
                           {r.eligible ? "ELIGIBLE" : "BLOCKED"}
                         </span>
                       </div>
-                      <div className="mt-1 text-zinc-500">
+                      <div className="mt-1 text-muted-foreground">
                         mode={r.triggerMode} · current={r.currentSize} · required={r.requiredSize}
                         {r.modelId ? ` · model=${r.modelId}` : " · model=any"}
                       </div>
                       {!r.eligible && r.reasons.length ? (
-                        <div className="mt-1 text-[color:var(--status-pending-fg)]/90">{r.reasons.join(" ; ")}</div>
+                        <p className="mt-1 text-[color:var(--status-pending-fg)]/90">{r.reasons.join(" ; ")}</p>
                       ) : null}
                     </div>
                   ))
                 ) : (
-                  <div className="text-zinc-500">No training policies yet.</div>
+                  <div className="text-muted-foreground">No training policies yet.</div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </DetailSection>
+          </div>
       ) : null}
 
       {activeTab === "readiness" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center gap-2">
-              Readiness Policy Evaluation
-              <DomainChip kind="readiness" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-xs text-zinc-500">
-              Live panel uses <span className="font-mono text-zinc-100">GET …/readiness</span> (derived state only; safe to
-              poll). To append an audit row in the history table, use{" "}
-              <span className="font-semibold text-zinc-100">Evaluate now (persist)</span> below.
+        <DetailSection
+          title="Readiness policy evaluation"
+          accentBorder="sky"
+          headerActions={<DomainChip kind="readiness" />}
+        >
+            <p className="mb-3 text-xs text-muted-foreground">
+              Panel reflects <span className="font-mono text-foreground">GET …/readiness</span> (safe to poll). It does{" "}
+              <span className="font-medium text-foreground">not</span> write audit history — use{" "}
+              <span className="font-semibold text-foreground">Evaluate now</span>; the table under this card lists persisted
+              evaluations.
             </p>
             {readinessLegacyFallback ? (
-              <div className="mb-3 rounded-lg border border-zinc-800 bg-zinc-950/60/60 px-3 py-2 text-xs text-zinc-500">
-                Runtime config: <span className="font-semibold text-zinc-100">readiness_allow_legacy_fallback</span> is on —{" "}
-                the API may resolve an implicit latest materialized head when <code className="font-mono text-zinc-100">dataset_version_id</code> is omitted.
-                Prefer an explicit version row below for reproducible audits.
+              <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">readiness_allow_legacy_fallback</span> — API may infer latest
+                version if <code className="font-mono text-foreground">dataset_version_id</code> is omitted. Pin a version above
+                for reproducible audits.
               </div>
             ) : null}
-            <div className="mb-3 grid gap-3 md:grid-cols-2">
-              <label className="text-xs text-zinc-500">
+            <details className="mb-3 rounded-lg border border-border bg-muted/20 px-3 py-2" open>
+              <summary className="cursor-pointer select-none text-xs font-medium text-foreground hover:text-foreground/90">
+                Version, policy & required size
+              </summary>
+              <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
+                <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-xs text-muted-foreground">
                 Version for readiness
                 <SelectDropdown
                   value={selectedVersionId}
                   onChange={setSelectedVersionId}
                   options={readinessVersionSelectOptions}
                   className="mt-1"
-                  buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm"
+                  buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
                   disabled={readinessVersionSelectOptions.length === 0}
                   aria-label="Dataset version for readiness"
                 />
               </label>
-              <label className="text-xs text-zinc-500">
+              <label className="text-xs text-muted-foreground">
                 Policy
                 <SelectDropdown
                   value={selectedPolicyId}
@@ -886,19 +1200,19 @@ export default function DatasetHubPage() {
                   }}
                   options={policySelectOptions}
                   className="mt-1"
-                  buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm"
+                  buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
                   disabled={policySelectOptions.length === 0}
                   aria-label="Training policy for readiness"
                 />
               </label>
-            </div>
-            <div className="mb-3 flex items-center gap-2">
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
               <SelectDropdown
                 value={newPolicyTriggerMode}
                 onChange={setNewPolicyTriggerMode}
                 options={POLICY_TRIGGER_MODE_OPTIONS}
                 className="w-40 shrink-0"
-                buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-2 text-xs"
+                buttonClassName="rounded-lg border border-border bg-muted/40 px-2 py-2 text-xs"
                 aria-label="Trigger mode for new policy"
               />
               <input
@@ -906,7 +1220,7 @@ export default function DatasetHubPage() {
                 min={1}
                 value={policyRequiredSizeDraft}
                 onChange={(e) => setPolicyRequiredSizeDraft(e.target.value)}
-                className="w-48 appearance-none rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-2 text-xs text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-48 appearance-none rounded-lg border border-border bg-muted/40 px-2 py-2 text-xs text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <Button
                 type="button"
@@ -925,9 +1239,11 @@ export default function DatasetHubPage() {
               >
                 Create Policy
               </Button>
-              {policyMsg ? <span className="text-xs text-zinc-500">{policyMsg}</span> : null}
-            </div>
-            <div className="mb-3 flex flex-wrap gap-2">
+              {policyMsg ? <span className="text-xs text-muted-foreground">{policyMsg}</span> : null}
+                </div>
+                <div>
+                  <p className="mb-2 text-[11px] text-muted-foreground">Quick required_size presets</p>
+                  <div className="flex flex-wrap gap-2">
               {policyPresets.map((preset) => (
                 <Button
                   key={preset.id}
@@ -940,12 +1256,15 @@ export default function DatasetHubPage() {
                   {preset.label} ({preset.requiredSize})
                 </Button>
               ))}
-            </div>
+                  </div>
+                </div>
+              </div>
+            </details>
             {readinessQuery.data ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-sm">
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-zinc-100">
+              <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-foreground">
                   <DomainChip kind="readiness" />
-                  <span>Result:</span>
+                  <span className="text-muted-foreground">Status:</span>
                   <span
                     className={
                       readinessQuery.data.ready
@@ -956,22 +1275,32 @@ export default function DatasetHubPage() {
                     {String(readinessQuery.data.eligibility_status || readinessQuery.data.status || "blocked")}
                   </span>
                 </div>
-                <div className="mb-2 text-xs text-zinc-500">
-                  Current: {readinessQuery.data.current_size} · Required: {readinessQuery.data.required_size}
-                </div>
-                <div className="mb-2 text-xs text-zinc-500">
-                  Evaluated version:{" "}
-                  <span className="font-mono text-zinc-100">{readinessQuery.data.dataset_version_id || "—"}</span>
-                </div>
-                <div className="mb-2 text-xs text-zinc-500">
-                  Policy: <span className="font-mono text-zinc-100">{readinessQuery.data.policy_id || "—"}</span>
-                </div>
-                {readinessQuery.data.evaluated_at ? (
-                  <div className="mb-2 text-xs text-zinc-500">
-                    Snapshot at:{" "}
-                    <span className="font-mono text-zinc-100">{formatDateTimeCompact(readinessQuery.data.evaluated_at)}</span>
+                <div className="mb-3 grid gap-x-4 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+                  <div>
+                    Current / required rows:{" "}
+                    <span className="tabular-nums text-foreground">{readinessQuery.data.current_size}</span>
+                    {" / "}
+                    <span className="tabular-nums text-foreground">{readinessQuery.data.required_size}</span>
                   </div>
-                ) : null}
+                  <div>
+                    Ready:{" "}
+                    <span className="font-medium text-foreground">{readinessQuery.data.ready ? "yes" : "no"}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    Policy{" "}
+                    <span className="font-mono text-foreground">{readinessQuery.data.policy_id || "—"}</span>
+                    {" · Version "}
+                    <span className="font-mono text-foreground">{readinessQuery.data.dataset_version_id || "—"}</span>
+                    {readinessQuery.data.evaluated_at ? (
+                      <>
+                        {" · Evaluated "}
+                        <span className="font-mono text-foreground">
+                          {formatDateTimeCompact(readinessQuery.data.evaluated_at)}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
@@ -990,18 +1319,18 @@ export default function DatasetHubPage() {
                     {evaluatePersistMutation.isPending ? "Recording…" : "Evaluate now (persist)"}
                   </Button>
                   {evaluatePersistMsg ? (
-                    <span className="text-xs text-zinc-500">{evaluatePersistMsg}</span>
+                    <span className="text-xs text-muted-foreground">{evaluatePersistMsg}</span>
                   ) : null}
                 </div>
                 {(readinessQuery.data.eligibility_criteria || []).length ? (
-                  <div className="mt-3 space-y-2">
-                    <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
+                  <div className="mt-3 space-y-2 border-t border-border pt-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
                       <DomainChip kind="eligibility" />
-                      <span>Criteria for the selected policy</span>
+                      <span>Criteria</span>
                     </div>
                     {(readinessQuery.data.eligibility_criteria || []).map((c) => (
-                      <div key={c.code} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs">
-                        <span className="text-zinc-500">{c.label}</span>
+                      <div key={c.code} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-2 py-1 text-xs">
+                        <span className="text-muted-foreground">{c.label}</span>
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             c.status === "pass"
@@ -1017,68 +1346,47 @@ export default function DatasetHubPage() {
                 ) : null}
               </div>
             ) : (
-              <p className="text-xs text-zinc-500">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
+              <p className="text-xs text-muted-foreground">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
             )}
-          </CardContent>
-        </Card>
+        </DetailSection>
       ) : null}
 
       {activeTab === "accumulation" ? (
-        <Card className="border-l-4 border-l-[var(--status-pending-border)]">
-          <CardHeader>
-            <CardTitle>Active Accumulation Buffer</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-zinc-500">
-              Mutable layer — not an immutable train snapshot until materialized into a version.
-            </p>
+        <DetailSection title="Accumulation buffer" accentBorder="amber">
             {bufferQuery.isLoading && !bufferQuery.data ? (
-              <p className="text-xs text-zinc-500">Loading buffer…</p>
+              <p className="text-xs text-muted-foreground">Loading buffer…</p>
             ) : bufferQuery.data ? (
-              <div className="space-y-3 text-xs text-zinc-500">
-                <p className="text-[11px] leading-relaxed">
-                  <span className="text-zinc-100">Materialization target</span> is the row count at which runtime accumulation
-                  can finalize a new dataset version (runtime_feedback lineage path). Separate from training policy{" "}
-                  <span className="text-zinc-100">required_size</span> (readiness).
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
+                  <span className="text-foreground">Materialization target</span> is separate from training policy{" "}
+                  <span className="font-mono text-foreground">required_size</span> on the Readiness tab.
                 </p>
-                {accumulationStrategyDraft === "snapshot_on_schedule" ? (
-                  <p className="text-[11px] leading-relaxed">
-                    Schedule strategy is project-scoped. Use <span className="text-zinc-100">Run schedule tick</span> to process
-                    eligible buffers for this project and materialize immutable versions.
-                  </p>
+                {accumulationStrategyDraft === "snapshot_on_schedule" && bufferMaterializationHints ? (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                    Schedule mode: buffer{" "}
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.cur}</span>/
+                    <span className="font-mono text-foreground">{bufferMaterializationHints.tgt}</span> — versions come from
+                    project <span className="font-medium text-foreground">Run schedule tick</span> (below), not a wall-clock ETA.
+                  </div>
                 ) : null}
                 {accumulationStrategyDraft === "rolling_accumulate" ? (
                   <div className="rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-[11px] leading-relaxed text-[color:var(--status-pending-fg)]">
-                    <span className="font-semibold text-zinc-100">Rolling accumulate:</span> the buffer can pass the
-                    materialization target, but MLAir does <span className="font-semibold">not</span> create a new immutable
-                    dataset version automatically. Use <span className="font-semibold">Materialize now</span> or switch to{" "}
-                    <span className="font-mono">snapshot_on_threshold</span> if you expect threshold-driven snapshots.
+                    <span className="font-semibold text-foreground">Rolling accumulate:</span> no auto snapshot at threshold — use{" "}
+                    <span className="font-semibold">Materialize now</span> or switch strategy.
                   </div>
                 ) : null}
                 {accumulationStrategyDraft === "snapshot_on_threshold" &&
                 bufferMaterializationHints &&
                 bufferMaterializationHints.rowsToThreshold != null ? (
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
-                    <span className="font-semibold text-zinc-100">Threshold progress:</span> buffer{" "}
-                    <span className="font-mono text-zinc-100">{bufferMaterializationHints.cur}</span> /{" "}
-                    <span className="font-mono text-zinc-100">{bufferMaterializationHints.tgt}</span> · about{" "}
-                    <span className="font-semibold text-zinc-100">{bufferMaterializationHints.rowsToThreshold}</span> rows
-                    until automatic materialization at the current target (depends on ingest rate).
-                  </div>
-                ) : null}
-                {accumulationStrategyDraft === "snapshot_on_schedule" && bufferMaterializationHints ? (
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
-                    <span className="font-semibold text-zinc-100">Schedule projection:</span> buffer{" "}
-                    <span className="font-mono text-zinc-100">{bufferMaterializationHints.cur}</span> /{" "}
-                    <span className="font-mono text-zinc-100">{bufferMaterializationHints.tgt}</span> — new{" "}
-                    <span className="font-mono text-zinc-100">vN</span> rows appear when a project schedule tick
-                    materializes this dataset (not a fixed wall-clock ETA in the UI).
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                    ~<span className="font-semibold text-foreground">{bufferMaterializationHints.rowsToThreshold}</span> rows to
+                    target ({bufferMaterializationHints.cur}/{bufferMaterializationHints.tgt}).
                   </div>
                 ) : null}
                 {accumulationStrategyDraft === "manual_materialize_only" ? (
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
-                    <span className="font-semibold text-zinc-100">Manual only:</span> no automatic materialization from row
-                    count; use <span className="font-semibold">Materialize now</span> when you want a new immutable version.
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">Manual only</span> — row count won&apos;t auto-materialize;
+                    use <span className="font-semibold">Materialize now</span>.
                   </div>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-2">
@@ -1092,7 +1400,7 @@ export default function DatasetHubPage() {
                       }}
                       options={ACCUMULATION_STRATEGY_OPTIONS}
                       className="min-w-[12rem]"
-                      buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-2 text-sm"
+                      buttonClassName="rounded-lg border border-border bg-muted/40 px-2 py-2 text-sm"
                       aria-label="Accumulation strategy"
                     />
                   </label>
@@ -1106,7 +1414,7 @@ export default function DatasetHubPage() {
                         setAccumulationMsg("");
                         setAccumulationThresholdDraft(e.target.value);
                       }}
-                      className="w-32 appearance-none rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-2 text-sm text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="w-32 appearance-none rounded-lg border border-border bg-muted/40 px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </label>
                   <Button
@@ -1150,7 +1458,7 @@ export default function DatasetHubPage() {
                             setAccumulationMsg("");
                             setScheduleTickLimit(e.target.value);
                           }}
-                          className="w-24 appearance-none rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-2 text-sm text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          className="w-24 appearance-none rounded-lg border border-border bg-muted/40 px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </label>
                       <Button
@@ -1181,19 +1489,19 @@ export default function DatasetHubPage() {
                   </p>
                 ) : null}
                 {scheduleTickResult ? (
-                  <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-[11px]">
-                    <div className="text-zinc-500">
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px]">
+                    <div className="text-muted-foreground">
                       Last tick: checked={scheduleTickResult.checked}, materialized={scheduleTickResult.materialized_count},
                       skipped={scheduleTickResult.skipped.length}
                     </div>
                     {scheduleTickResult.materialized.length ? (
                       <div>
-                        <div className="mb-1 font-semibold text-zinc-100">Materialized</div>
+                        <div className="mb-1 font-semibold text-foreground">Materialized</div>
                         <div className="space-y-1">
                           {scheduleTickResult.materialized.slice(0, 8).map((row) => (
-                            <div key={`${row.dataset_id}:${row.dataset_version_id}`} className="text-zinc-500">
-                              <span className="font-mono text-zinc-100">{row.dataset_id}</span> {"->"}{" "}
-                              <span className="font-mono text-zinc-100">{row.version}</span>{" "}
+                            <div key={`${row.dataset_id}:${row.dataset_version_id}`} className="text-muted-foreground">
+                              <span className="font-mono text-foreground">{row.dataset_id}</span> {"->"}{" "}
+                              <span className="font-mono text-foreground">{row.version}</span>{" "}
                               (<span className="font-mono">{row.dataset_version_id.slice(0, 8)}…</span>)
                             </div>
                           ))}
@@ -1202,11 +1510,11 @@ export default function DatasetHubPage() {
                     ) : null}
                     {scheduleTickResult.skipped.length ? (
                       <div>
-                        <div className="mb-1 font-semibold text-zinc-100">Skipped</div>
+                        <div className="mb-1 font-semibold text-foreground">Skipped</div>
                         <div className="space-y-1">
                           {scheduleTickResult.skipped.slice(0, 8).map((row, idx) => (
-                            <div key={`${String(row.dataset_id || "na")}:${idx}`} className="text-zinc-500">
-                              <span className="font-mono text-zinc-100">{String(row.dataset_id || "unknown")}</span> ·{" "}
+                            <div key={`${String(row.dataset_id || "na")}:${idx}`} className="text-muted-foreground">
+                              <span className="font-mono text-foreground">{String(row.dataset_id || "unknown")}</span> ·{" "}
                               {String(row.reason || "skipped")}
                             </div>
                           ))}
@@ -1215,11 +1523,15 @@ export default function DatasetHubPage() {
                     ) : null}
                   </div>
                 ) : null}
-                <div className="space-y-2 border-t border-zinc-800 pt-3">
-                <div>buffer_id: <span className="font-mono text-zinc-100">{String(bufferQuery.data.buffer_id || "—")}</span></div>
+                <details className="mt-2 rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <summary className="cursor-pointer select-none text-xs font-medium text-foreground">
+                    All buffer fields (diagnostics)
+                  </summary>
+                  <div className="mt-3 space-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                <div>buffer_id: <span className="font-mono text-foreground">{String(bufferQuery.data.buffer_id || "—")}</span></div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span>source_type (stored):</span>
-                  <span className="font-mono text-xs text-zinc-100">
+                  <span className="font-mono text-xs text-foreground">
                     {String(bufferQuery.data.source_type || "runtime_feedback")}
                   </span>
                   {(() => {
@@ -1233,198 +1545,93 @@ export default function DatasetHubPage() {
                     );
                   })()}
                 </div>
-                <p className="text-[11px] leading-relaxed text-zinc-500">
-                  <span className="font-semibold text-zinc-100">window_start</span> /{" "}
-                  <span className="font-semibold text-zinc-100">window_end</span> describe the buffer strategy window from
-                  ingestion/materialization services (not the same as a calendar schedule tick — see schedule strategy notes
-                  above).
+                <p className="text-[11px] text-muted-foreground">
+                  <span className="font-medium text-foreground">window_start</span> /{" "}
+                  <span className="font-medium text-foreground">window_end</span> come from ingestion services (not the schedule
+                  tick).
                 </p>
-                <div>accumulation_strategy: <span className="font-semibold text-zinc-100">{String(bufferQuery.data.accumulation_strategy || "snapshot_on_threshold")}</span></div>
-                <div>window_strategy: <span className="font-semibold text-zinc-100">{String(bufferQuery.data.window_strategy || "threshold")}</span></div>
-                <div>window_status: <span className="font-semibold text-zinc-100">{String(bufferQuery.data.window_status || "active")}</span></div>
-                <div>materialization_strategy: <span className="font-semibold text-zinc-100">{String(bufferQuery.data.materialization_strategy || "snapshot_on_threshold")}</span></div>
-                <div>record_count: <span className="font-semibold text-zinc-100">{Number(bufferQuery.data.record_count ?? bufferQuery.data.current_size ?? 0)}</span></div>
-                <div>progress: <span className="font-semibold text-zinc-100">{Number(bufferQuery.data.current_size || 0)} / {Number(bufferQuery.data.target_threshold || 0)}</span></div>
-                <div>created_at: <span className="text-zinc-100">{formatDateTimeCompact(String(bufferQuery.data.created_at || bufferQuery.data.started_at || ""))}</span></div>
-                <div>last_ingested_at: <span className="text-zinc-100">{formatDateTimeCompact(String(bufferQuery.data.last_ingested_at || bufferQuery.data.updated_at || ""))}</span></div>
-                <div>last_materialized_version: <span className="font-mono text-zinc-100">{String(bufferQuery.data.last_materialized_version_id || "—")}</span></div>
-                <div>last_materialized_at: <span className="text-zinc-100">{formatDateTimeCompact(String(bufferQuery.data.last_materialized_at || ""))}</span></div>
-                </div>
+                <div>accumulation_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.accumulation_strategy || "snapshot_on_threshold")}</span></div>
+                <div>window_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_strategy || "threshold")}</span></div>
+                <div>window_status: <span className="font-semibold text-foreground">{String(bufferQuery.data.window_status || "active")}</span></div>
+                <div>materialization_strategy: <span className="font-semibold text-foreground">{String(bufferQuery.data.materialization_strategy || "snapshot_on_threshold")}</span></div>
+                <div>record_count: <span className="font-semibold text-foreground">{Number(bufferQuery.data.record_count ?? bufferQuery.data.current_size ?? 0)}</span></div>
+                <div>progress: <span className="font-semibold text-foreground">{Number(bufferQuery.data.current_size || 0)} / {Number(bufferQuery.data.target_threshold || 0)}</span></div>
+                <div>created_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.created_at || bufferQuery.data.started_at || ""))}</span></div>
+                <div>last_ingested_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.last_ingested_at || bufferQuery.data.updated_at || ""))}</span></div>
+                <div>last_materialized_version: <span className="font-mono text-foreground">{String(bufferQuery.data.last_materialized_version_id || "—")}</span></div>
+                <div>last_materialized_at: <span className="text-foreground">{formatDateTimeCompact(String(bufferQuery.data.last_materialized_at || ""))}</span></div>
+                  </div>
+                </details>
               </div>
             ) : (
-              <p className="text-xs text-zinc-500">No active accumulation buffer yet.</p>
+              <p className="text-xs text-muted-foreground">No active accumulation buffer yet.</p>
             )}
-          </CardContent>
-        </Card>
+        </DetailSection>
       ) : null}
 
       {activeTab === "versions" ? (
-        <Card className="min-w-0 border-l-4 border-l-sky-500/45 dark:border-l-sky-500/40">
-          <CardHeader>
-            <CardTitle>Dataset Versions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-2 text-xs text-zinc-500">
-              Immutable snapshots — bind training and audits to explicit{" "}
-              <span className="font-mono text-zinc-100">version_id</span>. Tags and external refs are{" "}
-              <span className="font-semibold text-zinc-100">additive</span> (PATCH merge); maintainers can append from{" "}
-              <span className="font-semibold text-zinc-100">Edit metadata</span>.
-            </p>
-            <DataTableShell>
-              <DataTable className="text-sm">
-                <thead className="bg-zinc-950/60">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Version</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Source</th>
-                    <th className="px-3 py-2 text-left">Rows</th>
-                    <th className="min-w-[7rem] px-3 py-2 text-left">Tags</th>
-                    <th className="min-w-[6rem] px-3 py-2 text-left">Refs</th>
-                    <th className="px-3 py-2 text-left">Created</th>
-                    {canEditVersionMetadata ? <th className="px-3 py-2 text-left">Metadata</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(versionsQuery.data?.items || []).map((v) => (
-                    <tr key={v.version_id} className="border-t border-zinc-800">
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{v.version}</td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}>
-                          {normalizeDatasetStatus(v.status)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        {(() => {
-                          const b = datasetVersionSourceBadge(v);
-                          return (
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
-                              {b.label}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-3 py-2">{Number(v.record_count || 0)}</td>
-                      <td className="max-w-[12rem] px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          {(Array.isArray(v.tags) ? v.tags : []).length ? (
-                            (Array.isArray(v.tags) ? v.tags : []).map((t) => (
-                              <span
-                                key={`${v.version_id}:${t}`}
-                                className="rounded-full border border-zinc-800 bg-zinc-950/60 px-1.5 py-0.5 text-[10px] text-zinc-100"
-                              >
-                                {t}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-[10px] text-zinc-500">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="max-w-[10rem] px-3 py-2 text-[10px] text-zinc-500">
-                        {(Array.isArray(v.external_refs) ? v.external_refs : []).length ? (
-                          <ul className="list-inside list-disc space-y-0.5">
-                            {(Array.isArray(v.external_refs) ? v.external_refs : []).slice(0, 2).map((r, idx) => {
-                              const url = typeof r?.url === "string" ? r.url : "";
-                              const lab = typeof r?.label === "string" && r.label ? r.label : url.slice(0, 24);
-                              return (
-                                <li key={`${v.version_id}:ref:${idx}`} className="truncate">
-                                  {url ? (
-                                    <a href={url} target="_blank" rel="noreferrer" className="text-sky-600 underline dark:text-sky-400">
-                                      {lab}
-                                    </a>
-                                  ) : (
-                                    "—"
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : (
-                          "—"
-                        )}
-                        {(Array.isArray(v.external_refs) ? v.external_refs : []).length > 2 ? (
-                          <div className="text-[10px]">
-                            +{(Array.isArray(v.external_refs) ? v.external_refs : []).length - 2} more
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">{formatDateTimeCompact(v.created_at)}</td>
-                      {canEditVersionMetadata ? (
-                        <td className="whitespace-nowrap px-3 py-2">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="px-2 py-1 text-[10px]"
-                            onClick={() => {
-                              setVersionMetaMsg("");
-                              setVersionMetaId(v.version_id);
-                              setVersionMetaLabel(v.version);
-                              setVersionMetaTagInput("");
-                              setVersionMetaRefUrl("");
-                              setVersionMetaRefLabel("");
-                              setVersionMetaOpen(true);
-                            }}
-                          >
-                            Edit metadata
-                          </Button>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            </DataTableShell>
-          </CardContent>
-        </Card>
+        <DetailSection
+          title="Dataset versions"
+          accentBorder="sky"
+          className="min-w-0"
+          description="Immutable snapshots. Edit tags/refs from the table when your role allows."
+        >
+            {versionsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : (versionsQuery.data?.items || []).length === 0 ? (
+              <MlopsEmptyState
+                icon={Database}
+                title="No versions yet"
+                description="Materialize or import a dataset version to see immutable snapshots here."
+              />
+            ) : (
+              <MlopsDataTable
+                columns={versionColumns}
+                data={versionsQuery.data?.items || []}
+                keyExtractor={(v) => v.version_id}
+                emptyMessage="No versions yet."
+                className="text-sm"
+              />
+            )}
+        </DetailSection>
       ) : null}
 
       {activeTab === "training" ? (
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>Train model (intent)</CardTitle>
-          </CardHeader>
-          <CardContent>
-          <p className="mb-3 text-xs text-zinc-500">
-            Uses <code className="rounded px-1 font-mono text-zinc-100">POST /runs/trigger</code> — resolves pipeline and
-            base weights server-side.
-          </p>
-          <p className="mb-3 text-xs text-zinc-500">
-            Each <span className="font-semibold text-zinc-100">Train</span> on a version row sends that row&apos;s{" "}
-            <code className="rounded px-1 font-mono text-zinc-100">dataset_version_id</code> (immutable snapshot pin),
-            even when the API allows a compat fallback for omitted ids.
+        <DetailSection title="Train model (intent)" accentBorder="violet" className="min-w-0">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Uses <code className="rounded px-1 font-mono text-foreground">POST …/runs/trigger</code>. Each row pins that row&apos;s{" "}
+            <code className="rounded px-1 font-mono text-foreground">dataset_version_id</code>.
           </p>
           {!strictDatasetVersionOnTrigger ? (
             <div className="mb-3 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-xs text-[color:var(--status-pending-fg)]">
-              Runtime config: <span className="font-semibold">strict_dataset_version_required</span> is off —{" "}
-              <code className="font-mono">POST .../runs/trigger</code> may accept calls without an explicit version. This Hub
-              still pins the row you click for reproducible training.
+              <span className="font-semibold">strict_dataset_version_required</span> is off — API may accept trigger without a
+              version; the table still pins the row you click.
             </div>
           ) : null}
           {strictDatasetVersionAllPostRuns ? (
-            <div className="mb-3 rounded-lg border border-zinc-800 bg-zinc-950/60/60 px-3 py-2 text-xs text-zinc-500">
-              Runtime config: <span className="font-semibold text-zinc-100">strict_dataset_version_all_post_runs</span> is on —{" "}
-              <code className="font-mono text-zinc-100">POST .../runs</code>,{" "}
-              <code className="font-mono text-zinc-100">{"POST .../pipelines/{id}/run"}</code>, and{" "}
-              <code className="font-mono text-zinc-100">check-readiness</code> require a pinned <code className="font-mono text-zinc-100">dataset_version_id</code> even when the
-              pipeline does not declare dataset readiness inputs (integrators using generic run APIs must send a pin).
+            <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">strict_dataset_version_all_post_runs</span> — API may require a
+              pinned <code className="font-mono text-foreground">dataset_version_id</code> for generic{" "}
+              <code className="font-mono text-foreground">POST …/runs</code>, pipeline run, and check-readiness calls even when the
+              pipeline omits dataset inputs.
             </div>
           ) : null}
           <div className="mb-3">
-            <label className="text-xs text-zinc-500">Model</label>
+            <label className="text-xs text-muted-foreground">Model</label>
             <SelectDropdown
               value={selectedModelId}
               onChange={setSelectedModelId}
               options={trainingModelSelectOptions}
               className="mt-1"
-              buttonClassName="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm"
+              buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
               aria-label="Model to train"
             />
           </div>
-          <div className="mb-2 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-500">
+          <div className="mb-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             Pipeline:{" "}
-            <span className="font-mono text-zinc-100">{effectivePipeline || "—"}</span>
+            <span className="font-mono text-foreground">{effectivePipeline || "—"}</span>
             {resolvedPipelineQuery.data?.source ? (
-              <span className="text-zinc-500"> ({resolvedPipelineQuery.data.source})</span>
+              <span className="text-muted-foreground"> ({resolvedPipelineQuery.data.source})</span>
             ) : null}
           </div>
           <TrainingGateFields
@@ -1435,110 +1642,59 @@ export default function DatasetHubPage() {
             className="mb-3"
           />
           {trainMsg ? <div className="mb-2 text-xs text-[color:var(--status-pending-fg)]">{trainMsg}</div> : null}
-          <DataTableShell>
-            <DataTable className="text-sm">
-              <thead className="bg-zinc-950/60">
-                <tr>
-                  <th className="whitespace-nowrap px-3 py-2 text-left">Version</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="whitespace-nowrap px-3 py-2 text-left">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(versionsQuery.data?.items || []).map((v) => (
-                  <tr
-                    key={v.version_id}
-                    className={`border-t border-zinc-800 ${selectedVersionForReadiness === v.version_id ? "bg-secondary/40" : ""}`}
-                    onClick={() => setSelectedVersionId(v.version_id)}
-                  >
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{v.version}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
-                      >
-                        {normalizeDatasetStatus(v.status)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2">
-                      <Button
-                        type="button"
-                        className="px-3 py-1 text-xs"
-                        disabled={
-                          !selectedModelId ||
-                          normalizeDatasetStatus(v.status) === "FAILED" ||
-                          !pluginPrecheck.ok ||
-                          pipelineVersionsQuery.isLoading
-                        }
-                        title={pluginPrecheck.ok ? "Train" : pluginPrecheck.reason}
-                        onClick={async () => {
-                          setTrainMsg("");
-                          setSelectedVersionId(v.version_id);
-                          try {
-                            const scopedPid = normalizeProjectId(String(projectId || "").trim());
-                            const runContext: Record<string, string> = {};
-                            if (scopedPid.startsWith("clinic_")) {
-                              runContext.clinic_id = scopedPid.slice("clinic_".length);
-                            }
-                            runContext.mlair_model_id = selectedModelId;
-                            const res = await executeTrainingIntent(tenantId, projectId, token, {
-                              kind: "model_dataset",
-                              modelId: selectedModelId,
-                              datasetId,
-                              datasetVersionId: v.version_id,
-                              idempotencyKey: `dataset-hub-train-${Date.now()}`,
-                              trainingMode,
-                              context: Object.keys(runContext).length ? runContext : undefined
-                            });
-                            if (res.run_id) router.push(`/runs/${res.run_id}`);
-                          } catch (err) {
-                            setTrainMsg(describeTrainError(err));
-                          }
-                        }}
-                      >
-                        Train
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-            {(versionsQuery.data?.items || []).length === 0 && !versionsQuery.isLoading ? (
-              <p className="p-4 text-xs text-zinc-500">No versions yet.</p>
-            ) : null}
-          </DataTableShell>
-          </CardContent>
-        </Card>
+          {versionsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (versionsQuery.data?.items || []).length === 0 ? (
+            <MlopsEmptyState
+              icon={Database}
+              title="No versions yet"
+              description="Create a dataset version before training from this hub."
+            />
+          ) : (
+            <MlopsDataTable
+              columns={trainingVersionColumns}
+              data={versionsQuery.data?.items || []}
+              keyExtractor={(v) => v.version_id}
+              onRowClick={(v) => setSelectedVersionId(v.version_id)}
+              rowClassName={(v) =>
+                selectedVersionForReadiness === v.version_id ? "bg-secondary/40" : undefined
+              }
+              emptyMessage="No versions yet."
+              className="text-sm"
+            />
+          )}
+        </DetailSection>
       ) : null}
 
       {activeTab === "readiness" ? (
-      <Card className="mt-4 min-w-0">
-        <CardHeader>
-          <CardTitle>Readiness evaluations</CardTitle>
-          <p className="text-xs text-zinc-500">
-            Rows are created only by explicit actions (e.g. <span className="font-semibold">Evaluate now (persist)</span> above
-            or automation calling <span className="font-mono">POST …/readiness/evaluate</span>), not by polling{" "}
-            <span className="font-mono">GET …/readiness</span>.
-          </p>
-        </CardHeader>
-        <CardContent>
+        <DetailSection
+          title="Readiness evaluations"
+          className="min-w-0"
+          accentBorder="emerald"
+          description="Rows are written only when you use Evaluate now — not when polling GET …/readiness."
+          headerActions={
+            <FilterChips
+              variant="emerald"
+              options={[
+                { id: "all", label: "All" },
+                { id: "eligible", label: "Eligible" },
+                { id: "blocked", label: "Blocked" },
+              ]}
+              value={evaluationStatusFilter}
+              onChange={(id) => {
+                setEvaluationStatusFilter(id);
+                setEvaluationCurrentPage(1);
+              }}
+            />
+          }
+        >
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted-foreground">
               Showing {(evaluationCurrentPage - 1) * READINESS_EVALUATIONS_PAGE_SIZE + 1}-
               {Math.min(evaluationCurrentPage * READINESS_EVALUATIONS_PAGE_SIZE, filteredEvaluations.length)} of{" "}
               {filteredEvaluations.length} evaluations
             </span>
             <div className="flex items-center gap-2">
-              <SelectDropdown
-                value={evaluationStatusFilter}
-                onChange={(v) => {
-                  setEvaluationStatusFilter(v);
-                  setEvaluationCurrentPage(1);
-                }}
-                options={READINESS_EVAL_STATUS_FILTER_OPTIONS}
-                buttonClassName="rounded-lg border border-zinc-800 bg-zinc-900/50 px-2 py-1 text-xs"
-                className="min-w-[9rem]"
-                aria-label="Filter evaluations by status"
-              />
               <SelectDropdown
                 value={evaluationSourceFilter}
                 onChange={(v) => {
@@ -1546,7 +1702,7 @@ export default function DatasetHubPage() {
                   setEvaluationCurrentPage(1);
                 }}
                 options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
-                buttonClassName="rounded-lg border border-zinc-800 bg-zinc-900/50 px-2 py-1 text-xs"
+                buttonClassName="rounded-lg border border-border bg-card/80 px-2 py-1 text-xs"
                 className="min-w-[10rem]"
                 aria-label="Filter evaluations by source"
               />
@@ -1557,7 +1713,7 @@ export default function DatasetHubPage() {
                   setEvaluationCurrentPage(1);
                 }}
                 options={evaluationPolicyFilterOptions}
-                buttonClassName="rounded-lg border border-zinc-800 bg-zinc-900/50 px-2 py-1 text-xs"
+                buttonClassName="rounded-lg border border-border bg-card/80 px-2 py-1 text-xs"
                 className="min-w-[10rem]"
                 aria-label="Filter evaluations by policy"
               />
@@ -1568,7 +1724,7 @@ export default function DatasetHubPage() {
               >
                 {"<<"}
               </Button>
-              <span className="px-3 text-sm text-zinc-100">
+              <span className="px-3 text-sm text-foreground">
                 Page {evaluationCurrentPage} / {evaluationTotalPages}
               </span>
               <Button
@@ -1582,69 +1738,36 @@ export default function DatasetHubPage() {
               </Button>
             </div>
           </div>
-          <DataTableShell>
-            <DataTable className="text-sm">
-              <thead className="bg-zinc-950/60">
-                <tr>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Current / Required</th>
-                  <th className="px-3 py-2 text-left">Version</th>
-                  <th className="px-3 py-2 text-left">Source</th>
-                  <th className="px-3 py-2 text-left">Why blocked</th>
-                  <th className="px-3 py-2 text-left">Evaluated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedEvaluations.map((row) => (
-                  <tr key={row.evaluation_id} className="border-t border-zinc-800">
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                          row.status === "eligible"
-                            ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                            : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
-                        }`}
-                      >
-                        {String(row.status || "blocked").toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      {Number(row.current_size || 0)} / {Number(row.required_size || 0)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-zinc-500">
-                      {row.dataset_version_id || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-zinc-500">
-                      {String((row as { source?: string }).source || "manual")}
-                    </td>
-                    <td
-                      className="max-w-[14rem] px-3 py-2 text-xs text-zinc-500"
-                      title={formatEvaluationReasons(row.reasons)}
-                    >
-                      {String(row.status || "").toLowerCase() === "eligible" ? (
-                        <span className="text-zinc-500">—</span>
-                      ) : (
-                        <span className="line-clamp-2 text-[color:var(--status-pending-fg)]/90">
-                          {formatEvaluationReasons(row.reasons) || "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{formatDateTimeCompact(row.evaluated_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-            {paginatedEvaluations.length === 0 && !readinessEvaluationsQuery.isLoading ? (
-              <p className="p-4 text-xs text-zinc-500">
-                {allEvaluationItems.length === 0
-                  ? "No readiness evaluations yet."
-                  : "No evaluations match the current filters."}
-              </p>
-            ) : null}
-          </DataTableShell>
-        </CardContent>
-      </Card>
+          {readinessEvaluationsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : paginatedEvaluations.length === 0 ? (
+            <MlopsEmptyState
+              icon={Database}
+              title={
+                allEvaluationItems.length === 0
+                  ? "No readiness evaluations yet"
+                  : "No evaluations match filters"
+              }
+              description={
+                allEvaluationItems.length === 0
+                  ? "Run evaluate from the Readiness tab controls above."
+                  : "Try a different status, source, or policy filter."
+              }
+            />
+          ) : (
+            <MlopsDataTable
+              columns={evaluationColumns}
+              data={paginatedEvaluations}
+              keyExtractor={(row) => row.evaluation_id}
+              emptyMessage="No evaluations on this page."
+              className="text-sm"
+            />
+          )}
+        </DetailSection>
       ) : null}
+        </>
+        )}
+      </div>
 
       <Dialog
         open={versionMetaOpen}
@@ -1657,14 +1780,14 @@ export default function DatasetHubPage() {
           <DialogHeader>
             <DialogTitle>Add version metadata</DialogTitle>
             <DialogDescription>
-              Append-only merge for <span className="font-mono text-zinc-100">v{versionMetaLabel}</span> (
-              <span className="font-mono text-[10px] text-zinc-500">{versionMetaId.slice(0, 8)}…</span>). Empty
+              Append-only merge for <span className="font-mono text-foreground">v{versionMetaLabel}</span> (
+              <span className="font-mono text-[10px] text-muted-foreground">{versionMetaId.slice(0, 8)}…</span>). Empty
               submit is rejected.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div>
-              <Label htmlFor="vm-tags" className="text-xs text-zinc-500">
+              <Label htmlFor="vm-tags" className="text-xs text-muted-foreground">
                 New tags (comma or newline separated)
               </Label>
               <Input
@@ -1676,7 +1799,7 @@ export default function DatasetHubPage() {
               />
             </div>
             <div>
-              <Label htmlFor="vm-ref-url" className="text-xs text-zinc-500">
+              <Label htmlFor="vm-ref-url" className="text-xs text-muted-foreground">
                 External reference URL (optional)
               </Label>
               <Input
@@ -1688,7 +1811,7 @@ export default function DatasetHubPage() {
               />
             </div>
             <div>
-              <Label htmlFor="vm-ref-label" className="text-xs text-zinc-500">
+              <Label htmlFor="vm-ref-label" className="text-xs text-muted-foreground">
                 Link label (optional)
               </Label>
               <Input

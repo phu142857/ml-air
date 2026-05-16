@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, DataTableShell } from "@/components/ui/data-table";
+import { MlopsEmptyState, DetailSection } from "@/components/mlops/layout";
+import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
+import type { PluginItem } from "@/lib/api";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 export function PluginsSettingsTab() {
@@ -56,107 +58,134 @@ export function PluginsSettingsTab() {
     }
   }, [items, selectedPlugin]);
 
+  const pluginColumns: DataTableColumn<PluginItem>[] = useMemo(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        cell: (p) => <span className="font-mono text-xs text-foreground">{p.name}</span>,
+      },
+      {
+        id: "version",
+        header: "Version",
+        cell: (p) => <span className="text-xs text-muted-foreground">{p.version}</span>,
+      },
+      {
+        id: "engine",
+        header: "Engine",
+        cell: (p) => <span className="text-xs text-muted-foreground">{p.engine_version}</span>,
+      },
+      {
+        id: "enabled",
+        header: "Enabled",
+        cell: (p) =>
+          p.enabled ? (
+            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">
+              on
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-border text-muted-foreground">
+              off
+            </Badge>
+          ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        className: "text-right",
+        cell: (p) => (
+          <div className="text-right">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 border-border bg-card text-xs"
+              disabled={toggleMutation.isPending}
+              onClick={() => toggleMutation.mutate({ name: p.name, enabled: !p.enabled })}
+            >
+              {p.enabled ? "Disable" : "Enable"}
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [toggleMutation],
+  );
+
   return (
     <div className="max-w-4xl space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Puzzle className="h-4 w-4 text-zinc-500" />
-          <h3 className="text-sm font-medium text-zinc-200">Loaded plugins</h3>
-          {pluginsQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin text-zinc-500" /> : null}
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2 bg-zinc-900 border-zinc-800"
-          disabled={reloadMutation.isPending}
-          onClick={() => reloadMutation.mutate()}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
-          Reload registry
-        </Button>
-      </div>
+      <DetailSection
+        title="Loaded plugins"
+        description="Plugins registered by the API runtime."
+        accentBorder="emerald"
+        headerActions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2 bg-card border-border"
+            disabled={reloadMutation.isPending}
+            onClick={() => reloadMutation.mutate()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
+            Reload registry
+          </Button>
+        }
+        bodyClassName="space-y-4"
+      >
+        {pluginsQuery.isFetching ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            <span>Refreshing…</span>
+          </div>
+        ) : null}
 
-      {pluginsQuery.isError ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          {(pluginsQuery.error as Error)?.message || "Failed to load plugins"}
-        </p>
-      ) : null}
+        {pluginsQuery.isError ? (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {(pluginsQuery.error as Error)?.message || "Failed to load plugins"}
+          </p>
+        ) : null}
 
-      {loadErrors.length > 0 ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-          <p className="mb-2 font-medium text-amber-100">Load-time errors</p>
-          <ul className="list-inside list-disc space-y-1 text-amber-200/90">
-            {loadErrors.map((e) => (
-              <li key={e.entry_point}>
-                <span className="font-mono">{e.entry_point}</span>: {e.error}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+        {loadErrors.length > 0 ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+            <p className="mb-2 font-medium text-amber-100">Load-time errors</p>
+            <ul className="list-inside list-disc space-y-1 text-amber-200/90">
+              {loadErrors.map((e) => (
+                <li key={e.entry_point}>
+                  <span className="font-mono">{e.entry_point}</span>: {e.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
-      <DataTableShell>
-        <DataTable>
-          <thead className="border-b border-zinc-800 bg-zinc-900/80">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Name</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Version</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Engine</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-zinc-400">Enabled</th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-zinc-400">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 && !pluginsQuery.isLoading ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
-                  No plugins returned from the API.
-                </td>
-              </tr>
-            ) : null}
-            {items.map((p) => (
-              <tr key={p.name} className="border-t border-zinc-800 hover:bg-zinc-900/50">
-                <td className="px-3 py-2 font-mono text-xs text-zinc-200">{p.name}</td>
-                <td className="px-3 py-2 text-xs text-zinc-400">{p.version}</td>
-                <td className="px-3 py-2 text-xs text-zinc-500">{p.engine_version}</td>
-                <td className="px-3 py-2">
-                  {p.enabled ? (
-                    <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">
-                      on
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="border-zinc-600 text-zinc-500">
-                      off
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 border-zinc-700 bg-zinc-900 text-xs"
-                    disabled={toggleMutation.isPending}
-                    onClick={() => toggleMutation.mutate({ name: p.name, enabled: !p.enabled })}
-                  >
-                    {p.enabled ? "Disable" : "Enable"}
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
-      </DataTableShell>
+        {pluginsQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading plugins…</p>
+        ) : items.length === 0 ? (
+          <MlopsEmptyState
+            icon={Puzzle}
+            title="No plugins loaded"
+            description="The API returned an empty registry. Use Reload registry after adding plugins on the server."
+          />
+        ) : (
+          <DataTable
+            columns={pluginColumns}
+            data={items}
+            keyExtractor={(p) => p.name}
+            emptyMessage="No plugins returned from the API."
+          />
+        )}
+      </DetailSection>
 
-      <div className="rounded-lg border border-zinc-800 p-6 space-y-4">
-        <div>
-          <h4 className="text-sm font-medium text-zinc-200">Validate plugin</h4>
-          <p className="text-xs text-zinc-500">POST validation context JSON to a plugin entrypoint.</p>
-        </div>
+      <DetailSection
+        title="Validate plugin"
+        description="POST validation context JSON to a plugin entrypoint."
+        accentBorder="sky"
+        bodyClassName="space-y-4"
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label className="text-xs text-zinc-400">Plugin</Label>
+            <Label className="text-xs text-muted-foreground">Plugin</Label>
             {pluginOptions.length ? (
               <SelectDropdown
                 value={selectedPlugin}
@@ -166,18 +195,18 @@ export function PluginsSettingsTab() {
                 aria-label="Plugin to validate"
               />
             ) : (
-              <p className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-xs text-zinc-500">
+              <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 No plugins loaded yet.
               </p>
             )}
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label className="text-xs text-zinc-400">Context JSON</Label>
+            <Label className="text-xs text-muted-foreground">Context JSON</Label>
             <Textarea
               value={validatePayload}
               onChange={(e) => setValidatePayload(e.target.value)}
               rows={5}
-              className="font-mono text-xs bg-zinc-950 border-zinc-800"
+              className="font-mono text-xs bg-muted/30 border-border"
             />
           </div>
         </div>
@@ -202,17 +231,17 @@ export function PluginsSettingsTab() {
           </Button>
         </div>
         {validateResult ? (
-          <pre className="max-h-48 overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-emerald-300 whitespace-pre-wrap">
+          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-xs text-emerald-300 whitespace-pre-wrap">
             {validateResult}
           </pre>
         ) : null}
         {selected ? (
-          <p className="text-[10px] text-zinc-600">
-            Selected: <span className="font-mono text-zinc-400">{selected.name}</span> · inputs keys:{" "}
+          <p className="text-[10px] text-muted-foreground/80">
+            Selected: <span className="font-mono text-muted-foreground">{selected.name}</span> · inputs keys:{" "}
             {Object.keys(selected.inputs || {}).length}
           </p>
         ) : null}
-      </div>
+      </DetailSection>
     </div>
   );
 }

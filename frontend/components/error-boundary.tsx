@@ -136,25 +136,25 @@ export function ErrorDisplay({
       </div>
       
       {/* Error message */}
-      <h2 className="mt-4 text-xl font-semibold text-zinc-100">
+      <h2 className="mt-4 text-xl font-semibold text-foreground">
         {config.title}
       </h2>
-      <p className="mt-2 text-sm text-zinc-500 text-center max-w-md">
+      <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
         {config.description}
       </p>
       
       {/* Error details (collapsible) */}
       {error && (
         <details className="mt-4 w-full max-w-md">
-          <summary className="cursor-pointer text-xs text-zinc-600 hover:text-zinc-500 transition-colors">
+          <summary className="cursor-pointer text-xs text-muted-foreground/80 hover:text-muted-foreground transition-colors">
             Show technical details
           </summary>
-          <div className="mt-2 rounded-lg bg-zinc-950 border border-zinc-800 p-3 overflow-x-auto">
-            <code className="text-xs font-mono text-zinc-500 break-all">
+          <div className="mt-2 rounded-lg bg-background border border-border p-3 overflow-x-auto">
+            <code className="text-xs font-mono text-muted-foreground break-all">
               {error.message}
             </code>
             {error.stack && (
-              <pre className="mt-2 text-[10px] font-mono text-zinc-700 whitespace-pre-wrap">
+              <pre className="mt-2 text-[10px] font-mono text-muted-foreground whitespace-pre-wrap">
                 {error.stack.split("\n").slice(1, 5).join("\n")}
               </pre>
             )}
@@ -169,7 +169,7 @@ export function ErrorDisplay({
             variant="outline" 
             size="sm" 
             onClick={onGoBack}
-            className="h-9 gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+            className="h-9 gap-2 bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <ArrowLeft className="h-4 w-4" />
             Go Back
@@ -180,7 +180,7 @@ export function ErrorDisplay({
             variant="outline" 
             size="sm" 
             onClick={onGoHome}
-            className="h-9 gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+            className="h-9 gap-2 bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <Home className="h-4 w-4" />
             Home
@@ -205,21 +205,21 @@ export function ErrorDisplay({
       
       {/* Helpful links for API down */}
       {errorType === "api-down" && (
-        <div className="mt-8 rounded-lg bg-zinc-900/50 border border-zinc-800 p-4 max-w-md w-full">
-          <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
+        <div className="mt-8 rounded-lg bg-card/80 border border-border p-4 max-w-md w-full">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Troubleshooting
           </h3>
           <ul className="mt-3 space-y-2">
-            <li className="flex items-start gap-2 text-xs text-zinc-500">
-              <span className="text-zinc-600">1.</span>
-              Check if the <code className="text-zinc-400 bg-zinc-800 px-1 rounded">/v1</code> proxy endpoint is running
+            <li className="flex items-start gap-2 text-xs text-muted-foreground">
+              <span className="text-muted-foreground/80">1.</span>
+              Check if the <code className="text-muted-foreground bg-muted px-1 rounded">/v1</code> proxy endpoint is running
             </li>
-            <li className="flex items-start gap-2 text-xs text-zinc-500">
-              <span className="text-zinc-600">2.</span>
+            <li className="flex items-start gap-2 text-xs text-muted-foreground">
+              <span className="text-muted-foreground/80">2.</span>
               Verify your network connection
             </li>
-            <li className="flex items-start gap-2 text-xs text-zinc-500">
-              <span className="text-zinc-600">3.</span>
+            <li className="flex items-start gap-2 text-xs text-muted-foreground">
+              <span className="text-muted-foreground/80">3.</span>
               Check the Jaeger service status
             </li>
           </ul>

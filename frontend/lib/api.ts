@@ -104,9 +104,6 @@ export type PipelineItem = {
 
 export type PipelineVersionItem = {
   version_id: string;
-  tenant_id: string;
-  project_id: string;
-  pipeline_id: string;
   version: number;
   config: Record<string, unknown>;
   created_at: string;
@@ -2110,7 +2107,7 @@ export async function listPipelineVersionsApi(
   );
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: Array<{ version_id: string; version: number; config: unknown; created_at: string }> };
+  return data as { items: PipelineVersionItem[] };
 }
 
 export async function createPipelineVersionApi(

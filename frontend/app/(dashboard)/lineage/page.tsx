@@ -20,8 +20,10 @@ import { Network, Database, GitBranch, Box, Layers, Loader2 } from "lucide-react
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ResourcePageHeader, ScopePinnedInline, MlopsEmptyState } from "@/components/mlops/layout"
 import { cn, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
+import { SCOPE_AGGREGATE_LINEAGE } from "@/lib/scope-messages"
 import {
   fetchDatasetVersions,
   fetchLineageForRun,
@@ -29,6 +31,7 @@ import {
   type DatasetVersionItem,
 } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
+import { useChartTheme } from "@/hooks/use-chart-theme"
 
 const nodeTypeConfig = {
   dataset: { icon: Database, color: "from-emerald-500 to-emerald-600", border: "border-emerald-500/30", bg: "bg-emerald-500/10" },
@@ -56,18 +59,18 @@ function LineageNode({ data }: NodeProps<Node<LineageNodeData>>) {
 
   return (
     <>
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-zinc-800 !bg-zinc-600" />
-      <div className={cn("min-w-[140px] rounded-lg border bg-zinc-900/80 px-4 py-3", config.border)}>
+      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-border !bg-muted-foreground/50" />
+      <div className={cn("min-w-[140px] rounded-lg border bg-card/80 px-4 py-3", config.border)}>
         <div className="mb-1 flex items-center gap-2">
           <div className={cn("rounded-md bg-gradient-to-br p-1.5", config.color)}>
             <Icon className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-[10px] uppercase tracking-wider text-zinc-500">{node.type}</span>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{node.type}</span>
         </div>
-        <div className="text-sm font-medium text-zinc-200">{node.name}</div>
-        {node.version ? <div className="mt-1 font-mono text-[10px] text-zinc-500">{node.version}</div> : null}
+        <div className="text-sm font-medium text-foreground">{node.name}</div>
+        {node.version ? <div className="mt-1 font-mono text-[10px] text-muted-foreground">{node.version}</div> : null}
       </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-zinc-800 !bg-zinc-600" />
+      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-border !bg-muted-foreground/50" />
     </>
   )
 }
@@ -234,7 +237,11 @@ function buildFromNeighborhood(
   return buildFromRunLineage(mapped, versions)
 }
 
-function toReactFlow(nodes: LineageGraphNode[], rfEdges: RfEdge[]): { nodes: Node<LineageNodeData>[]; edges: Edge[] } {
+function toReactFlow(
+  nodes: LineageGraphNode[],
+  rfEdges: RfEdge[],
+  edgeStroke: string,
+): { nodes: Node<LineageNodeData>[]; edges: Edge[] } {
   const ids = nodes.map((n) => n.id)
   const pos = layoutPositions(
     ids,
@@ -251,7 +258,7 @@ function toReactFlow(nodes: LineageGraphNode[], rfEdges: RfEdge[]): { nodes: Nod
     source: e.source,
     target: e.target,
     animated: true,
-    style: { stroke: "#3f3f46", strokeWidth: 2 },
+    style: { stroke: edgeStroke, strokeWidth: 2 },
   }))
   return { nodes: rfNodes, edges: rfEdgesOut }
 }
@@ -270,6 +277,7 @@ function LineagePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { tenantId, projectId, token } = useAppContext()
+  const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme()
   const canScope = tenantId !== "all" && projectId !== "all"
   const enabled = Boolean(token?.trim()) && canScope
 
@@ -344,7 +352,7 @@ function LineagePageInner() {
     return { nodes: [] as LineageGraphNode[], rfEdges: [] as RfEdge[] }
   }, [mode, lineageRunQuery.data, lineageNbQuery.data])
 
-  const rf = useMemo(() => toReactFlow(graph.nodes, graph.rfEdges), [graph])
+  const rf = useMemo(() => toReactFlow(graph.nodes, graph.rfEdges, flowEdgeStroke), [graph, flowEdgeStroke])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(rf.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(rf.edges)
@@ -387,93 +395,92 @@ function LineagePageInner() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-zinc-800 bg-zinc-950/50 px-6 py-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-pink-500/20 bg-gradient-to-br from-pink-500/20 to-pink-600/10">
-              <Network className="h-5 w-5 text-pink-400" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-zinc-100">Lineage</h1>
-              <p className="text-xs text-zinc-500">Dataset version graph from MLAir lineage edges</p>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <ResourcePageHeader
+        className="shrink-0"
+        icon={Network}
+        accent="zinc"
+        title="Lineage"
+        subtitle={canScope ? "Run inputs/outputs and dataset versions" : undefined}
+      />
+
+      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Run ID</Label>
+            <div className="flex gap-2">
+              <Input
+                value={runInput}
+                onChange={(e) => setRunInput(e.target.value)}
+                placeholder="run_…"
+                className="h-8 min-w-[200px] border-border bg-card font-mono text-xs"
+                disabled={!canScope}
+              />
+              <Button type="button" size="sm" className="h-8 shrink-0" onClick={applyRun} disabled={!runInput.trim() || !canScope}>
+                Load
+              </Button>
             </div>
           </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">Run ID</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={runInput}
-                  onChange={(e) => setRunInput(e.target.value)}
-                  placeholder="run_…"
-                  className="h-8 min-w-[200px] border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-100"
-                />
-                <Button type="button" size="sm" className="h-8 shrink-0" onClick={applyRun} disabled={!runInput.trim()}>
-                  Load
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">Dataset version ID</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={dvInput}
-                  onChange={(e) => setDvInput(e.target.value)}
-                  placeholder="dataset_versions.version_id"
-                  className="h-8 min-w-[220px] border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-100"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 shrink-0"
-                  onClick={applyDatasetVersion}
-                  disabled={!dvInput.trim()}
-                >
-                  Load
-                </Button>
-              </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Dataset version ID</Label>
+            <div className="flex gap-2">
+              <Input
+                value={dvInput}
+                onChange={(e) => setDvInput(e.target.value)}
+                placeholder="dataset_versions.version_id"
+                className="h-8 min-w-[220px] border-border bg-card font-mono text-xs"
+                disabled={!canScope}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-8 shrink-0"
+                onClick={applyDatasetVersion}
+                disabled={!dvInput.trim() || !canScope}
+              >
+                Load
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {!canScope ? (
-        <div className="border-b border-zinc-800 bg-amber-500/10 px-6 py-2 text-xs text-amber-100">
-          Select a specific tenant and project to load lineage from the API.
-        </div>
-      ) : null}
-
       {activeError ? (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-6 py-2 text-xs text-red-200">
+        <div className="shrink-0 border-b border-border bg-red-500/10 px-6 py-2 text-xs text-destructive">
           {formatApiClientError(activeError)}
         </div>
       ) : null}
 
       {resolvingDatasetId && resolveDatasetQuery.isLoading ? (
-        <div className="flex items-center gap-2 border-b border-zinc-800 px-6 py-2 text-xs text-zinc-500">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-6 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Resolving latest version for dataset{" "}
-          <span className="font-mono text-zinc-400">{datasetIdParam}</span>…
+          <span className="font-mono text-muted-foreground">{datasetIdParam}</span>…
         </div>
       ) : null}
 
       {mode && activeLoading && !(resolvingDatasetId && resolveDatasetQuery.isLoading) ? (
-        <div className="flex items-center gap-2 border-b border-zinc-800 px-6 py-2 text-xs text-zinc-500">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-6 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Loading lineage…
         </div>
       ) : null}
 
       {mode && !activeLoading && graph.nodes.length === 0 && !activeError ? (
-        <div className="border-b border-zinc-800 px-6 py-2 text-xs text-zinc-500">No lineage edges returned for this query.</div>
+        <div className="shrink-0 border-b border-border bg-card/40 px-6 py-4">
+          <MlopsEmptyState
+            icon={Network}
+            title="No lineage edges"
+            description="The API returned no graph nodes for this query."
+            className="border-0 bg-transparent p-0"
+          />
+        </div>
       ) : null}
 
-      <div className="border-b border-zinc-800 bg-zinc-900/30 px-6 py-3">
+      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
         <div className="flex flex-wrap items-center gap-6">
-          <span className="text-xs text-zinc-500">Node types</span>
+          <span className="text-xs text-muted-foreground">Node types:</span>
           {Object.entries(nodeTypeConfig).map(([type, config]) => {
             const Icon = config.icon
             return (
@@ -481,36 +488,50 @@ function LineagePageInner() {
                 <div className={cn("rounded bg-gradient-to-br p-1", config.color)}>
                   <Icon className="h-3 w-3 text-white" />
                 </div>
-                <span className="text-xs capitalize text-zinc-400">{type}</span>
+                <span className="text-xs capitalize text-muted-foreground">{type}</span>
               </div>
             )
           })}
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 bg-zinc-950">
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
+        {!canScope ? (
+          <div className="shrink-0 px-6 pt-4">
+            <ScopePinnedInline message={SCOPE_AGGREGATE_LINEAGE} />
+          </div>
+        ) : null}
+        <div className="relative min-h-0 flex-1">
         {!mode ? (
-          <div className="flex h-full items-center justify-center p-8 text-center text-sm text-zinc-500">
-            Enter a run ID or dataset version ID above, use <span className="font-mono text-zinc-400">?datasetId=</span>{" "}
-            for the latest version of a dataset, or open lineage from a run or dataset page.
+          <div className="flex h-full items-center justify-center p-8">
+            <MlopsEmptyState
+              icon={Network}
+              title="No graph loaded"
+              description="Enter a run ID or dataset version ID above, use ?datasetId= for the latest version of a dataset, or open lineage from a run or dataset page."
+              className="max-w-lg border-0 bg-transparent"
+            />
           </div>
         ) : (
           <ReactFlow
+            className="h-full w-full"
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
+            colorMode={flowColorMode}
+            defaultMarkerColor={flowEdgeStroke}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             minZoom={0.25}
             maxZoom={1.5}
             proOptions={{ hideAttribution: true }}
           >
-            <Background color="#27272a" gap={20} size={1} />
-            <Controls className="!rounded-lg !border-zinc-800 !bg-zinc-900 [&>button]:!border-zinc-700 [&>button]:!bg-zinc-800 [&>button]:!text-zinc-400 [&>button:hover]:!bg-zinc-700" />
+            <Background color={flowBackground} gap={20} size={1} />
+            <Controls className="!bg-card !border-border !rounded-lg [&>button]:!bg-muted [&>button]:!border-border [&>button]:!text-muted-foreground [&>button:hover]:!bg-accent" />
           </ReactFlow>
         )}
+        </div>
       </div>
     </div>
   )
@@ -520,7 +541,7 @@ export default function LineagePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Loading lineage…
         </div>

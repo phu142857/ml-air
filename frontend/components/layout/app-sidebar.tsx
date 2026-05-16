@@ -6,6 +6,8 @@ import {
   Database,
   GitBranch,
   Play,
+  ListTodo,
+  Search,
   History,
   Box,
   Network,
@@ -48,6 +50,16 @@ const navItems = [
     icon: Play,
   },
   {
+    title: "Tasks",
+    href: "/tasks",
+    icon: ListTodo,
+  },
+  {
+    title: "Search",
+    href: "/search",
+    icon: Search,
+  },
+  {
     title: "Lifecycle",
     href: "/lifecycle",
     icon: History,
@@ -73,21 +85,21 @@ export function AppSidebar() {
   const pathname = usePathname()
 
   return (
-    <Sidebar className="border-r border-zinc-800/50">
-      <SidebarHeader className="border-b border-zinc-800/50 px-4 py-3">
+    <Sidebar className="border-r border-border/50">
+      <SidebarHeader className="border-b border-border/50 px-4 py-3">
         <Link href="/datasets" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-emerald-500">
             <Network className="h-4 w-4 text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-zinc-100">ML-Air Hub</span>
-            <span className="text-[10px] text-zinc-500 font-mono">v1.0.0</span>
+            <span className="text-sm font-semibold text-foreground">ML-Air Hub</span>
+            <span className="text-[10px] text-muted-foreground font-mono">v1.0.0</span>
           </div>
         </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-zinc-500 text-[10px] uppercase tracking-wider px-4">
+          <SidebarGroupLabel className="text-muted-foreground text-[10px] uppercase tracking-wider px-4">
             Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -102,13 +114,13 @@ export function AppSidebar() {
                         className={cn(
                           "flex items-center gap-3 px-3 py-2 text-sm transition-colors",
                           isActive
-                            ? "text-zinc-100 bg-zinc-800/50"
-                            : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/30"
+                            ? "text-foreground bg-muted/80"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                         )}
                       >
                         <item.icon className={cn(
                           "h-4 w-4",
-                          isActive ? "text-sky-400" : "text-zinc-500"
+                          isActive ? "text-sky-400" : "text-muted-foreground"
                         )} />
                         <span>{item.title}</span>
                       </Link>
@@ -120,8 +132,8 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-zinc-800/50 p-4">
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+      <SidebarFooter className="border-t border-border/50 p-4">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>API Connected</span>
         </div>
