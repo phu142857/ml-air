@@ -38,6 +38,10 @@ export const mlairKeys = {
       ["dataset-training-eligibility", tenantId, projectId] as const,
     trainingPolicies: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-training-policies", tenantId, projectId, datasetId] as const,
+    retentionPolicy: (tenantId: string, projectId: string, datasetId: string) =>
+      ["dataset-retention-policy", tenantId, projectId, datasetId] as const,
+    retentionPreview: (tenantId: string, projectId: string, datasetId: string) =>
+      ["dataset-retention-preview", tenantId, projectId, datasetId] as const,
     versions: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-versions", tenantId, projectId, datasetId] as const,
     readiness: (tenantId: string, projectId: string, datasetId: string, requiredSize: number) =>
@@ -69,7 +73,14 @@ export const mlairKeys = {
     nextArtifact: (tenantId: string, projectId: string, modelId: string) =>
       ["model-next-artifact", tenantId, projectId, modelId] as const,
     gateFreshness: (tenantId: string, projectId: string, fingerprint: string) =>
-      ["model-gate-freshness", tenantId, projectId, fingerprint] as const
+      ["model-gate-freshness", tenantId, projectId, fingerprint] as const,
+    promotionEligibility: (
+      tenantId: string,
+      projectId: string,
+      modelId: string,
+      version: number,
+      targetStage: string
+    ) => ["model-promotion-eligibility", tenantId, projectId, modelId, version, targetStage] as const
   },
   pipelines: {
     list: (tenantId: string, projectId: string) => ["pipelines", tenantId, projectId] as const,

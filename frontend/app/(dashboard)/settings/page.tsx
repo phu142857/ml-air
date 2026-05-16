@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Settings, Key, Globe, Building2, FolderKanban, Save, Eye, EyeOff, Copy, Check, ExternalLink, Puzzle, Loader2, RefreshCw, Palette } from "lucide-react"
+import { Settings, Key, Globe, Building2, FolderKanban, Save, Eye, EyeOff, Copy, Check, ExternalLink, Puzzle, Loader2, RefreshCw, Palette, Shield } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,11 +23,11 @@ import {
 } from "@/lib/runtime-config"
 import { PluginsSettingsTab } from "@/components/settings/plugins-settings-tab"
 import { useAppContext, type AccessibleScopeRow } from "@/lib/app-context"
-import { switchScopeContext } from "@/lib/api"
+import { switchScopeContext, fetchTenantQuotas, fetchTenantQuotaUsage, upsertTenantQuotas } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
-const SETTINGS_TABS = ["runtime", "api", "scope", "plugins", "design-tokens"] as const
+const SETTINGS_TABS = ["runtime", "api", "scope", "governance", "plugins", "design-tokens"] as const
 
 function SettingsPageContent() {
   const searchParams = useSearchParams()
@@ -64,6 +65,57 @@ function SettingsPageContent() {
   const [apiBaseUrl, setApiBaseUrl] = useState("/v1")
   const [scopeSwitching, setScopeSwitching] = useState(false)
   const hasLocalOverride = Boolean(readRuntimeConfigOverride())
+  const queryClient = useQueryClient()
+  const [quotaProjects, setQuotaProjects] = useState("200")
+  const [quotaDatasets, setQuotaDatasets] = useState("500")
+  const [quotaModels, setQuotaModels] = useState("200")
+  const [quotaRuns, setQuotaRuns] = useState("50000")
+  const [quotaWebhooks, setQuotaWebhooks] = useState("50")
+  const [quotaWebhookHosts, setQuotaWebhookHosts] = useState("")
+  const [quotaMsg, setQuotaMsg] = useState("")
+
+  const tenantQuotasQuery = useQuery({
+    queryKey: ["tenant-quotas", tenantId],
+    queryFn: () => fetchTenantQuotas(tenantId, token),
+    enabled: Boolean(tenantId && tenantId !== "all" && token.trim()),
+  })
+  const tenantUsageQuery = useQuery({
+    queryKey: ["tenant-quota-usage", tenantId, projectId],
+    queryFn: () => fetchTenantQuotaUsage(tenantId, token, projectId !== "all" ? projectId : undefined),
+    enabled: Boolean(tenantId && tenantId !== "all" && token.trim()),
+  })
+
+  useEffect(() => {
+    const q = tenantQuotasQuery.data
+    if (!q) return
+    setQuotaProjects(String(q.max_projects ?? ""))
+    setQuotaDatasets(String(q.max_datasets_per_project ?? ""))
+    setQuotaModels(String(q.max_models_per_project ?? ""))
+    setQuotaRuns(String(q.max_runs_per_project ?? ""))
+    setQuotaWebhooks(String(q.max_webhook_subscriptions_per_project ?? ""))
+    setQuotaWebhookHosts((q.webhook_allowed_hosts || []).join(", "))
+  }, [tenantQuotasQuery.data])
+
+  const quotaSaveMutation = useMutation({
+    mutationFn: () =>
+      upsertTenantQuotas(tenantId, token, {
+        max_projects: Number.parseInt(quotaProjects, 10) || null,
+        max_datasets_per_project: Number.parseInt(quotaDatasets, 10) || null,
+        max_models_per_project: Number.parseInt(quotaModels, 10) || null,
+        max_runs_per_project: Number.parseInt(quotaRuns, 10) || null,
+        max_webhook_subscriptions_per_project: Number.parseInt(quotaWebhooks, 10) || null,
+        webhook_allowed_hosts: quotaWebhookHosts.trim()
+          ? quotaWebhookHosts.split(",").map((h) => h.trim()).filter(Boolean)
+          : null,
+      }),
+    onSuccess: async () => {
+      setQuotaMsg("Quotas saved")
+      await queryClient.invalidateQueries({ queryKey: ["tenant-quotas", tenantId] })
+      await queryClient.invalidateQueries({ queryKey: ["tenant-quota-usage", tenantId] })
+      window.setTimeout(() => setQuotaMsg(""), 2000)
+    },
+    onError: (e: unknown) => setQuotaMsg(String((e as Error)?.message || e)),
+  })
 
   useEffect(() => {
     setDraftToken(token)
@@ -181,6 +233,7 @@ function SettingsPageContent() {
             { id: "runtime", label: "Runtime Config", icon: <Globe className="h-3.5 w-3.5" /> },
             { id: "api", label: "Session", icon: <Key className="h-3.5 w-3.5" /> },
             { id: "scope", label: "Scope Management", icon: <Building2 className="h-3.5 w-3.5" /> },
+            { id: "governance", label: "Governance", icon: <Shield className="h-3.5 w-3.5" /> },
             { id: "plugins", label: "Plugins", icon: <Puzzle className="h-3.5 w-3.5" /> },
             { id: "design-tokens", label: "Design Tokens", icon: <Palette className="h-3.5 w-3.5" /> },
           ]}
@@ -490,6 +543,98 @@ function SettingsPageContent() {
                 <p className="text-[10px] text-muted-foreground/80">
                   Creating tenants or projects is not available in this UI — use your platform API or provisioning flow.
                 </p>
+              </DetailSection>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="governance" className="mt-0 space-y-6">
+            <div className="max-w-2xl">
+              <DetailSection
+                title="Tenant quotas"
+                description="Capacity limits per tenant and project. Enforcement requires ML_AIR_TENANT_QUOTA_ENFORCE=1 on the API."
+                accentBorder="amber"
+              >
+                {tenantId === "all" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Pin a single tenant in the header to edit quotas for that tenant.
+                  </p>
+                ) : (
+                  <div className="space-y-4 text-sm">
+                    {tenantUsageQuery.data ? (
+                      <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                        <div>
+                          projects {tenantUsageQuery.data.usage.projects ?? "—"} / {tenantUsageQuery.data.limits.max_projects ?? "∞"}
+                        </div>
+                        {tenantUsageQuery.data.usage.project_id ? (
+                          <>
+                            <div>
+                              datasets {tenantUsageQuery.data.usage.datasets ?? "—"} /{" "}
+                              {tenantUsageQuery.data.limits.max_datasets_per_project ?? "∞"}
+                            </div>
+                            <div>
+                              models {tenantUsageQuery.data.usage.models ?? "—"} /{" "}
+                              {tenantUsageQuery.data.limits.max_models_per_project ?? "∞"}
+                            </div>
+                            <div>
+                              runs {tenantUsageQuery.data.usage.runs ?? "—"} /{" "}
+                              {tenantUsageQuery.data.limits.max_runs_per_project ?? "∞"}
+                            </div>
+                            <div>
+                              webhooks {tenantUsageQuery.data.usage.webhook_subscriptions ?? "—"} /{" "}
+                              {tenantUsageQuery.data.limits.max_webhook_subscriptions_per_project ?? "∞"}
+                            </div>
+                          </>
+                        ) : null}
+                        <p className="mt-1 text-[10px]">
+                          enforcement: {tenantUsageQuery.data.enforcement_enabled ? "on" : "off"}
+                        </p>
+                      </div>
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Max projects</Label>
+                        <Input value={quotaProjects} onChange={(e) => setQuotaProjects(e.target.value)} className="mt-1 h-8 font-mono text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max datasets / project</Label>
+                        <Input value={quotaDatasets} onChange={(e) => setQuotaDatasets(e.target.value)} className="mt-1 h-8 font-mono text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max models / project</Label>
+                        <Input value={quotaModels} onChange={(e) => setQuotaModels(e.target.value)} className="mt-1 h-8 font-mono text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max runs / project</Label>
+                        <Input value={quotaRuns} onChange={(e) => setQuotaRuns(e.target.value)} className="mt-1 h-8 font-mono text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Max webhook subs / project</Label>
+                        <Input value={quotaWebhooks} onChange={(e) => setQuotaWebhooks(e.target.value)} className="mt-1 h-8 font-mono text-xs" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Webhook hosts (tenant subset, comma-separated)</Label>
+                      <Input
+                        value={quotaWebhookHosts}
+                        onChange={(e) => setQuotaWebhookHosts(e.target.value)}
+                        placeholder="hooks.internal.example.com"
+                        className="mt-1 h-8 font-mono text-xs"
+                      />
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Must also appear in global ML_AIR_WEBHOOK_ALLOWED_HOSTS. Leave empty to use global list only.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={quotaSaveMutation.isPending || tenantQuotasQuery.isLoading}
+                      onClick={() => quotaSaveMutation.mutate()}
+                    >
+                      Save tenant quotas
+                    </Button>
+                    {quotaMsg ? <p className="text-xs text-muted-foreground">{quotaMsg}</p> : null}
+                  </div>
+                )}
               </DetailSection>
             </div>
           </TabsContent>

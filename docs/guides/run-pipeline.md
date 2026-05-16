@@ -30,7 +30,7 @@ curl -X POST "http://localhost:8080/v1/pipelines/validate" \
   -d '{
     "config": {
       "tasks": [
-        { "id": "train_model", "plugin": "local_train" }
+        { "id": "train_model", "plugin": "local_train", "plugin_version": ">=0.1.0,<2.0.0" }
       ]
     }
   }'

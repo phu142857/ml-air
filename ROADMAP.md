@@ -277,21 +277,21 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Model Governance
 
 - [ ] Multi-stage promotion workflows
-- [ ] Approval policies
+- [x] Approval policies (**MVP:** production promote requires `approval_status=approved`; `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE`; stages via `ML_AIR_PROMOTION_APPROVAL_STAGES`; Hub approve/reject on model detail)
 - [ ] Rollback policies
-- [ ] Deployment gates
+- [x] Deployment gates (**MVP:** `GET .../versions/{v}/promotion-eligibility?target_stage=` + shared `compute_promotion_eligibility`; Hub disables Promote/Rollback with gate messages; `/runtime-config` exposes `promotion_governance_enabled` + `promotion_approval_stages`)
 
 ### Dataset Governance
 
-- [ ] Dataset retention policy
-- [ ] Snapshot retention rules
-- [ ] Lineage immutability policy
+- [x] Dataset retention policy (**MVP:** `dataset_retention_policies` table; GET/PUT policy; preview + apply purge; Hub Overview card; [`docs/api/dataset-retention.md`](docs/api/dataset-retention.md))
+- [x] Snapshot retention rules (**MVP:** covered by per-version retention — `max_versions` + optional `max_age_days` on materialized snapshots)
+- [x] Lineage immutability policy (**doc:** [`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md) — immutable snapshot fields vs additive metadata)
 
 ### Tenant Governance
 
-- [ ] Tenant quotas
-- [ ] Isolation policies
-- [ ] External webhook allowlists
+- [x] Tenant quotas (**MVP:** `tenant_quotas` table; GET/PUT quotas + usage; enforce on project/dataset/model/run/webhook create when `ML_AIR_TENANT_QUOTA_ENFORCE=1`; [`docs/api/tenant-quotas.md`](docs/api/tenant-quotas.md))
+- [x] Isolation policies (**MVP:** scope RBAC via `authorize_scope` + bootstrap scope mapping — see [configure-tenant-project-scope](docs/guides/configure-tenant-project-scope.md))
+- [x] External webhook allowlists (**MVP:** global `ML_AIR_WEBHOOK_ALLOWED_HOSTS` + per-tenant `webhook_allowed_hosts` on quota row; both required when tenant list is set)
 
 ---
 
@@ -299,23 +299,23 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### HTTP/Webhook Tasks
 
-- [ ] Generic HTTP task type
-- [ ] Secret references
-- [ ] Retry/backoff policy
-- [ ] Jinja/JSONPath templating
+- [x] Generic HTTP task type (**MVP:** `type: http` + `http` block in `config.tasks`; executor [`http_task_runner`](executor/http_task_runner.py); scheduler passes `http_task`; [`docs/guides/http-pipeline-tasks.md`](docs/guides/http-pipeline-tasks.md))
+- [x] Secret references (**MVP:** `secret_env` / `authorization_secret_env` → Bearer token from executor env)
+- [x] Retry/backoff policy (**MVP:** scheduler task `max_attempts` / backoff; executor marks 5xx/429 retryable)
+- [x] Jinja/JSONPath templating (**MVP:** [`sdk/http_task_templating.py`](sdk/http_task_templating.py) — Jinja2 on `url` / `headers` / `json_body`; `json_body_jsonpath` (`$.params`, `$.metrics[0]`); `ML_AIR_HTTP_TASK_TEMPLATES=1`)
 
 ### Plugin SDK
 
 - [x] Stable plugin contract ([`sdk/plugin_contract.py`](sdk/plugin_contract.py) + validate path)
-- [ ] Plugin versioning (beyond per-plugin `meta.version`; compatibility matrix TBD)
-- [ ] Plugin compatibility matrix
+- [x] Plugin versioning (**MVP:** `plugin_version` / `requires_plugin_version` task pins; matrix checks on validate + run; [`docs/guides/plugin-versioning.md`](docs/guides/plugin-versioning.md))
+- [x] Plugin compatibility matrix (**MVP:** [`sdk/plugin_compatibility_matrix.json`](sdk/plugin_compatibility_matrix.json) + `GET /v1/plugins/compatibility-matrix`; per-plugin `compatibility` on list/get)
 
 ### Integration Ecosystem
 
 - [x] Webhook cookbook (**MVP:** [`docs/guides/semantic-webhook-cookbook.md`](docs/guides/semantic-webhook-cookbook.md) — semantic lifecycle JSON webhooks; cross-links [`docs/api/realtime-event-envelope.md`](docs/api/realtime-event-envelope.md))
 - [x] Reference integrations (**MVP:** [`docs/guides/reference-integrations.md`](docs/guides/reference-integrations.md) — decision table + links to realtime, webhooks, outbox, audit, workers, metrics)
-- [ ] Vet-AI as sample consumer
-- [ ] Contract testing kit
+- [x] External sample consumers (e.g. Vet-AI) — **not in ml-air**; wire in a separate integrator repo using [webhook cookbook](docs/guides/semantic-webhook-cookbook.md) + [contract kit](sdk/semantic_event_contract.py)
+- [x] Contract testing kit (**MVP:** [`sdk/schemas/mlair-semantic-event-v1.schema.json`](sdk/schemas/mlair-semantic-event-v1.schema.json), [`sdk/semantic_event_contract.py`](sdk/semantic_event_contract.py), `scripts/validate_semantic_event.py`, API [`semantic_event_contract`](api/app/domains/lifecycle/semantic_event_contract.py) + `ML_AIR_SEMANTIC_EVENT_VALIDATE=1`, tests [`api/tests/test_semantic_event_contract.py`](api/tests/test_semantic_event_contract.py))
 
 ---
 
@@ -369,7 +369,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Security
 
 - [ ] Secret rotation
-- [ ] Audit export
+- [x] Audit export (**MVP:** `GET .../audit/timeline/export?format=jsonl|json` — SIEM NDJSON; see [`api/app/api/routes/v1.py`](api/app/api/routes/v1.py))
 - [ ] Signed event payloads
 
 ### Multi-Tenant

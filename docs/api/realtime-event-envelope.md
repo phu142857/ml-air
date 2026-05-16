@@ -42,6 +42,18 @@ Aliases and additional types are defined in [`api/app/domains/lifecycle/realtime
 - **Web UI:** `NEXT_PUBLIC_MLAIR_REALTIME_WS` + `useMlairRealtime` (debounced invalidation).
 - **Automation:** subscribe to the Redis channel or extend the audit export path ([`GET .../audit/timeline/export`](./overview.md)) for persisted history.
 
+## Contract testing (integrators)
+
+Validate payloads against the **v1 JSON Schema** before wiring production webhooks or Redis consumers:
+
+- Schema: [`sdk/schemas/mlair-semantic-event-v1.schema.json`](../../sdk/schemas/mlair-semantic-event-v1.schema.json) (copy under [`api/app/schemas/`](../../api/app/schemas/) for API Docker builds).
+- Python: [`sdk/semantic_event_contract.py`](../../sdk/semantic_event_contract.py) — `validate_semantic_event(event)`.
+- CLI: `python scripts/validate_semantic_event.py path/to/event.json` (exit **0** = valid).
+
+**API strict mode:** set **`ML_AIR_SEMANTIC_EVENT_VALIDATE=1`** on the API process to reject invalid envelopes at `publish_mlair_event` (log + skip publish). Default **off** so legacy tests and partial fixtures are unaffected.
+
+**CI:** [`api/tests/test_semantic_event_contract.py`](../../api/tests/test_semantic_event_contract.py) asserts `build_event` output matches the schema for all shipped `EventType` values.
+
 ## Durable outbox (optional)
 
 When **`ML_AIR_EVENT_OUTBOX=1`**, the API appends each semantic envelope to Postgres table **`semantic_event_outbox`** before attempting Redis publish, and sets **`redis_delivered_at`** after a successful publish. Failed Redis attempts leave the row undelivered for a background drain (enable with **`ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC`** > 0 on the API process — advisory-locked batch republish). This is **not** a full transactional outbox across business writes + events; it is an **at-least-once delivery log + retry** for the realtime channel. See [`event_outbox_service.py`](../../api/app/domains/observability/event_outbox_service.py).

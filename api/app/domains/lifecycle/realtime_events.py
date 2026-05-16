@@ -135,6 +135,11 @@ def build_event(
 
 
 def publish_mlair_event(event: dict[str, Any]) -> None:
+    from app.domains.lifecycle.semantic_event_contract import validate_semantic_event_if_enabled
+
+    if not validate_semantic_event_if_enabled(event):
+        return
+
     event_id = str(event.get("event_id") or "").strip()
     if event_outbox_service.outbox_writes_enabled():
         event_outbox_service.record_outbox_attempt(event)

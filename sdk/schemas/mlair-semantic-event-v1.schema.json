@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mlair.local/schemas/semantic-event-v1.json",
+  "title": "MLAir semantic realtime event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "event_id",
+    "type",
+    "tenant_id",
+    "project_id",
+    "resource_id",
+    "timestamp",
+    "payload"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "v1" },
+    "event_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run.created",
+        "run.updated",
+        "task.updated",
+        "model.promoted",
+        "model.eligibility.updated",
+        "dataset.updated",
+        "dataset.buffer.updated",
+        "buffer.threshold_met",
+        "dataset.version.created",
+        "dataset.readiness.updated",
+        "training.eligibility.updated",
+        "eligibility.updated",
+        "training.policy.updated",
+        "training.triggered",
+        "training.completed"
+      ]
+    },
+    "tenant_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "project_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "resource_id": { "type": ["string", "null"], "maxLength": 256 },
+    "timestamp": { "type": "number" },
+    "trace_id": { "type": ["string", "null"], "maxLength": 128 },
+    "payload": { "type": "object" }
+  }
+}

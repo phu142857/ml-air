@@ -76,6 +76,20 @@ export function PluginsSettingsTab() {
         cell: (p) => <span className="text-xs text-muted-foreground">{p.engine_version}</span>,
       },
       {
+        id: "compat",
+        header: "Compat",
+        cell: (p) =>
+          p.compatibility?.compatible === false ? (
+            <Badge variant="outline" className="border-red-500/40 text-red-400 text-[10px]">
+              blocked
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-[10px]">
+              ok
+            </Badge>
+          ),
+      },
+      {
         id: "enabled",
         header: "Enabled",
         cell: (p) =>

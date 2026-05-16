@@ -410,17 +410,34 @@ def main() -> None:
             task_start = time.perf_counter()
             cpu_start = time.process_time()
             rss_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            time.sleep(duration)
+            http_task_cfg = task.get("http_task") if task.get("task_type") == "http" else None
+            plugin_name = task.get("plugin_name")
+            if not http_task_cfg and not plugin_name:
+                time.sleep(duration)
             finished_at = datetime.now(timezone.utc).isoformat()
             status = "SUCCESS"
             plugin_exec = None
+            http_exec = None
             # Deterministic failure mode to validate retry/backoff flow.
             if pipeline_id.startswith("fail_once") and int(task.get("attempt", 1)) == 1:
                 status = "FAILED"
             if pipeline_id.startswith("always_fail"):
                 status = "FAILED"
-            plugin_name = task.get("plugin_name")
-            if plugin_name:
+            if http_task_cfg and isinstance(http_task_cfg, dict):
+                from http_task_runner import run_http_task
+
+                http_ctx = dict(task.get("context", {}))
+                http_ctx.setdefault("run_id", task.get("run_id"))
+                http_ctx.setdefault("task_id", task.get("task_id"))
+                http_ctx.setdefault("tenant_id", tenant_id)
+                http_ctx.setdefault("project_id", project_id)
+                http_ctx.setdefault("pipeline_id", pipeline_id)
+                http_ctx.setdefault("trace_id", trace_id)
+                http_exec = run_http_task(http_task_cfg, http_ctx)
+                plugin_exec = http_exec
+                if not http_exec.get("ok"):
+                    status = "FAILED"
+            elif plugin_name:
                 plugin_exec = _run_plugin_subprocess(plugin_name=plugin_name, context=task.get("context", {}))
                 if not plugin_exec.get("ok"):
                     status = "FAILED"
@@ -469,7 +486,9 @@ def main() -> None:
                             "project_id": project_id,
                             "trace_id": trace_id,
                             "plugin_name": plugin_name,
+                            "task_type": task.get("task_type"),
                             "plugin_exec": plugin_exec,
+                            "http_exec": http_exec,
                             "queue": queue_name,
                         },
                     }
@@ -487,6 +506,8 @@ def main() -> None:
                 "project_id": project_id,
                 "trace_id": trace_id,
                 "plugin_name": plugin_name,
+                "task_type": task.get("task_type"),
+                "http_task": http_task_cfg,
                 "plugin_exec": plugin_exec,
                 "context": task.get("context", {}),
                 "started_at": started_at,

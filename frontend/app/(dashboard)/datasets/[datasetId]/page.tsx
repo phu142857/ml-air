@@ -36,6 +36,10 @@ import {
   fetchDatasetTrainingPolicies,
   fetchDatasetTrainingEligibility,
   fetchDatasetVersions,
+  fetchDatasetRetentionPolicy,
+  upsertDatasetRetentionPolicy,
+  previewDatasetRetention,
+  applyDatasetRetention,
   materializeDatasetBuffer,
   materializeScheduledDatasetBuffers,
   patchDatasetBuffer,
@@ -211,6 +215,15 @@ export default function DatasetHubPage() {
   const [versionMetaRefUrl, setVersionMetaRefUrl] = useState("");
   const [versionMetaRefLabel, setVersionMetaRefLabel] = useState("");
   const [versionMetaMsg, setVersionMetaMsg] = useState("");
+  const [retentionEnabled, setRetentionEnabled] = useState(false);
+  const [retentionMaxVersions, setRetentionMaxVersions] = useState("50");
+  const [retentionMaxAgeDays, setRetentionMaxAgeDays] = useState("");
+  const [retentionProtectReferenced, setRetentionProtectReferenced] = useState(true);
+  const [retentionMsg, setRetentionMsg] = useState("");
+  const [retentionPreview, setRetentionPreview] = useState<{
+    eligible_count: number;
+    candidates: Array<{ version_id: string; version?: string | null; reasons: string[] }>;
+  } | null>(null);
 
   const datasetQuery = useQuery({
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
@@ -225,6 +238,68 @@ export default function DatasetHubPage() {
     queryFn: () => fetchDatasetVersions(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token),
     ...realtimeFallbackPolling()
+  });
+
+  const retentionPolicyQuery = useQuery({
+    queryKey: mlairKeys.datasets.retentionPolicy(tenantId, projectId, datasetId),
+    queryFn: () => fetchDatasetRetentionPolicy(tenantId, projectId, datasetId, token),
+    enabled: Boolean(datasetId && token && !scopePinned),
+    ...realtimeFallbackPolling()
+  });
+
+  useEffect(() => {
+    const p = retentionPolicyQuery.data;
+    if (!p) return;
+    setRetentionEnabled(Boolean(p.enabled));
+    setRetentionMaxVersions(String(p.max_versions ?? 50));
+    setRetentionMaxAgeDays(p.max_age_days != null ? String(p.max_age_days) : "");
+    setRetentionProtectReferenced(p.protect_referenced !== false);
+  }, [retentionPolicyQuery.data]);
+
+  const retentionSaveMutation = useMutation({
+    mutationFn: () =>
+      upsertDatasetRetentionPolicy(tenantId, projectId, datasetId, token, {
+        enabled: retentionEnabled,
+        max_versions: Math.max(1, Number.parseInt(retentionMaxVersions || "50", 10) || 50),
+        max_age_days: retentionMaxAgeDays.trim()
+          ? Math.max(1, Number.parseInt(retentionMaxAgeDays, 10) || 1)
+          : null,
+        protect_referenced: retentionProtectReferenced
+      }),
+    onSuccess: async () => {
+      setRetentionMsg("Policy saved");
+      await queryClient.invalidateQueries({
+        queryKey: mlairKeys.datasets.retentionPolicy(tenantId, projectId, datasetId)
+      });
+      window.setTimeout(() => setRetentionMsg(""), 2000);
+    },
+    onError: (e: unknown) => setRetentionMsg(String((e as Error)?.message || e))
+  });
+
+  const retentionPreviewMutation = useMutation({
+    mutationFn: async () => {
+      await retentionSaveMutation.mutateAsync();
+      return previewDatasetRetention(tenantId, projectId, datasetId, token);
+    },
+    onSuccess: (data) => {
+      setRetentionPreview({ eligible_count: data.eligible_count, candidates: data.candidates || [] });
+      setRetentionMsg(
+        data.eligible_count
+          ? `Preview: ${data.eligible_count} version(s) eligible for purge`
+          : "Preview: nothing to purge"
+      );
+    },
+    onError: (e: unknown) => setRetentionMsg(String((e as Error)?.message || e))
+  });
+
+  const retentionApplyMutation = useMutation({
+    mutationFn: () => applyDatasetRetention(tenantId, projectId, datasetId, token, false),
+    onSuccess: async (data) => {
+      setRetentionMsg(`Deleted ${(data.deleted || []).length} version(s)`);
+      setRetentionPreview(null);
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) });
+    },
+    onError: (e: unknown) => setRetentionMsg(String((e as Error)?.message || e))
   });
 
   useEffect(() => {
@@ -1112,6 +1187,115 @@ export default function DatasetHubPage() {
                 </div>
               ) : null}
             </DetailSection>
+
+            {!scopePinned ? (
+              <DetailSection
+                title="Version retention"
+                accentBorder="amber"
+                description="Keep newest snapshots; purge older versions when policy is enabled. Referenced versions are skipped when protection is on."
+              >
+                <div className="space-y-3 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={retentionEnabled}
+                      onChange={(e) => setRetentionEnabled(e.target.checked)}
+                    />
+                    <span className="text-foreground">Enable retention policy</span>
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="retention-max-versions" className="text-[11px]">
+                        Keep newest N versions
+                      </Label>
+                      <Input
+                        id="retention-max-versions"
+                        value={retentionMaxVersions}
+                        onChange={(e) => setRetentionMaxVersions(e.target.value)}
+                        className="mt-1 h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="retention-max-age" className="text-[11px]">
+                        Max age (days, optional)
+                      </Label>
+                      <Input
+                        id="retention-max-age"
+                        value={retentionMaxAgeDays}
+                        onChange={(e) => setRetentionMaxAgeDays(e.target.value)}
+                        placeholder="e.g. 90"
+                        className="mt-1 h-8 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={retentionProtectReferenced}
+                      onChange={(e) => setRetentionProtectReferenced(e.target.checked)}
+                    />
+                    <span className="text-muted-foreground">
+                      Protect versions referenced by lineage, readiness history, or last materialization
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={retentionSaveMutation.isPending}
+                      onClick={() => retentionSaveMutation.mutate()}
+                    >
+                      Save policy
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={retentionPreviewMutation.isPending || !retentionEnabled}
+                      onClick={() => retentionPreviewMutation.mutate()}
+                    >
+                      Preview purge
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={
+                        retentionApplyMutation.isPending ||
+                        !retentionEnabled ||
+                        !retentionPreview?.eligible_count
+                      }
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Delete ${retentionPreview?.eligible_count ?? 0} dataset version(s)? This cannot be undone.`
+                          )
+                        ) {
+                          return;
+                        }
+                        retentionApplyMutation.mutate();
+                      }}
+                    >
+                      Apply purge
+                    </Button>
+                  </div>
+                  {retentionPreview?.candidates?.length ? (
+                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                      {retentionPreview.candidates.slice(0, 8).map((c) => (
+                        <div key={c.version_id}>
+                          {c.version || c.version_id.slice(0, 8)} · {c.reasons.join(", ")}
+                        </div>
+                      ))}
+                      {retentionPreview.candidates.length > 8 ? (
+                        <p className="mt-1">+{retentionPreview.candidates.length - 8} more</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {retentionMsg ? <p className="text-muted-foreground">{retentionMsg}</p> : null}
+                </div>
+              </DetailSection>
+            ) : null}
 
             <DetailSection
               title="Training eligibility"

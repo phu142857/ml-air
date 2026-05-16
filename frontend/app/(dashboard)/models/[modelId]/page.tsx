@@ -3,7 +3,7 @@
 import { Box, Play } from "lucide-react";
 import { ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -29,6 +29,7 @@ import {
   fetchModelStatus,
   fetchModelTriggerPolicy,
   fetchModelVersions,
+  fetchPromotionEligibility,
   fetchRun,
   promoteModelVersion,
   setModelServingSlot,
@@ -40,7 +41,13 @@ import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_MODEL_DETAIL } from "@/lib/scope-messages";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
-import { modelApprovalPillClass } from "@/lib/model-governance-ui";
+import {
+  canPromoteVersionToStage,
+  modelApprovalPillClass,
+  promotionBlockMessage,
+  type PromotionGovernanceFeatures,
+} from "@/lib/model-governance-ui";
+import { getRuntimeConfig } from "@/lib/runtime-config";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 
@@ -92,6 +99,16 @@ export default function ModelDetailPage() {
   const [servingSlotDraft, setServingSlotDraft] = useState<Record<string, string>>({});
   const [tab, setTab] = useState("overview");
   const isTabLoading = useTabLoading(tab);
+  const [promotionFeatures, setPromotionFeatures] = useState<PromotionGovernanceFeatures | null>(
+    () => getRuntimeConfig()?.features ?? null
+  );
+
+  useEffect(() => {
+    const sync = () => setPromotionFeatures(getRuntimeConfig()?.features ?? null);
+    sync();
+    window.addEventListener("mlair-runtime-config-updated", sync);
+    return () => window.removeEventListener("mlair-runtime-config-updated", sync);
+  }, []);
 
   const modelsQuery = useQuery({
     queryKey: mlairKeys.models.list(tenantId, projectId),
@@ -244,6 +261,27 @@ export default function ModelDetailPage() {
     setConfirmOpen(true);
   };
 
+  const requestPromote = useCallback(
+    async (version: number, stage: string, row: ModelVersionItem) => {
+      if (projectId === "all" || !token) return;
+      if (!canPromoteVersionToStage(row, stage, promotionFeatures)) {
+        setVersionBanner(promotionBlockMessage(row, stage));
+        return;
+      }
+      try {
+        const elig = await fetchPromotionEligibility(tenantId, projectId, modelId, version, token, stage);
+        if (!elig.eligible) {
+          setVersionBanner(elig.reasons.map((r) => r.message).join(" · "));
+          return;
+        }
+        promoteMutation.mutate({ version, stage });
+      } catch (e: unknown) {
+        setVersionBanner(formatApiClientError(e));
+      }
+    },
+    [tenantId, projectId, modelId, token, promotionFeatures, promoteMutation]
+  );
+
   const effectiveTriggerMode = triggerPolicyQuery.data?.trigger_mode || triggerMode;
   const effectiveDebounce = triggerPolicyQuery.data?.debounce_minutes ?? Math.max(1, Number.parseInt(debounceMinutes || "10", 10) || 10);
   const effectiveCron = triggerPolicyQuery.data?.schedule_cron || scheduleCron || "0 */6 * * *";
@@ -324,21 +362,26 @@ export default function ModelDetailPage() {
         id: "actions",
         header: "Actions",
         className: "text-right",
-        cell: (v) => (
+        cell: (v) => {
+          const canPromoteProd = canPromoteVersionToStage(v, "production", promotionFeatures);
+          const canRollbackStaging = canPromoteVersionToStage(v, "staging", promotionFeatures);
+          return (
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => promoteMutation.mutate({ version: v.version, stage: "production" })}
+              onClick={() => void requestPromote(v.version, "production", v)}
               className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-              disabled={promoteMutation.isPending || v.stage === "production"}
+              disabled={promoteMutation.isPending || !canPromoteProd}
+              title={!canPromoteProd ? promotionBlockMessage(v, "production") : undefined}
             >
               Promote
             </button>
             <button
               type="button"
-              onClick={() => promoteMutation.mutate({ version: v.version, stage: "staging" })}
+              onClick={() => void requestPromote(v.version, "staging", v)}
               className="action-btn-md btn-action-rollback rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-              disabled={promoteMutation.isPending || v.stage === "staging"}
+              disabled={promoteMutation.isPending || !canRollbackStaging}
+              title={!canRollbackStaging ? promotionBlockMessage(v, "staging") : undefined}
             >
               Rollback
             </button>
@@ -360,7 +403,8 @@ export default function ModelDetailPage() {
               Delete
             </button>
           </div>
-        ),
+          );
+        },
       },
     ],
     [
@@ -371,6 +415,8 @@ export default function ModelDetailPage() {
       promoteMutation,
       deleteVersionMutation,
       openConfirm,
+      promotionFeatures,
+      requestPromote,
     ],
   );
 

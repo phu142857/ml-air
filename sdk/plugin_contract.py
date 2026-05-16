@@ -14,6 +14,7 @@ class PluginMeta(BaseModel):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
     engine_version: str = Field(min_length=1)
+    contract_version: str = Field(default="1.0", min_length=1)
     inputs: dict[str, Any] = Field(default_factory=dict)
     outputs: dict[str, Any] = Field(default_factory=dict)
     ui_schema: dict[str, Any] | None = None

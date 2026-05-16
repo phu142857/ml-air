@@ -116,6 +116,15 @@ export type RunTracking = {
   artifacts: Array<{ artifact_id: string; path: string; uri?: string | null; logged_at: string }>;
 };
 
+export type PluginCompatibility = {
+  compatible: boolean;
+  reasons: Array<{ code: string; message: string }>;
+  mlair_engine_version?: string;
+  engine_supported_range?: string | null;
+  plugin_version_range?: string | null;
+  version_constraint?: string | null;
+};
+
 export type PluginItem = {
   name: string;
   version: string;
@@ -124,6 +133,7 @@ export type PluginItem = {
   outputs: Record<string, unknown>;
   ui_schema?: Record<string, unknown> | null;
   enabled: boolean;
+  compatibility?: PluginCompatibility;
 };
 
 export type ModelItem = {
@@ -373,6 +383,59 @@ export async function fetchBootstrapContext(
   const data = (await res.json()) as BootstrapContextResponse;
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data;
+}
+
+export type TenantQuotas = {
+  tenant_id: string;
+  max_projects: number | null;
+  max_datasets_per_project: number | null;
+  max_models_per_project: number | null;
+  max_runs_per_project: number | null;
+  max_webhook_subscriptions_per_project: number | null;
+  webhook_allowed_hosts: string[] | null;
+  updated_at?: string | null;
+};
+
+export type TenantQuotaUsageResponse = {
+  limits: TenantQuotas;
+  usage: Record<string, number | string>;
+  enforcement_enabled: boolean;
+};
+
+export async function fetchTenantQuotas(tenantId: string, token: string) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/quotas`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as TenantQuotas;
+}
+
+export async function fetchTenantQuotaUsage(tenantId: string, token: string, projectId?: string) {
+  const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/quotas/usage${qs}`, {
+    headers: authHeaders(token),
+    cache: "no-store"
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as TenantQuotaUsageResponse;
+}
+
+export async function upsertTenantQuotas(
+  tenantId: string,
+  token: string,
+  payload: Omit<TenantQuotas, "tenant_id" | "updated_at">
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/quotas`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as TenantQuotas;
 }
 
 export async function switchScopeContext(
@@ -1278,6 +1341,101 @@ export type DatasetTrainingPolicy = {
   validation_rules?: Array<Record<string, unknown> | string>;
 };
 
+export type DatasetRetentionPolicy = {
+  dataset_id: string;
+  tenant_id: string;
+  project_id: string;
+  enabled: boolean;
+  max_versions: number | null;
+  max_age_days: number | null;
+  protect_referenced: boolean;
+  updated_at?: string | null;
+};
+
+export type DatasetRetentionPreview = {
+  policy: DatasetRetentionPolicy;
+  total_versions: number;
+  eligible_count: number;
+  protected_count: number;
+  candidates: Array<{
+    version_id: string;
+    version?: string | null;
+    created_at?: string | null;
+    reasons: string[];
+  }>;
+  dry_run?: boolean;
+  deleted?: string[];
+  skipped?: Array<{ version_id: string; reason: string }>;
+  message?: string;
+};
+
+export async function fetchDatasetRetentionPolicy(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/retention-policy`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetRetentionPolicy;
+}
+
+export async function upsertDatasetRetentionPolicy(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  payload: Pick<DatasetRetentionPolicy, "enabled" | "max_versions" | "max_age_days" | "protect_referenced">
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/retention-policy`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetRetentionPolicy;
+}
+
+export async function previewDatasetRetention(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/retention/preview`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetRetentionPreview;
+}
+
+export async function applyDatasetRetention(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  dryRun: boolean
+) {
+  const qs = new URLSearchParams({ dry_run: dryRun ? "true" : "false" });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/retention/apply?${qs}`,
+    { method: "POST", headers: authHeaders(token) }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetRetentionPreview;
+}
+
 export async function fetchDatasetTrainingPolicies(
   tenantId: string,
   projectId: string,
@@ -1788,6 +1946,44 @@ export async function importModelVersionMany(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ModelVersionItem & { metadata_generated?: boolean; uploaded_files?: string[] };
+}
+
+export type PromotionEligibilityReason = {
+  code: string;
+  message: string;
+  canonical_code?: string | null;
+  promote_error?: string;
+};
+
+export type PromotionEligibility = {
+  model_id: string;
+  version: number;
+  target_stage: string;
+  current_stage?: string | null;
+  approval_status?: string | null;
+  artifact_uri_present: boolean;
+  requires_approval: boolean;
+  approval_gate_skipped: boolean;
+  eligible: boolean;
+  reasons: PromotionEligibilityReason[];
+};
+
+export async function fetchPromotionEligibility(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  version: number,
+  token: string,
+  targetStage: string
+) {
+  const qs = new URLSearchParams({ target_stage: targetStage });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/versions/${version}/promotion-eligibility?${qs}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as PromotionEligibility;
 }
 
 export async function promoteModelVersion(

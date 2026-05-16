@@ -1,0 +1,29 @@
+# Pipeline with an HTTP notify task (requires ML_AIR_HTTP_TASK_ALLOWED_HOSTS or ML_AIR_WEBHOOK_ALLOWED_HOSTS)
+pipeline_id: http_notify_demo
+priority: normal
+max_parallel_tasks: 2
+plugin_name: echo_tracking
+use_latest_pipeline_version: true
+context:
+  params:
+    source: http_notify_demo
+# Register a pipeline version with tasks (POST .../pipelines/{id}/versions):
+# {
+#   "config": {
+#     "tasks": [
+#       { "id": "train", "plugin": "echo_tracking" },
+#       {
+#         "id": "notify",
+#         "type": "http",
+#         "depends_on": ["train"],
+#         "http": {
+#           "method": "POST",
+#           "url": "https://hooks.internal.example.com/mlair/run-done",
+#           "json_body": { "event": "run.task_done" },
+#           "secret_env": "MLAIR_HTTP_TASK_BEARER_TOKEN",
+#           "timeout_seconds": 30
+#         }
+#       }
+#     ]
+#   }
+# }

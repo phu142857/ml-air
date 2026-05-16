@@ -19,9 +19,126 @@ VALID_SERVING_SLOTS = frozenset({"candidate", "challenger", "champion", "canary"
 
 
 def _require_approval_for_production_promote() -> bool:
-    """When True, promote to production requires approval_status=approved."""
+    """When True, promote to gated stages requires approval_status=approved."""
     skip = str(os.getenv("ML_AIR_SKIP_APPROVAL_FOR_PROMOTE", "")).strip().lower()
     return skip not in ("1", "true", "yes")
+
+
+def _stages_requiring_approval() -> frozenset[str]:
+    raw = str(os.getenv("ML_AIR_PROMOTION_APPROVAL_STAGES", "production")).strip()
+    if not raw:
+        return frozenset()
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
+def promotion_governance_runtime() -> dict:
+    """Public snapshot for /runtime-config and Hub promotion gate."""
+    return {
+        "promotion_governance_enabled": _require_approval_for_production_promote(),
+        "promotion_approval_stages": sorted(_stages_requiring_approval()),
+    }
+
+
+def _promotion_requires_approval_for_stage(stage: str) -> bool:
+    if not _require_approval_for_production_promote():
+        return False
+    stage_norm = (stage or "").strip().lower() or "production"
+    return stage_norm in _stages_requiring_approval()
+
+
+def compute_promotion_eligibility(
+    *,
+    model_id: str,
+    version: int,
+    target_stage: str,
+    current_stage: str | None,
+    approval_status: str | None,
+    artifact_uri: str | None,
+) -> dict:
+    """Pure eligibility evaluation (also used by promote + GET promotion-eligibility)."""
+    target = (target_stage or "production").strip().lower() or "production"
+    current = (current_stage or "").strip().lower() or None
+    requires_approval = _promotion_requires_approval_for_stage(target)
+    reasons: list[dict] = []
+    eligible = True
+
+    if current == target:
+        eligible = False
+        reasons.append(
+            {
+                "code": "already_at_stage",
+                "message": f"Version is already at stage '{target}'.",
+                "canonical_code": None,
+            }
+        )
+
+    if requires_approval:
+        ast = str(approval_status or "")
+        if ast != APPROVAL_APPROVED:
+            eligible = False
+            if ast == APPROVAL_REJECTED:
+                code = "approval_rejected"
+                message = "Version approval was rejected; approve again or register a new version."
+            elif ast == APPROVAL_PENDING:
+                code = "approval_pending"
+                message = "Manual approval required before promotion to this stage."
+            else:
+                code = "approval_required"
+                message = "Approval required before promotion to this stage."
+            reasons.append(
+                {
+                    "code": code,
+                    "message": message,
+                    "canonical_code": "GOVERNANCE_BLOCKED",
+                    "promote_error": "approval_required_for_production"
+                    if target == "production"
+                    else "approval_required",
+                }
+            )
+
+    return {
+        "model_id": model_id,
+        "version": int(version),
+        "target_stage": target,
+        "current_stage": current_stage,
+        "approval_status": approval_status,
+        "artifact_uri_present": bool(str(artifact_uri or "").strip()),
+        "requires_approval": requires_approval,
+        "approval_gate_skipped": not _require_approval_for_production_promote(),
+        "eligible": eligible,
+        "reasons": reasons,
+    }
+
+
+def evaluate_promotion_eligibility(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    target_stage: str,
+) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mv.model_id, mv.version, mv.stage, mv.approval_status, mv.artifact_uri
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s AND mv.version = %s
+                """,
+                (tenant_id, project_id, model_id, int(version)),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return compute_promotion_eligibility(
+        model_id=str(row[0]),
+        version=int(row[1]),
+        target_stage=target_stage,
+        current_stage=row[2],
+        approval_status=row[3],
+        artifact_uri=row[4],
+    )
 
 
 def _version_row_to_dict(row: tuple) -> dict:
@@ -494,18 +611,33 @@ def delete_model_version(model_id: str, version: int) -> bool:
 
 def promote_model_version(model_id: str, version: int, stage: str = "production") -> dict:
     stage_norm = (stage or "").strip().lower() or "production"
-    if stage_norm == "production" and _require_approval_for_production_promote():
-        with db_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT approval_status FROM model_versions WHERE model_id = %s AND version = %s",
-                    (model_id, int(version)),
-                )
-                row_a = cur.fetchone()
-        if not row_a:
-            raise ValueError("model_version_not_found")
-        if str(row_a[0]) != APPROVAL_APPROVED:
-            raise ValueError("approval_required_for_production")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mv.model_id, mv.version, mv.stage, mv.approval_status, mv.artifact_uri
+                FROM model_versions mv
+                WHERE mv.model_id = %s AND mv.version = %s
+                """,
+                (model_id, int(version)),
+            )
+            row_g = cur.fetchone()
+    if not row_g:
+        raise ValueError("model_version_not_found")
+    elig = compute_promotion_eligibility(
+        model_id=str(row_g[0]),
+        version=int(row_g[1]),
+        target_stage=stage_norm,
+        current_stage=row_g[2],
+        approval_status=row_g[3],
+        artifact_uri=row_g[4],
+    )
+    if not elig["eligible"]:
+        for reason in elig["reasons"]:
+            pe = reason.get("promote_error")
+            if pe:
+                raise ValueError(str(pe))
+        raise ValueError(str(elig["reasons"][0]["code"]) if elig["reasons"] else "promotion_blocked")
 
     with db_conn() as conn:
         with conn.cursor() as cur:

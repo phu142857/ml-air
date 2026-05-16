@@ -1,0 +1,12 @@
+{
+  "matrix_version": "1",
+  "engine": {
+    "supported_range": ">=1.0.0,<2.0.0",
+    "min_plugin_version": "0.1.0"
+  },
+  "plugins": {
+    "echo_tracking": { "version_range": ">=0.1.0,<1.0.0" },
+    "app_etl_adapter": { "version_range": ">=0.1.0,<1.0.0" },
+    "app_train_adapter": { "version_range": ">=0.1.0,<1.0.0" }
+  }
+}

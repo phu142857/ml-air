@@ -22,11 +22,18 @@ from app.domains.governance.model_registry_service import (
     list_model_versions,
     list_models,
     preview_next_model_artifact_uri,
+    evaluate_promotion_eligibility,
     promote_model_version,
+    promotion_governance_runtime,
     resolve_model_pipeline,
     set_model_serving_slot,
     update_model_version_approval,
     upsert_model_pipeline_mapping,
+)
+from app.plugins.compatibility_service import (
+    compatibility_matrix_payload,
+    evaluate_registered_plugin,
+    plugin_version_enforcement_enabled,
 )
 from app.plugins.registry import plugin_registry
 from app.domains.governance.auth_service import authenticate_bearer, authorize_scope
@@ -69,7 +76,10 @@ from datetime import datetime, timezone
 from app.domains.governance.executor_promote_webhook_service import notify_model_promotion_webhook
 from app.domains.orchestration.manifest_service import upsert_task_manifest
 from app.domains.governance import trigger_policy_service
+from app.domains.governance import dataset_retention_service
 from app.domains.governance import scope_context_service
+from app.domains.governance.tenant_quota_service import TenantQuotaExceeded, assert_within_quota
+from app.domains.governance import tenant_quota_service
 
 router = APIRouter()
 logger = logging.getLogger("mlair.api.scope")
@@ -143,6 +153,22 @@ class DatasetTrainingPolicyIn(BaseModel):
     freshness_hours: int = Field(default=24, ge=1)
     trigger_mode: str = "manual"
     validation_rules: list[dict] | list[str] = Field(default_factory=list)
+
+
+class TenantQuotasIn(BaseModel):
+    max_projects: int | None = Field(default=None, ge=1, le=100_000)
+    max_datasets_per_project: int | None = Field(default=None, ge=1, le=1_000_000)
+    max_models_per_project: int | None = Field(default=None, ge=1, le=100_000)
+    max_runs_per_project: int | None = Field(default=None, ge=1, le=10_000_000)
+    max_webhook_subscriptions_per_project: int | None = Field(default=None, ge=1, le=10_000)
+    webhook_allowed_hosts: list[str] | None = None
+
+
+class DatasetRetentionPolicyIn(BaseModel):
+    enabled: bool = False
+    max_versions: int | None = Field(default=None, ge=1, le=10_000)
+    max_age_days: int | None = Field(default=None, ge=1, le=3650)
+    protect_referenced: bool = True
 
 
 class DatasetBufferPatchIn(BaseModel):
@@ -232,6 +258,21 @@ def _blocked(detail_reason: str, details: str, *, status_code: int = 422) -> HTT
         status_code=status_code,
         detail={"status": "BLOCKED", "reason": detail_reason, "details": details},
     )
+
+
+def _enforce_tenant_quota(tenant_id: str, resource: str, *, project_id: str | None = None) -> None:
+    try:
+        assert_within_quota(tenant_id, resource, project_id=project_id)
+    except TenantQuotaExceeded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "tenant_quota_exceeded",
+                "resource": exc.resource,
+                "limit": exc.limit,
+                "current": exc.current,
+            },
+        ) from exc
 
 
 def _serving_slots_http_enabled() -> bool:
@@ -357,15 +398,56 @@ def _validate_pipeline_plugin_contract(
     tasks = config.get("tasks") if isinstance(config, dict) else None
     if not isinstance(tasks, list) or not tasks:
         return
+    try:
+        from sdk.http_task_contract import http_task_allowed_hosts, task_is_http, validate_pipeline_tasks
+
+        http_errors = validate_pipeline_tasks(tasks, allowed_hosts=http_task_allowed_hosts())
+        if http_errors:
+            raise _blocked("INVALID_HTTP_TASK", "; ".join(http_errors[:5]))
+    except ImportError:
+        def task_is_http(_item: dict) -> bool:
+            return False
+
     for item in tasks:
         if not isinstance(item, dict):
             raise _blocked("INVALID_TASK", "Task definition must be an object")
+        if task_is_http(item):
+            continue
         task_id = str(item.get("id") or "").strip() or "<unknown>"
         plugin_name = str(item.get("plugin") or "").strip()
         if not plugin_name:
             raise _blocked("NO_PLUGIN", f"Task {task_id} has no plugin")
         if require_plugin_exists and plugin_registry.get(plugin_name) is None:
             raise _blocked("PLUGIN_NOT_FOUND", f"Task {task_id} uses unknown plugin '{plugin_name}'")
+        reg = plugin_registry.get(plugin_name)
+        if reg:
+            compat = evaluate_registered_plugin(
+                plugin_name,
+                version_constraint=str(
+                    item.get("plugin_version") or item.get("requires_plugin_version") or ""
+                ).strip()
+                or None,
+            )
+            if compat and not compat.get("compatible"):
+                msg = compat["reasons"][0]["message"] if compat.get("reasons") else "plugin incompatible"
+                raise _blocked("PLUGIN_VERSION_INCOMPATIBLE", f"Task {task_id}: {msg}")
+
+
+def _ensure_plugin_runtime_compatible(plugin_name: str) -> None:
+    if not plugin_version_enforcement_enabled():
+        return
+    compat = evaluate_registered_plugin(plugin_name)
+    if compat and not compat.get("compatible"):
+        msg = compat["reasons"][0]["message"] if compat.get("reasons") else "plugin incompatible"
+        raise _blocked("PLUGIN_VERSION_INCOMPATIBLE", msg)
+
+
+def _plugin_to_api_dict(plugin) -> dict:
+    base = plugin.__dict__
+    compat = evaluate_registered_plugin(plugin.name)
+    if compat:
+        return {**base, "compatibility": compat}
+    return base
 
 
 class LogArtifactIn(BaseModel):
@@ -462,6 +544,8 @@ def register_project_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id="default_project", min_role="maintainer")
     try:
+        if not tenant_quota_service.tenant_project_exists(tenant_id, payload.project_id):
+            _enforce_tenant_quota(tenant_id, "projects")
         return register_project(
             tenant_id=tenant_id,
             project_id=payload.project_id,
@@ -469,6 +553,52 @@ def register_project_v1(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/tenants/{tenant_id}/quotas")
+def get_tenant_quotas_v1(
+    tenant_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id="default_project", min_role="viewer")
+    return tenant_quota_service.get_tenant_quotas(tenant_id)
+
+
+@router.put("/tenants/{tenant_id}/quotas")
+def put_tenant_quotas_v1(
+    tenant_id: str,
+    payload: TenantQuotasIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id="default_project", min_role="admin")
+    try:
+        return tenant_quota_service.upsert_tenant_quotas(
+            tenant_id,
+            max_projects=payload.max_projects,
+            max_datasets_per_project=payload.max_datasets_per_project,
+            max_models_per_project=payload.max_models_per_project,
+            max_runs_per_project=payload.max_runs_per_project,
+            max_webhook_subscriptions_per_project=payload.max_webhook_subscriptions_per_project,
+            webhook_allowed_hosts=payload.webhook_allowed_hosts,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/tenants/{tenant_id}/quotas/usage")
+def get_tenant_quota_usage_v1(
+    tenant_id: str,
+    project_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    pid = str(project_id or "default_project").strip() or "default_project"
+    authorize_scope(principal, tenant_id=tenant_id, project_id=pid, min_role="viewer")
+    usage = tenant_quota_service.get_tenant_usage(tenant_id, project_id if project_id else None)
+    limits = tenant_quota_service.get_tenant_quotas(tenant_id)
+    return {"limits": limits, "usage": usage, "enforcement_enabled": tenant_quota_service.enforcement_enabled()}
 
 
 @router.get("/tenants")
@@ -514,6 +644,7 @@ def trigger_run_v1(
             raise _blocked("NO_PLUGIN", "No plugin configured for run payload")
         if plugin_registry.get(plugin_name) is None:
             raise _blocked("PLUGIN_NOT_FOUND", f"Plugin '{plugin_name}' is not available")
+        _ensure_plugin_runtime_compatible(plugin_name)
 
     merged_ov, merged_ctx = _merge_pinned_dataset_version_for_run(
         tenant_id,
@@ -525,6 +656,7 @@ def trigger_run_v1(
     _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
+    _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -617,6 +749,7 @@ def trigger_run_by_model_dataset_v1(
     override_cfg.setdefault("dataset_version_id", str(dv.get("version_id") or ""))
     override_cfg.setdefault("inputs", [{"dataset": str(ds.get("name") or payload.dataset_id), "required_size": 1}])
 
+    _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -761,6 +894,7 @@ def check_pipeline_readiness_v1(
     _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
+    _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -816,6 +950,7 @@ def run_pipeline_with_gating_v1(
             raise _blocked("NO_PLUGIN", "No plugin configured for run payload and pipeline has no task plugin map")
         if plugin_registry.get(plugin_name) is None:
             raise _blocked("PLUGIN_NOT_FOUND", f"Plugin '{plugin_name}' is not available")
+        _ensure_plugin_runtime_compatible(plugin_name)
 
     merged_ov, merged_ctx = _merge_pinned_dataset_version_for_run(
         tenant_id,
@@ -827,6 +962,7 @@ def run_pipeline_with_gating_v1(
     _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
+    _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
         tenant_id=tenant_id,
         project_id=project_id,
@@ -1050,6 +1186,12 @@ def runtime_config_v1() -> dict:
         "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
         "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
         "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "0") == "1",
+        "dataset_retention_policies": os.getenv("ML_AIR_DATASET_RETENTION_POLICIES", "1") == "1",
+        "tenant_quota_enforcement": tenant_quota_service.enforcement_enabled(),
+        "http_pipeline_tasks": os.getenv("ML_AIR_HTTP_PIPELINE_TASKS", "1") == "1",
+        "http_task_templates": os.getenv("ML_AIR_HTTP_TASK_TEMPLATES", "1") == "1",
+        "plugin_version_enforcement": plugin_version_enforcement_enabled(),
+        **promotion_governance_runtime(),
     }
     jaeger_ui = os.getenv("ML_AIR_JAEGER_UI_URL", "").strip() or None
     return {
@@ -1356,6 +1498,8 @@ async def upload_dataset_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     try:
+        if not tenant_quota_service.dataset_exists_by_name(tenant_id, project_id, dataset_name):
+            _enforce_tenant_quota(tenant_id, "datasets", project_id=project_id)
         csv_bytes = await file.read()
         required_columns: list[str] | None = None
         if required_cols:
@@ -1991,8 +2135,9 @@ def create_semantic_webhook_subscription_v1(
             status_code=422,
             detail="webhook_allowlist_required",
         )
-    if not semantic_webhook_subscription_service.is_target_host_allowlisted(payload.target_url):
+    if not tenant_quota_service.is_webhook_host_allowed_for_tenant(tenant_id, payload.target_url):
         raise HTTPException(status_code=422, detail="webhook_host_not_allowed")
+    _enforce_tenant_quota(tenant_id, "webhook_subscriptions", project_id=project_id)
     row = semantic_webhook_subscription_service.create_subscription(
         tenant_id,
         project_id,
@@ -2166,6 +2311,79 @@ def materialize_scheduled_buffers_v1(
         tenant_id=tenant_id,
         project_id=project_id,
         limit=limit,
+    )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/retention-policy")
+def get_dataset_retention_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return dataset_retention_service.get_dataset_retention_policy(tenant_id, project_id, dataset_id)
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/retention-policy")
+def put_dataset_retention_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    payload: DatasetRetentionPolicyIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    try:
+        return dataset_retention_service.upsert_dataset_retention_policy(
+            tenant_id,
+            project_id,
+            dataset_id,
+            enabled=payload.enabled,
+            max_versions=payload.max_versions,
+            max_age_days=payload.max_age_days,
+            protect_referenced=payload.protect_referenced,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/retention/preview")
+def preview_dataset_retention_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return dataset_retention_service.plan_dataset_retention_purge(tenant_id, project_id, dataset_id)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/retention/apply")
+def apply_dataset_retention_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dry_run: bool = Query(default=True),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    if not dry_run and os.getenv("ML_AIR_DATASET_RETENTION_ALLOW_APPLY", "1") != "1":
+        raise HTTPException(status_code=403, detail="dataset_retention_apply_disabled")
+    return dataset_retention_service.apply_dataset_retention_purge(
+        tenant_id, project_id, dataset_id, dry_run=dry_run
     )
 
 
@@ -2450,6 +2668,7 @@ def create_model_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    _enforce_tenant_quota(tenant_id, "models", project_id=project_id)
     return create_model(tenant_id=tenant_id, project_id=project_id, name=payload.name, description=payload.description)
 
 
@@ -2695,6 +2914,28 @@ def promote_model_v1(
     return out
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/promotion-eligibility")
+def get_model_version_promotion_eligibility_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    target_stage: str = Query(..., min_length=1),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    out = evaluate_promotion_eligibility(
+        tenant_id, project_id, model_id, int(version), target_stage=target_stage
+    )
+    if not out:
+        raise HTTPException(status_code=404, detail="model_version_not_found")
+    return out
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/approval")
 def get_model_version_approval_v1(
     tenant_id: str,
@@ -2821,11 +3062,22 @@ def delete_model_version_v1(
     return {"model_id": model_id, "version": version, "deleted": True}
 
 
+@router.get("/plugins/compatibility-matrix")
+def get_plugin_compatibility_matrix_v1(authorization: str | None = Header(default=None)) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="viewer")
+    return compatibility_matrix_payload()
+
+
 @router.get("/plugins")
 def list_plugins_v1(authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="viewer")
-    return {"items": [item.__dict__ for item in plugin_registry.list()], "errors": plugin_registry.errors()}
+    return {
+        "items": [_plugin_to_api_dict(item) for item in plugin_registry.list()],
+        "errors": plugin_registry.errors(),
+        "plugin_version_enforcement": plugin_version_enforcement_enabled(),
+    }
 
 
 @router.get("/plugins/{plugin_name}")
@@ -2835,7 +3087,21 @@ def get_plugin_v1(plugin_name: str, authorization: str | None = Header(default=N
     plugin = plugin_registry.get(plugin_name)
     if not plugin:
         raise HTTPException(status_code=404, detail="plugin_not_found")
-    return plugin.__dict__
+    return _plugin_to_api_dict(plugin)
+
+
+@router.get("/plugins/{plugin_name}/compatibility")
+def get_plugin_compatibility_v1(
+    plugin_name: str,
+    version_constraint: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=principal.tenant_id or "default", project_id="default_project", min_role="viewer")
+    compat = evaluate_registered_plugin(plugin_name, version_constraint=version_constraint)
+    if not compat:
+        raise HTTPException(status_code=404, detail="plugin_not_found")
+    return compat
 
 
 @router.post("/plugins/{plugin_name}/validate")

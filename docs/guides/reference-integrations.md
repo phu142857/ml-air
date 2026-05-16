@@ -19,6 +19,7 @@ This page is an **index** only — each row links to the canonical guide or API 
 | **Execute tasks** outside MLAir workers | Lease / pull **external worker** | [External worker execution](./external-worker-execution.md), [End-to-end control plane](./downstream-executor-control-plane.md) |
 | **Prometheus / Grafana** for lifecycle counters | `GET /metrics` on API | [View metrics](./view-metrics.md) |
 | **Distributed traces** (OTLP) | Optional **OpenTelemetry** on api / scheduler / executor / realtime | [OpenTelemetry](./opentelemetry.md) |
+| **Validate** webhook/Redis JSON before go-live | **Contract testing kit** (JSON Schema + CLI) | [Realtime envelope § Contract testing](../api/realtime-event-envelope.md#contract-testing-integrators) |
 | **Scope and tokens** for multi-tenant UIs | Bootstrap + JWT | [Bootstrap and Scope Sync Contract](./bootstrap-and-scope-sync-contract.md) |
 | **Optional** model registry mirror | Pull/push patterns | [Sync external model registry](./sync-external-model-registry.md) |
 

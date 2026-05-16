@@ -7,9 +7,10 @@ Promote a registered model version to the target stage.
 ## Steps
 
 1. Pick model and version.
-2. **Approve** the version for production (unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1` is set on the API).
-3. Transition stage with **promote**.
-4. Verify stage history.
+2. **Check eligibility** (optional): `GET .../versions/{version}/promotion-eligibility?target_stage=production` — returns `eligible`, `reasons[]` with `canonical_code` `GOVERNANCE_BLOCKED` when approval is missing.
+3. **Approve** the version for production (unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1` is set on the API). Gated stages default to `production` only; override with `ML_AIR_PROMOTION_APPROVAL_STAGES=production,staging`.
+4. Transition stage with **promote**.
+5. Verify stage history.
 
 ## Command (approve then promote)
 

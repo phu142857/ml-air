@@ -430,7 +430,7 @@ def _task_execution_mode() -> str:
     return os.getenv("ML_AIR_TASK_EXECUTION_MODE", "internal").strip().lower()
 
 
-def _plugin_for_task_key(config_snapshot: dict | None, task_key: str) -> str | None:
+def _task_def_for_key(config_snapshot: dict | None, task_key: str) -> dict | None:
     if not isinstance(config_snapshot, dict):
         return None
     tasks_cfg = config_snapshot.get("tasks")
@@ -438,10 +438,29 @@ def _plugin_for_task_key(config_snapshot: dict | None, task_key: str) -> str | N
         return None
     for item in tasks_cfg:
         if isinstance(item, dict) and str(item.get("id", "")).strip() == task_key:
-            p = item.get("plugin")
-            if isinstance(p, str) and p.strip():
-                return p.strip()
+            return item
     return None
+
+
+def _plugin_for_task_key(config_snapshot: dict | None, task_key: str) -> str | None:
+    item = _task_def_for_key(config_snapshot, task_key)
+    if not item:
+        return None
+    p = item.get("plugin")
+    if isinstance(p, str) and p.strip():
+        return p.strip()
+    return None
+
+
+def _http_task_config_for_key(config_snapshot: dict | None, task_key: str) -> dict | None:
+    try:
+        from sdk.http_task_contract import normalize_http_block, task_is_http
+    except ImportError:
+        return None
+    item = _task_def_for_key(config_snapshot, task_key)
+    if not item or not task_is_http(item):
+        return None
+    return normalize_http_block(item)
 
 
 def _queue_name_for_priority(priority: str) -> str:
@@ -1108,7 +1127,8 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
     rid = run_event["run_id"]
     task_key = full_task_id[len(rid) + 1 :] if full_task_id.startswith(f"{rid}:") else full_task_id.split(":", 1)[-1]
     plugin = _plugin_for_task_key(run_event.get("config_snapshot"), task_key)
-    external = _task_execution_mode() == "external"
+    http_task = _http_task_config_for_key(run_event.get("config_snapshot"), task_key)
+    external = _task_execution_mode() == "external" and not http_task
     next_status = "QUEUED" if external else "RUNNING"
     _upsert_or_transition_task(
         task_id=full_task_id,
@@ -1158,7 +1178,9 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
         "pipeline_id": run_event.get("pipeline_id", "demo_pipeline"),
         "priority": run_event.get("priority", "normal"),
         "trace_id": run_event.get("trace_id"),
-        "plugin_name": plugin or run_event.get("plugin_name"),
+        "plugin_name": None if http_task else (plugin or run_event.get("plugin_name")),
+        "task_type": "http" if http_task else "plugin",
+        "http_task": http_task,
         "context": run_event.get("context", {}),
         "pipeline_version_id": run_event.get("pipeline_version_id"),
         "config_snapshot": run_event.get("config_snapshot"),
