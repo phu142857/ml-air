@@ -27,6 +27,18 @@ function mapNodeStatus(raw: string): PipelineStage["status"] {
   return "idle";
 }
 
+/** React Query cache for `mlairKeys.pipelines.dag` must always store `ApiPipelineDag` (raw API). */
+export function pipelineFromDagQueryData(
+  pipelineId: string,
+  data: ApiPipelineDag | Pipeline | undefined | null,
+): Pipeline | null {
+  if (!data) return null;
+  if ("stages" in data && Array.isArray(data.stages) && !("nodes" in data)) {
+    return data as Pipeline;
+  }
+  return apiDagToMockPipeline(pipelineId, data as ApiPipelineDag);
+}
+
 /** Bridge API `/pipelines/.../dag` payload to the mock `Pipeline` shape consumed by `PipelineDAG`. */
 export function apiDagToMockPipeline(pipelineId: string, dag: ApiPipelineDag): Pipeline {
   const stages: PipelineStage[] = (dag.nodes || []).map((n) => ({

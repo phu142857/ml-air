@@ -11,7 +11,8 @@ import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog";
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
-import { DagView } from "@/components/pipeline/dag-view";
+import { PipelineDAG } from "@/components/mlops/pipeline-dag";
+import { pipelineFromDagQueryData } from "@/lib/adapt-pipeline-dag";
 import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
 import { DetailSection } from "@/components/mlops/layout";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
@@ -55,11 +56,12 @@ export default function PipelineDetailPage() {
   const [triggerOpen, setTriggerOpen] = useState(false);
   const scopePinned = isScopePinned(tenantId, projectId);
 
-  const { data } = useQuery({
+  const dagQuery = useQuery({
     queryKey: mlairKeys.pipelines.dag(tenantId, projectId, pipelineId),
     queryFn: () => fetchPipelineDag(tenantId, projectId, pipelineId, token),
     enabled: Boolean(token?.trim()) && scopePinned,
   });
+  const data = dagQuery.data;
 
   const { data: pipelinesList } = useQuery({
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
@@ -84,9 +86,9 @@ export default function PipelineDetailPage() {
     return items.reduce((a, b) => (a.version >= b.version ? a : b));
   }, [versionsData]);
 
-  const tasks = useMemo(
-    () => (data?.nodes ?? []).map((node) => ({ task_id: node.id, status: node.status, attempt: 1 })),
-    [data],
+  const dagPipeline = useMemo(
+    () => pipelineFromDagQueryData(pipelineId, data),
+    [data, pipelineId],
   );
 
   const scopeRole = useMemo(() => {
@@ -289,9 +291,21 @@ export default function PipelineDetailPage() {
           description="Stages and dependency shape from the live DAG endpoint."
           accentBorder="amber"
         >
-          <div className="min-h-[280px]">
-            <DagView tasks={tasks} />
-          </div>
+          {!scopePinned ? (
+            <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-4 text-center text-sm text-muted-foreground">
+              Pin a tenant and project in the header to load the pipeline DAG.
+            </div>
+          ) : dagQuery.isLoading ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Could not load DAG: {String(dagQuery.error)}
+            </div>
+          ) : dagPipeline ? (
+            <PipelineDAG pipeline={dagPipeline} />
+          ) : (
+            <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
+              No DAG data for this pipeline.
+            </div>
+          )}
         </DetailSection>
 
         <DetailSection

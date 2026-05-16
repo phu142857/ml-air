@@ -17,6 +17,17 @@ import "@xyflow/react/dist/style.css"
 import { Download, GitBranch, Cpu, CheckCircle2, FlaskConical, Rocket, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChartTheme } from "@/hooks/use-chart-theme"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  estimateDagCanvasHeight,
+  layoutDagPositions,
+  truncateDagLabel,
+} from "@/lib/pipeline-dag-layout"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
 
 const stageTypeIcons = {
@@ -53,6 +64,14 @@ function StageNode({ data }: NodeProps<Node<StageNodeData>>) {
   const Icon = stageTypeIcons[stage.type]
   const gradient = stageTypeColors[stage.type]
   const status = statusColors[stage.status]
+  const displayName = truncateDagLabel(stage.name)
+  const showTooltip = displayName !== stage.name.trim()
+
+  const label = (
+    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={stage.name}>
+      {displayName}
+    </span>
+  )
 
   return (
     <>
@@ -63,36 +82,47 @@ function StageNode({ data }: NodeProps<Node<StageNodeData>>) {
       />
       <div
         className={cn(
-          "rounded-lg border px-4 py-3 min-w-[160px] transition-all",
+          "w-[220px] max-w-[220px] rounded-lg border px-3 py-2.5 transition-all",
           status
         )}
       >
-        <div className="flex items-center gap-2 mb-2">
-          <div className={cn("p-1.5 rounded-md bg-gradient-to-br", gradient)}>
+        <div className="mb-2 flex items-center gap-2">
+          <div className={cn("shrink-0 rounded-md bg-gradient-to-br p-1.5", gradient)}>
             <Icon className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-sm font-medium text-foreground">{stage.name}</span>
+          {showTooltip ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{label}</TooltipTrigger>
+              <TooltipContent side="top" className="max-w-sm font-mono text-xs">
+                {stage.name}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            label
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           {stage.status === "running" ? (
-            <Loader2 className="h-3 w-3 text-sky-400 animate-spin" />
+            <Loader2 className="h-3 w-3 shrink-0 text-sky-400 animate-spin" />
           ) : stage.status === "success" ? (
-            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-400" />
           ) : stage.status === "failed" ? (
-            <div className="h-3 w-3 rounded-full bg-red-500" />
+            <div className="h-3 w-3 shrink-0 rounded-full bg-red-500" />
           ) : stage.status === "pending" ? (
-            <div className="h-3 w-3 rounded-full bg-amber-500/50 animate-pulse" />
+            <div className="h-3 w-3 shrink-0 rounded-full bg-amber-500/50 animate-pulse" />
           ) : (
-            <div className="h-3 w-3 rounded-full bg-muted-foreground/60" />
+            <div className="h-3 w-3 shrink-0 rounded-full bg-muted-foreground/60" />
           )}
-          <span className={cn(
-            "text-xs capitalize",
-            stage.status === "success" && "text-emerald-400",
-            stage.status === "running" && "text-sky-400",
-            stage.status === "failed" && "text-red-400",
-            stage.status === "pending" && "text-amber-400",
-            stage.status === "idle" && "text-muted-foreground"
-          )}>
+          <span
+            className={cn(
+              "text-xs capitalize",
+              stage.status === "success" && "text-emerald-400",
+              stage.status === "running" && "text-sky-400",
+              stage.status === "failed" && "text-red-400",
+              stage.status === "pending" && "text-amber-400",
+              stage.status === "idle" && "text-muted-foreground"
+            )}
+          >
             {stage.status}
           </span>
         </div>
@@ -117,13 +147,18 @@ interface PipelineDAGProps {
 export function PipelineDAG({ pipeline }: PipelineDAGProps) {
   const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme()
 
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, canvasHeight } = useMemo(() => {
     const stageMap = new Map(pipeline.stages.map((s) => [s.id, s]))
-    
-    const initialNodes: Node<StageNodeData>[] = pipeline.stages.map((stage, index) => ({
+    const nodeIds = pipeline.stages.map((s) => s.id)
+    const dagEdges = pipeline.stages.flatMap((stage) =>
+      stage.dependencies.map((depId) => ({ source: depId, target: stage.id }))
+    )
+    const positions = layoutDagPositions(nodeIds, dagEdges)
+
+    const initialNodes: Node<StageNodeData>[] = pipeline.stages.map((stage) => ({
       id: stage.id,
       type: "stage",
-      position: { x: index * 220, y: 50 },
+      position: positions[stage.id] ?? { x: 0, y: 0 },
       data: { stage },
     }))
 
@@ -134,43 +169,52 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
         target: stage.id,
         animated: stageMap.get(depId)?.status === "running",
         style: {
-          stroke: stageMap.get(depId)?.status === "success"
-            ? "#10b981"
-            : stageMap.get(depId)?.status === "running"
-            ? "#0ea5e9"
-            : flowEdgeStroke,
+          stroke:
+            stageMap.get(depId)?.status === "success"
+              ? "#10b981"
+              : stageMap.get(depId)?.status === "running"
+                ? "#0ea5e9"
+                : flowEdgeStroke,
           strokeWidth: 2,
         },
       }))
     )
 
-    return { nodes: initialNodes, edges: initialEdges }
+    const canvasHeight = estimateDagCanvasHeight(nodeIds, dagEdges, { minHeight: 260 })
+
+    return { nodes: initialNodes, edges: initialEdges, canvasHeight }
   }, [pipeline, flowEdgeStroke])
 
   const [nodesState] = useNodesState(nodes)
   const [edgesState] = useEdgesState(edges)
 
   return (
-    <div className="h-[200px] w-full rounded-lg border border-border bg-muted/30 overflow-hidden">
-      <ReactFlow
-        nodes={nodesState}
-        edges={edgesState}
-        nodeTypes={nodeTypes}
-        colorMode={flowColorMode}
-        defaultMarkerColor={flowEdgeStroke}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.5}
-        maxZoom={1.5}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        panOnDrag={false}
-        zoomOnScroll={false}
+    <TooltipProvider delayDuration={200}>
+      <div
+        className="w-full overflow-hidden rounded-lg border border-border bg-muted/30"
+        style={{ height: canvasHeight }}
       >
-        <Background color={flowBackground} gap={16} size={1} />
-      </ReactFlow>
-    </div>
+        <ReactFlow
+          nodes={nodesState}
+          edges={edgesState}
+          nodeTypes={nodeTypes}
+          colorMode={flowColorMode}
+          defaultMarkerColor={flowEdgeStroke}
+          fitView
+          fitViewOptions={{ padding: 0.35, minZoom: 0.4, maxZoom: 1.2 }}
+          minZoom={0.25}
+          maxZoom={1.5}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          panOnDrag
+          zoomOnScroll
+        >
+          <Background color={flowBackground} gap={16} size={1} />
+          <Controls showInteractive={false} className="!shadow-sm" />
+        </ReactFlow>
+      </div>
+    </TooltipProvider>
   )
 }

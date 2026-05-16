@@ -19,7 +19,7 @@ import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { apiDagToMockPipeline, type ApiPipelineDag } from "@/lib/adapt-pipeline-dag"
+import { pipelineFromDagQueryData } from "@/lib/adapt-pipeline-dag"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
 
 const statusConfig = {
@@ -130,17 +130,19 @@ export default function PipelinesPage() {
 
   const dagQuery = useQuery({
     queryKey: mlairKeys.pipelines.dag(tenantId, projectId, selectedId || ""),
-    queryFn: async () => {
-      const dag = await fetchPipelineDag(tenantId, projectId, selectedId!, token)
-      return apiDagToMockPipeline(selectedId!, dag as ApiPipelineDag)
-    },
+    queryFn: () => fetchPipelineDag(tenantId, projectId, selectedId!, token),
     enabled: dagEnabled && Boolean(selectedId),
     retry: false,
   })
 
+  const dagPipeline = useMemo(
+    () => (selectedId ? pipelineFromDagQueryData(selectedId, dagQuery.data) : null),
+    [selectedId, dagQuery.data],
+  )
+
   const displayPipeline: Pipeline | null = useMemo(() => {
     if (!selectedId) return null
-    if (dagQuery.data) return dagQuery.data
+    if (dagPipeline) return dagPipeline
     const label = !dagEnabled
       ? "Select a single tenant + project to load DAG"
       : dagQuery.isLoading
@@ -169,7 +171,7 @@ export default function PipelinesPage() {
         },
       ],
     }
-  }, [selectedId, dagQuery.data, dagQuery.isLoading, dagQuery.isError, dagQuery.error, dagEnabled, selected])
+  }, [selectedId, dagPipeline, dagQuery.isLoading, dagQuery.isError, dagQuery.error, dagEnabled, selected])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
