@@ -130,13 +130,17 @@ jobs:
       matrix:
         include:
           - name: api
-            context: ./api
+            context: .
+            dockerfile: api/Dockerfile
           - name: scheduler
-            context: ./scheduler
+            context: .
+            dockerfile: scheduler/Dockerfile
           - name: executor
-            context: ./executor
+            context: .
+            dockerfile: executor/Dockerfile
           - name: frontend
             context: ./frontend
+            dockerfile: Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -148,5 +152,6 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: false
           tags: ml-air/${{ matrix.name }}:ci

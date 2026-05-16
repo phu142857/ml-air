@@ -23,8 +23,8 @@ services:
 
   api:
     build:
-      context: ../api
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: api/Dockerfile
     container_name: ml-air-api
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -115,8 +115,8 @@ services:
 
   scheduler:
     build:
-      context: ../scheduler
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: scheduler/Dockerfile
     container_name: ml-air-scheduler
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -150,8 +150,8 @@ services:
 
   executor:
     build:
-      context: ../executor
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: executor/Dockerfile
     container_name: ml-air-executor
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
