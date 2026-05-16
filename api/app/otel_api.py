@@ -144,10 +144,14 @@ def attach_mlair_trace_id_to_current_span(trace_id: str) -> None:
 
 
 def inject_redis_trace_carrier(event: dict) -> None:
-    """Merge W3C Trace Context (traceparent / tracestate) into a Redis JSON payload when OTel is on.
+    """Merge W3C trace context + canonical ``trace_id`` into a Redis JSON payload.
 
-    Scheduler and executor read these keys and continue the trace as child spans.
+    Scheduler and executor read ``traceparent`` / ``tracestate`` for child spans and
+    ``trace_id`` for semantic events/logs (aligned with the active OTel trace when enabled).
     """
+    from app.services.trace_service import ensure_event_trace_id
+
+    ensure_event_trace_id(event)
     if not otel_enabled():
         return
     try:

@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchAuditTimeline, fetchRuns } from "@/lib/api"
 import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
+import { toAuditTimelineFilters, type LifecycleSemanticFilters } from "@/lib/lifecycle-filters"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
@@ -54,10 +55,13 @@ interface UseLifecycleOptions {
   jaegerUrl?: string
   /** Poll interval when live mode is on (ms). */
   livePollMs?: number
+  /** Server-side audit timeline filters (`GET .../audit/timeline`). */
+  semanticFilters?: LifecycleSemanticFilters
 }
 
 export function useLifecycle(options: UseLifecycleOptions = {}) {
-  const { jaegerUrl = "", livePollMs = 15_000 } = options
+  const { jaegerUrl = "", livePollMs = 15_000, semanticFilters = {} } = options
+  const apiFilters = useMemo(() => toAuditTimelineFilters(semanticFilters), [semanticFilters])
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { tenantId, projectId, token } = useAppContext()
@@ -70,9 +74,12 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   const hasSeededRef = useRef(false)
 
   const lifecycleQuery = useQuery({
-    queryKey: mlairKeys.audit.timeline(tenantId, projectId, {}),
+    queryKey: mlairKeys.audit.timeline(tenantId, projectId, apiFilters),
     queryFn: async () => {
-      const { items } = await fetchAuditTimeline(tenantId, projectId, token, { limit: 100 })
+      const { items } = await fetchAuditTimeline(tenantId, projectId, token, {
+        limit: 100,
+        filters: apiFilters,
+      })
       return mapAuditTimelineItems(items)
     },
     enabled,
@@ -99,24 +106,25 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     retry: 0,
   })
 
-  const events: AuditEvent[] = lifecycleQuery.data ?? []
+  const events: AuditEvent[] = Array.isArray(lifecycleQuery.data) ? lifecycleQuery.data : []
 
   useEffect(() => {
-    if (!lifecycleQuery.data) return
-    const ids = new Set(lifecycleQuery.data.map((e) => e.id))
+    const data = lifecycleQuery.data
+    if (!Array.isArray(data) || data.length === 0) return
+    const ids = new Set(data.map((e) => e.id))
     if (!hasSeededRef.current) {
       prevIdsRef.current = ids
       hasSeededRef.current = true
       return
     }
     const fresh = new Set<string>()
-    for (const e of lifecycleQuery.data) {
+    for (const e of data) {
       if (!prevIdsRef.current.has(e.id)) fresh.add(e.id)
     }
     prevIdsRef.current = ids
     if (fresh.size === 0) return
     setNewEventIds((prev) => new Set([...prev, ...fresh]))
-    const first = lifecycleQuery.data.find((e) => fresh.has(e.id))
+    const first = data.find((e) => fresh.has(e.id))
     if (first && isLive) {
       toast({
         title: "New update",

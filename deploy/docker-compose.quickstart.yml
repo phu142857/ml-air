@@ -191,6 +191,22 @@ services:
       - "${ML_AIR_JAEGER_OTLP_GRPC_PORT:-4317}:4317"
     restart: unless-stopped
 
+  # Grafana Tempo (OTLP gRPC). Use tempo:4317 on the Compose network; host OTLP maps to 4327
+  # so Jaeger (host 4317) and Tempo can run together under --profile traces.
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: ml-air-tempo
+    profiles:
+      - traces
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./monitoring/tempo.yaml:/etc/tempo.yaml:ro
+      - ml_air_tempo:/var/tempo
+    ports:
+      - "${ML_AIR_TEMPO_HTTP_PORT:-3200}:3200"
+      - "${ML_AIR_TEMPO_OTLP_GRPC_PORT:-4327}:4317"
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: ml-air-redis
@@ -263,3 +279,4 @@ volumes:
   ml_air_pgdata:
   ml_air_minio:
   ml_air_dataset_artifacts:
+  ml_air_tempo:

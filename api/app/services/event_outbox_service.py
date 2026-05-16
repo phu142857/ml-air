@@ -81,29 +81,14 @@ def mark_outbox_redis_delivered(outbox_id: str) -> None:
 
 
 def _publish_envelope_to_redis(event: dict[str, Any]) -> bool:
-    from app.services import realtime_events as rt
-    from app.services.queue_service import redis_client
+    from app.domains.observability.redis_event_bus import (
+        publish_semantic_envelope_to_redis,
+        realtime_channel_enabled,
+    )
 
-    if not rt.realtime_enabled():
+    if not realtime_channel_enabled():
         return False
-    tenant_id = str(event.get("tenant_id") or "").strip()
-    project_id = str(event.get("project_id") or "").strip()
-    ev_type = str(event.get("type") or "")
-    if not tenant_id or not project_id or not ev_type:
-        return False
-    channel = f"mlair.events.{tenant_id}.{project_id}"
-    try:
-        redis_client().publish(channel, json.dumps(event, separators=(",", ":"), default=str))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "event_outbox_redis_publish_failed type=%s tenant=%s project=%s err=%s",
-            ev_type,
-            tenant_id,
-            project_id,
-            exc,
-        )
-        return False
-    return True
+    return publish_semantic_envelope_to_redis(event)
 
 
 def list_outbox_for_project(

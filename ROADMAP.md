@@ -172,7 +172,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Lifecycle Intelligence UI
 
-- [x] Create “Lifecycle Insights” page (**MVP:** [`/lifecycle`](frontend/app/lifecycle/page.tsx) — semantic hub links; audit timeline with API-backed semantic filters)
+- [x] Create “Lifecycle Insights” page (**MVP:** [`/lifecycle`](frontend/app/(dashboard)/lifecycle/page.tsx) — semantic hub links; audit timeline with API-backed semantic filters)
 - [x] Unified timeline:
   - [x] materialization (via `dataset.version.created` / `buffer.threshold_met` / buffer rows in [`GET .../audit/timeline`](docs/api/overview.md) on `/lifecycle`)
   - [x] readiness (`dataset.readiness.evaluated` timeline kinds + Hub)
@@ -233,8 +233,8 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] API → scheduler (W3C `traceparent` / `tracestate` on `mlair:runs:new` + `mlair:tasks:done` JSON when OTel on API)
   - [x] scheduler → executor (same keys copied onto task queue payloads; child spans in scheduler/executor when OTel on workers)
   - [x] executor → plugin (`TRACEPARENT` / `TRACESTATE` env for `python -m` subprocess when OTel on executor; [`executor/main.py`](executor/main.py) + [`executor/otel_bootstrap.py`](executor/otel_bootstrap.py))
-- [ ] Replace manual trace-only flow (today: `X-Trace-Id` + `trace_id` on events/logs via [`api/app/services/trace_service.py`](api/app/services/trace_service.py))
-- [x] W3C TraceContext on API/realtime when OTel enabled (`TraceContextTextMapPropagator`); `mlair.trace_id` mirrored onto active HTTP server span from `X-Trace-Id` (**MVP**, complements manual `trace_id`)
+- [x] Replace manual trace-only flow (**MVP:** [`api/app/services/trace_service.py`](api/app/services/trace_service.py) — `get_trace_id()` prefers active OTel span when `ML_AIR_OTEL_ENABLED=1`; legacy `X-Trace-Id` + UUID when off; Redis payloads get canonical `trace_id` + W3C carrier via [`inject_redis_trace_carrier`](api/app/otel_api.py); scheduler/executor [`resolve_trace_id_for_event`](scheduler/otel_bootstrap.py))
+- [x] W3C TraceContext on API/realtime when OTel enabled (`TraceContextTextMapPropagator`); `mlair.trace_id` on HTTP span mirrors resolved correlation id (OTel trace or legacy header)
 
 ### Lifecycle-Aware Traces
 
@@ -245,8 +245,8 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 - [x] Integrate:
   - [x] Jaeger — optional **`--profile traces`** on [`deploy/docker-compose.quickstart.yml`](deploy/docker-compose.quickstart.yml) (`jaeger` OTLP gRPC **4317**, UI **16686**; see [`docs/guides/opentelemetry.md`](docs/guides/opentelemetry.md))
-  - [ ] Tempo (same OTLP exporter; compose snippet TBD)
-- [x] Add trace links in UI (**MVP:** `/lifecycle` “Open this request in Jaeger” when `ML_AIR_JAEGER_UI_URL` is set and API returns `traceparent`; [`frontend/app/lifecycle/page.tsx`](../../frontend/app/lifecycle/page.tsx))
+  - [x] Tempo (optional **`tempo`** service, profile **`traces`**; [`deploy/monitoring/tempo.yaml`](deploy/monitoring/tempo.yaml); OTLP `tempo:4317`, query HTTP **3200**; see [`docs/guides/opentelemetry.md`](docs/guides/opentelemetry.md))
+- [x] Add trace links in UI (**MVP:** `/lifecycle` “Open this request in Jaeger” when `ML_AIR_JAEGER_UI_URL` is set and API returns `traceparent`; [`frontend/app/(dashboard)/lifecycle/page.tsx`](frontend/app/(dashboard)/lifecycle/page.tsx))
 
 ---
 
@@ -254,21 +254,21 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Domain Separation
 
-- [ ] Separate packages:
-  - [ ] lifecycle domain
-  - [ ] orchestration domain
-  - [ ] governance domain
-  - [ ] observability domain
+- [x] Separate packages (**MVP:** [`api/app/domains/`](api/app/domains/) — `lifecycle`, `orchestration`, `governance`, `observability`, `shared`; implementations still in `app/services/` with shims for `readiness_canonical_codes` / `evaluation_semantics` moved under `domains/lifecycle/`)
+  - [x] lifecycle domain
+  - [x] orchestration domain
+  - [x] governance domain
+  - [x] observability domain
 
 ### Import Boundaries
 
-- [ ] Enforce architectural boundaries
-- [ ] Prevent orchestration leaking into lifecycle core
+- [x] Enforce architectural boundaries (**MVP:** [`api/app/domains/boundaries.py`](api/app/domains/boundaries.py) + [`api/tests/test_import_boundaries.py`](api/tests/test_import_boundaries.py))
+- [x] Prevent orchestration leaking into lifecycle core (**MVP:** `readiness_service` uses [`load_run_for_readiness`](api/app/domains/lifecycle/run_lookup.py) instead of `run_service.get_run`; outbox drain uses [`redis_event_bus`](api/app/domains/observability/redis_event_bus.py) instead of importing `realtime_events` directly)
 
 ### Async Lifecycle Services
 
-- [ ] Extract readiness/materialization workers
-- [ ] Add async evaluation queue
+- [x] Extract readiness/materialization workers (**MVP:** [`domains/lifecycle/workers/materialization_tick.py`](api/app/domains/lifecycle/workers/materialization_tick.py) — scope list + `materialize_scheduled_buffers` per tenant/project; scheduler may keep HTTP tick or call API)
+- [x] Add async evaluation queue (**MVP:** Redis `mlair:lifecycle:readiness:evaluate`, `ML_AIR_READINESS_ASYNC_QUEUE=1`, `ML_AIR_READINESS_QUEUE_DRAIN_INTERVAL_SEC`, `POST .../readiness/evaluate?async_eval=true`, background drain in API startup)
 
 ---
 

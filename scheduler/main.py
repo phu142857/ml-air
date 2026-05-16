@@ -1297,7 +1297,13 @@ def main() -> None:
     next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
-    from otel_bootstrap import ensure_worker_tracing, otel_remote_carrier_from_event, otel_span
+    from otel_bootstrap import (
+        ensure_worker_tracing,
+        otel_remote_carrier_from_event,
+        otel_span,
+        resolve_trace_id_for_event,
+        set_span_mlair_trace_id,
+    )
 
     ensure_worker_tracing(
         service_name=os.getenv("OTEL_SERVICE_NAME", "mlair-scheduler").strip() or "mlair-scheduler"
@@ -1339,6 +1345,8 @@ def main() -> None:
                 mlair_project_id=str(run_event.get("project_id", "default_project")),
                 mlair_trace_id=str(run_event.get("trace_id") or ""),
             ):
+                run_event["trace_id"] = resolve_trace_id_for_event(run_event)
+                set_span_mlair_trace_id(str(run_event["trace_id"]))
                 tenant_id = run_event.get("tenant_id", "default")
                 project_id = run_event.get("project_id", "default_project")
                 max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
@@ -1387,6 +1395,8 @@ def main() -> None:
                 mlair_trace_id=str(done_event.get("trace_id") or ""),
                 mlair_task_status=str(done_event.get("status", "")),
             ):
+                done_event["trace_id"] = resolve_trace_id_for_event(done_event)
+                set_span_mlair_trace_id(str(done_event["trace_id"]))
                 _upsert_or_transition_task(
                     task_id=done_event["task_id"],
                     run_id=done_event["run_id"],
@@ -1416,7 +1426,7 @@ def main() -> None:
                         "project_id": done_event.get("project_id", "default_project"),
                         "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
                         "priority": done_event.get("priority", "normal"),
-                        "trace_id": done_event.get("trace_id"),
+                        "trace_id": done_event["trace_id"],
                         "plugin_name": done_event.get("plugin_name"),
                         "context": done_event.get("context", {}),
                         "pipeline_version_id": done_event.get("pipeline_version_id"),
@@ -1455,7 +1465,7 @@ def main() -> None:
                             "project_id": done_event.get("project_id", "default_project"),
                             "pipeline_id": done_event.get("pipeline_id", "demo_pipeline"),
                             "priority": done_event.get("priority", "normal"),
-                            "trace_id": done_event.get("trace_id"),
+                            "trace_id": done_event["trace_id"],
                             "plugin_name": done_event.get("plugin_name"),
                             "context": done_event.get("context", {}),
                             "pipeline_version_id": done_event.get("pipeline_version_id"),

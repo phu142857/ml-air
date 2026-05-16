@@ -382,7 +382,6 @@ def main() -> None:
         task = json.loads(raw_payload)
         tenant_id = task.get("tenant_id", "default")
         project_id = task.get("project_id", "default_project")
-        trace_id = task.get("trace_id")
         pipeline_id = task.get("pipeline_id", "demo_pipeline")
         with otel_span(
             "mlair.executor",
@@ -390,12 +389,16 @@ def main() -> None:
             remote_carrier=otel_remote_carrier_from_event(task),
             mlair_run_id=str(task.get("run_id", "")),
             mlair_task_id=str(task.get("task_id", "")),
-            mlair_trace_id=str(trace_id or ""),
+            mlair_trace_id=str(task.get("trace_id") or ""),
             mlair_pipeline_id=str(pipeline_id),
             mlair_pipeline_version_id=str(task.get("pipeline_version_id") or ""),
             mlair_tenant_id=str(tenant_id),
             mlair_project_id=str(project_id),
         ):
+            from otel_bootstrap import resolve_trace_id_for_event, set_span_mlair_trace_id
+
+            trace_id = resolve_trace_id_for_event(task)
+            set_span_mlair_trace_id(trace_id)
             started_at = datetime.now(timezone.utc).isoformat()
             ref_sleep_ms = (os.getenv("ML_AIR_REFERENCE_TASK_SLEEP_MS") or "").strip()
             if ref_sleep_ms.isdigit():
@@ -497,10 +500,9 @@ def main() -> None:
                 "config_snapshot": task.get("config_snapshot"),
                 "replay_from_task_id": task.get("replay_from_task_id"),
             }
-            for _k in ("traceparent", "tracestate"):
-                _v = task.get(_k)
-                if isinstance(_v, str) and _v.strip():
-                    done_payload[_k] = _v.strip()
+            from otel_bootstrap import inject_w3c_carrier_on_event
+
+            inject_w3c_carrier_on_event(done_payload)
             client.rpush("mlair:tasks:done", json.dumps(done_payload))
             QUEUE_INFLIGHT.labels(queue=queue_name).dec()
 

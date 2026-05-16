@@ -37,6 +37,51 @@ def ensure_worker_tracing(*, service_name: str) -> None:
     logger.info("otel_worker_tracing_started service=%s", service_name)
 
 
+def trace_id_from_traceparent(traceparent: str | None) -> str | None:
+    value = (traceparent or "").strip()
+    if not value:
+        return None
+    parts = value.split("-")
+    if len(parts) < 3:
+        return None
+    tid = parts[1].strip().lower()
+    if len(tid) == 32 and all(c in "0123456789abcdef" for c in tid):
+        return tid
+    return None
+
+
+def current_otel_trace_id() -> str | None:
+    if not otel_worker_enabled():
+        return None
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        ctx = span.get_span_context()
+        if not ctx.is_valid or ctx.trace_id == 0:
+            return None
+        return format(ctx.trace_id, "032x")
+    except Exception:
+        return None
+
+
+def resolve_trace_id_for_event(event: dict[str, Any]) -> str:
+    from uuid import uuid4
+
+    otel_tid = current_otel_trace_id()
+    if otel_tid:
+        return otel_tid
+    raw = event.get("trace_id")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()[:128]
+    tp = event.get("traceparent")
+    if isinstance(tp, str):
+        parsed = trace_id_from_traceparent(tp)
+        if parsed:
+            return parsed
+    return str(uuid4())
+
+
 def otel_remote_carrier_from_event(evt: dict[str, Any]) -> dict[str, str] | None:
     """Build W3C carrier dict from Redis JSON if ``traceparent`` is present."""
     tp = evt.get("traceparent")
@@ -72,6 +117,40 @@ def otel_subprocess_env() -> dict[str, str]:
     except Exception as exc:  # noqa: BLE001
         logger.debug("otel_subprocess_env_failed err=%s", exc)
         return {}
+
+
+def inject_w3c_carrier_on_event(event: dict[str, Any]) -> None:
+    """Merge W3C trace context from the active span into a Redis JSON payload."""
+    if not otel_worker_enabled():
+        return
+    try:
+        from opentelemetry import propagate, trace
+
+        span = trace.get_current_span()
+        if not span.is_recording() or not span.get_span_context().is_valid:
+            return
+        carrier: dict[str, str] = {}
+        propagate.inject(carrier)
+        for k, v in carrier.items():
+            if isinstance(v, str) and v.strip():
+                event[str(k)] = v.strip()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("otel_event_carrier_inject_failed err=%s", exc)
+
+
+def set_span_mlair_trace_id(trace_id: str) -> None:
+    if not (trace_id or "").strip():
+        return
+    if not otel_worker_enabled():
+        return
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        if span.is_recording():
+            span.set_attribute("mlair.trace_id", trace_id.strip()[:1024])
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("otel_set_mlair_trace_id_failed err=%s", exc)
 
 
 @contextmanager

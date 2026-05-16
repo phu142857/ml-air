@@ -112,6 +112,7 @@ export function mapAuditTimelineItem(item: AuditTimelineItem, index = 0): AuditE
 }
 
 export function mapAuditTimelineItems(items: AuditTimelineItem[]): AuditEvent[] {
+  if (!Array.isArray(items)) return []
   return items.map((item, i) => mapAuditTimelineItem(item, i))
 }
 

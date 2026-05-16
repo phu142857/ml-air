@@ -1521,6 +1521,10 @@ def post_dataset_readiness_evaluate_v1(
         default=False,
         description="If true, always append a new evaluation row even when semantically identical to the latest row for this policy+version scope.",
     ),
+    async_eval: bool = Query(
+        default=False,
+        description="When true and ML_AIR_READINESS_ASYNC_QUEUE=1, enqueue evaluation instead of running inline.",
+    ),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Explicit audit: evaluate, persist ``dataset_readiness_evaluations`` (deduped by default), emit ``dataset.readiness.updated`` on new rows only."""
@@ -1529,6 +1533,32 @@ def post_dataset_readiness_evaluate_v1(
     src = str(source or "manual").strip().lower() or "manual"
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
+    if async_eval:
+        from app.domains.lifecycle.workers.readiness_queue import async_queue_enabled, enqueue_readiness_evaluation
+
+        if not async_queue_enabled():
+            raise HTTPException(
+                status_code=503,
+                detail="readiness_async_queue_disabled",
+            )
+        job_id = enqueue_readiness_evaluation(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            required_size=required_size,
+            dataset_version_id=dataset_version_id,
+            policy_id=policy_id,
+            source=src,
+            force_persist=force_persist,
+        )
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "tenant_id": tenant_id,
+            "project_id": project_id,
+            "dataset_id": dataset_id,
+            "source": src,
+        }
     try:
         result = _evaluate_dataset_readiness_http(
             tenant_id,

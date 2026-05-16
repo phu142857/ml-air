@@ -28,7 +28,7 @@ Default is **off** so local tests and quickstart do not require a collector.
 
 **HTTP span enrichment:** after each handled request (same point as `mlair.trace_id` from `X-Trace-Id`), the API sets the path/query attributes above on the active server span when it is still recording.
 
-**Redis propagation (API → scheduler → executor):** when OTel is enabled on the API, `publish_run_event` / `publish_task_finished` merge the current span’s W3C fields into the JSON payload as `traceparent` and optional `tracestate`. The scheduler and executor read those keys and start `scheduler.consume_run`, `scheduler.task_done`, and `executor.execute_task` as **child spans** of that remote context when `ML_AIR_OTEL_ENABLED=1` in each process. The legacy `trace_id` field on payloads remains for logs and semantic events.
+**Redis propagation (API → scheduler → executor):** `publish_run_event` / `publish_task_finished` always set **`trace_id`** on the JSON payload from the active correlation id (`get_trace_id()`). When OTel is enabled on the API, the same call also injects W3C **`traceparent`** / **`tracestate`** from the current span. Scheduler and executor continue the trace as child spans and **re-resolve** `trace_id` from the active OTel span (32-hex, matching Jaeger/Tempo) so semantic events, logs, and backends stay aligned. With OTel off, behavior is unchanged: optional **`X-Trace-Id`** on HTTP requests, or a generated UUID per request.
 
 **Plugin subprocess:** when OTel is enabled on the **executor**, `python -m …` plugin runs receive standard **`TRACEPARENT`** / **`TRACESTATE`** environment variables derived from the active `executor.execute_task` span so child processes can attach to the same trace (OpenTelemetry SDKs and many runtimes honor these automatically).
 
@@ -36,9 +36,9 @@ Default is **off** so local tests and quickstart do not require a collector.
 
 ## Quickstart (optional collector)
 
-### Jaeger in quickstart Compose
+### Jaeger or Tempo in quickstart Compose
 
-[`deploy/docker-compose.quickstart.yml`](../deploy/docker-compose.quickstart.yml) defines an optional **`jaeger`** service (profile **`traces`**):
+[`deploy/docker-compose.quickstart.yml`](../deploy/docker-compose.quickstart.yml) defines optional **`jaeger`** and **`tempo`** services (profile **`traces`**):
 
 ```bash
 docker compose -f deploy/docker-compose.quickstart.yml --profile traces up -d
@@ -46,10 +46,11 @@ docker compose -f deploy/docker-compose.quickstart.yml --profile traces up -d
 
 Then point OTLP at the collector on the Compose network, for example:
 
-- `OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317`
+- **Jaeger:** `OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317` — UI `http://localhost:16686` (`ML_AIR_JAEGER_UI_PORT`); set `ML_AIR_JAEGER_UI_URL` on the API for Hub Lifecycle links.
+- **Tempo:** `OTEL_EXPORTER_OTLP_ENDPOINT=tempo:4317` — query API `http://localhost:3200` (`ML_AIR_TEMPO_HTTP_PORT`); host OTLP maps to **4327** (`ML_AIR_TEMPO_OTLP_GRPC_PORT`) so Jaeger and Tempo can run together.
 - `OTEL_EXPORTER_OTLP_INSECURE=true` (default for dev)
 
-Jaeger UI: `http://localhost:16686` (override host port with `ML_AIR_JAEGER_UI_PORT`).
+Config: [`deploy/monitoring/tempo.yaml`](../deploy/monitoring/tempo.yaml).
 
 ### Any OTLP gRPC backend
 

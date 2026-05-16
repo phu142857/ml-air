@@ -532,8 +532,10 @@ async function fetchAuditTimelineForScope(
   );
   const traceparent = res.headers.get("traceparent");
   if (!res.ok) return { items: [], traceparent };
-  const data = (await res.json()) as { items?: AuditTimelineItem[] };
-  return { items: (data.items || []) as AuditTimelineItem[], traceparent };
+  const data = (await res.json()) as { items?: unknown };
+  const rawItems = data.items;
+  const items = Array.isArray(rawItems) ? (rawItems as AuditTimelineItem[]) : [];
+  return { items, traceparent };
 }
 
 /** Unified audit-ish timeline (readiness evals, model events, run/task snapshots). */

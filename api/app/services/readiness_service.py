@@ -9,12 +9,12 @@ from uuid import uuid4
 
 from app.services.db_service import db_conn
 from app.services import lineage_service
-from app.services.readiness_canonical_codes import attach_canonical_to_reason_row, canonical_readiness_code
-from app.services.readiness_evaluation_semantics import (
+from app.domains.lifecycle.canonical_codes import attach_canonical_to_reason_row, canonical_readiness_code
+from app.domains.lifecycle.evaluation_semantics import (
     normalize_dataset_version_id,
     readiness_eval_result_matches_stored_row,
 )
-from app.services.run_service import get_run
+from app.domains.lifecycle.run_lookup import load_run_for_readiness
 
 logger = logging.getLogger("mlair.api.readiness_service")
 
@@ -131,7 +131,7 @@ def _upsert_run_dataset_lineage(
 
 
 def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]:
-    run = get_run(run_id)
+    run = load_run_for_readiness(run_id)
     if not run or run.get("tenant_id") != tenant_id or run.get("project_id") != project_id:
         raise ValueError("run_not_found")
 

@@ -13,7 +13,7 @@ from app.otel_api import attach_mlair_trace_id_to_current_span, attach_otel_w3c_
 from app.plugins.registry import plugin_registry
 from app.services.db_service import assert_db_connection
 from app.services.lineage_service import DatasetVersionSnapshotIntegrityError
-from app.services.trace_service import normalize_trace_id, set_trace_id
+from app.services.trace_service import bind_request_trace_id, get_trace_id
 
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
@@ -59,15 +59,16 @@ def on_startup() -> None:
     assert_db_connection()
     plugin_registry.reload()
     from app.services.event_outbox_service import start_outbox_drain_background
+    from app.domains.lifecycle.workers.readiness_queue import start_readiness_queue_background
 
     start_outbox_drain_background()
+    start_readiness_queue_background()
     logger.info("api_startup_completed")
 
 
 @app.middleware("http")
 async def tracing_and_metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
-    trace_id = normalize_trace_id(request.headers.get("x-trace-id"))
-    set_trace_id(trace_id)
+    bind_request_trace_id(request.headers.get("x-trace-id"))
     started = time.perf_counter()
     route_path = request.url.path
     try:
@@ -78,10 +79,11 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
             "http_request_failed method=%s path=%s trace_id=%s elapsed_ms=%d",
             request.method,
             route_path,
-            trace_id,
+            get_trace_id(),
             int(elapsed * 1000),
         )
         raise
+    trace_id = get_trace_id()
     elapsed = time.perf_counter() - started
     HTTP_REQUESTS_TOTAL.labels(method=request.method, path=route_path, status=str(response.status_code)).inc()
     HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, path=route_path).observe(elapsed)

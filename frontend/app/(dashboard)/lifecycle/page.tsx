@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useState, useMemo, useEffect, useCallback } from "react"
-import { useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { 
   History, 
   RefreshCw, 
@@ -44,6 +44,14 @@ import { useLifecycle } from "@/hooks/use-lifecycle"
 import { useToast } from "@/hooks/use-toast"
 import { exportAuditTimeline } from "@/lib/api"
 import { auditEventsToCsv } from "@/lib/audit-event"
+import { LifecycleSemanticFiltersBar } from "@/components/mlops/lifecycle-semantic-filters"
+import {
+  applySemanticFiltersToSearchParams,
+  countActiveSemanticFilters,
+  lifecycleSemanticFiltersFromSearchParams,
+  toAuditTimelineFilters,
+  type LifecycleSemanticFilters,
+} from "@/lib/lifecycle-filters"
 import { useAppContext } from "@/lib/app-context"
 import { useJaegerUiUrl } from "@/lib/use-jaeger-ui-url"
 import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
@@ -54,6 +62,8 @@ function LifecycleContent() {
   const { toast } = useToast()
   const { tenantId, projectId, token } = useAppContext()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const router = useRouter()
   const runtimeJaegerUrl = useJaegerUiUrl()
   const [exporting, setExporting] = useState(false)
 
@@ -62,6 +72,9 @@ function LifecycleContent() {
   const [timeRange, setTimeRange] = useState<TimeRange>("24h")
   const [searchQuery, setSearchQuery] = useState("")
   const [jaegerUrl, setJaegerUrl] = useState("http://localhost:16686")
+  const [semanticFilters, setSemanticFilters] = useState<LifecycleSemanticFilters>(() =>
+    lifecycleSemanticFiltersFromSearchParams(searchParams),
+  )
 
   useEffect(() => {
     if (runtimeJaegerUrl) setJaegerUrl(runtimeJaegerUrl)
@@ -70,7 +83,19 @@ function LifecycleContent() {
   useEffect(() => {
     const trace = (searchParams.get("trace") || "").trim()
     if (trace) setSearchQuery(trace)
+    setSemanticFilters(lifecycleSemanticFiltersFromSearchParams(searchParams))
   }, [searchParams])
+
+  useEffect(() => {
+    const nextParams = applySemanticFiltersToSearchParams(searchParams, semanticFilters)
+    const current = searchParams.toString()
+    const next = nextParams.toString()
+    if (next === current) return
+    const href = next ? `${pathname}?${next}` : pathname
+    router.replace(href, { scroll: false })
+  }, [semanticFilters, pathname, router, searchParams])
+
+  const apiTimelineFilters = useMemo(() => toAuditTimelineFilters(semanticFilters), [semanticFilters])
 
   // Data fetching via custom hook
   const {
@@ -88,7 +113,7 @@ function LifecycleContent() {
     refreshJaeger,
     toggleLive,
     scopePinned,
-  } = useLifecycle({ jaegerUrl })
+  } = useLifecycle({ jaegerUrl, semanticFilters })
 
   const handleExport = useCallback(async () => {
     if (!token.trim()) {
@@ -104,6 +129,7 @@ function LifecycleContent() {
       const { blob, filename } = await exportAuditTimeline(tenantId, projectId, token, {
         format: "jsonl",
         limit: 1000,
+        filters: apiTimelineFilters,
       })
       downloadBlob(blob, filename)
       toast({
@@ -119,11 +145,12 @@ function LifecycleContent() {
     } finally {
       setExporting(false)
     }
-  }, [scopePinned, token, tenantId, projectId, toast])
+  }, [apiTimelineFilters, scopePinned, token, tenantId, projectId, toast])
 
-  // Filter events based on UI state
+  // Filter events based on UI state (defensive: timeline data must be an array)
   const filteredEvents = useMemo(() => {
-    return events.filter((event) => {
+    const list = Array.isArray(events) ? events : []
+    return list.filter((event) => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         const matchesTitle = event.title.toLowerCase().includes(query)
@@ -175,18 +202,22 @@ function LifecycleContent() {
     toast({ title: "Exported", description: `${filteredEvents.length} rows (current view)` })
   }, [filteredEvents, toast])
 
-  const activeFilters = [
-    eventType !== "all",
-    severity !== "all",
-    timeRange !== "24h",
-    searchQuery !== "",
-  ].filter(Boolean).length
+  const semanticFilterCount = countActiveSemanticFilters(semanticFilters)
+  const activeFilters =
+    [
+      eventType !== "all",
+      severity !== "all",
+      timeRange !== "24h",
+      searchQuery !== "",
+      semanticFilterCount > 0,
+    ].filter(Boolean).length
 
   const handleClearFilters = () => {
     setEventType("all")
     setSeverity("all")
     setTimeRange("24h")
     setSearchQuery("")
+    setSemanticFilters({})
   }
 
   // Show full page skeleton on initial load
@@ -503,7 +534,7 @@ function LifecycleContent() {
       </div>
 
       {/* Filters toolbar */}
-      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
+      <div className="shrink-0 space-y-3 border-b border-border bg-muted/50 px-6 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-1 items-center gap-4">
             <div className="relative max-w-xs flex-1">
@@ -535,10 +566,18 @@ function LifecycleContent() {
             )}
             <span>
               Showing <span className="text-muted-foreground font-medium">{filteredEvents.length}</span> of{" "}
-              <span className="text-muted-foreground">{events.length}</span> events
+              <span className="text-muted-foreground">{(Array.isArray(events) ? events : []).length}</span> events
+              {semanticFilterCount > 0 ? (
+                <span className="text-muted-foreground/70"> · {semanticFilterCount} API filter(s)</span>
+              ) : null}
             </span>
           </div>
         </div>
+        <LifecycleSemanticFiltersBar
+          filters={semanticFilters}
+          onChange={setSemanticFilters}
+          disabled={isLoading}
+        />
       </div>
 
       {/* Main: timeline + Jaeger sidebar */}
