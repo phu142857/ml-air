@@ -4,7 +4,7 @@ import time
 from collections import defaultdict
 from typing import Any, Literal
 
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 TypeFilter = Literal["run", "task", "dataset", "all"]
 

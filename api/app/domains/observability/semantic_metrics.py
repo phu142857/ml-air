@@ -49,7 +49,7 @@ def normalize_audit_source(source: str | None) -> str:
 
 def primary_eligibility_denial_reason(result: dict[str, Any]) -> str:
     """Map evaluate_dataset_readiness payload to a low-cardinality Prometheus ``reason`` label."""
-    from app.services.readiness_canonical_codes import canonical_readiness_code, metric_label_for_canonical
+    from app.domains.lifecycle.canonical_codes import canonical_readiness_code, metric_label_for_canonical
 
     for r in result.get("reasons") or []:
         if isinstance(r, dict):

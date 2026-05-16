@@ -14,9 +14,9 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from app.dataset_source_type import canonical_dataset_source_type
-from app.services.db_service import db_conn
-from app.services import realtime_events as rt
-from app.services.trace_service import get_trace_id
+from app.domains.shared.db_service import db_conn
+import app.domains.lifecycle.realtime_events as rt
+from app.domains.observability.trace_service import get_trace_id
 try:
     from prometheus_client import Counter, Gauge, Histogram
 except Exception:  # pragma: no cover - optional dependency in tests

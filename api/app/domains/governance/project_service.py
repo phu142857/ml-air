@@ -1,4 +1,4 @@
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 
 def _is_undefined_table_error(exc: BaseException) -> bool:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.readiness_canonical_codes import (
+from app.domains.lifecycle.canonical_codes import (
     attach_canonical_to_reason_row,
     canonical_readiness_code,
     metric_label_for_canonical,

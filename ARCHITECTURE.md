@@ -197,8 +197,7 @@ ml-air/
 ├── api/                     # FastAPI control-plane APIs
 │   ├── app/
 │   │   ├── api/routes/
-│   │   ├── services/
-│   │   ├── domain/
+│   │   ├── domains/          # lifecycle, orchestration, governance, observability, shared
 │   │   ├── infra/
 │   │   └── core/
 │   └── tests/

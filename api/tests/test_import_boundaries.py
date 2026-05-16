@@ -13,9 +13,8 @@ API_ROOT = Path(__file__).resolve().parents[1] / "app"
 
 def _python_files() -> list[Path]:
     out: list[Path] = []
-    for base in (API_ROOT / "domains", API_ROOT / "services"):
-        if not base.is_dir():
-            continue
+    base = API_ROOT / "domains"
+    if base.is_dir():
         out.extend(base.rglob("*.py"))
     return sorted(out)
 
@@ -35,8 +34,9 @@ def _imports_in_file(path: Path) -> list[str]:
 
 class TestImportBoundaries(unittest.TestCase):
     def test_readiness_service_does_not_import_run_service(self) -> None:
-        path = API_ROOT / "services" / "readiness_service.py"
+        path = API_ROOT / "domains" / "lifecycle" / "readiness_service.py"
         mods = _imports_in_file(path)
+        self.assertNotIn("app.domains.orchestration.run_service", mods)
         self.assertNotIn("app.services.run_service", mods)
 
     def test_domain_packages_respect_allowed_edges(self) -> None:

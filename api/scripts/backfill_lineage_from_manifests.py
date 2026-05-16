@@ -15,7 +15,7 @@ if _API_ROOT not in sys.path:
 
 
 def _db_url() -> str:
-    from app.services.db_service import _db_url as api_db_url  # noqa: PLC0415
+    from app.domains.shared.db_service import _db_url as api_db_url  # noqa: PLC0415
 
     return api_db_url()
 
@@ -66,7 +66,7 @@ def _load_rows(
 
 def main() -> int:
     args = _parse_args()
-    from app.services import lineage_service  # noqa: PLC0415
+    from app.domains.lifecycle import lineage_service  # noqa: PLC0415
 
     rows = _load_rows(
         db_url=_db_url(),

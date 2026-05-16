@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.services import semantic_metrics as sm
+from app.domains.observability import semantic_metrics as sm
 
 
 class TestSemanticMetricsHelpers(unittest.TestCase):

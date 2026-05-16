@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from psycopg.types.json import Json
 
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 
 def create_pipeline_version(

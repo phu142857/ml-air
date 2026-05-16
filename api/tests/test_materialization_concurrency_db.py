@@ -7,8 +7,8 @@ from uuid import uuid4
 
 from psycopg import connect
 
-from app.services.db_service import database_url
-from app.services import lineage_service
+from app.domains.shared.db_service import database_url
+from app.domains.lifecycle import lineage_service
 
 
 def _db_ready() -> bool:

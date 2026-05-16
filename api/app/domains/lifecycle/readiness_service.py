@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from app.services.db_service import db_conn
-from app.services import lineage_service
+from app.domains.shared.db_service import db_conn
+import app.domains.lifecycle.lineage_service as lineage_service
 from app.domains.lifecycle.canonical_codes import attach_canonical_to_reason_row, canonical_readiness_code
 from app.domains.lifecycle.evaluation_semantics import (
     normalize_dataset_version_id,

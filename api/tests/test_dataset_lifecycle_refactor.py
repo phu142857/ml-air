@@ -21,7 +21,7 @@ if "redis" not in sys.modules:
     _redis_stub.Redis = object  # type: ignore[attr-defined]
     sys.modules["redis"] = _redis_stub
 
-from app.services import lineage_service, readiness_service
+from app.domains.lifecycle import lineage_service, readiness_service
 
 
 class TestDatasetLifecycleRefactor(unittest.TestCase):
@@ -56,19 +56,19 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(a, b)
         self.assertNotEqual(a, c)
 
-    @patch("app.services.lineage_service._materialize_runtime_feedback_if_needed", return_value=("vid-1", "v12"))
-    @patch("app.services.lineage_service.get_dataset_buffer", return_value={"accumulation_strategy": "manual_materialize_only", "source_type": "runtime_feedback", "current_size": 2000})
-    @patch("app.services.lineage_service.get_dataset", return_value={"dataset_id": "ds1", "source_uri": None, "checksum": None})
+    @patch("app.domains.lifecycle.lineage_service._materialize_runtime_feedback_if_needed", return_value=("vid-1", "v12"))
+    @patch("app.domains.lifecycle.lineage_service.get_dataset_buffer", return_value={"accumulation_strategy": "manual_materialize_only", "source_type": "runtime_feedback", "current_size": 2000})
+    @patch("app.domains.lifecycle.lineage_service.get_dataset", return_value={"dataset_id": "ds1", "source_uri": None, "checksum": None})
     def test_manual_materialize_endpoint_path(self, _ds, _buf, _materialize) -> None:
         out = lineage_service.materialize_dataset_buffer_now(tenant_id="t", project_id="p", dataset_id="ds1")
         self.assertIsNotNone(out)
         self.assertEqual(out["version"], "v12")
         self.assertEqual(out["dataset_version_id"], "vid-1")
 
-    @patch("app.services.readiness_service._allow_legacy_readiness_fallback", return_value=True)
-    @patch("app.services.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
-    @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value={"version_id": "v-1", "record_count": 1200})
-    @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 0})
+    @patch("app.domains.lifecycle.readiness_service._allow_legacy_readiness_fallback", return_value=True)
+    @patch("app.domains.lifecycle.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
+    @patch("app.domains.lifecycle.readiness_service._load_latest_dataset_version_row", return_value={"version_id": "v-1", "record_count": 1200})
+    @patch("app.domains.lifecycle.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 0})
     def test_readiness_evaluate_uses_version_record_count(self, _ds, _latest, _policy, _legacy) -> None:
         out = readiness_service.evaluate_dataset_readiness(
             tenant_id="t",
@@ -81,10 +81,10 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertTrue(out["ready"])
         self.assertEqual(out["status"], "eligible")
 
-    @patch("app.services.readiness_service._allow_legacy_readiness_fallback", return_value=False)
-    @patch("app.services.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
-    @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value={"version_id": "v-1", "record_count": 100, "status": "ready"})
-    @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 0})
+    @patch("app.domains.lifecycle.readiness_service._allow_legacy_readiness_fallback", return_value=False)
+    @patch("app.domains.lifecycle.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
+    @patch("app.domains.lifecycle.readiness_service._load_latest_dataset_version_row", return_value={"version_id": "v-1", "record_count": 100, "status": "ready"})
+    @patch("app.domains.lifecycle.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 0})
     def test_readiness_rejects_implicit_latest_head_when_legacy_off(self, _ds, _latest, _policy, _legacy) -> None:
         with self.assertRaises(ValueError) as ctx:
             readiness_service.evaluate_dataset_readiness(
@@ -94,10 +94,10 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
             )
         self.assertEqual(str(ctx.exception), "dataset_version_id_required")
 
-    @patch("app.services.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 999})
-    @patch("app.services.readiness_service._load_latest_dataset_version_row", return_value=None)
-    @patch("app.services.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
-    @patch("app.services.readiness_service._allow_legacy_readiness_fallback", return_value=False)
+    @patch("app.domains.lifecycle.readiness_service._load_dataset_row", return_value={"dataset_id": "ds1", "name": "dataset-a", "current_size": 999})
+    @patch("app.domains.lifecycle.readiness_service._load_latest_dataset_version_row", return_value=None)
+    @patch("app.domains.lifecycle.readiness_service.get_or_create_dataset_training_policy", return_value={"policy_id": "p1", "required_size": 1000, "validation_rules": []})
+    @patch("app.domains.lifecycle.readiness_service._allow_legacy_readiness_fallback", return_value=False)
     def test_readiness_strict_mode_requires_materialized_version(self, _fb, _policy, _latest, _ds) -> None:
         with self.assertRaises(ValueError):
             readiness_service.evaluate_dataset_readiness(
@@ -106,10 +106,10 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
                 dataset_id="ds1",
             )
 
-    @patch("app.services.lineage_service._materialize_runtime_feedback_if_needed", return_value=("vid-2", "v13"))
-    @patch("app.services.lineage_service.get_dataset", return_value={"dataset_id": "ds2", "source_uri": None, "checksum": None})
+    @patch("app.domains.lifecycle.lineage_service._materialize_runtime_feedback_if_needed", return_value=("vid-2", "v13"))
+    @patch("app.domains.lifecycle.lineage_service.get_dataset", return_value={"dataset_id": "ds2", "source_uri": None, "checksum": None})
     @patch(
-        "app.services.lineage_service.db_conn",
+        "app.domains.lifecycle.lineage_service.db_conn",
         autospec=True,
     )
     def test_materialize_scheduled_buffers_threshold_guard(self, mock_db_conn, _ds, _mat) -> None:
@@ -143,13 +143,13 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["materialized"][0]["dataset_id"], "ds2")
 
     @patch(
-        "app.services.readiness_service.list_dataset_training_policies",
+        "app.domains.lifecycle.readiness_service.list_dataset_training_policies",
         return_value=[
             {"policy_id": "p-a", "model_id": "m1", "trigger_mode": "manual", "required_size": 100},
             {"policy_id": "p-b", "model_id": None, "trigger_mode": "auto_ready", "required_size": 500},
         ],
     )
-    @patch("app.services.readiness_service.evaluate_dataset_readiness")
+    @patch("app.domains.lifecycle.readiness_service.evaluate_dataset_readiness")
     def test_summarize_eligibility_per_policy(self, mock_eval, _pols) -> None:
         def _ev(**kwargs: object) -> dict:
             pid = kwargs.get("policy_id")
@@ -185,17 +185,17 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         self.assertEqual(out["eligible"][0]["policy_id"], "p-a")
         self.assertEqual(out["blocked"][0]["policy_id"], "p-b")
 
-    @patch("app.services.readiness_service._upsert_run_dataset_lineage")
-    @patch("app.services.readiness_service._dataset_actual_size", return_value=("ds-pin", 0))
+    @patch("app.domains.lifecycle.readiness_service._upsert_run_dataset_lineage")
+    @patch("app.domains.lifecycle.readiness_service._dataset_actual_size", return_value=("ds-pin", 0))
     @patch(
-        "app.services.lineage_service.get_dataset_version",
+        "app.domains.lifecycle.lineage_service.get_dataset_version",
         return_value={"dataset_id": "ds-pin", "record_count": 200},
     )
-    @patch("app.services.readiness_service.get_run")
+    @patch("app.domains.lifecycle.readiness_service.load_run_for_readiness")
     def test_check_run_readiness_uses_pinned_version_record_count(
-        self, mock_get_run, _mock_gdv, _mock_das, _mock_upsert
+        self, mock_load_run, _mock_gdv, _mock_das, _mock_upsert
     ) -> None:
-        mock_get_run.return_value = {
+        mock_load_run.return_value = {
             "tenant_id": "t",
             "project_id": "p",
             "training_mode": "quick",

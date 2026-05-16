@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from app.services.queue_service import redis_client
-from app.services.trace_service import get_trace_id
-from app.services import event_outbox_service
-from app.services import semantic_webhook_subscription_service as semantic_webhook_subs
+from app.domains.shared.queue_service import redis_client
+from app.domains.observability.trace_service import get_trace_id
+import app.domains.observability.event_outbox_service as event_outbox_service
+import app.domains.governance.semantic_webhook_subscription_service as semantic_webhook_subs
 
 try:
     from prometheus_client import Counter as _PrometheusCounter

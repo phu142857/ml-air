@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from app.services import trace_service
+from app.domains.observability import trace_service
 
 
 class TestTraceService(unittest.TestCase):
@@ -33,7 +33,10 @@ class TestTraceService(unittest.TestCase):
     def test_get_trace_id_prefers_otel_span(self) -> None:
         with patch.dict(os.environ, {"ML_AIR_OTEL_ENABLED": "1"}, clear=False):
             trace_service.bind_request_trace_id(None)
-            with patch.object(trace_service, "current_otel_trace_id", return_value="a" * 32):
+            with patch(
+                "app.domains.observability.trace_service.current_otel_trace_id",
+                return_value="a" * 32,
+            ):
                 self.assertEqual(trace_service.get_trace_id(), "a" * 32)
 
     def test_resolve_trace_id_from_event_uses_traceparent(self) -> None:

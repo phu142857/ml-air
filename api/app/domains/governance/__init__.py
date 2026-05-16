@@ -1,1 +1,1 @@
-"""Governance domain: auth, model registry, policies, webhook subscriptions."""
+"""Governance domain: auth, model registry, policies, webhooks."""

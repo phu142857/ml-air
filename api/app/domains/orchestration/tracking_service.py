@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 
 def create_experiment(tenant_id: str, project_id: str, name: str, description: str | None = None) -> dict:

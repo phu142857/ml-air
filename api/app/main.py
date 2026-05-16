@@ -11,9 +11,9 @@ from app.api.routes.v1 import router as v1_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.otel_api import attach_mlair_trace_id_to_current_span, attach_otel_w3c_response_headers, enrich_http_span_from_request, init_fastapi_otel
 from app.plugins.registry import plugin_registry
-from app.services.db_service import assert_db_connection
-from app.services.lineage_service import DatasetVersionSnapshotIntegrityError
-from app.services.trace_service import bind_request_trace_id, get_trace_id
+from app.domains.shared.db_service import assert_db_connection
+from app.domains.lifecycle.lineage_service import DatasetVersionSnapshotIntegrityError
+from app.domains.observability.trace_service import bind_request_trace_id, get_trace_id
 
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
@@ -58,7 +58,7 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 def on_startup() -> None:
     assert_db_connection()
     plugin_registry.reload()
-    from app.services.event_outbox_service import start_outbox_drain_background
+    from app.domains.observability.event_outbox_service import start_outbox_drain_background
     from app.domains.lifecycle.workers.readiness_queue import start_readiness_queue_background
 
     start_outbox_drain_background()

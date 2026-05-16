@@ -20,10 +20,10 @@ class TestReadinessQueue(unittest.TestCase):
 
     def test_enqueue_payload(self) -> None:
         mock_redis = MagicMock()
-        fake_queue = types.ModuleType("app.services.queue_service")
+        fake_queue = types.ModuleType("app.domains.shared.queue_service")
         fake_queue.redis_client = lambda: mock_redis  # type: ignore[attr-defined]
         with patch.dict(os.environ, {"ML_AIR_READINESS_ASYNC_QUEUE": "1"}, clear=False):
-            with patch.dict(sys.modules, {"app.services.queue_service": fake_queue}):
+            with patch.dict(sys.modules, {"app.domains.shared.queue_service": fake_queue}):
                 job_id = readiness_queue.enqueue_readiness_evaluation(
                     tenant_id="t1",
                     project_id="p1",

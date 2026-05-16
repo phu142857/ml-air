@@ -14,7 +14,7 @@ if "redis" not in sys.modules:
     _redis_stub.Redis = MagicMock  # type: ignore[attr-defined]
     sys.modules["redis"] = _redis_stub
 
-from app.services.realtime_events import (
+from app.domains.lifecycle.realtime_events import (
     EventType,
     build_event,
     publish_mlair_event,
@@ -41,8 +41,8 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertIn("event_id", ev)
         self.assertIsInstance(ev["timestamp"], float)
 
-    @patch("app.services.realtime_events.realtime_enabled", return_value=True)
-    @patch("app.services.realtime_events.redis_client")
+    @patch("app.domains.lifecycle.realtime_events.realtime_enabled", return_value=True)
+    @patch("app.domains.lifecycle.realtime_events.redis_client")
     def test_publish_uses_channel(self, mock_redis: MagicMock, _enabled: MagicMock) -> None:
         client = MagicMock()
         mock_redis.return_value = client
@@ -173,11 +173,11 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertEqual(ev["type"], "eligibility.updated")
         self.assertEqual(ev["payload"]["kind"], "training")
 
-    @patch("app.services.realtime_events.publish_mlair_event")
+    @patch("app.domains.lifecycle.realtime_events.publish_mlair_event")
     def test_emit_training_eligibility_dual_publish(self, mock_pub: MagicMock) -> None:
         from datetime import datetime, timezone
 
-        from app.services.realtime_events import emit_training_eligibility_updated
+        from app.domains.lifecycle.realtime_events import emit_training_eligibility_updated
 
         emit_training_eligibility_updated(
             tenant_id="t1",
@@ -194,11 +194,11 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertEqual(mock_pub.call_args_list[1].args[0]["type"], "eligibility.updated")
         self.assertEqual(mock_pub.call_args_list[1].args[0]["payload"]["kind"], "training")
 
-    @patch("app.services.realtime_events.publish_mlair_event")
+    @patch("app.domains.lifecycle.realtime_events.publish_mlair_event")
     def test_emit_model_eligibility_dual_publish(self, mock_pub: MagicMock) -> None:
         from datetime import datetime, timezone
 
-        from app.services.realtime_events import emit_model_eligibility_updated
+        from app.domains.lifecycle.realtime_events import emit_model_eligibility_updated
 
         emit_model_eligibility_updated(
             tenant_id="t1",

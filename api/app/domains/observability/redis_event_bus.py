@@ -11,7 +11,7 @@ logger = logging.getLogger("mlair.observability.redis_event_bus")
 
 def publish_semantic_envelope_to_redis(event: dict[str, Any]) -> bool:
     """Publish a v1 envelope to ``mlair.events.{tenant}.{project}`` when realtime is enabled."""
-    from app.services.queue_service import redis_client
+    from app.domains.shared.queue_service import redis_client
 
     tenant_id = str(event.get("tenant_id") or "").strip()
     project_id = str(event.get("project_id") or "").strip()
@@ -34,6 +34,6 @@ def publish_semantic_envelope_to_redis(event: dict[str, Any]) -> bool:
 
 
 def realtime_channel_enabled() -> bool:
-    from app.services import realtime_events as rt
+    import app.domains.lifecycle.realtime_events as rt
 
     return rt.realtime_enabled()

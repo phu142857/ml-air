@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services.auth_service import authenticate_worker_lease_principal
-from app.services.worker_task_service import (
+from app.domains.governance.auth_service import authenticate_worker_lease_principal
+from app.domains.orchestration.worker_task_service import (
     complete_task,
     external_execution_enabled,
     fail_task,

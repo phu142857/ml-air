@@ -7,9 +7,9 @@ import re
 from uuid import uuid4
 from urllib.parse import urlparse
 
-from app.services.db_service import db_conn
-from app.services import realtime_events as rt
-from app.services.trace_service import get_trace_id
+from app.domains.shared.db_service import db_conn
+import app.domains.lifecycle.realtime_events as rt
+from app.domains.observability.trace_service import get_trace_id
 
 APPROVAL_PENDING = "pending_manual_approval"
 APPROVAL_APPROVED = "approved"

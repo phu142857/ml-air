@@ -1,4 +1,4 @@
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 
 def list_tasks_by_run(run_id: str) -> list[dict]:

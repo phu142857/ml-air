@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 VALID_MODES = {"manual", "auto_ready", "schedule"}
 

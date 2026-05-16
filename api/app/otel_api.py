@@ -149,7 +149,7 @@ def inject_redis_trace_carrier(event: dict) -> None:
     Scheduler and executor read ``traceparent`` / ``tracestate`` for child spans and
     ``trace_id`` for semantic events/logs (aligned with the active OTel trace when enabled).
     """
-    from app.services.trace_service import ensure_event_trace_id
+    from app.domains.observability.trace_service import ensure_event_trace_id
 
     ensure_event_trace_id(event)
     if not otel_enabled():

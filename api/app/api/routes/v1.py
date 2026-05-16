@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Respons
 from prometheus_client import Counter
 from pydantic import BaseModel, Field
 
-from app.services.model_registry_service import (
+from app.domains.governance.model_registry_service import (
     create_model,
     create_model_version,
     create_model_version_from_upload,
@@ -29,21 +29,21 @@ from app.services.model_registry_service import (
     upsert_model_pipeline_mapping,
 )
 from app.plugins.registry import plugin_registry
-from app.services.auth_service import authenticate_bearer, authorize_scope
-from app.services.log_service import append_run_log, read_run_logs
-from app.services.project_service import list_projects, list_tenants, register_project
-from app.services.queue_service import replay_dlq_for_run
-from app.services import pipeline_version_service
-from app.services import search_service
+from app.domains.governance.auth_service import authenticate_bearer, authorize_scope
+from app.domains.orchestration.log_service import append_run_log, read_run_logs
+from app.domains.governance.project_service import list_projects, list_tenants, register_project
+from app.domains.shared.queue_service import replay_dlq_for_run
+from app.domains.orchestration import pipeline_version_service
+from app.domains.orchestration import search_service
 from app.dataset_source_type import canonical_dataset_source_type
-from app.services import lineage_service
-from app.services import readiness_service
-from app.services import realtime_events as rt
-from app.services import semantic_metrics
-from app.services import audit_timeline_service
-from app.services import event_outbox_service
-from app.services import semantic_webhook_subscription_service
-from app.services.run_service import (
+from app.domains.lifecycle import lineage_service
+from app.domains.lifecycle import readiness_service
+from app.domains.lifecycle import realtime_events as rt
+from app.domains.observability import semantic_metrics
+from app.domains.observability import audit_timeline_service
+from app.domains.observability import event_outbox_service
+from app.domains.governance import semantic_webhook_subscription_service
+from app.domains.orchestration.run_service import (
     create_replay_run,
     create_run,
     get_latest_run_for_pipeline,
@@ -54,8 +54,8 @@ from app.services.run_service import (
     mark_run_running,
     set_run_status,
 )
-from app.services.task_service import get_task_by_id, list_tasks_by_run
-from app.services.tracking_service import (
+from app.domains.orchestration.task_service import get_task_by_id, list_tasks_by_run
+from app.domains.orchestration.tracking_service import (
     compare_runs,
     create_experiment,
     get_run_tracking,
@@ -64,12 +64,12 @@ from app.services.tracking_service import (
     log_metric,
     log_param,
 )
-from app.services.trace_service import get_trace_id
+from app.domains.observability.trace_service import get_trace_id
 from datetime import datetime, timezone
-from app.services.executor_promote_webhook_service import notify_model_promotion_webhook
-from app.services.manifest_service import upsert_task_manifest
-from app.services import trigger_policy_service
-from app.services import scope_context_service
+from app.domains.governance.executor_promote_webhook_service import notify_model_promotion_webhook
+from app.domains.orchestration.manifest_service import upsert_task_manifest
+from app.domains.governance import trigger_policy_service
+from app.domains.governance import scope_context_service
 
 router = APIRouter()
 logger = logging.getLogger("mlair.api.scope")

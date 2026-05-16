@@ -61,7 +61,7 @@ curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (re
 
 ## Materialization and buffer gauges (API)
 
-Counters and histograms are emitted from [`api/app/services/lineage_service.py`](../../api/app/services/lineage_service.py). Alert rules reference some of these series in [`deploy/monitoring/alerts/mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml).
+Counters and histograms are emitted from [`api/app/domains/lifecycle/lineage_service.py`](../../api/app/domains/lifecycle/lineage_service.py). Alert rules reference some of these series in [`deploy/monitoring/alerts/mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml).
 
 | Metric | Labels | Role |
 | --- | --- | --- |

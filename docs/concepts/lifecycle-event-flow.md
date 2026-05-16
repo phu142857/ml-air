@@ -6,7 +6,7 @@ This page diagrams how **v1 semantic envelopes** move from the API to consumers:
 
 ## Publish path (API)
 
-When application code calls `publish_mlair_event` ([`realtime_events.py`](../../api/app/services/realtime_events.py)), the API performs the following in one call (simplified).
+When application code calls `publish_mlair_event` ([`realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py)), the API performs the following in one call (simplified).
 
 ```mermaid
 flowchart TD

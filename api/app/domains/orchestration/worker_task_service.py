@@ -10,11 +10,11 @@ from typing import Any
 
 from psycopg import connect
 
-from app.services.auth_service import Principal
-from app.services.db_service import database_url
-from app.services.queue_service import publish_task_finished
-from app.services import realtime_events as rt
-from app.services.trace_service import get_trace_id
+from app.domains.governance.auth_service import Principal
+from app.domains.shared.db_service import database_url
+from app.domains.shared.queue_service import publish_task_finished
+import app.domains.lifecycle.realtime_events as rt
+from app.domains.observability.trace_service import get_trace_id
 
 
 @contextmanager

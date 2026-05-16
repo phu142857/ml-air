@@ -19,7 +19,7 @@ The service may **fill in or normalize** metadata that does not redefine the tra
 
 - **`source_type` / `canonical_source_type`** — lineage categorization; normalization is documented in [Readiness and Gating](./readiness-and-gating.md).
 - **`summary` / `details` (JSONB)** — human-readable quality notes from validation or ingest.
-- **`tags` (JSONB array of strings)** and **`external_refs` (JSONB array of `{ "url", "label?" }`)** — merged append-only via **`PATCH .../dataset-versions/{version_id}/metadata`** (maintainer role); returned on **`GET .../dataset-versions/{version_id}`** and dataset version list responses ([`lineage_service.py`](../../api/app/services/lineage_service.py), Alembic **`0024_dsver_tags_extrefs`**).
+- **`tags` (JSONB array of strings)** and **`external_refs` (JSONB array of `{ "url", "label?" }`)** — merged append-only via **`PATCH .../dataset-versions/{version_id}/metadata`** (maintainer role); returned on **`GET .../dataset-versions/{version_id}`** and dataset version list responses ([`lineage_service.py`](../../api/app/domains/lifecycle/lineage_service.py), Alembic **`0024_dsver_tags_extrefs`**).
 - **Lineage graph edges** — relationships to runs/tasks/other versions.
 
 ## Optional validation
@@ -40,8 +40,8 @@ These are the **only** product paths where a **dataset** snapshot may be chosen 
 
 | Surface | When it applies | Rule |
 | --- | --- | --- |
-| `POST .../runs/trigger` | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0` and body omits `dataset_version_id` | Newest row: `get_latest_materialized_dataset_version` → `ORDER BY dataset_versions.created_at DESC LIMIT 1` ([`api/app/services/lineage_service.py`](../../api/app/services/lineage_service.py)). |
-| `GET .../datasets/{id}/readiness`, `POST .../readiness/evaluate`, `GET .../datasets/{id}/eligibility` | `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1` and query omits `dataset_version_id` | Same ordering rule inside [`api/app/services/readiness_service.py`](../../api/app/services/readiness_service.py) (`_load_latest_dataset_version_row`). |
+| `POST .../runs/trigger` | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0` and body omits `dataset_version_id` | Newest row: `get_latest_materialized_dataset_version` → `ORDER BY dataset_versions.created_at DESC LIMIT 1` ([`api/app/domains/lifecycle/lineage_service.py`](../../api/app/domains/lifecycle/lineage_service.py)). |
+| `GET .../datasets/{id}/readiness`, `POST .../readiness/evaluate`, `GET .../datasets/{id}/eligibility` | `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1` and query omits `dataset_version_id` | Same ordering rule inside [`api/app/domains/lifecycle/readiness_service.py`](../../api/app/domains/lifecycle/readiness_service.py) (`_load_latest_dataset_version_row`). |
 
 **Not dataset-version “latest”:** `use_latest_pipeline_version` on `POST .../runs` resolves a **pipeline version** head, not a dataset snapshot. `POST .../pipelines/{id}/check-readiness` clones from the **latest run** for that pipeline to recover pipeline config — it does not invent a dataset pin.
 

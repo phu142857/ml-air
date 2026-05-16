@@ -41,7 +41,7 @@ def enqueue_readiness_evaluation(
     source: str | None = None,
     force_persist: bool = False,
 ) -> str:
-    from app.services.queue_service import redis_client
+    from app.domains.shared.queue_service import redis_client
 
     job_id = str(uuid4())
     payload = {
@@ -61,9 +61,9 @@ def enqueue_readiness_evaluation(
 
 
 def _process_one(raw: str) -> bool:
-    from app.services import readiness_service
-    from app.services import realtime_events as rt
-    from app.services.trace_service import get_trace_id
+    import app.domains.lifecycle.readiness_service as readiness_service
+    import app.domains.lifecycle.realtime_events as rt
+    from app.domains.observability.trace_service import get_trace_id
     from datetime import datetime, timezone
 
     try:
@@ -129,7 +129,7 @@ def _process_one(raw: str) -> bool:
 
 
 def drain_once(*, max_jobs: int = 8) -> int:
-    from app.services.queue_service import redis_client
+    from app.domains.shared.queue_service import redis_client
 
     client = redis_client()
     processed = 0

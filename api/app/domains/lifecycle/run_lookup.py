@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.services.db_service import db_conn
+from app.domains.shared.db_service import db_conn
 
 _RUN_COLUMNS = """
     run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks,

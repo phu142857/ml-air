@@ -22,7 +22,7 @@ class TestOtelFlags(unittest.TestCase):
     def test_inject_redis_carrier_sets_trace_id_when_otel_off(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ML_AIR_OTEL_ENABLED", None)
-            from app.services.trace_service import set_trace_id
+            from app.domains.observability.trace_service import set_trace_id
 
             set_trace_id("corr-abc")
             ev: dict[str, str] = {"run_id": "r1"}
@@ -33,7 +33,7 @@ class TestOtelFlags(unittest.TestCase):
 
     def test_inject_redis_carrier_sets_trace_id_when_otel_on_without_span(self) -> None:
         with patch.dict(os.environ, {"ML_AIR_OTEL_ENABLED": "1"}, clear=False):
-            from app.services.trace_service import set_trace_id
+            from app.domains.observability.trace_service import set_trace_id
 
             set_trace_id("corr-otel")
             ev: dict[str, str] = {"run_id": "r1"}

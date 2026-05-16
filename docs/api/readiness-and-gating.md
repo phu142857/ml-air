@@ -25,7 +25,7 @@ Readiness responses and persisted evaluations expose two layers of machine-reada
 - **Internal `code`** (snake_case, stable per criterion): for example `size_threshold`, `approval`, `validation_rules`. Clients may branch on these for fine-grained UX.
 - **`canonical_code`** (uppercase enum): a **low-cardinality** vocabulary shared across API payloads, audit rows, realtime hints, and Prometheus. Any internal `code` not explicitly mapped uses **`UNKNOWN_READINESS_REASON`**.
 
-**Source of truth (code + metric label mapping):** [`api/app/services/readiness_canonical_codes.py`](../../api/app/services/readiness_canonical_codes.py). Adding a new internal criterion requires updating that module (and this table), then extending tests in [`api/tests/test_readiness_canonical_codes.py`](../../api/tests/test_readiness_canonical_codes.py).
+**Source of truth (code + metric label mapping):** [`api/app/domains/lifecycle/canonical_codes.py`](../../api/app/domains/lifecycle/canonical_codes.py). Adding a new internal criterion requires updating that module (and this table), then extending tests in [`api/tests/test_readiness_canonical_codes.py`](../../api/tests/test_readiness_canonical_codes.py).
 
 | Internal `code` | `canonical_code` | `mlair_eligibility_denied_total` label `reason` |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ Readiness responses and persisted evaluations expose two layers of machine-reada
 | `legacy_fallback` | `LEGACY_COMPATIBILITY_FALLBACK` | `legacy_compatibility_fallback` |
 | *(any other / empty)* | `UNKNOWN_READINESS_REASON` | `other` |
 
-**Prometheus nuance:** `metric_label_for_canonical` maps the canonical enum to the `reason` label. If `POST .../readiness/evaluate` persists `ready=false` but neither `reasons` nor failing `eligibility_criteria` yield a code, the counter uses **`unknown`** (see [`api/app/services/semantic_metrics.py`](../../api/app/services/semantic_metrics.py) `primary_eligibility_denied_reason`). That is distinct from **`other`**, which covers unrecognized internal codes after canonicalization.
+**Prometheus nuance:** `metric_label_for_canonical` maps the canonical enum to the `reason` label. If `POST .../readiness/evaluate` persists `ready=false` but neither `reasons` nor failing `eligibility_criteria` yield a code, the counter uses **`unknown`** (see [`api/app/domains/observability/semantic_metrics.py`](../../api/app/domains/observability/semantic_metrics.py) `primary_eligibility_denied_reason`). That is distinct from **`other`**, which covers unrecognized internal codes after canonicalization.
 
 ## Endpoints
 

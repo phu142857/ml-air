@@ -66,7 +66,7 @@ def main() -> int:
     args = _parse_args()
     sys.path.insert(0, os.path.join(_repo_root(), "api"))
     try:
-        from app.services import lineage_service  # noqa: PLC0415
+        from app.domains.lifecycle import lineage_service  # noqa: PLC0415
     except ModuleNotFoundError as exc:
         if exc.name == "psycopg":
             print(

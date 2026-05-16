@@ -1,8 +1,8 @@
 import json
 from datetime import datetime, timezone
 
-from app.services.queue_service import redis_client
-from app.services.trace_service import get_trace_id
+from app.domains.shared.queue_service import redis_client
+from app.domains.observability.trace_service import get_trace_id
 
 
 def append_run_log(run_id: str, level: str, message: str, payload: dict | None = None) -> None:

@@ -35,7 +35,7 @@ MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.
 | `run.created` / `run.updated` | `run_id` | `status`, `updated_at`, … |
 | `task.updated` | `task_id` | `run_id`, `status`, `updated_at`, … |
 
-Aliases and additional types are defined in [`api/app/services/realtime_events.py`](../../api/app/services/realtime_events.py) (`EventType`).
+Aliases and additional types are defined in [`api/app/domains/lifecycle/realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py) (`EventType`).
 
 ## Consumers
 
@@ -44,7 +44,7 @@ Aliases and additional types are defined in [`api/app/services/realtime_events.p
 
 ## Durable outbox (optional)
 
-When **`ML_AIR_EVENT_OUTBOX=1`**, the API appends each semantic envelope to Postgres table **`semantic_event_outbox`** before attempting Redis publish, and sets **`redis_delivered_at`** after a successful publish. Failed Redis attempts leave the row undelivered for a background drain (enable with **`ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC`** > 0 on the API process — advisory-locked batch republish). This is **not** a full transactional outbox across business writes + events; it is an **at-least-once delivery log + retry** for the realtime channel. See [`event_outbox_service.py`](../../api/app/services/event_outbox_service.py).
+When **`ML_AIR_EVENT_OUTBOX=1`**, the API appends each semantic envelope to Postgres table **`semantic_event_outbox`** before attempting Redis publish, and sets **`redis_delivered_at`** after a successful publish. Failed Redis attempts leave the row undelivered for a background drain (enable with **`ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC`** > 0 on the API process — advisory-locked batch republish). This is **not** a full transactional outbox across business writes + events; it is an **at-least-once delivery log + retry** for the realtime channel. See [`event_outbox_service.py`](../../api/app/domains/observability/event_outbox_service.py).
 
 ### Outbox listing and manual replay (operator)
 
@@ -55,7 +55,7 @@ After migration **`0025_evt_outbox`**, project-scoped APIs (same auth as audit t
 
 ## Webhook subscriptions (optional)
 
-When **`ML_AIR_SEMANTIC_WEBHOOK_DELIVERY=1`**, each valid semantic publish also **fans out** (best-effort, background thread) to registered HTTP targets for that tenant/project. The POST body is the same JSON envelope as Redis. Registration and delivery use a non-empty deployment allowlist **`ML_AIR_WEBHOOK_ALLOWED_HOSTS`** (comma-separated hostnames; case-insensitive exact match to the URL host). **`POST .../webhooks/subscriptions`** is rejected if the allowlist is unset — configure hosts before registering URLs. Optional per-subscription **`secret_hmac`** adds **`X-MLAir-Signature-256: sha256=<hex>`** (HMAC-SHA256 over the raw JSON body bytes). Migration **`0026_webhook_subscriptions`** — table **`semantic_webhook_subscriptions`**. APIs (see [`semantic_webhook_subscription_service.py`](../../api/app/services/semantic_webhook_subscription_service.py)):
+When **`ML_AIR_SEMANTIC_WEBHOOK_DELIVERY=1`**, each valid semantic publish also **fans out** (best-effort, background thread) to registered HTTP targets for that tenant/project. The POST body is the same JSON envelope as Redis. Registration and delivery use a non-empty deployment allowlist **`ML_AIR_WEBHOOK_ALLOWED_HOSTS`** (comma-separated hostnames; case-insensitive exact match to the URL host). **`POST .../webhooks/subscriptions`** is rejected if the allowlist is unset — configure hosts before registering URLs. Optional per-subscription **`secret_hmac`** adds **`X-MLAir-Signature-256: sha256=<hex>`** (HMAC-SHA256 over the raw JSON body bytes). Migration **`0026_webhook_subscriptions`** — table **`semantic_webhook_subscriptions`**. APIs (see [`semantic_webhook_subscription_service.py`](../../api/app/domains/governance/semantic_webhook_subscription_service.py)):
 
 - **`GET /v1/tenants/{tenant_id}/projects/{project_id}/webhooks/subscriptions`** — **viewer**; returns **`items`** (`subscription_id`, `target_url`, `secret_hmac_configured`, `event_types` or all-types, `enabled`, timestamps). Secrets are never returned.
 - **`POST .../webhooks/subscriptions`** — **maintainer**; body `{ "target_url", "secret_hmac"?, "event_types"?, "enabled"? }`. Omit **`event_types`** or use an empty list to receive **all** semantic types.

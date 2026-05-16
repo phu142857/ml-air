@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.services.readiness_evaluation_semantics import readiness_eval_result_matches_stored_row
+from app.domains.lifecycle.evaluation_semantics import readiness_eval_result_matches_stored_row
 
 
 class TestReadinessEvalDedupe(unittest.TestCase):

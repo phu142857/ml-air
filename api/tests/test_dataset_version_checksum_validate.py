@@ -24,7 +24,7 @@ if "redis" not in sys.modules:
     _redis_stub.Redis = object  # type: ignore[attr-defined]
     sys.modules["redis"] = _redis_stub
 
-from app.services.lineage_service import (
+from app.domains.lifecycle.lineage_service import (
     DatasetVersionSnapshotIntegrityError,
     _validate_dataset_version_snapshot_if_enabled,
 )

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 
-from app.services.auth_service import Principal
-from app.services.db_service import db_conn
-from app.services.project_service import list_projects
+from app.domains.governance.auth_service import Principal
+from app.domains.shared.db_service import db_conn
+from app.domains.governance.project_service import list_projects
 
 _SCOPE_VERSION_SOURCES = [
     "runs",

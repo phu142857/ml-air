@@ -46,7 +46,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 - [x] Shipped subset: strict pin when **declared dataset readiness inputs** exist — `POST .../runs`, `POST .../pipelines/{pipeline_id}/run`, and `POST .../check-readiness` (after merge, before `create_run`) when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`
 - [x] Shipped subset: `POST .../runs/trigger` rejects missing `dataset_version_id` when `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1` (default in repo). **`POST .../runs`** / **`POST .../pipelines/.../run`** / **`check-readiness`** additionally require a pin when strict=1 **and** the merged override + pipeline config declare dataset readiness inputs (see `_ensure_strict_dataset_version_for_declared_inputs`); runs without declared inputs remain unpinned-compatible.
 - [x] Deprecate implicit "latest dataset" resolution (track any remaining silent defaults outside documented compat paths)
-  - [x] API: dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, **`GET .../eligibility`** no longer resolve implicit latest head when **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`** (default); **`422`** `DATASET_VERSION_REQUIRED` if materialized versions exist and **`dataset_version_id`** is omitted — set **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** for rollback ([`readiness_service.py`](api/app/services/readiness_service.py); [`test_dataset_lifecycle_refactor.py`](api/tests/test_dataset_lifecycle_refactor.py)).
+  - [x] API: dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, **`GET .../eligibility`** no longer resolve implicit latest head when **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`** (default); **`422`** `DATASET_VERSION_REQUIRED` if materialized versions exist and **`dataset_version_id`** is omitted — set **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=1`** for rollback ([`readiness_service.py`](api/app/domains/lifecycle/readiness_service.py); [`test_dataset_lifecycle_refactor.py`](api/tests/test_dataset_lifecycle_refactor.py)).
   - [x] Hub: auto-select list head **`version_id`** when versions load; readiness selector labels the head row **Head snapshot (vN)**; **`GET /v1/runtime-config` → `features.readiness_allow_legacy_fallback`** for operator UI.
 - [x] Add strict validation:
   - [x] missing version → hard error on strict **`POST .../runs/trigger`** path (env-gated)
@@ -73,7 +73,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Version Allocation
 
 - [x] Single monotonic allocator:
-  - [x] v1, v2, v3… (`_next_dataset_version_locked` / `^v[0-9]+$` max in [`api/app/services/lineage_service.py`](api/app/services/lineage_service.py))
+  - [x] v1, v2, v3… (`_next_dataset_version_locked` / `^v[0-9]+$` max in [`api/app/domains/lifecycle/lineage_service.py`](api/app/domains/lifecycle/lineage_service.py))
 - [x] Remove all `default` materialization paths (Hub uses explicit **Head snapshot (vN)** row = list head `version_id`, not an empty sentinel; API audit: [implicit resolution](./dataset-version-immutability.md#implicit-dataset-version-resolution-engineering-audit))
 - [x] Add idempotency key:
   - [x] dataset_id
@@ -94,10 +94,10 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] snapshot_on_schedule
 - [x] Implement atomic materialization transaction (advisory lock + DB transaction; concurrency test [`api/tests/test_materialization_concurrency_db.py`](api/tests/test_materialization_concurrency_db.py))
 - [x] Add dataset-level lock (`pg_advisory_xact_lock` + hot row `SELECT FOR UPDATE` on materialization path)
-- [x] Ensure rollback-safe reset ([`lineage_service._materialize_runtime_feedback_if_needed`](api/app/services/lineage_service.py): buffer `FOR UPDATE` + version `INSERT` + buffer reset inside one **`Connection.transaction()`**; see [Dataset accumulation strategies](../guides/dataset-accumulation-strategies.md))
+- [x] Ensure rollback-safe reset ([`lineage_service._materialize_runtime_feedback_if_needed`](api/app/domains/lifecycle/lineage_service.py): buffer `FOR UPDATE` + version `INSERT` + buffer reset inside one **`Connection.transaction()`**; see [Dataset accumulation strategies](../guides/dataset-accumulation-strategies.md))
 - [x] Separate:
   - [x] ingest step (`_ingest_lineage_dataset_and_buffer` in task lineage ingest; CSV upload path unchanged)
-  - [x] materialization **decision** (`_materialization_gate_failure_reason`) vs **effect** (transactional insert + buffer reset in `_materialize_runtime_feedback_if_needed`) — [`lineage_service.py`](api/app/services/lineage_service.py), [Dataset accumulation strategies](../guides/dataset-accumulation-strategies.md)
+  - [x] materialization **decision** (`_materialization_gate_failure_reason`) vs **effect** (transactional insert + buffer reset in `_materialize_runtime_feedback_if_needed`) — [`lineage_service.py`](api/app/domains/lifecycle/lineage_service.py), [Dataset accumulation strategies](../guides/dataset-accumulation-strategies.md)
 
 ### Readiness Semantics
 
@@ -113,8 +113,8 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] `THRESHOLD_NOT_MET` ← `size_threshold`
   - [x] `GOVERNANCE_BLOCKED` ← `approval`, `validation_rules`
   - [x] `MODEL_POLICY_MISMATCH` ← `model_compatibility`
-  - [x] `FRESHNESS_NOT_MET`, `LEGACY_COMPATIBILITY_FALLBACK`, `UNKNOWN_READINESS_REASON` — see [`api/app/services/readiness_canonical_codes.py`](api/app/services/readiness_canonical_codes.py)
-- [x] Structured reasons retain internal `code` / `message`; **`canonical_code`** is the cross-surface contract (see [`api/app/services/readiness_canonical_codes.py`](api/app/services/readiness_canonical_codes.py)).
+  - [x] `FRESHNESS_NOT_MET`, `LEGACY_COMPATIBILITY_FALLBACK`, `UNKNOWN_READINESS_REASON` — see [`api/app/domains/lifecycle/canonical_codes.py`](api/app/domains/lifecycle/canonical_codes.py)
+- [x] Structured reasons retain internal `code` / `message`; **`canonical_code`** is the cross-surface contract (see [`api/app/domains/lifecycle/canonical_codes.py`](api/app/domains/lifecycle/canonical_codes.py)).
 
 ### Eligibility Domain
 
@@ -138,8 +138,8 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] training.completed (emitted when run **SUCCESS** and pinned `dataset_version_id` in override/plugin context — API `set_run_status` + scheduler `_transition_run_status`; UI invalidates runs + Hub/model)
   - [x] model.promoted
   - [x] eligibility.updated (generic name; dual-published with `training.eligibility.updated` / `model.eligibility.updated`; payload `kind`: `training` \| `model`)
-  - [x] buffer.threshold_met (on buffer upsert when `current_size` crosses to ≥ `target_threshold`; [`api/app/services/lineage_service.py`](api/app/services/lineage_service.py) + [`api/app/services/realtime_events.py`](api/app/services/realtime_events.py))
-- [x] Shipped aliases / related types: `training.eligibility.updated`, `model.eligibility.updated`, `dataset.buffer.updated`, `run.*`, `task.updated` — see [`api/app/services/realtime_events.py`](api/app/services/realtime_events.py). Canonical `eligibility.updated` is emitted alongside the training/model-specific types (same turn).
+  - [x] buffer.threshold_met (on buffer upsert when `current_size` crosses to ≥ `target_threshold`; [`api/app/domains/lifecycle/lineage_service.py`](api/app/domains/lifecycle/lineage_service.py) + [`api/app/domains/lifecycle/realtime_events.py`](api/app/domains/lifecycle/realtime_events.py))
+- [x] Shipped aliases / related types: `training.eligibility.updated`, `model.eligibility.updated`, `dataset.buffer.updated`, `run.*`, `task.updated` — see [`api/app/domains/lifecycle/realtime_events.py`](api/app/domains/lifecycle/realtime_events.py). Canonical `eligibility.updated` is emitted alongside the training/model-specific types (same turn).
 
 ### Event Schema
 
@@ -187,7 +187,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Semantic Reasoning
 
-- [x] Standardize reason codes globally (**MLAir contract:** canonical enum + internal→canonical map + Prometheus `reason` labels — [readiness-and-gating § Canonical readiness reason codes](./docs/api/readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair); code [`api/app/services/readiness_canonical_codes.py`](api/app/services/readiness_canonical_codes.py))
+- [x] Standardize reason codes globally (**MLAir contract:** canonical enum + internal→canonical map + Prometheus `reason` labels — [readiness-and-gating § Canonical readiness reason codes](./docs/api/readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair); code [`api/app/domains/lifecycle/canonical_codes.py`](api/app/domains/lifecycle/canonical_codes.py))
 - [x] Add human-readable explanations (reason `message` + Hub “why blocked” column from persisted evaluations)
 - [x] Add exportable audit trail (`GET .../audit/timeline/export` — `format=jsonl` default, `format=json`, filters match timeline; cap 5000 rows)
 
@@ -198,9 +198,9 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] eligibility_denied_total (exported as `mlair_eligibility_denied_total`; `POST .../readiness/evaluate` when persisted `ready=false`; labels `source`, `reason`)
   - [x] training_triggered_total (shipped as `mlair_lifecycle_training_triggered_total`; see [`docs/guides/view-metrics.md`](docs/guides/view-metrics.md))
   - [x] dataset_version_materialized_total (shipped as `mlair_dataset_materialization_version_created_total` and related lineage counters; see view-metrics + alerts)
-  - [x] model_promoted_total (shipped as `mlair_lifecycle_model_promoted_total`; label `stage`; incremented with `model.promoted` emit in [`api/app/services/realtime_events.py`](api/app/services/realtime_events.py))
-  - [x] model_version_approval_set_total (shipped as `mlair_lifecycle_model_version_approval_set_total`; label `approval_status`; API approval updates via [`model_registry_service`](api/app/services/model_registry_service.py))
-- [x] Shipped materialization / accumulation Prometheus metrics (API [`api/app/services/lineage_service.py`](api/app/services/lineage_service.py); rules in [`deploy/monitoring/alerts/mlair-alerts.yml`](deploy/monitoring/alerts/mlair-alerts.yml)):
+  - [x] model_promoted_total (shipped as `mlair_lifecycle_model_promoted_total`; label `stage`; incremented with `model.promoted` emit in [`api/app/domains/lifecycle/realtime_events.py`](api/app/domains/lifecycle/realtime_events.py))
+  - [x] model_version_approval_set_total (shipped as `mlair_lifecycle_model_version_approval_set_total`; label `approval_status`; API approval updates via [`model_registry_service`](api/app/domains/governance/model_registry_service.py))
+- [x] Shipped materialization / accumulation Prometheus metrics (API [`api/app/domains/lifecycle/lineage_service.py`](api/app/domains/lifecycle/lineage_service.py); rules in [`deploy/monitoring/alerts/mlair-alerts.yml`](deploy/monitoring/alerts/mlair-alerts.yml)):
   - [x] `mlair_dataset_materialization_attempt_total`
   - [x] `mlair_dataset_materialization_version_created_total`
   - [x] `mlair_dataset_materialization_failure_total`
@@ -233,7 +233,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] API → scheduler (W3C `traceparent` / `tracestate` on `mlair:runs:new` + `mlair:tasks:done` JSON when OTel on API)
   - [x] scheduler → executor (same keys copied onto task queue payloads; child spans in scheduler/executor when OTel on workers)
   - [x] executor → plugin (`TRACEPARENT` / `TRACESTATE` env for `python -m` subprocess when OTel on executor; [`executor/main.py`](executor/main.py) + [`executor/otel_bootstrap.py`](executor/otel_bootstrap.py))
-- [x] Replace manual trace-only flow (**MVP:** [`api/app/services/trace_service.py`](api/app/services/trace_service.py) — `get_trace_id()` prefers active OTel span when `ML_AIR_OTEL_ENABLED=1`; legacy `X-Trace-Id` + UUID when off; Redis payloads get canonical `trace_id` + W3C carrier via [`inject_redis_trace_carrier`](api/app/otel_api.py); scheduler/executor [`resolve_trace_id_for_event`](scheduler/otel_bootstrap.py))
+- [x] Replace manual trace-only flow (**MVP:** [`api/app/domains/observability/trace_service.py`](api/app/domains/observability/trace_service.py) — `get_trace_id()` prefers active OTel span when `ML_AIR_OTEL_ENABLED=1`; legacy `X-Trace-Id` + UUID when off; Redis payloads get canonical `trace_id` + W3C carrier via [`inject_redis_trace_carrier`](api/app/otel_api.py); scheduler/executor [`resolve_trace_id_for_event`](scheduler/otel_bootstrap.py))
 - [x] W3C TraceContext on API/realtime when OTel enabled (`TraceContextTextMapPropagator`); `mlair.trace_id` on HTTP span mirrors resolved correlation id (OTel trace or legacy header)
 
 ### Lifecycle-Aware Traces
@@ -254,7 +254,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Domain Separation
 
-- [x] Separate packages (**MVP:** [`api/app/domains/`](api/app/domains/) — `lifecycle`, `orchestration`, `governance`, `observability`, `shared`; implementations still in `app/services/` with shims for `readiness_canonical_codes` / `evaluation_semantics` moved under `domains/lifecycle/`)
+- [x] Separate packages (**done:** [`api/app/domains/`](api/app/domains/) — all implementations live under domain packages; legacy `app/services/` shims removed)
   - [x] lifecycle domain
   - [x] orchestration domain
   - [x] governance domain

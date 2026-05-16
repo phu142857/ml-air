@@ -7,5 +7,5 @@ Layers:
 - **observability** — traces, audit timeline, metrics, durable outbox transport
 - **shared** — database and cross-cutting infra
 
-Legacy imports via ``app.services.*`` remain as thin shims during migration.
+Import from ``app.domains.<domain>.<module>`` (e.g. ``app.domains.lifecycle.lineage_service``).
 """

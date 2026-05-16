@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from app.services import semantic_webhook_subscription_service as sws
+from app.domains.governance import semantic_webhook_subscription_service as sws
 
 
 class TestSemanticWebhookSubscriptionFlags(unittest.TestCase):

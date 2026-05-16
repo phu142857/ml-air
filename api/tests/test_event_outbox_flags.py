@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from app.services import event_outbox_service
+from app.domains.observability import event_outbox_service
 
 
 class TestEventOutboxFlags(unittest.TestCase):

@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.services import lineage_service
-from app.services.db_service import db_conn
+import app.domains.lifecycle.lineage_service as lineage_service
+from app.domains.shared.db_service import db_conn
 
 logger = logging.getLogger("mlair.lifecycle.materialization_tick")
 

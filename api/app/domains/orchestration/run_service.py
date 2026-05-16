@@ -7,12 +7,12 @@ from uuid import uuid4
 
 from psycopg.types.json import Json
 
-from app.services import pipeline_version_service as pvs
-from app.services.db_service import db_conn
-from app.services.log_service import append_run_log
-from app.services.queue_service import publish_run_event
-from app.services import realtime_events as rt
-from app.services.trace_service import get_trace_id
+import app.domains.orchestration.pipeline_version_service as pvs
+from app.domains.shared.db_service import db_conn
+from app.domains.orchestration.log_service import append_run_log
+from app.domains.shared.queue_service import publish_run_event
+import app.domains.lifecycle.realtime_events as rt
+from app.domains.observability.trace_service import get_trace_id
 
 logger = logging.getLogger("mlair.api.run_service")
 

@@ -15,7 +15,7 @@ except Exception:
     sys.modules["psycopg"] = _psycopg_stub
 
 from app.api.routes import v1
-from app.services import project_service
+from app.domains.governance import project_service
 
 
 class TestProjectRegistry(unittest.TestCase):
@@ -23,7 +23,7 @@ class TestProjectRegistry(unittest.TestCase):
         with self.assertRaises(ValueError):
             project_service.register_project("tenant-a", "all")
 
-    @patch("app.services.project_service.db_conn")
+    @patch("app.domains.governance.project_service.db_conn")
     def test_register_project_inserts(self, mock_db_conn: MagicMock) -> None:
         mock_conn = MagicMock()
         mock_cur = MagicMock()
@@ -40,7 +40,7 @@ class TestProjectRegistry(unittest.TestCase):
         )
         mock_cur.execute.assert_called_once()
 
-    @patch("app.services.project_service.db_conn")
+    @patch("app.domains.governance.project_service.db_conn")
     def test_list_projects_merges_registry_and_discovery(self, mock_db_conn: MagicMock) -> None:
         """Registry-only project appears alongside discovered IDs; names from registry win."""
 

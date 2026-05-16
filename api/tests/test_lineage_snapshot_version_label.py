@@ -21,7 +21,7 @@ if "redis" not in sys.modules:
     _redis_stub.Redis = object  # type: ignore[attr-defined]
     sys.modules["redis"] = _redis_stub
 
-from app.services.lineage_service import _lineage_snapshot_version_label
+from app.domains.lifecycle.lineage_service import _lineage_snapshot_version_label
 
 
 class TestLineageSnapshotVersionLabel(unittest.TestCase):
@@ -40,7 +40,7 @@ class TestLineageSnapshotVersionLabel(unittest.TestCase):
         self.assertEqual(_lineage_snapshot_version_label("ds-1", "", batch_unpinned_cache=c), "default")
 
     @patch.dict(os.environ, {"ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL": ""}, clear=False)
-    @patch("app.services.lineage_service._allocate_next_monotonic_dataset_version_label", return_value="v3")
+    @patch("app.domains.lifecycle.lineage_service._allocate_next_monotonic_dataset_version_label", return_value="v3")
     def test_allocates_and_caches_per_batch(self, mock_alloc: MagicMock) -> None:
         c: dict[str, str] = {}
         self.assertEqual(_lineage_snapshot_version_label("ds-1", None, batch_unpinned_cache=c), "v3")
@@ -48,7 +48,7 @@ class TestLineageSnapshotVersionLabel(unittest.TestCase):
         mock_alloc.assert_called_once_with("ds-1")
 
     @patch.dict(os.environ, {"ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL": ""}, clear=False)
-    @patch("app.services.lineage_service._allocate_next_monotonic_dataset_version_label", side_effect=["v2", "v4"])
+    @patch("app.domains.lifecycle.lineage_service._allocate_next_monotonic_dataset_version_label", side_effect=["v2", "v4"])
     def test_separate_datasets_in_same_batch(self, mock_alloc: MagicMock) -> None:
         c: dict[str, str] = {}
         self.assertEqual(_lineage_snapshot_version_label("ds-a", None, batch_unpinned_cache=c), "v2")
