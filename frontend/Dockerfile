@@ -1,13 +1,14 @@
 # syntax=docker/dockerfile:1
-# Build context: frontend/ directory (not repo root).
-#   docker build -f Dockerfile -t ml-air-frontend:local ./frontend
+# Build context: repository root (`.`).
+#   docker build -f frontend/Dockerfile -t ml-air-frontend:local .
+# Do not use context ./frontend — root package.json has no "build" script.
 FROM node:20-alpine AS deps
 
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY package.json package-lock.json* ./
+COPY frontend/package.json frontend/package-lock.json* ./
 
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
@@ -26,7 +27,7 @@ ENV NEXT_PUBLIC_MLAIR_REALTIME_WS=${NEXT_PUBLIC_MLAIR_REALTIME_WS}
 
 COPY --from=deps /app/node_modules ./node_modules
 
-COPY . .
+COPY frontend .
 
 RUN npm run build
 

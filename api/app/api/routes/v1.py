@@ -623,8 +623,9 @@ def trigger_run_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     pipeline_cfg: dict = {}
-    if payload.pipeline_version_id or payload.use_latest_pipeline_version:
-        selected_pv = payload.pipeline_version_id
+    use_latest_pv = bool(payload.use_latest_pipeline_version)
+    selected_pv = payload.pipeline_version_id
+    if selected_pv or use_latest_pv:
         if selected_pv:
             pv_row = pipeline_version_service.get_pipeline_version(selected_pv)
             if not pv_row or pv_row.get("tenant_id") != tenant_id or pv_row.get("project_id") != project_id:
@@ -637,8 +638,15 @@ def trigger_run_v1(
             if latest_pv:
                 pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
                 pipeline_cfg = pv_row.get("config") if pv_row and isinstance(pv_row.get("config"), dict) else {}
-        if pipeline_cfg:
-            _validate_pipeline_plugin_contract(pipeline_cfg, require_plugin_exists=True)
+    else:
+        # Hub "Re-run" (POST /runs) often sends only pipeline_id — resolve latest version + task plugins.
+        latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, payload.pipeline_id)
+        if latest_pv:
+            pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+            pipeline_cfg = pv_row.get("config") if pv_row and isinstance(pv_row.get("config"), dict) else {}
+            use_latest_pv = True
+    if pipeline_cfg:
+        _validate_pipeline_plugin_contract(pipeline_cfg, require_plugin_exists=True)
     else:
         plugin_name = str(payload.plugin_name or "").strip()
         if not plugin_name:
@@ -670,7 +678,7 @@ def trigger_run_v1(
         plugin_name=payload.plugin_name,
         plugin_context=merged_ctx,
         pipeline_version_id=payload.pipeline_version_id,
-        use_latest_pipeline_version=payload.use_latest_pipeline_version,
+        use_latest_pipeline_version=use_latest_pv,
         training_mode=payload.training_mode,
         override_config=merged_ov,
     )

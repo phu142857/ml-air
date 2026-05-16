@@ -704,7 +704,17 @@ export async function triggerRun(
   tenantId: string,
   projectId: string,
   token: string,
-  payload: { pipeline_id: string; idempotency_key?: string | null; priority: string; max_parallel_tasks: number }
+  payload: {
+    pipeline_id: string;
+    idempotency_key?: string | null;
+    priority: string;
+    max_parallel_tasks: number;
+    training_mode?: string;
+    use_latest_pipeline_version?: boolean;
+    dataset_version_id?: string;
+    context?: Record<string, unknown>;
+    override_config?: Record<string, unknown>;
+  }
 ) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/runs`, {
     method: "POST",

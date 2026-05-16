@@ -31,6 +31,6 @@ build_python executor executor/Dockerfile
 build_python realtime realtime/Dockerfile
 
 echo "==> ${ENGINE} build frontend"
-"${ENGINE}" build -f frontend/Dockerfile -t ml-air-frontend:local frontend/
+"${ENGINE}" build -f frontend/Dockerfile -t ml-air-frontend:local .
 
 echo "Done. Images: ml-air-api:local ml-air-scheduler:local ml-air-executor:local ml-air-realtime:local ml-air-frontend:local"

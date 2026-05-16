@@ -139,8 +139,8 @@ jobs:
             context: .
             dockerfile: executor/Dockerfile
           - name: frontend
-            context: ./frontend
-            dockerfile: Dockerfile
+            context: .
+            dockerfile: frontend/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v6
