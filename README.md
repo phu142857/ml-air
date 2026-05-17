@@ -66,7 +66,7 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 
 ### In progress / incremental (not a blocker to run the stack)
 
-- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility chips, accumulation projections, version-scoped train; pipeline **Execution gate** tools are **hidden by default** for maintainers until **Show execution gate tools** (persisted in `localStorage`), optional `NEXT_PUBLIC_MLAIR_PIPELINE_EXECUTION_GATE_DEFAULT=open` — details in `docs/api/readiness-and-gating.md`. **Optional** Hub vs pipeline train-intent beacon: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (+ debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`); see the same doc § *Optional train-intent telemetry*.)
+- **Hub-first lifecycle UX** (Dataset Hub: readiness/eligibility, **Run / Train** with **Train with model** | **Run with pipeline**; pipeline pages are observability-only — no trigger-run or execution-gate UI). Execution gate remains on API (`check-readiness`, `runs/trigger`, `pipelines/.../run`). **Optional** intent telemetry: `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` (`hub_train_model`, `hub_run_pipeline`; debug `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`) — see `docs/api/readiness-and-gating.md` § *Optional train-intent telemetry* and [`docs/guides/dataset-hub-and-readiness.md`](docs/guides/dataset-hub-and-readiness.md).
 - **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback is still incremental work.)
 - **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
 

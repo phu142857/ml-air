@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use Dataset Hub as the primary entry point for **training eligibility** (policy + dataset version), readiness evaluation history, and intent-driven training, while keeping **execution gate** flows on pipeline/run APIs for advanced orchestration.
+Use Dataset Hub as the primary entry point for **training eligibility** (policy + dataset version), readiness evaluation history, and **intent-driven execution** (train with model or run with pipeline). **Execution gate** APIs remain for automation and ops; the dashboard does not expose gate forms on pipeline pages.
 
 ## Where to open
 
@@ -61,41 +61,44 @@ What it means:
 - Evaluates readiness in the context of a run request (`training_mode`, `override_config.inputs[]`, pipeline execution config).
 - Used to block/unblock actual execution.
 
-## Preferred training flow (intent-driven)
+## Preferred execution flows (intent-driven UI)
 
-From Dataset Hub, trigger training by model + dataset version:
+Open dataset detail → tab **Run / Train**. Two explicit intents:
 
-- `POST /v1/tenants/{tenant_id}/projects/{project_id}/runs/trigger`
+### Train with model
 
-MLAir resolves:
+- **UI:** model selector + dataset version; resolved pipeline shown read-only (no manual pipeline picker).
+- **API:** `POST /v1/tenants/{tenant_id}/projects/{project_id}/runs/trigger`
+- MLAir resolves pipeline mapping, base weights, run creation, and execution gate checks server-side.
 
-- pipeline mapping
-- base weights source
-- run creation and gate checks
+### Run with pipeline
 
-This keeps UX dataset/model-centric while preserving orchestration internals.
+- **UI:** pipeline selector + optional dataset version (ETL, maintenance DAGs, operational workflows — not model training).
+- **API:** `POST /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run` (latest pipeline version when configured in UI).
+- Use when execution is pipeline-centric rather than model-mapped.
 
-## Execution Gate positioning
+Optional client telemetry (when `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` is set): `hub_train_model`, `hub_run_pipeline`.
 
-Pipeline detail now treats gate controls as advanced execution tooling:
+## Execution gate positioning
 
-- label: **Execution Gate (Advanced)**
-- default UX: check-oriented and diagnostic
-- primary user path: Dataset Hub for readiness + training intents
+- **API (unchanged):** `check-readiness`, `pipelines/.../run`, and `runs/trigger` still apply the execution gate in run context.
+- **Dashboard pipeline pages:** observability only (DAG, versions, runs history). No trigger-run buttons or execution-gate forms. Link to Dataset Hub for production execution.
+- **Advanced ops:** use curl/API or automation; do not expect gate diagnostics on pipeline detail UI.
 
 ## UI behavior
 
 Dataset Hub shows:
 
+- **Run / Train** tab: unified execution panel (train with model | run with pipeline)
 - readiness summary: eligibility status + criteria checklist
 - policy selector and policy presets
 - accumulation buffer metadata and **editable materialization target** (`target_threshold` via `PATCH .../buffer`; distinct from policy `required_size`)
 - schedule strategy controls in Accumulation tab (`Run schedule tick`, scoped to tenant/project, with materialized/skipped summary)
 - dataset versions table with source badges (`IMPORTED DATASET` vs `RUNTIME ACCUMULATED`), **tags** and **external refs** (read-only pills/links; maintainers append via **Edit metadata** on the Versions tab)
 - training eligibility matrix by policy/model (eligible vs blocked reasons for selected version scope)
-- train action per version (intent-driven)
+- **Readiness** tab: evaluation history and **Evaluate now (persist)** — audit/observability; not a mandatory step before Run / Train
 
-Model page is governance-only; readiness and training actions are handled from Dataset Hub.
+Model page is governance-only; readiness and execution start from Dataset Hub.
 
 ## Related guides
 

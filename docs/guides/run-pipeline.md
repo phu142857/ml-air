@@ -4,6 +4,8 @@
 
 Trigger and monitor a pipeline run from CLI.
 
+**Dashboard note:** Production execution from the UI starts at **Dataset Hub** → **Run / Train** (train with model or run with pipeline). Pipeline pages are for observability (DAG, versions, run history). This guide covers CLI/API operators.
+
 ## Steps
 
 1. Ensure stack is running.

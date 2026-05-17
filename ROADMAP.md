@@ -19,7 +19,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] not “create DAG → run task” (README now leads with lifecycle-first framing; pipelines described as execution substrate)
 - [x] Update onboarding UX copy:
   - [x] Dataset Hub becomes primary entrypoint (documented Hub-first flows; `/datasets/[datasetId]`)
-  - [x] Pipeline UI labeled “Advanced / Execution / Replay” (pipeline detail: **Execution gate (advanced / compatibility)** + replay/DLQ docs)
+  - [x] Pipeline UI = observability only; execution from Dataset Hub **Run / Train** (train with model | run with pipeline); execution gate via API/automation ([`docs/guides/dataset-hub-and-readiness.md`](docs/guides/dataset-hub-and-readiness.md))
 - [x] Remove ambiguous wording:
   - [x] readiness vs gate vs eligibility
   - [x] standardize everywhere (UI/API/docs/events) — see [`docs/api/readiness-and-gating.md`](docs/api/readiness-and-gating.md) and README terminology

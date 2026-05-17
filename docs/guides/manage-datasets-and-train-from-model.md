@@ -24,12 +24,13 @@ Strategy reference: [Dataset accumulation strategies](./dataset-accumulation-str
 Recommended navigation:
 
 1. Open `Datasets` and select dataset hub (`/datasets/{dataset_id}`).
-2. Check **training eligibility**: `GET .../datasets/{dataset_id}/readiness` with a chosen `policy_id` and `dataset_version_id` (read-only derived state). Use `POST .../readiness/evaluate` when you need a persisted audit row in evaluation history.
-3. Select model + dataset version.
-4. Trigger training via intent-driven endpoint (`POST /runs/trigger`).
-5. Track run and readiness snapshot in run detail.
+2. (Optional) **Readiness** tab: `GET .../readiness` for live eligibility; `POST .../readiness/evaluate` to persist an audit row — not required before execution.
+3. **Run / Train** tab — choose intent:
+   - **Train with model:** model + dataset version → `POST .../runs/trigger` (pipeline resolved from mapping).
+   - **Run with pipeline:** explicit pipeline + optional dataset version → `POST .../pipelines/{pipeline_id}/run` (ETL/ops workflows).
+4. Track run and readiness snapshot in run detail.
 
-Model detail remains governance-focused; legacy training forms are compatibility tools.
+Model detail remains governance-only. Pipeline detail is observability-only (no dashboard trigger-run).
 
 ## Steps
 
@@ -303,7 +304,12 @@ Using shared helper: `formatDateTimeCompact()` in `frontend/lib/utils.ts`.
 
 ## Model + dataset trigger (MLAir-native)
 
-The Datasets UI can call **`POST /v1/tenants/{tenant}/projects/{project}/runs/trigger`** so users pick **model** and **dataset version** only; MLAir resolves **default pipeline** (`model_pipeline_mapping` or latest run linkage) and injects **production / latest `artifact_uri`** into run **`plugin_context`** when available. See:
+Dataset Hub **Run / Train** panel:
+
+- **Train with model** → **`POST /v1/tenants/{tenant}/projects/{project}/runs/trigger`**: user picks **model** and **dataset version** only; MLAir resolves **default pipeline** (`model_pipeline_mapping` or latest run linkage) and injects **production / latest `artifact_uri`** into run **`plugin_context`** when available.
+- **Run with pipeline** → **`POST .../pipelines/{pipeline_id}/run`**: explicit pipeline for non-training workflows.
+
+See:
 
 - [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md)
 
@@ -324,8 +330,8 @@ See:
 3. Upload one CSV on `Datasets`.
 4. Verify `Status` and `Score` appear in version table.
 5. Click `View` and verify `Summary`/`Details`.
-6. Confirm `failed` versions cannot be trained.
-7. Trigger train for `ready|warning` versions and verify redirect to run detail.
+6. On **Run / Train**, confirm **Train with model** is disabled for failed dataset versions.
+7. Train with model (or run with pipeline) and verify redirect to run detail.
 
 ## Operational Notes
 

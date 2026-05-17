@@ -30,8 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Serving slot HTTP API:** routes mount when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`** at API startup (default **`0`**). The Next.js models UI reads **`GET /v1/runtime-config`** → **`features.serving_slots_http`** instead of a static flag.
 - **Environment variable rename (integrators):** any prior experimental **`MLAIR_VETAI_*`**-style promote webhook variables are superseded by **`MLAIR_MODEL_PROMOTE_*`**. Update deployments and secret managers accordingly; old names are not read by the API.
 
+### Changed
+
+- **Frontend (intent-based execution UX):** Pipeline list/detail no longer expose trigger-run or execution-gate forms. Dataset Hub **Run / Train** tab unifies **Train with model** (`POST .../runs/trigger`) and **Run with pipeline** (`POST .../pipelines/{id}/run`). Readiness tab remains audit/evaluate-only. Scope switcher retries once on `mapping_version_stale` after bootstrap refresh. Command palette favors Dataset Hub over pipeline triggers. No API contract changes.
+
 ### Documentation
 
+- **Hub / gating guides:** [`docs/guides/dataset-hub-and-readiness.md`](docs/guides/dataset-hub-and-readiness.md), [`model-page-governance-mode.md`](docs/guides/model-page-governance-mode.md), [`configure-data-readiness-gating.md`](docs/guides/configure-data-readiness-gating.md), [`manage-datasets-and-train-from-model.md`](docs/guides/manage-datasets-and-train-from-model.md), [`model-centric-pipeline-mapping-and-trigger.md`](docs/guides/model-centric-pipeline-mapping-and-trigger.md) — aligned with observability-only pipeline UI and Run / Train intents.
 - **ROADMAP:** Phase C/D readiness v2 + Hub-first lifecycle checkboxes aligned with shipped evaluations UI and pipeline execution-gate posture; README + Dataset list/detail subtitles point operators at **`docs/guides/dataset-accumulation-strategies.md`**.
 - **Governance docs:** `ARCHITECTURE.md` §7, `docs/index.md`, and OpenAPI describe **approval**, **serving slots** (contract + DB; HTTP routes mount when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**), and the **production promote** gate (plus roadmap-only items such as audit timeline API).
 - Guide: **`docs/guides/model-centric-pipeline-mapping-and-trigger.md`**

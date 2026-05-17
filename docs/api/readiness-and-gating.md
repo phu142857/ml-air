@@ -12,9 +12,9 @@ Keep these names aligned with the operator UI and [`ROADMAP.md`](../../ROADMAP.m
 | --- | --- | --- |
 | **Dataset Readiness** | Lifecycle evaluation on `dataset_version` + training policy (sizes, criteria). **Derived** via `GET .../readiness`; **audit rows** via `POST .../readiness/evaluate`. | Dataset Hub **Readiness** tab |
 | **Training Eligibility** | Per-policy aggregate “can train?” view (readiness outcome matrix). | Dataset Hub + `GET .../eligibility` |
-| **Execution Gate** | Pipeline/run-level check that mirrors orchestration inputs (synthetic run + `check-readiness`). | Pipeline detail — **advanced**, maintainer opt-in in UI |
+| **Execution Gate** | Pipeline/run-level check that mirrors orchestration inputs (synthetic run + `check-readiness`). | **API / automation** (`check-readiness`, gated run). Dashboard pipeline pages: observability only (no gate UI). |
 
-Training from immutable versions is initiated from **Dataset Hub**; the pipeline page remains orchestration, replay, and execution-gate debugging.
+Production execution from the dashboard starts at **Dataset Hub → Run / Train** (`hub_train_model` / `hub_run_pipeline`). Pipeline list/detail: DAG, versions, runs history.
 
 **See also:** [Dataset version immutability policy](./dataset-version-immutability.md) — frozen vs additive fields on `dataset_versions`, and strictness env vars.
 
@@ -397,7 +397,7 @@ No stable URL paths or HTTP verbs were removed in these slices; changes are **op
 
 ### Optional train-intent telemetry (browser)
 
-For adoption metrics (“Hub **`POST .../runs/trigger`**” vs “pipeline **`POST .../pipelines/.../run`**”), the Next.js client can **opt in** to a JSON beacon via **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL`** (and optional **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`**). Implementation: `frontend/lib/train-intent-telemetry.ts`, invoked from `triggerRunFromModelDataset` / `triggerPipelineRunWithGating` in `frontend/lib/api.ts`. The endpoint must accept anonymous `POST` + CORS from the UI origin if used cross-origin.
+For adoption metrics (**Train with model** vs **Run with pipeline**), the Next.js client can **opt in** to a JSON beacon via **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL`** (and optional **`NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1`**). Implementation: `frontend/lib/train-intent-telemetry.ts`, recorded from `executeTrainingIntent` in `frontend/lib/training-intent.ts` with intents **`hub_train_model`** and **`hub_run_pipeline`** (legacy aliases `hub_runs_trigger` / `pipeline_gated_run` may still appear in older clients). The endpoint must accept anonymous `POST` + CORS from the UI origin if used cross-origin.
 
 ## Dataset version and evaluation audit timestamps
 

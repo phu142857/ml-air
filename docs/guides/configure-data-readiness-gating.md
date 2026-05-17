@@ -22,8 +22,8 @@ Use dataset eligibility evaluation for lifecycle monitoring and user guidance; u
 
 1. Define/read **training policy** via dataset training policies (`POST/PUT /datasets/{dataset_id}/training-policies`).
 2. Run **eligibility evaluation** (`GET .../readiness` with `policy_id` + `dataset_version_id`) before execution where useful.
-3. Trigger lifecycle-centric training from Dataset Hub (`POST .../runs/trigger`) for primary UX.
-4. Use direct pipeline run gate only for advanced execution/ops workflows.
+3. Start execution from Dataset Hub → **Run / Train**: **Train with model** (`POST .../runs/trigger`) or **Run with pipeline** (`POST .../pipelines/{pipeline_id}/run`).
+4. Use `check-readiness` / gated pipeline run via **API or automation** for advanced ops (no execution-gate form on pipeline detail UI).
 5. Review run readiness snapshot and blocking datasets.
 
 ## Command
@@ -100,7 +100,7 @@ You should see:
 - Do not mutate dataset `current_size` manually.
 - Keep overrides in `override_config` to preserve reproducibility.
 - In lifecycle-centric flow, policy owns threshold (`required_size` in policy), not random per-request input.
-- In current frontend migration state, Pipeline detail uses gate checks as advanced tooling; primary train UX is Dataset Hub.
+- **Dashboard:** Dataset Hub owns Run / Train and readiness audit; pipeline pages are observability-only. Execution gate is enforced on the server for `runs/trigger` and `pipelines/.../run`; operators use API/curl for pre-flight `check-readiness`, not a pipeline-detail form.
 - Readiness v2 strict mode is the default (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`): callers must pass **`dataset_version_id`** on dataset-scoped readiness/eligibility when versions exist (**422** if omitted); if no version is materialized yet, API returns **`409 no_materialized_dataset_version`**.
 
 ## Auto Trigger Policy (Persisted)

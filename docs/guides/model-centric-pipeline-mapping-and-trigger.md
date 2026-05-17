@@ -133,19 +133,20 @@ Implementation merges **`context`** from the request body first, then sets the k
 
 ## UI (MLAir frontend)
 
-### Datasets
+### Dataset Hub → Run / Train
 
-- Train uses **`POST .../runs/trigger`** with selected **model** and **dataset version**.
-- **Advanced**: optional `pipeline_id_override` if mapping is missing and you must force a pipeline id.
-- Pipeline / base-weights line is driven by **`resolved-pipeline`** (not a hardcoded client string).
+- **Train with model:** **`POST .../runs/trigger`** with selected **model** and **dataset version**; resolved pipeline is shown read-only (`GET .../resolved-pipeline`).
+- **Run with pipeline:** **`POST .../pipelines/{pipeline_id}/run`** with explicit pipeline (optional dataset version).
+- Readiness **Evaluate** lives on the **Readiness** tab (audit); it does not replace Run / Train.
 
-### Pipeline detail → Readiness & gating
+### Pipeline pages
 
-- Enter the **exact** `dataset` string required by **your** pipeline version readiness config (`inputs[].dataset`). MLAir does **not** auto-generate per-project dataset names here.
+- List and detail: DAG, versions, runs — **no** trigger-run or execution-gate forms. Use Dataset Hub or API for execution.
+- Pre-flight **`check-readiness`**: API/curl only; pass the **exact** `dataset` string from pipeline version `inputs[].dataset` when using `override_config.inputs[]`.
 
 ### Model detail
 
-- Pipeline id for manual runs is inferred from **resolved pipeline**, latest run, optional **`NEXT_PUBLIC_MLAIR_DEFAULT_PIPELINE_ID`**, or first pipeline in the list—see page help text.
+- Governance only (versions, approvals, trigger policy). No training or pipeline run triggers on this page.
 
 ## curl examples
 

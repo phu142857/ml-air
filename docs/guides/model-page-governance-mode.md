@@ -17,10 +17,11 @@ Model page emphasizes:
 - trigger policy (`manual|auto_ready|schedule`)
 - serving slot metadata (when enabled)
 
-Training / **training eligibility**:
+Training / **training eligibility** / **execution**:
 
-- evaluate and train from Dataset Hub (`/datasets/{dataset_id}`) using **training policies** and dataset versions
-- pipeline-level **execution gate** controls remain on Pipeline detail as advanced tooling
+- evaluate readiness from Dataset Hub (`/datasets/{dataset_id}` → **Readiness** tab): policies, **Evaluate now (persist)**, evaluation history
+- start runs from Dataset Hub → **Run / Train**: **Train with model** (`POST .../runs/trigger`) or **Run with pipeline** (`POST .../pipelines/{id}/run`)
+- pipeline list/detail pages are **observability only** (no trigger-run or execution-gate UI); execution gate remains on **API** for automation
 
 Model **trigger policy** (`manual` / `auto_ready` / `schedule`) is separate: it decides when the scheduler attempts runs, not the per-version eligibility checklist.
 
@@ -34,4 +35,4 @@ Model **trigger policy** (`manual` / `auto_ready` / `schedule`) is separate: it 
 
 1. Restart frontend runtime after deploy.
 2. Verify model page has governance sections only (status, trigger policy, versions, approvals).
-3. Confirm readiness/training operations are performed from Dataset Hub and not from model detail.
+3. Confirm readiness evaluation and Run / Train execution are performed from Dataset Hub, not from model or pipeline detail pages.
