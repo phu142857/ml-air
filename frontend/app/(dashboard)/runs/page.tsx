@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
 import { Play, Clock, CheckCircle2, XCircle, Loader2, Ban, Bot } from "lucide-react"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
@@ -12,9 +11,8 @@ import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
-import { fetchRuns, type RunItem } from "@/lib/api"
-import { mlairKeys } from "@/lib/query-keys"
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
+import type { RunItem } from "@/lib/api"
+import { useRunsListLive } from "@/hooks/use-runs-list-live"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { normalizeStatus } from "@/lib/status-style"
@@ -149,14 +147,8 @@ export default function RunsPage() {
     setTriggerOpen(true)
   }
 
-  const runsQuery = useQuery({
-    queryKey: mlairKeys.runs.list(tenantId, projectId),
-    queryFn: () => fetchRuns(tenantId, projectId, token),
-    enabled: Boolean(token?.trim()),
-    ...realtimeFallbackPolling(),
-  })
-
-  const rows = runsQuery.data?.items ?? []
+  const runsQuery = useRunsListLive(Boolean(token?.trim()))
+  const rows = runsQuery.items
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

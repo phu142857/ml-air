@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { fetchPipelineVersions, fetchPipelines } from "@/lib/api";
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology";
 import { mlairKeys } from "@/lib/query-keys";
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { useAppContext } from "@/lib/app-context";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -26,6 +26,7 @@ export default function PipelineDetailPage() {
   const { tenantId, projectId, token } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
 
+  const poll = useRealtimeQueryPolling();
   const { topologyQuery, topology, pipeline: topologyPipeline, isLoading: topologyLoading } =
     usePipelineTopology(tenantId, projectId, pipelineId, token, scopePinned);
 
@@ -33,6 +34,8 @@ export default function PipelineDetailPage() {
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token),
     enabled: Boolean(token?.trim()) && scopePinned,
+    refetchOnMount: "always",
+    ...poll,
   });
 
   const { data: versionsData } = useQuery({

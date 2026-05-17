@@ -15,7 +15,7 @@ import { useAppContext } from "@/lib/app-context"
 import { fetchPipelines } from "@/lib/api"
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology"
 import { mlairKeys } from "@/lib/query-keys"
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag"
@@ -95,11 +95,13 @@ export default function PipelinesPage() {
   const isAggregate = !scopePinned
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
+  const poll = useRealtimeQueryPolling()
   const pipelinesQuery = useQuery({
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token),
     enabled: Boolean(token?.trim()),
-    ...realtimeFallbackPolling(),
+    refetchOnMount: "always",
+    ...poll,
   })
 
   const items = pipelinesQuery.data?.items ?? []

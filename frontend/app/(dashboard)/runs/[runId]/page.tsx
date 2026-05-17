@@ -62,7 +62,7 @@ import {
 } from "@/lib/api"
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { normalizeStatus } from "@/lib/status-style"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
@@ -206,6 +206,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
 
+  const poll = useRealtimeQueryPolling()
   const hydrateRunSnapshot = useExecutionStore((s) => s.hydrateRunSnapshot)
   const storeRun = useExecutionStore((s) => s.runs[runId])
   const storeTasks = useExecutionStore((s) => s.tasksByRun[runId])
@@ -220,8 +221,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryFn: () => fetchRun(tenantId, projectId, runId, token),
     enabled,
     refetchOnMount: "always",
-    refetchInterval: (q) => activeRunRefetchMs(q.state.data?.status),
-    ...realtimeFallbackPolling(),
+    refetchInterval: (q) => activeRunRefetchMs(q.state.data?.status) || poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
   const tasksQuery = useQuery({
@@ -229,8 +230,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryFn: () => fetchRunTasks(tenantId, projectId, runId, token),
     enabled,
     refetchOnMount: "always",
-    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status),
-    ...realtimeFallbackPolling(),
+    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
   useRunExecutionGraph(tenantId, projectId, runId, token, enabled)

@@ -1,4 +1,5 @@
 import { buildAuditTimelineSearchParams, type AuditTimelineFilters } from "./audit-timeline-filters";
+import { resolveRealtimeWsBase } from "./realtime-url";
 
 type RuntimeConfigGlobal = {
   __ML_AIR_RUNTIME_CONFIG__?: {
@@ -40,14 +41,16 @@ export function getApiBaseUrl(): string {
   );
 }
 
-/** WebSocket root: injected runtime config, then build-time env. */
+/** WebSocket root: runtime inject → build env → sensible default (see `realtime-url.ts`). */
 export function getRealtimeWsBase(): string {
   if (typeof window !== "undefined") {
     const g = window as unknown as RuntimeConfigGlobal;
-    const w = String(g.__ML_AIR_RUNTIME_CONFIG__?.realtime_base_url || "").trim();
-    if (w) return w;
+    return resolveRealtimeWsBase(
+      g.__ML_AIR_RUNTIME_CONFIG__?.realtime_base_url,
+      process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS,
+    );
   }
-  return String(process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS || "").trim();
+  return resolveRealtimeWsBase(null, process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS);
 }
 
 // Important: keep `API_BASE` usable in template strings without refactoring call sites.
@@ -353,10 +356,14 @@ export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): P
       );
     }
     const out = await readOk(rel);
-    if (!String(out.api_base_url || "").trim()) {
-      return { ...out, api_base_url: getPublicApiBaseUrl() };
+    const patched = { ...out };
+    if (!String(patched.api_base_url || "").trim()) {
+      patched.api_base_url = getPublicApiBaseUrl();
     }
-    return out;
+    if (!String(patched.realtime_base_url || "").trim()) {
+      patched.realtime_base_url = resolveRealtimeWsBase(null, process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS);
+    }
+    return patched;
   }
 
   const base =
@@ -365,10 +372,14 @@ export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): P
       : stripTrailingSlash(getApiBaseUrl());
   const res = await fetch(`${base}/v1/runtime-config`, { cache: "no-store" });
   const out = await readOk(res);
-  if (typeof window !== "undefined" && !String(out.api_base_url || "").trim()) {
-    return { ...out, api_base_url: getPublicApiBaseUrl() };
+  const patched = { ...out };
+  if (typeof window !== "undefined" && !String(patched.api_base_url || "").trim()) {
+    patched.api_base_url = getPublicApiBaseUrl();
   }
-  return out;
+  if (!String(patched.realtime_base_url || "").trim()) {
+    patched.realtime_base_url = resolveRealtimeWsBase(null, process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS);
+  }
+  return patched;
 }
 
 export async function fetchBootstrapContext(

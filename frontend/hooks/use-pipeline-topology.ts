@@ -7,7 +7,7 @@ import { fetchPipelineTopology } from "@/lib/api";
 import { pipelineFromTopologyQuery } from "@/lib/adapt-pipeline-topology";
 import { useExecutionStore } from "@/lib/execution-store";
 import { mlairKeys } from "@/lib/query-keys";
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import type { Pipeline } from "@/lib/pipeline-types";
 
 /** Static pipeline topology (no latest-run overlay) with optional store projection. */
@@ -18,11 +18,13 @@ export function usePipelineTopology(
   token: string,
   enabled: boolean,
 ) {
+  const poll = useRealtimeQueryPolling();
   const topologyQuery = useQuery({
     queryKey: mlairKeys.pipelines.topology(tenantId, projectId, pipelineId),
     queryFn: () => fetchPipelineTopology(tenantId, projectId, pipelineId, token),
     enabled: enabled && Boolean(token?.trim()) && Boolean(pipelineId),
-    ...realtimeFallbackPolling(),
+    refetchOnMount: "always",
+    ...poll,
   });
 
   const storeTopology = useExecutionStore((s) => s.topologies[pipelineId]);

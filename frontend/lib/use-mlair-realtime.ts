@@ -20,6 +20,7 @@ import {
 } from "./execution-realtime-sync";
 import { fetchExecutionProjection, fetchSemanticEventReplay } from "./api";
 import { getRuntimeConfig } from "./runtime-config";
+import { isRealtimeConfigured } from "./realtime-url";
 import { reconcileExecutionSnapshots } from "./execution-reconcile";
 import {
   envelopeSequence,
@@ -38,23 +39,30 @@ const MAX_BACKOFF_MS = 30_000;
 let pendingSerializedKeys: Set<string> = new Set();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-const EXECUTION_IMMEDIATE_KEY_HEADS = new Set([
+const IMMEDIATE_INVALIDATE_KEY_HEADS = new Set([
+  "runs",
   "run",
   "run-tasks",
   "run-logs",
   "run-tracking",
   "run-readiness",
   "run-execution-graph",
+  "pipelines",
+  "pipeline-topology",
+  "pipeline-dag",
+  "datasets",
+  "models",
+  "execution-projection",
 ]);
 
-function isImmediateExecutionKey(key: readonly unknown[]): boolean {
-  return EXECUTION_IMMEDIATE_KEY_HEADS.has(String(key[0] ?? ""));
+function isImmediateInvalidateKey(key: readonly unknown[]): boolean {
+  return IMMEDIATE_INVALIDATE_KEY_HEADS.has(String(key[0] ?? ""));
 }
 
 function scheduleInvalidates(queryClient: QueryClient, keys: readonly (readonly unknown[])[]) {
   const debounced: (readonly unknown[])[] = [];
   for (const k of keys) {
-    if (isImmediateExecutionKey(k)) {
+    if (isImmediateInvalidateKey(k)) {
       queryClient.invalidateQueries({ queryKey: [...k], exact: false });
     } else {
       debounced.push(k);
@@ -385,10 +393,17 @@ function updatedAtMs(iso: string | undefined): number {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
+function envelopePayload(ev: Envelope): Envelope["payload"] & { updated_at: number } {
+  const p = { ...(ev.payload ?? {}) };
+  if (typeof p.updated_at !== "number") {
+    p.updated_at = Math.floor(Date.now() / 1000);
+  }
+  return p as Envelope["payload"] & { updated_at: number };
+}
+
 /** v1.5: merge hot fields into cached run/task queries when payload is sufficient (startUpForRTS §10). */
 function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectId: string, ev: Envelope) {
-  const p = ev.payload;
-  if (!p || typeof p.updated_at !== "number") return;
+  const p = envelopePayload(ev);
   const uaMs = p.updated_at * 1000;
   const typ = ev.type;
   const rid = typeof ev.resource_id === "string" ? ev.resource_id : undefined;
@@ -403,15 +418,26 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
       return { ...old, status, updated_at: iso };
     });
     queryClient.setQueryData<{ items: RunItem[] } | undefined>(mlairKeys.runs.list(tenantId, projectId), (old) => {
-      if (!old?.items) return old;
-      let changed = false;
-      const items = old.items.map((row) => {
-        if (row.run_id !== rid) return row;
-        if (updatedAtMs(row.updated_at) > uaMs) return row;
-        changed = true;
-        return { ...row, status, updated_at: iso };
-      });
-      return changed ? { ...old, items } : old;
+      const items = [...(old?.items ?? [])];
+      const idx = items.findIndex((row) => row.run_id === rid);
+      if (idx >= 0) {
+        const row = items[idx]!;
+        if (updatedAtMs(row.updated_at) <= uaMs) {
+          items[idx] = { ...row, status, updated_at: iso };
+        }
+      } else if (typ === "run.created") {
+        const pipelineId = String(p.pipeline_id || "").trim();
+        items.unshift({
+          run_id: rid,
+          tenant_id: tenantId,
+          project_id: projectId,
+          pipeline_id: pipelineId,
+          status,
+          updated_at: iso,
+          created_at: iso,
+        });
+      }
+      return { items };
     });
     const pipelineId = String(p.pipeline_id || "").trim();
     if (pipelineId) {
@@ -550,19 +576,31 @@ export function useMlairRealtime() {
 
       const eid = data.event_id;
       if (eid && !rememberEventId(eid)) return;
-      const ua = data.payload?.updated_at;
-      const rk = `${data.type ?? ""}:${data.resource_id ?? ""}`;
+
+      const normalized: Envelope = {
+        ...data,
+        payload: envelopePayload(data),
+      };
+
+      const ua = normalized.payload?.updated_at;
+      const rk = `${normalized.type ?? ""}:${normalized.resource_id ?? ""}`;
+      let stalePatch = false;
       if (typeof ua === "number" && rk) {
         const prev = lastUpdated.current.get(rk);
-        if (prev !== undefined && ua < prev) return;
-        lastUpdated.current.set(rk, ua);
+        if (prev !== undefined && ua < prev) stalePatch = true;
+        else lastUpdated.current.set(rk, ua);
       }
-      if (data.type === "ping" || (data as { type?: string }).type === "pong") return;
-      applyRealtimePatch(queryClient, tenantId, projectId, data);
-      useExecutionStore.getState().applyEnvelope(data);
-      const keys = keysForEventWithExecutionSurfaces(queryClient, tenantId, projectId, data);
+
+      if (normalized.type === "ping" || (normalized as { type?: string }).type === "pong") return;
+
+      if (!stalePatch) {
+        applyRealtimePatch(queryClient, tenantId, projectId, normalized);
+      }
+      useExecutionStore.getState().applyEnvelope(normalized);
+
+      const keys = keysForEventWithExecutionSurfaces(queryClient, tenantId, projectId, normalized);
       if (keys.length) scheduleInvalidates(queryClient, keys);
-      bumpSequence(data);
+      bumpSequence(normalized);
     };
 
     const replayMissedEvents = async () => {
@@ -619,8 +657,9 @@ export function useMlairRealtime() {
 
     const connect = () => {
       if (shouldHaltRef.current) return;
+      const rtEnabled = getRuntimeConfig()?.features?.realtime_enabled !== false;
       const base = getRealtimeWsBase();
-      if (!base) {
+      if (!rtEnabled || !isRealtimeConfigured() || !base) {
         setMlairRealtimeUiStatus({ kind: "polling" });
         return;
       }

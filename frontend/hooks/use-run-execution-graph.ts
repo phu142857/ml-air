@@ -8,7 +8,7 @@ import { pipelineFromExecutionGraphQuery } from "@/lib/adapt-pipeline-topology";
 import { useExecutionStore } from "@/lib/execution-store";
 import { mergeTaskStatusesIntoGraph } from "@/lib/merge-execution-graph-tasks";
 import { mlairKeys } from "@/lib/query-keys";
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import type { Pipeline } from "@/lib/pipeline-types";
 
 /**
@@ -21,11 +21,13 @@ export function useRunExecutionGraph(
   token: string,
   enabled: boolean,
 ) {
+  const poll = useRealtimeQueryPolling();
   const graphQuery = useQuery({
     queryKey: mlairKeys.run.executionGraph(tenantId, projectId, runId),
     queryFn: () => fetchRunExecutionGraph(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(token?.trim()) && Boolean(runId),
-    ...realtimeFallbackPolling(),
+    refetchOnMount: "always",
+    ...poll,
   });
 
   const storeGraph = useExecutionStore((s) => s.executionGraphs[runId]);

@@ -1213,9 +1213,21 @@ def whoami_v1(authorization: str | None = Header(default=None)) -> dict:
     }
 
 
+def _runtime_realtime_base_url() -> str:
+    """Browser WebSocket root; default on so Hub sync works without per-deploy frontend env."""
+    explicit = os.getenv("ML_AIR_RUNTIME_REALTIME_BASE_URL", "").strip()
+    if explicit:
+        return explicit
+    if os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return ""
+    return os.getenv("ML_AIR_RUNTIME_REALTIME_DEFAULT_URL", "ws://localhost:8001").strip() or "ws://localhost:8001"
+
+
 @router.get("/runtime-config")
 def runtime_config_v1() -> dict:
     features = {
+        "realtime_enabled": os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower()
+        not in {"0", "false", "no", "off"},
         "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
         "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
         "strict_dataset_version_all_post_runs": _strict_dataset_version_all_post_runs(),
@@ -1240,7 +1252,7 @@ def runtime_config_v1() -> dict:
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
         "api_base_url": os.getenv("ML_AIR_RUNTIME_API_BASE_URL", "").strip() or None,
-        "realtime_base_url": os.getenv("ML_AIR_RUNTIME_REALTIME_BASE_URL", "").strip() or None,
+        "realtime_base_url": _runtime_realtime_base_url() or None,
         "default_tenant_hint": os.getenv("ML_AIR_DEFAULT_TENANT", "default"),
         "default_project_hint": os.getenv("ML_AIR_DEFAULT_PROJECT", "default_project"),
         "features": features,

@@ -38,9 +38,11 @@ export function reduceExecutionEnvelope(
   ev: ExecutionEnvelope,
 ): ExecutionStoreSlice {
   const p = ev.payload;
-  if (!p || typeof p.updated_at !== "number") return state;
+  if (!p || typeof p.status !== "string") return state;
 
-  const uaMs = p.updated_at * 1000;
+  const updatedAt =
+    typeof p.updated_at === "number" ? p.updated_at : Math.floor(Date.now() / 1000);
+  const uaMs = updatedAt * 1000;
   const typ = ev.type;
   const rid = typeof ev.resource_id === "string" ? ev.resource_id : undefined;
   const runFromPayload = typeof p.run_id === "string" ? p.run_id : undefined;
@@ -49,7 +51,7 @@ export function reduceExecutionEnvelope(
 
   if ((typ === "run.updated" || typ === "run.created") && rid && typeof p.status === "string") {
     const status = p.status;
-    const iso = isoFromUnix(p.updated_at);
+    const iso = isoFromUnix(updatedAt);
     const prevRun = runs[rid];
     if (prevRun && updatedAtMs(prevRun.updated_at) > uaMs) {
       return state;
@@ -67,7 +69,7 @@ export function reduceExecutionEnvelope(
 
   if (typ === "task.updated" && runFromPayload && rid && typeof p.status === "string") {
     const status = p.status;
-    const iso = isoFromUnix(p.updated_at);
+    const iso = isoFromUnix(updatedAt);
     const runId = runFromPayload;
     const prevTasks = tasksByRun[runId] ?? {};
     const prevTask = prevTasks[rid];

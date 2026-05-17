@@ -25,7 +25,15 @@ export function AppProviders({ children }: PropsWithChildren) {
       if (!existing) {
         try {
           const rc = await fetchRuntimeConfig({ preferRelative: true });
-          g.__ML_AIR_RUNTIME_CONFIG__ = { ...(g.__ML_AIR_RUNTIME_CONFIG__ || {}), ...(rc || {}) };
+          g.__ML_AIR_RUNTIME_CONFIG__ = {
+            ...(g.__ML_AIR_RUNTIME_CONFIG__ || {}),
+            ...(rc || {}),
+            features: {
+              ...(g.__ML_AIR_RUNTIME_CONFIG__?.features || {}),
+              ...(rc?.features || {}),
+              realtime_enabled: rc?.features?.realtime_enabled !== false,
+            },
+          };
           window.dispatchEvent(new Event("mlair-runtime-config-updated"));
         } catch {
           // ignore: env/build-time config fallback remains
