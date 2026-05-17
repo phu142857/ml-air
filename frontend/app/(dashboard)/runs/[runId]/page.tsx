@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useMemo, useState, type ReactNode } from "react"
+import { use, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
@@ -38,6 +38,9 @@ import {
   SubpageBreadcrumb,
 } from "@/components/mlops/layout"
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
+import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
+import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
+import { useExecutionStore } from "@/lib/execution-store"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
 import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
@@ -59,12 +62,14 @@ import {
 } from "@/lib/api"
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
 import { normalizeStatus } from "@/lib/status-style"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
 
 const RUN_TABS = [
   { id: "overview", label: "Overview" },
+  { id: "graph", label: "Execution graph", icon: <Network className="h-3.5 w-3.5" /> },
   { id: "tasks", label: "Tasks", icon: <ListTodo className="h-3.5 w-3.5" /> },
   { id: "logs", label: "Logs", icon: <Terminal className="h-3.5 w-3.5" /> },
   { id: "metrics", label: "Metrics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
@@ -74,6 +79,7 @@ const RUN_TABS = [
 
 const RUN_TAB_SKELETON: Record<string, "grid" | "table" | "terminal" | "chart"> = {
   overview: "grid",
+  graph: "grid",
   tasks: "table",
   logs: "terminal",
   metrics: "chart",
@@ -200,17 +206,34 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
 
+  const hydrateRunSnapshot = useExecutionStore((s) => s.hydrateRunSnapshot)
+  const storeRun = useExecutionStore((s) => s.runs[runId])
+  const storeTasks = useExecutionStore((s) => s.tasksByRun[runId])
+
+  const activeRunRefetchMs = (status: string | undefined) => {
+    const st = normalizeStatus(String(status ?? storeRun?.status ?? ""))
+    return st === "RUNNING" || st === "PENDING" || st === "QUEUED" ? 4000 : false
+  }
+
   const runQuery = useQuery({
     queryKey: mlairKeys.run.detail(runId),
     queryFn: () => fetchRun(tenantId, projectId, runId, token),
     enabled,
+    refetchOnMount: "always",
+    refetchInterval: (q) => activeRunRefetchMs(q.state.data?.status),
+    ...realtimeFallbackPolling(),
   })
 
   const tasksQuery = useQuery({
     queryKey: mlairKeys.run.tasks(runId),
     queryFn: () => fetchRunTasks(tenantId, projectId, runId, token),
-    enabled: enabled && Boolean(runQuery.data),
+    enabled,
+    refetchOnMount: "always",
+    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status),
+    ...realtimeFallbackPolling(),
   })
+
+  useRunExecutionGraph(tenantId, projectId, runId, token, enabled)
 
   const logsQuery = useQuery({
     queryKey: mlairKeys.run.logs(runId),
@@ -226,7 +249,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   })
 
   const readinessQuery = useQuery({
-    queryKey: [...mlairKeys.run.detail(runId), "readiness"] as const,
+    queryKey: mlairKeys.run.readiness(runId),
     queryFn: () => fetchRunReadiness(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
     retry: false,
@@ -242,11 +265,27 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     enabled: enabled && Boolean(runQuery.data),
   })
 
-  const run = runQuery.data
+  useEffect(() => {
+    if (runQuery.data && tasksQuery.data?.items) {
+      hydrateRunSnapshot(runQuery.data, tasksQuery.data.items)
+    }
+  }, [runQuery.data, tasksQuery.data?.items, hydrateRunSnapshot])
+
+  const run = useMemo(() => {
+    const base = runQuery.data
+    if (!base) return storeRun
+    if (!storeRun) return base
+    return { ...base, ...storeRun, status: storeRun.status ?? base.status }
+  }, [runQuery.data, storeRun])
+
   const sk = run ? runStatusRowKey(run.status) : "pending"
   const status = statusConfig[sk]
   const traceId = run ? pickTraceId(run) : null
-  const tasks = tasksQuery.data?.items ?? []
+  const tasks = useMemo(() => {
+    const fromStore = storeTasks ? Object.values(storeTasks) : []
+    if (fromStore.length) return fromStore
+    return tasksQuery.data?.items ?? []
+  }, [storeTasks, tasksQuery.data?.items])
   const gateResults = useMemo(() => readinessToGateRows(readinessQuery.data), [readinessQuery.data])
   const timelineEvents = useMemo(
     () => mapAuditTimelineItems(timelineQuery.data?.items ?? []),
@@ -541,6 +580,25 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 ) : null}
               </>
             ) : null}
+          </RunTabPanel>
+        </TabsContent>
+
+        <TabsContent value="graph" className="flex-1 overflow-auto p-6 mt-0">
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.graph}>
+            <DetailSection
+              title="Execution graph"
+              description="Runtime DAG for this run only — node status reflects tasks in this execution."
+              accentBorder="sky"
+            >
+              <RunExecutionGraph
+                tenantId={tenantId}
+                projectId={projectId}
+                runId={runId}
+                token={token}
+                enabled={enabled}
+                className="min-h-[320px]"
+              />
+            </DetailSection>
           </RunTabPanel>
         </TabsContent>
 

@@ -14,6 +14,8 @@ export const mlairKeys = {
   },
   run: {
     detail: (runId: string) => ["run", runId] as const,
+    executionGraph: (tenantId: string, projectId: string, runId: string) =>
+      ["run-execution-graph", tenantId, projectId, runId] as const,
     tasks: (runId: string) => ["run-tasks", runId] as const,
     logs: (runId: string) => ["run-logs", runId] as const,
     tracking: (runId: string) => ["run-tracking", runId] as const,
@@ -82,8 +84,14 @@ export const mlairKeys = {
       targetStage: string
     ) => ["model-promotion-eligibility", tenantId, projectId, modelId, version, targetStage] as const
   },
+  execution: {
+    projection: (tenantId: string, projectId: string) =>
+      ["execution-projection", tenantId, projectId] as const,
+  },
   pipelines: {
     list: (tenantId: string, projectId: string) => ["pipelines", tenantId, projectId] as const,
+    topology: (tenantId: string, projectId: string, pipelineId: string) =>
+      ["pipeline-topology", tenantId, projectId, pipelineId] as const,
     dag: (tenantId: string, projectId: string, pipelineId: string) =>
       ["pipeline-dag", tenantId, projectId, pipelineId] as const,
     versions: (tenantId: string, projectId: string, pipelineId: string) =>

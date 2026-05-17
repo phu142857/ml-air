@@ -12,15 +12,13 @@ import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/compon
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
-import { fetchPipelineDag, fetchPipelines } from "@/lib/api"
+import { fetchPipelines } from "@/lib/api"
+import { usePipelineTopology } from "@/hooks/use-pipeline-topology"
 import { mlairKeys } from "@/lib/query-keys"
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import {
-  dagDataMatchesPipeline,
-  normalizePipelineForDag,
-  pipelineFromDagQueryData,
-} from "@/lib/adapt-pipeline-dag"
+import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
 
 const statusConfig = {
@@ -101,6 +99,7 @@ export default function PipelinesPage() {
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token),
     enabled: Boolean(token?.trim()),
+    ...realtimeFallbackPolling(),
   })
 
   const items = pipelinesQuery.data?.items ?? []
@@ -117,62 +116,54 @@ export default function PipelinesPage() {
 
   const selected = useMemo(() => items.find((p) => p.pipeline_id === selectedId) ?? null, [items, selectedId])
 
-  const dagEnabled = Boolean(selectedId && token.trim()) && scopePinned
+  const topologyEnabled = Boolean(selectedId && token.trim()) && scopePinned
 
-  const dagQuery = useQuery({
-    queryKey: mlairKeys.pipelines.dag(tenantId, projectId, selectedId || ""),
-    queryFn: () => fetchPipelineDag(tenantId, projectId, selectedId!, token),
-    enabled: dagEnabled && Boolean(selectedId),
-    retry: false,
-  })
-
-  const dagDataReady =
-    Boolean(selectedId) && dagDataMatchesPipeline(dagQuery.data, selectedId || "")
-
-  const dagPipeline = useMemo(
-    () =>
-      selectedId && dagDataReady ? pipelineFromDagQueryData(selectedId, dagQuery.data) : null,
-    [selectedId, dagQuery.data, dagDataReady],
+  const {
+    topologyQuery,
+    pipeline: topologyPipeline,
+    isLoading: topologyLoading,
+  } = usePipelineTopology(
+    tenantId,
+    projectId,
+    selectedId || "",
+    token,
+    topologyEnabled && Boolean(selectedId),
   )
-
-  const dagLoading =
-    dagEnabled &&
-    Boolean(selectedId) &&
-    !dagDataReady &&
-    (dagQuery.isLoading || dagQuery.isFetching)
 
   const displayPipeline: Pipeline | null = useMemo(() => {
     if (!selectedId) return null
-    if (dagPipeline) return normalizePipelineForDag(dagPipeline) ?? dagPipeline
-    const label = !dagEnabled
-      ? "Select a single tenant + project to load DAG"
-      : dagLoading
-        ? "Loading DAG…"
-        : dagQuery.isError
-          ? `DAG error — ${formatApiClientError(dagQuery.error)}`
-          : "No DAG preview"
+    if (topologyPipeline) return normalizePipelineForDag(topologyPipeline) ?? topologyPipeline
+    const label = !topologyEnabled
+      ? "Select a single tenant + project to load topology"
+      : topologyLoading
+        ? "Loading topology…"
+        : topologyQuery.isError
+          ? `Topology error — ${formatApiClientError(topologyQuery.error)}`
+          : "No topology preview"
     return {
       id: selectedId,
       name: selectedId,
       version: selected?.latest_run_id ? `last run ${selected.latest_run_id.slice(0, 10)}…` : "—",
-      status: ((): Pipeline["status"] => {
-        const m = mapListStatus(selected?.latest_status || "")
-        if (m === "failed") return "failed"
-        if (m === "running") return "running"
-        if (m === "success") return "success"
-        return "idle"
-      })(),
+      status: "idle" as const,
       stages: [
         {
           id: "_preview",
           name: label.slice(0, 120),
           type: "transform",
-          status: dagLoading ? "running" : "idle",
+          status: topologyLoading ? "running" : "idle",
           dependencies: [],
         },
       ],
     }
-  }, [selectedId, dagPipeline, dagLoading, dagQuery.isError, dagQuery.error, dagEnabled, selected])
+  }, [
+    selectedId,
+    topologyPipeline,
+    topologyLoading,
+    topologyQuery.isError,
+    topologyQuery.error,
+    topologyEnabled,
+    selected,
+  ])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -257,7 +248,7 @@ export default function PipelinesPage() {
                 <MlopsEmptyState
                   icon={GitBranch}
                   title="Select a pipeline"
-                  description="Choose a pipeline from the list to preview its DAG."
+                  description="Choose a pipeline from the list to preview its topology."
                   className="border-0 bg-transparent p-0"
                 />
               ) : (
@@ -326,7 +317,7 @@ export default function PipelinesPage() {
                   </div>
 
                   <div>
-                    <h3 className="mb-3 text-sm font-medium text-muted-foreground">Pipeline DAG</h3>
+                    <h3 className="mb-3 text-sm font-medium text-muted-foreground">Pipeline topology</h3>
                     <PipelineDAG key={selectedId} pipeline={displayPipeline} />
                   </div>
 

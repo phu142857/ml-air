@@ -4,6 +4,7 @@ import { useQueries } from "@tanstack/react-query"
 import { fetchDatasets, fetchModels, fetchPipelines, fetchRuns } from "@/lib/api"
 import { useAppContext } from "@/lib/app-context"
 import { mlairKeys } from "@/lib/query-keys"
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
 import { isScopePinned } from "@/lib/scope"
 
 export function useDashboardStats() {
@@ -11,27 +12,32 @@ export function useDashboardStats() {
   const isAggregate = !isScopePinned(tenantId, projectId)
   const enabled = Boolean(token?.trim())
 
+  const poll = realtimeFallbackPolling()
   const results = useQueries({
     queries: [
       {
         queryKey: mlairKeys.datasets.list(tenantId, projectId),
         queryFn: () => fetchDatasets(tenantId, projectId, token),
         enabled,
+        ...poll,
       },
       {
         queryKey: mlairKeys.pipelines.list(tenantId, projectId),
         queryFn: () => fetchPipelines(tenantId, projectId, token),
         enabled,
+        ...poll,
       },
       {
         queryKey: mlairKeys.runs.list(tenantId, projectId),
         queryFn: () => fetchRuns(tenantId, projectId, token),
         enabled,
+        ...poll,
       },
       {
         queryKey: mlairKeys.models.list(tenantId, projectId),
         queryFn: () => fetchModels(tenantId, projectId, token),
         enabled,
+        ...poll,
       },
     ],
   })

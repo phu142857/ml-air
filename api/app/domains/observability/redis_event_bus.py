@@ -11,6 +11,7 @@ logger = logging.getLogger("mlair.observability.redis_event_bus")
 
 def publish_semantic_envelope_to_redis(event: dict[str, Any]) -> bool:
     """Publish a v1 envelope to ``mlair.events.{tenant}.{project}`` when realtime is enabled."""
+    from app.domains.observability import event_sequence_service
     from app.domains.shared.queue_service import redis_client
 
     tenant_id = str(event.get("tenant_id") or "").strip()
@@ -18,6 +19,11 @@ def publish_semantic_envelope_to_redis(event: dict[str, Any]) -> bool:
     ev_type = str(event.get("type") or "")
     if not tenant_id or not project_id or not ev_type:
         return False
+    event = event_sequence_service.assign_sequence_and_buffer(event)
+    from app.domains.observability import event_stream_service, execution_projection_service
+
+    event_stream_service.append_event_streams(event)
+    execution_projection_service.apply_execution_event(event)
     channel = f"mlair.events.{tenant_id}.{project_id}"
     try:
         redis_client().publish(channel, json.dumps(event, separators=(",", ":"), default=str))

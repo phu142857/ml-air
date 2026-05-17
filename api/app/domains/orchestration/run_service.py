@@ -249,6 +249,7 @@ def create_run(
         run_id=str(created[0]),
         status="PENDING",
         updated_at=created[16],
+        pipeline_id=pipeline_id,
         trace_id=trace_id,
     )
     return _row_to_run(created)
@@ -323,6 +324,7 @@ def mark_run_running(run_id: str) -> None:
                 run_id=str(row["run_id"]),
                 status=str(row["status"]),
                 updated_at=_parse_updated_at_dt(row.get("updated_at")),
+                pipeline_id=str(row.get("pipeline_id") or "") or None,
                 trace_id=get_trace_id(),
             )
 
@@ -351,6 +353,7 @@ def set_run_status(run_id: str, status: str) -> bool:
                 run_id=str(row["run_id"]),
                 status=str(row["status"]),
                 updated_at=_parse_updated_at_dt(row.get("updated_at")),
+                pipeline_id=str(row.get("pipeline_id") or "") or None,
                 trace_id=get_trace_id(),
             )
             if normalized == "SUCCESS":
@@ -439,7 +442,11 @@ def list_pipelines(tenant_id: str, project_id: str, limit: int = 100, offset: in
     return ordered[safe_offset : safe_offset + safe_limit]
 
 
-def _dag_from_pipeline_config(cfg: Any) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+def _dag_from_pipeline_config(
+    cfg: Any,
+    *,
+    default_status: str = "PENDING",
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     if not isinstance(cfg, dict):
         return [], []
     tasks = cfg.get("tasks")
@@ -453,12 +460,119 @@ def _dag_from_pipeline_config(cfg: Any) -> tuple[list[dict[str, str]], list[dict
         tid = str(t.get("id") or "").strip()
         if not tid:
             continue
-        nodes.append({"id": tid, "label": tid, "status": "PENDING"})
+        nodes.append({"id": tid, "label": tid, "status": default_status})
         for dep in t.get("depends_on") or []:
             d = str(dep).strip()
             if d:
                 edges.append({"source": d, "target": tid})
     return nodes, edges
+
+
+def _resolve_run_pipeline_config(run: dict) -> tuple[dict | None, str | None]:
+    """Config used to build DAG nodes: run snapshot, then pinned pipeline version."""
+    snap = run.get("config_snapshot")
+    if isinstance(snap, dict) and isinstance(snap.get("tasks"), list):
+        return snap, str(run.get("pipeline_version_id") or "") or None
+    pv_id = str(run.get("pipeline_version_id") or "").strip()
+    if pv_id:
+        ver = pvs.get_pipeline_version(pv_id)
+        cfg = (ver or {}).get("config")
+        if isinstance(cfg, dict):
+            return cfg, pv_id
+    return None, None
+
+
+def get_pipeline_topology(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
+    """Static pipeline DAG from latest version config — no run status overlay."""
+    nodes: list[dict[str, str]] = []
+    edges: list[dict[str, str]] = []
+    version_id: str | None = None
+    version_num: int | None = None
+
+    vid = pvs.get_latest_version_id(tenant_id, project_id, pipeline_id)
+    if vid:
+        ver = pvs.get_pipeline_version(vid)
+        cfg = (ver or {}).get("config")
+        nodes, edges = _dag_from_pipeline_config(cfg, default_status="idle")
+        version_id = vid
+        if ver and ver.get("version") is not None:
+            try:
+                version_num = int(ver["version"])
+            except (TypeError, ValueError):
+                version_num = None
+
+    return {
+        "pipeline_id": pipeline_id,
+        "nodes": [{"id": n["id"], "label": n["label"]} for n in nodes],
+        "edges": edges,
+        "from_config": bool(nodes),
+        "pipeline_version_id": version_id,
+        "version": version_num,
+    }
+
+
+def get_run_execution_graph(tenant_id: str, project_id: str, run_id: str) -> dict | None:
+    """
+    Runtime execution graph for one run: topology from run config + task statuses for that run only.
+    """
+    from app.domains.orchestration.task_service import list_tasks_by_run
+
+    run = get_run(run_id)
+    if not run:
+        return None
+    if str(run.get("tenant_id") or "") != tenant_id or str(run.get("project_id") or "") != project_id:
+        return None
+
+    cfg, pv_id = _resolve_run_pipeline_config(run)
+    nodes, edges = _dag_from_pipeline_config(cfg, default_status="PENDING")
+    if not nodes:
+        tasks = list_tasks_by_run(run_id)
+        if tasks:
+            task_ids = [str(t["task_id"]) for t in tasks]
+            nodes = [{"id": tid, "label": tid, "status": str(t.get("status") or "PENDING")} for tid in task_ids]
+            edges = [
+                {"source": task_ids[i - 1], "target": task_ids[i]} for i in range(1, len(task_ids))
+            ]
+        return {
+            "pipeline_id": str(run.get("pipeline_id") or ""),
+            "run_id": run_id,
+            "run_status": str(run.get("status") or ""),
+            "pipeline_version_id": pv_id,
+            "nodes": nodes,
+            "edges": edges,
+        }
+
+    status_by_task: dict[str, str] = {}
+
+    def _task_lookup_key(task_id: str) -> str:
+        prefix = f"{run_id}:"
+        tid = str(task_id or "").strip()
+        if tid.startswith(prefix):
+            return tid[len(prefix) :]
+        return tid
+
+    for t in list_tasks_by_run(run_id):
+        tid = str(t["task_id"])
+        st = str(t.get("status") or "PENDING")
+        status_by_task[tid] = st
+        status_by_task[_task_lookup_key(tid)] = st
+
+    nodes = [
+        {
+            "id": n["id"],
+            "label": n["label"],
+            "status": status_by_task.get(n["id"], n.get("status", "PENDING")),
+        }
+        for n in nodes
+    ]
+    return {
+        "pipeline_id": str(run.get("pipeline_id") or ""),
+        "run_id": run_id,
+        "run_status": str(run.get("status") or ""),
+        "pipeline_version_id": pv_id,
+        "nodes": nodes,
+        "edges": edges,
+    }
 
 
 def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:

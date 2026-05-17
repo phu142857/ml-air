@@ -23,6 +23,22 @@ from app.domains.lifecycle.realtime_events import (
 
 
 class TestRealtimeEvents(unittest.TestCase):
+    def test_emit_run_updated_includes_pipeline_id(self) -> None:
+        from app.domains.lifecycle import realtime_events as rt
+
+        with patch.object(rt, "publish_mlair_event") as mock_pub:
+            rt.emit_run_updated(
+                tenant_id="t1",
+                project_id="p1",
+                run_id="run-9",
+                status="RUNNING",
+                updated_at=None,
+                pipeline_id="pipe-a",
+            )
+        ev = mock_pub.call_args[0][0]
+        self.assertEqual(ev["payload"]["pipeline_id"], "pipe-a")
+        self.assertEqual(ev["payload"]["run_id"], "run-9")
+
     def test_build_event_shape(self) -> None:
         ev = build_event(
             event_type=EventType.RUN_CREATED,
@@ -42,10 +58,9 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertIsInstance(ev["timestamp"], float)
 
     @patch("app.domains.lifecycle.realtime_events.realtime_enabled", return_value=True)
-    @patch("app.domains.lifecycle.realtime_events.redis_client")
-    def test_publish_uses_channel(self, mock_redis: MagicMock, _enabled: MagicMock) -> None:
-        client = MagicMock()
-        mock_redis.return_value = client
+    @patch("app.domains.observability.redis_event_bus.publish_semantic_envelope_to_redis")
+    def test_publish_uses_redis_bus(self, mock_pub: MagicMock, _enabled: MagicMock) -> None:
+        mock_pub.return_value = True
         ev = build_event(
             event_type=EventType.TASK_UPDATED,
             tenant_id="default",
@@ -55,11 +70,9 @@ class TestRealtimeEvents(unittest.TestCase):
             trace_id="t1",
         )
         publish_mlair_event(ev)
-        client.publish.assert_called_once()
-        channel, raw = client.publish.call_args[0]
-        self.assertEqual(channel, "mlair.events.default.default_project")
-        parsed = json.loads(raw)
-        self.assertEqual(parsed["type"], "task.updated")
+        mock_pub.assert_called_once()
+        published = mock_pub.call_args[0][0]
+        self.assertEqual(published["type"], "task.updated")
 
     def test_realtime_enabled_default(self) -> None:
         self.assertTrue(realtime_enabled())

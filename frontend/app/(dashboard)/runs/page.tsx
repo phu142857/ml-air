@@ -14,6 +14,7 @@ import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } f
 import { useAppContext } from "@/lib/app-context"
 import { fetchRuns, type RunItem } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { normalizeStatus } from "@/lib/status-style"
@@ -152,6 +153,7 @@ export default function RunsPage() {
     queryKey: mlairKeys.runs.list(tenantId, projectId),
     queryFn: () => fetchRuns(tenantId, projectId, token),
     enabled: Boolean(token?.trim()),
+    ...realtimeFallbackPolling(),
   })
 
   const rows = runsQuery.data?.items ?? []

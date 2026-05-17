@@ -12,6 +12,14 @@ vi.mock("./app-context", () => ({
   })
 }));
 
+vi.mock("./api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./api")>();
+  return {
+    ...actual,
+    fetchSemanticEventReplay: vi.fn().mockResolvedValue({ items: [], last_sequence: 0 }),
+  };
+});
+
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
 
@@ -67,6 +75,33 @@ describe("useMlairRealtime", () => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
     globalThis.WebSocket = originalWebSocket;
+  });
+
+  it("invalidates pipeline dag when run.updated includes pipeline_id", () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { unmount } = renderWithQueryClient(queryClient);
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emitJson({
+      version: "v1",
+      event_id: "evt-pipe-1",
+      type: "run.updated",
+      resource_id: "run-1",
+      payload: {
+        status: "RUNNING",
+        updated_at: 1710000000,
+        pipeline_id: "pipe-train",
+        run_id: "run-1",
+      },
+    });
+    vi.advanceTimersByTime(400);
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["pipeline-dag", "t1", "p1", "pipe-train"],
+      exact: false,
+    });
+    unmount();
   });
 
   it("deduplicates by event_id before invalidation", () => {

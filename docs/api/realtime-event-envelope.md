@@ -13,6 +13,7 @@ MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.
 | `project_id` | yes | Scope |
 | `resource_id` | often | Primary subject id when the event is about a single row (run, dataset, model, …); may be `null` |
 | `timestamp` | yes | Unix epoch seconds (float) |
+| `sequence` | optional | Monotonic int per `tenant_id` + `project_id` (Redis); used for reconnect replay |
 | `trace_id` | optional | Correlates with API logs when set |
 | `payload` | yes | Type-specific object (may be empty `{}`) |
 | `integrity` | optional | HMAC block when **`ML_AIR_SEMANTIC_EVENT_SIGNING=1`** — see [Production maturity](../guides/production-maturity.md) |
@@ -33,14 +34,20 @@ MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.
 | `eligibility.updated` | `run_id` or `model_id` | Same as training/model eligibility plus **`kind`**: `training` \| `model` |
 | `model.promoted` | `model_id` | `model_id`, `version`, `stage`, `updated_at`, … |
 | `model.eligibility.updated` | `model_id` | `model_id`, `action`, `updated_at`, optional `version`, `stage`, `approval_status` |
-| `run.created` / `run.updated` | `run_id` | `status`, `updated_at`, … |
-| `task.updated` | `task_id` | `run_id`, `status`, `updated_at`, … |
+| `run.created` / `run.updated` | `run_id` | `status`, `updated_at`, `run_id`, optional `pipeline_id` |
+| `task.updated` | `task_id` | `run_id`, `status`, `updated_at`, optional `pipeline_id` |
 
 Aliases and additional types are defined in [`api/app/domains/lifecycle/realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py) (`EventType`).
 
+## Reconnect replay (Phase 3)
+
+- **`GET /v1/tenants/{tenant_id}/projects/{project_id}/semantic-events/replay`** — query `after_sequence` (default `0`), `limit` (max 500). Returns `{ "items": [ …envelopes… ], "last_sequence": <int>, "source": "stream" | "buffer" }`. Prefers the Redis Stream when `ML_AIR_EVENT_STREAM=1`, else the Phase 3 list buffer.
+- **`GET /v1/tenants/{tenant_id}/projects/{project_id}/execution-projection`** — Redis snapshot of run/pipeline hot status when `ML_AIR_EXECUTION_PROJECTION=1` (viewer).
+- Browser clients persist the last applied `sequence` per scope and call replay after WebSocket reconnect before applying live frames.
+
 ## Consumers
 
-- **Web UI:** `NEXT_PUBLIC_MLAIR_REALTIME_WS` + `useMlairRealtime` (debounced invalidation).
+- **Web UI:** `NEXT_PUBLIC_MLAIR_REALTIME_WS` + `useMlairRealtime` (debounced invalidation, sequence guard, replay + 60s reconcile).
 - **Automation:** subscribe to the Redis channel or extend the audit export path ([`GET .../audit/timeline/export`](./overview.md)) for persisted history.
 
 ## Contract testing (integrators)

@@ -725,6 +725,79 @@ export async function triggerRun(
   return data as RunItem;
 }
 
+export type SemanticEventEnvelope = {
+  version?: string;
+  event_id?: string;
+  type?: string;
+  tenant_id?: string;
+  project_id?: string;
+  resource_id?: string | null;
+  timestamp?: number;
+  sequence?: number;
+  trace_id?: string | null;
+  payload?: Record<string, unknown>;
+};
+
+export type ExecutionProjection = {
+  version?: number;
+  updated_at?: string;
+  runs?: Record<
+    string,
+    {
+      run_id: string;
+      status: string;
+      pipeline_id?: string;
+      updated_at?: string;
+      sequence?: number;
+    }
+  >;
+  pipelines?: Record<
+    string,
+    {
+      pipeline_id: string;
+      latest_run_id?: string;
+      latest_status?: string;
+      updated_at?: string;
+    }
+  >;
+};
+
+export async function fetchExecutionProjection(
+  tenantId: string,
+  projectId: string,
+  token: string,
+): Promise<ExecutionProjection> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/execution-projection`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ExecutionProjection;
+}
+
+export async function fetchSemanticEventReplay(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  afterSequence: number,
+  limit = 200,
+): Promise<{ items: SemanticEventEnvelope[]; last_sequence: number }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams({
+    after_sequence: String(Math.max(0, afterSequence)),
+    limit: String(Math.min(500, Math.max(1, limit))),
+  });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/semantic-events/replay?${q}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: SemanticEventEnvelope[]; last_sequence: number };
+}
+
 export async function fetchRun(tenantId: string, projectId: string, runId: string, token: string) {
   const scopedProjectId = normalizeProjectId(projectId);
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}`, {
@@ -829,6 +902,40 @@ export async function fetchPipelineDag(tenantId: string, projectId: string, pipe
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { pipeline_id: string; run_id?: string; nodes: Array<{ id: string; label: string; status: string }>; edges: Array<{ source: string; target: string }> };
+}
+
+/** Static pipeline topology (no latest-run status overlay). */
+export async function fetchPipelineTopology(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string,
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/pipelines/${encodeURIComponent(pipelineId)}/topology`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as import("./execution-graph-types").PipelineTopology;
+}
+
+/** Runtime execution graph for a single run. */
+export async function fetchRunExecutionGraph(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${encodeURIComponent(runId)}/execution-graph`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as import("./execution-graph-types").RunExecutionGraph;
 }
 
 export async function fetchPipelineVersions(

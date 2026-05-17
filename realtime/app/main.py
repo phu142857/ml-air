@@ -38,6 +38,9 @@ PING_INTERVAL = float(os.getenv("MLAIR_REALTIME_PING_SECONDS", "30"))
 MAX_PENDING_SENDS = max(1, int(os.getenv("MLAIR_REALTIME_MAX_PENDING_SENDS", "64")))
 METRICS_PORT = int(os.getenv("ML_AIR_REALTIME_METRICS_PORT", "9104"))
 COALESCE_MS = float(os.getenv("MLAIR_REALTIME_COALESCE_MS", "150"))
+STREAM_FANOUT = os.getenv("MLAIR_REALTIME_STREAM_FANOUT", "").strip() == "1"
+GLOBAL_STREAM_KEY = "mlair.events.durable"
+STREAM_BLOCK_MS = max(100, int(os.getenv("MLAIR_REALTIME_STREAM_BLOCK_MS", "1000")))
 
 
 class ConnectionManager:
@@ -137,6 +140,43 @@ async def _ws_ping_loop(ws: WebSocket) -> None:
             return
 
 
+async def _stream_fanout_listener(coalescer: RealtimeCoalescer, r: redis_asyncio.Redis) -> None:
+    """Optional durable-bus consumer: XREAD global stream → same coalesced WS fan-out as pub/sub."""
+    last_id = os.getenv("MLAIR_REALTIME_STREAM_START_ID", "$").strip() or "$"
+    logger.info("realtime_stream_fanout_started stream=%s start_id=%s", GLOBAL_STREAM_KEY, last_id)
+    try:
+        while True:
+            try:
+                batches = await r.xread({GLOBAL_STREAM_KEY: last_id}, block=STREAM_BLOCK_MS, count=64)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("stream_fanout_xread_failed err=%s", exc)
+                await asyncio.sleep(1.0)
+                continue
+            if not batches:
+                continue
+            for _stream_name, entries in batches:
+                for entry_id, field_map in entries:
+                    last_id = entry_id
+                    raw_env = field_map.get("envelope")
+                    if not raw_env:
+                        continue
+                    try:
+                        event: dict[str, Any] = json.loads(raw_env)
+                    except json.JSONDecodeError:
+                        continue
+                    tid = str(event.get("tenant_id") or field_map.get("tenant_id") or "").strip()
+                    pid = str(event.get("project_id") or field_map.get("project_id") or "").strip()
+                    if not tid or not pid:
+                        continue
+                    event.setdefault("tenant_id", tid)
+                    event.setdefault("project_id", pid)
+                    await coalescer.push(event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("stream_fanout_listener_stopped err=%s", exc)
+
+
 async def _redis_listener(coalescer: RealtimeCoalescer, r: redis_asyncio.Redis) -> None:
     pubsub = r.pubsub()
     await pubsub.psubscribe("mlair.events.*")
@@ -193,12 +233,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.coalescer = coalescer
     app.state.redis = r
     listener = asyncio.create_task(_redis_listener(coalescer, r))
+    stream_listener: asyncio.Task[None] | None = None
+    if STREAM_FANOUT:
+        stream_listener = asyncio.create_task(_stream_fanout_listener(coalescer, r))
     logger.info(
-        "realtime_started redis=%s metrics_port=%s max_pending_sends=%s coalesce_ms=%s",
+        "realtime_started redis=%s metrics_port=%s max_pending_sends=%s coalesce_ms=%s stream_fanout=%s",
         REDIS_URL.split("@")[-1],
         METRICS_PORT,
         MAX_PENDING_SENDS,
         COALESCE_MS,
+        STREAM_FANOUT,
     )
     try:
         yield
@@ -206,6 +250,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         listener.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await listener
+        if stream_listener is not None:
+            stream_listener.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await stream_listener
         await coalescer.shutdown()
         await manager.close_all()
         await r.aclose()

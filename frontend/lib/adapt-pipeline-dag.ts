@@ -16,7 +16,7 @@ function inferStageType(label: string): PipelineStage["type"] {
   return "transform";
 }
 
-function mapNodeStatus(raw: string): PipelineStage["status"] {
+export function mapNodeStatus(raw: string): PipelineStage["status"] {
   const u = String(raw || "")
     .trim()
     .toUpperCase();

@@ -41,6 +41,7 @@
     "project_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "resource_id": { "type": ["string", "null"], "maxLength": 256 },
     "timestamp": { "type": "number" },
+    "sequence": { "type": "integer", "minimum": 1 },
     "trace_id": { "type": ["string", "null"], "maxLength": 128 },
     "payload": { "type": "object" },
     "integrity": {

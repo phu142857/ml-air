@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import {
   ReactFlow,
   Background,
@@ -190,8 +190,13 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
     return { nodes: initialNodes, edges: initialEdges, canvasHeight }
   }, [stages, flowEdgeStroke])
 
-  const [nodesState] = useNodesState(nodes)
-  const [edgesState] = useEdgesState(edges)
+  const [nodesState, setNodes, onNodesChange] = useNodesState(nodes)
+  const [edgesState, setEdges, onEdgesChange] = useEdgesState(edges)
+
+  useEffect(() => {
+    setNodes(nodes)
+    setEdges(edges)
+  }, [nodes, edges, setNodes, setEdges])
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -202,6 +207,8 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
         <ReactFlow
           nodes={nodesState}
           edges={edgesState}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           colorMode={flowColorMode}
           defaultMarkerColor={flowEdgeStroke}

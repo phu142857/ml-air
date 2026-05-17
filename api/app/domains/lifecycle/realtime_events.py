@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from app.domains.shared.queue_service import redis_client
 from app.domains.observability.trace_service import get_trace_id
 import app.domains.observability.event_outbox_service as event_outbox_service
 import app.domains.observability.event_signing_service as event_signing_service
@@ -172,18 +171,16 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
 
     redis_ok = False
     if realtime_enabled():
-        channel = f"mlair.events.{tenant_id}.{project_id}"
-        try:
-            redis_client().publish(channel, json.dumps(event, separators=(",", ":"), default=str))
-            redis_ok = True
-        except Exception as exc:  # noqa: BLE001
+        from app.domains.observability.redis_event_bus import publish_semantic_envelope_to_redis
+
+        redis_ok = publish_semantic_envelope_to_redis(event)
+        if not redis_ok:
             logger.warning(
-                "realtime_publish_failed type=%s resource_id=%s tenant=%s project=%s err=%s",
+                "realtime_publish_failed type=%s resource_id=%s tenant=%s project=%s",
                 ev_type,
                 event.get("resource_id"),
                 tenant_id,
                 project_id,
-                exc,
             )
     if event_outbox_service.outbox_writes_enabled() and event_id and redis_ok:
         event_outbox_service.mark_outbox_redis_delivered(event_id)
@@ -210,6 +207,21 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
     semantic_webhook_subs.schedule_deliver_semantic_webhooks(event)
 
 
+def _execution_payload(
+    *,
+    status: str,
+    updated_at: datetime | None,
+    run_id: str | None = None,
+    pipeline_id: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {"status": status, "updated_at": dt_to_unix(updated_at)}
+    if run_id:
+        payload["run_id"] = run_id
+    if pipeline_id:
+        payload["pipeline_id"] = pipeline_id
+    return payload
+
+
 def emit_run_created(
     *,
     tenant_id: str,
@@ -217,6 +229,7 @@ def emit_run_created(
     run_id: str,
     status: str,
     updated_at: datetime | None,
+    pipeline_id: str | None = None,
     trace_id: str | None = None,
 ) -> None:
     publish_mlair_event(
@@ -226,7 +239,12 @@ def emit_run_created(
             project_id=project_id,
             resource_id=run_id,
             trace_id=trace_id,
-            payload={"status": status, "updated_at": dt_to_unix(updated_at)},
+            payload=_execution_payload(
+                status=status,
+                updated_at=updated_at,
+                run_id=run_id,
+                pipeline_id=pipeline_id,
+            ),
         )
     )
 
@@ -238,6 +256,7 @@ def emit_run_updated(
     run_id: str,
     status: str,
     updated_at: datetime | None,
+    pipeline_id: str | None = None,
     trace_id: str | None = None,
 ) -> None:
     publish_mlair_event(
@@ -247,7 +266,12 @@ def emit_run_updated(
             project_id=project_id,
             resource_id=run_id,
             trace_id=trace_id,
-            payload={"status": status, "updated_at": dt_to_unix(updated_at)},
+            payload=_execution_payload(
+                status=status,
+                updated_at=updated_at,
+                run_id=run_id,
+                pipeline_id=pipeline_id,
+            ),
         )
     )
 
@@ -260,6 +284,7 @@ def emit_task_updated(
     run_id: str,
     status: str,
     updated_at: datetime | None,
+    pipeline_id: str | None = None,
     trace_id: str | None = None,
 ) -> None:
     publish_mlair_event(
@@ -269,11 +294,12 @@ def emit_task_updated(
             project_id=project_id,
             resource_id=task_id,
             trace_id=trace_id,
-            payload={
-                "status": status,
-                "run_id": run_id,
-                "updated_at": dt_to_unix(updated_at),
-            },
+            payload=_execution_payload(
+                status=status,
+                updated_at=updated_at,
+                run_id=run_id,
+                pipeline_id=pipeline_id,
+            ),
         )
     )
 

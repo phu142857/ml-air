@@ -49,6 +49,8 @@ from app.domains.lifecycle import realtime_events as rt
 from app.domains.observability import semantic_metrics
 from app.domains.observability import audit_timeline_service
 from app.domains.observability import event_outbox_service
+from app.domains.observability import event_sequence_service
+from app.domains.observability import execution_projection_service
 from app.domains.observability import event_signing_service
 from app.domains.governance import semantic_webhook_subscription_service
 from app.domains.orchestration.run_service import (
@@ -56,7 +58,9 @@ from app.domains.orchestration.run_service import (
     create_run,
     get_latest_run_for_pipeline,
     get_pipeline_dag,
+    get_pipeline_topology,
     get_run,
+    get_run_execution_graph,
     list_pipelines,
     list_runs,
     mark_run_running,
@@ -874,6 +878,33 @@ def get_pipeline_dag_v1(
     return get_pipeline_dag(tenant_id=tenant_id, project_id=project_id, pipeline_id=pipeline_id)
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/topology")
+def get_pipeline_topology_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return get_pipeline_topology(tenant_id=tenant_id, project_id=project_id, pipeline_id=pipeline_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/execution-graph")
+def get_run_execution_graph_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    graph = get_run_execution_graph(tenant_id=tenant_id, project_id=project_id, run_id=run_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return graph
+
+
 @router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness")
 def check_pipeline_readiness_v1(
     tenant_id: str,
@@ -1192,6 +1223,9 @@ def runtime_config_v1() -> dict:
         "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
         "serving_slots_http": _serving_slots_http_enabled(),
         "semantic_event_outbox": os.getenv("ML_AIR_EVENT_OUTBOX", "0") == "1",
+        "semantic_event_stream": os.getenv("ML_AIR_EVENT_STREAM", "0") == "1",
+        "semantic_event_stream_global_fanout": os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "0") == "1",
+        "execution_projection": os.getenv("ML_AIR_EXECUTION_PROJECTION", "0") == "1",
         "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
         "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
         "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "0") == "1",
@@ -2093,6 +2127,46 @@ def verify_semantic_event_envelope_v1(
     if integrity_valid is not None:
         out["integrity_valid"] = integrity_valid
     return out
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/execution-projection")
+def get_execution_projection_v1(
+    tenant_id: str,
+    project_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Redis-backed execution snapshot (runs + pipeline latest status) when ``ML_AIR_EXECUTION_PROJECTION=1``."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return execution_projection_service.get_execution_projection(tenant_id, project_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/semantic-events/replay")
+def replay_semantic_events_v1(
+    tenant_id: str,
+    project_id: str,
+    after_sequence: int = Query(default=0, ge=0, description="Return events with sequence strictly greater than this."),
+    limit: int = Query(default=200, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Replay recent semantic envelopes from the Redis ring buffer (viewer)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    items = event_sequence_service.list_replay_after(
+        tenant_id,
+        project_id,
+        after_sequence=after_sequence,
+        limit=limit,
+    )
+    last_sequence = 0
+    for ev in items:
+        seq = ev.get("sequence")
+        if isinstance(seq, int) and seq > last_sequence:
+            last_sequence = seq
+    from app.domains.observability import event_stream_service
+
+    source = "stream" if event_stream_service.stream_enabled() else "buffer"
+    return {"items": items, "last_sequence": last_sequence, "source": source}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox")

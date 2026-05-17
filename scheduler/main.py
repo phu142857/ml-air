@@ -563,6 +563,7 @@ def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | 
             run_id=run_id,
             status=str(updated[2]),
             updated_at=updated[3] if isinstance(updated[3], datetime) else None,
+            pipeline_id=str(updated[6] or "") or None,
             trace_id=None,
         )
         _maybe_publish_training_completed_scheduler(redis_client, run_id, updated)
@@ -587,6 +588,7 @@ def _emit_task_scheduler_realtime(client: Redis, done_event: dict) -> None:
         run_id=str(done_event["run_id"]),
         status=str(st).upper(),
         updated_at=ua if isinstance(ua, datetime) else None,
+        pipeline_id=str(done_event.get("pipeline_id") or "") or None,
         trace_id=done_event.get("trace_id"),
     )
 

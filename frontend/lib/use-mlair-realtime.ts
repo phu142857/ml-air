@@ -3,12 +3,34 @@
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { getRealtimeWsBase, type DatasetItem, type ModelItem, type RunItem, type TaskItem } from "./api";
+import {
+  getRealtimeWsBase,
+  type DatasetItem,
+  type ModelItem,
+  type PipelineItem,
+  type RunItem,
+  type TaskItem,
+} from "./api";
 import { useAppContext } from "./app-context";
+import { useExecutionStore } from "./execution-store";
+import {
+  appendPipelineExecutionKeys,
+  appendRunExecutionKeys,
+  resolvePipelineIdFromExecutionEvent,
+} from "./execution-realtime-sync";
+import { fetchExecutionProjection, fetchSemanticEventReplay } from "./api";
+import { getRuntimeConfig } from "./runtime-config";
+import { reconcileExecutionSnapshots } from "./execution-reconcile";
+import {
+  envelopeSequence,
+  readLastSequence,
+  writeLastSequence,
+} from "./execution-sequence";
 import { setMlairRealtimeUiStatus } from "./mlair-realtime-status";
 import { mlairKeys } from "./query-keys";
 
 const DEBOUNCE_MS = 300;
+const RECONCILE_MS = 60_000;
 const MAX_SEEN_IDS = 500;
 const BASE_BACKOFF_MS = 800;
 const MAX_BACKOFF_MS = 30_000;
@@ -16,8 +38,30 @@ const MAX_BACKOFF_MS = 30_000;
 let pendingSerializedKeys: Set<string> = new Set();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+const EXECUTION_IMMEDIATE_KEY_HEADS = new Set([
+  "run",
+  "run-tasks",
+  "run-logs",
+  "run-tracking",
+  "run-readiness",
+  "run-execution-graph",
+]);
+
+function isImmediateExecutionKey(key: readonly unknown[]): boolean {
+  return EXECUTION_IMMEDIATE_KEY_HEADS.has(String(key[0] ?? ""));
+}
+
 function scheduleInvalidates(queryClient: QueryClient, keys: readonly (readonly unknown[])[]) {
+  const debounced: (readonly unknown[])[] = [];
   for (const k of keys) {
+    if (isImmediateExecutionKey(k)) {
+      queryClient.invalidateQueries({ queryKey: [...k], exact: false });
+    } else {
+      debounced.push(k);
+    }
+  }
+  if (!debounced.length) return;
+  for (const k of debounced) {
     pendingSerializedKeys.add(JSON.stringify(k));
   }
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -51,6 +95,7 @@ function buildWsUrl(base: string, tenantId: string, projectId: string, token: st
 type Envelope = {
   version?: string;
   event_id?: string;
+  sequence?: number;
   type?: string;
   resource_id?: string | null;
   payload?: {
@@ -103,7 +148,8 @@ function keysForEvent(
         [...mlairKeys.run.tasks(rid)],
         [...mlairKeys.run.logs(rid)],
         [...mlairKeys.run.tracking(rid)],
-        [...mlairKeys.run.readiness(rid)]
+        [...mlairKeys.run.readiness(rid)],
+        [...mlairKeys.run.executionGraph(tenantId, projectId, rid)],
       );
     }
     return keys;
@@ -116,7 +162,8 @@ function keysForEvent(
         [...mlairKeys.run.tasks(r)],
         [...mlairKeys.run.detail(r)],
         [...mlairKeys.run.tracking(r)],
-        [...mlairKeys.run.readiness(r)]
+        [...mlairKeys.run.readiness(r)],
+        [...mlairKeys.run.executionGraph(tenantId, projectId, r)],
       );
     }
     return keys;
@@ -295,6 +342,35 @@ function keysForEvent(
   return [];
 }
 
+const EXECUTION_SYNC_EVENT_TYPES = new Set([
+  "run.created",
+  "run.updated",
+  "task.updated",
+  "training.triggered",
+  "training.completed",
+]);
+
+/** Merge pipeline list/DAG invalidation for execution lifecycle events. */
+function keysForEventWithExecutionSurfaces(
+  queryClient: QueryClient,
+  tenantId: string,
+  projectId: string,
+  ev: Envelope,
+): readonly (readonly unknown[])[] {
+  const keys: unknown[][] = keysForEvent(tenantId, projectId, ev).map((k) => [...k]);
+  if (!EXECUTION_SYNC_EVENT_TYPES.has(String(ev.type || ""))) {
+    return keys;
+  }
+  const pipelineId =
+    String(ev.payload?.pipeline_id || "").trim() || resolvePipelineIdFromExecutionEvent(queryClient, ev);
+  appendPipelineExecutionKeys(keys, tenantId, projectId, pipelineId);
+  const runId =
+    String(ev.payload?.run_id || "").trim() ||
+    (ev.type === "run.updated" || ev.type === "run.created" ? String(ev.resource_id || "").trim() : "");
+  appendRunExecutionKeys(keys, tenantId, projectId, runId);
+  return keys;
+}
+
 function isoFromUnix(ts: number): string {
   try {
     return new Date(ts * 1000).toISOString();
@@ -337,6 +413,30 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
       });
       return changed ? { ...old, items } : old;
     });
+    const pipelineId = String(p.pipeline_id || "").trim();
+    if (pipelineId) {
+      queryClient.setQueryData<{ items: PipelineItem[] } | undefined>(
+        mlairKeys.pipelines.list(tenantId, projectId),
+        (old) => {
+          if (!old?.items) return old;
+          let changed = false;
+          const items = old.items.map((row) => {
+            if (row.pipeline_id !== pipelineId) return row;
+            if (row.latest_run_id && row.latest_run_id !== rid && updatedAtMs(row.updated_at) > uaMs) {
+              return row;
+            }
+            changed = true;
+            return {
+              ...row,
+              latest_run_id: rid,
+              latest_status: status,
+              updated_at: iso,
+            };
+          });
+          return changed ? { ...old, items } : old;
+        },
+      );
+    }
   }
 
   if (typ === "task.updated" && runFromPayload && rid && typeof p.status === "string") {
@@ -408,6 +508,8 @@ export function useMlairRealtime() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const shouldHaltRef = useRef(false);
+  const lastSequenceRef = useRef(0);
+  const reconcileTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (tenantId === "all" || projectId === "all") {
@@ -418,6 +520,8 @@ export function useMlairRealtime() {
     }
 
     shouldHaltRef.current = false;
+    useExecutionStore.getState().setScope(`${tenantId}::${projectId}`);
+    lastSequenceRef.current = readLastSequence(tenantId, projectId);
 
     const rememberEventId = (id: string): boolean => {
       if (seenSet.current.has(id)) return false;
@@ -428,6 +532,89 @@ export function useMlairRealtime() {
         if (drop) seenSet.current.delete(drop);
       }
       return true;
+    };
+
+    const bumpSequence = (ev: Envelope) => {
+      const seq = envelopeSequence(ev);
+      if (seq == null) return;
+      if (seq > lastSequenceRef.current) {
+        lastSequenceRef.current = seq;
+        writeLastSequence(tenantId, projectId, seq);
+      }
+    };
+
+    const processEnvelope = (data: Envelope, opts?: { fromReplay?: boolean }) => {
+      if (data.version !== "v1") return;
+      const seq = envelopeSequence(data);
+      if (seq != null && seq <= lastSequenceRef.current && !opts?.fromReplay) return;
+
+      const eid = data.event_id;
+      if (eid && !rememberEventId(eid)) return;
+      const ua = data.payload?.updated_at;
+      const rk = `${data.type ?? ""}:${data.resource_id ?? ""}`;
+      if (typeof ua === "number" && rk) {
+        const prev = lastUpdated.current.get(rk);
+        if (prev !== undefined && ua < prev) return;
+        lastUpdated.current.set(rk, ua);
+      }
+      if (data.type === "ping" || (data as { type?: string }).type === "pong") return;
+      applyRealtimePatch(queryClient, tenantId, projectId, data);
+      useExecutionStore.getState().applyEnvelope(data);
+      const keys = keysForEventWithExecutionSurfaces(queryClient, tenantId, projectId, data);
+      if (keys.length) scheduleInvalidates(queryClient, keys);
+      bumpSequence(data);
+    };
+
+    const replayMissedEvents = async () => {
+      if (!token?.trim()) return;
+      try {
+        const { items, last_sequence: lastSeq } = await fetchSemanticEventReplay(
+          tenantId,
+          projectId,
+          token,
+          lastSequenceRef.current,
+        );
+        for (const ev of items) {
+          processEnvelope(ev as Envelope, { fromReplay: true });
+        }
+        if (typeof lastSeq === "number" && lastSeq > lastSequenceRef.current) {
+          lastSequenceRef.current = lastSeq;
+          writeLastSequence(tenantId, projectId, lastSeq);
+        }
+        reconcileExecutionSnapshots(queryClient, tenantId, projectId);
+        if (getRuntimeConfig()?.features?.execution_projection) {
+          try {
+            const projection = await fetchExecutionProjection(tenantId, projectId, token);
+            useExecutionStore.getState().hydrateFromProjection(projection);
+          } catch {
+            /* projection is optional */
+          }
+        }
+      } catch {
+        /* replay is best-effort; WS stream + periodic reconcile still apply */
+      }
+    };
+
+    const reconcileWithProjection = () => {
+      reconcileExecutionSnapshots(queryClient, tenantId, projectId);
+      if (!getRuntimeConfig()?.features?.execution_projection || !token?.trim()) return;
+      void fetchExecutionProjection(tenantId, projectId, token)
+        .then((projection) => useExecutionStore.getState().hydrateFromProjection(projection))
+        .catch(() => undefined);
+    };
+
+    const startReconcileTimer = () => {
+      if (reconcileTimerRef.current) return;
+      reconcileTimerRef.current = setInterval(() => {
+        reconcileWithProjection();
+      }, RECONCILE_MS);
+    };
+
+    const stopReconcileTimer = () => {
+      if (reconcileTimerRef.current) {
+        clearInterval(reconcileTimerRef.current);
+        reconcileTimerRef.current = null;
+      }
     };
 
     const connect = () => {
@@ -450,6 +637,8 @@ export function useMlairRealtime() {
       ws.onopen = () => {
         backoffRef.current = BASE_BACKOFF_MS;
         setMlairRealtimeUiStatus({ kind: "connected" });
+        void replayMissedEvents();
+        startReconcileTimer();
       };
 
       ws.onmessage = (evt) => {
@@ -459,20 +648,7 @@ export function useMlairRealtime() {
         } catch {
           return;
         }
-        if (data.version !== "v1") return;
-        const eid = data.event_id;
-        if (eid && !rememberEventId(eid)) return;
-        const ua = data.payload?.updated_at;
-        const rk = `${data.type ?? ""}:${data.resource_id ?? ""}`;
-        if (typeof ua === "number" && rk) {
-          const prev = lastUpdated.current.get(rk);
-          if (prev !== undefined && ua < prev) return;
-          lastUpdated.current.set(rk, ua);
-        }
-        if (data.type === "ping" || (data as { type?: string }).type === "pong") return;
-        applyRealtimePatch(queryClient, tenantId, projectId, data);
-        const keys = keysForEvent(tenantId, projectId, data);
-        if (keys.length) scheduleInvalidates(queryClient, keys);
+        processEnvelope(data);
       };
 
       ws.onerror = () => {
@@ -481,6 +657,7 @@ export function useMlairRealtime() {
 
       ws.onclose = (ev) => {
         wsRef.current = null;
+        stopReconcileTimer();
         if (shouldHaltRef.current) return;
         const fatalPolicy = ev.code === 1008;
         if (fatalPolicy) {
@@ -513,6 +690,7 @@ export function useMlairRealtime() {
 
     return () => {
       shouldHaltRef.current = true;
+      stopReconcileTimer();
       window.removeEventListener("mlair-runtime-config-updated", onRuntimeConfig);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;

@@ -10,15 +10,13 @@ import { useParams } from "next/navigation";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { PipelineDAG } from "@/components/mlops/pipeline-dag";
-import {
-  dagDataMatchesPipeline,
-  normalizePipelineForDag,
-  pipelineFromDagQueryData,
-} from "@/lib/adapt-pipeline-dag";
+import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag";
 import { DetailSection } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
-import { fetchPipelineDag, fetchPipelineVersions, fetchPipelines } from "@/lib/api";
+import { fetchPipelineVersions, fetchPipelines } from "@/lib/api";
+import { usePipelineTopology } from "@/hooks/use-pipeline-topology";
 import { mlairKeys } from "@/lib/query-keys";
+import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { useAppContext } from "@/lib/app-context";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -28,12 +26,8 @@ export default function PipelineDetailPage() {
   const { tenantId, projectId, token } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
 
-  const dagQuery = useQuery({
-    queryKey: mlairKeys.pipelines.dag(tenantId, projectId, pipelineId),
-    queryFn: () => fetchPipelineDag(tenantId, projectId, pipelineId, token),
-    enabled: Boolean(token?.trim()) && scopePinned,
-  });
-  const data = dagQuery.data;
+  const { topologyQuery, topology, pipeline: topologyPipeline, isLoading: topologyLoading } =
+    usePipelineTopology(tenantId, projectId, pipelineId, token, scopePinned);
 
   const { data: pipelinesList } = useQuery({
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
@@ -58,18 +52,8 @@ export default function PipelineDetailPage() {
     return items.reduce((a, b) => (a.version >= b.version ? a : b));
   }, [versionsData]);
 
-  const dagDataReady = dagDataMatchesPipeline(data, pipelineId);
-
-  const dagPipeline = useMemo(
-    () => (dagDataReady ? pipelineFromDagQueryData(pipelineId, data) : null),
-    [data, pipelineId, dagDataReady],
-  );
-
-  const dagLoading =
-    scopePinned && !dagDataReady && (dagQuery.isLoading || dagQuery.isFetching);
-
-  const resolvedPipelineId = data?.pipeline_id ?? pipelineId;
-  const latestRunId = pipelineRow?.latest_run_id?.trim() || data?.run_id?.trim() || "";
+  const resolvedPipelineId = topology?.pipeline_id ?? pipelineId;
+  const latestRunId = pipelineRow?.latest_run_id?.trim() || "";
 
   const headerSubtitle = pipelineRow
     ? `${pipelineRow.total_runs} total runs · last ${String(pipelineRow.latest_status || "—")}${pipelineRow.updated_at ? ` · updated ${formatRelativeTime(pipelineRow.updated_at)}` : ""}`
@@ -188,27 +172,27 @@ export default function PipelineDetailPage() {
         </div>
 
         <DetailSection
-          title="Pipeline DAG"
-          description="Stages and dependency shape from the live DAG endpoint."
+          title="Pipeline topology"
+          description="Static stages and dependencies from the latest pipeline config (no run overlay)."
           accentBorder="amber"
         >
           {!scopePinned ? (
             <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-4 text-center text-sm text-muted-foreground">
-              Pin a tenant and project in the header to load the pipeline DAG.
+              Pin a tenant and project in the header to load pipeline topology.
             </div>
-          ) : dagLoading ? (
+          ) : topologyLoading ? (
             <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-border bg-muted/30 text-sm text-muted-foreground">
-              Loading DAG…
+              Loading topology…
             </div>
-          ) : dagQuery.isError ? (
+          ) : topologyQuery.isError ? (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              Could not load DAG: {String(dagQuery.error)}
+              Could not load topology: {String(topologyQuery.error)}
             </div>
-          ) : dagPipeline ? (
-            <PipelineDAG key={pipelineId} pipeline={normalizePipelineForDag(dagPipeline)!} />
+          ) : topologyPipeline ? (
+            <PipelineDAG key={pipelineId} pipeline={normalizePipelineForDag(topologyPipeline)!} />
           ) : (
             <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
-              No DAG data for this pipeline.
+              No topology for this pipeline.
             </div>
           )}
         </DetailSection>
@@ -218,8 +202,8 @@ export default function PipelineDetailPage() {
           <Link href="/datasets" className="font-medium text-emerald-400 hover:underline">
             Dataset Hub
           </Link>
-          : train with a model (mapped pipeline) or run a pipeline explicitly. This page is for DAG, versions, and run
-          history only.
+          : train with a model (mapped pipeline) or run a pipeline explicitly. This page shows topology and versions;
+          open a run for live execution status.
         </div>
       </div>
     </div>

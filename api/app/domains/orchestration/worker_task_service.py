@@ -211,6 +211,7 @@ def lease_tasks(
                 run_id=run_id,
                 status="RUNNING",
                 updated_at=task_updated_at,
+                pipeline_id=str(pipeline_id or "") or None,
                 trace_id=get_trace_id(),
             )
     return out
@@ -421,6 +422,7 @@ def complete_task(
         run_id=str(row["run_id"]),
         status="SUCCESS",
         updated_at=task_updated_at,
+        pipeline_id=str(row.get("pipeline_id") or "") or None,
         trace_id=done_payload.get("trace_id") or get_trace_id(),
     )
     return "ok", {"task_id": task_id, "status": "SUCCESS"}
@@ -506,5 +508,6 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         run_id=str(row["run_id"]),
         status="FAILED",
         updated_at=task_updated_at_fail,
+        pipeline_id=str(row.get("pipeline_id") or "") or None,
         trace_id=done_payload.get("trace_id") or get_trace_id(),
     )

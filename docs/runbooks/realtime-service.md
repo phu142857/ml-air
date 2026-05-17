@@ -3,7 +3,7 @@
 ## What breaks if realtime is down
 
 - The **API and scheduler keep working**; runs, tasks, and datasets still update in Postgres and Redis queues.
-- The **UI** loses push updates: without `NEXT_PUBLIC_MLAIR_REALTIME_WS`, the app uses **5s polling** on critical pages (runs, run detail, dashboard, datasets, models) so data stays usable, only slightly delayed.
+- The **UI** loses push updates: without `NEXT_PUBLIC_MLAIR_REALTIME_WS`, the app uses **5s polling** on runs, run detail, pipelines, dashboard, datasets, and models so data stays usable, only slightly delayed.
 - With the WS URL set but the realtime process dead, open pages **reconnect with backoff**; until then, data may look stale until refetch (tab focus or manual refresh).
 
 ## Quick checks
@@ -12,6 +12,7 @@
 - Metrics (Prometheus): scrape port **9104** (see `ML_AIR_REALTIME_METRICS_PORT`). Counters include `mlair_realtime_redis_events_received_total`, `mlair_realtime_ws_send_errors_total`, `mlair_realtime_events_dropped_total`, `mlair_realtime_events_coalesced_total`.
 - Coalesce (debounce before fan-out): set **`MLAIR_REALTIME_COALESCE_MS`** (milliseconds, default **150**) to merge bursts for the same `(tenant, project, type, resource_id)`; higher values reduce WS traffic at the cost of slightly higher latency.
 - Redis: publishers use channel pattern `mlair.events.{tenant_id}.{project_id}`; subscriber uses `PSUBSCRIBE mlair.events.*`.
+- **Durable bus (Phase 4):** with `ML_AIR_EVENT_STREAM=1`, envelopes are also `XADD`’d to `mlair.events.stream.{tenant}.{project}`. With `ML_AIR_EVENT_STREAM_GLOBAL_FANOUT=1`, a global stream `mlair.events.durable` is written for multi-consumer fan-out. Enable `MLAIR_REALTIME_STREAM_FANOUT=1` on the realtime process to consume that stream (in addition to pub/sub). Start ID: `MLAIR_REALTIME_STREAM_START_ID` (default `$` = new only).
 
 ## Production notes
 
@@ -27,6 +28,7 @@
 - `training.completed`: published when a run reaches **SUCCESS** and `override_config` or `plugin_context` carries a pinned `dataset_version_id` (API `set_run_status` path and scheduler `_transition_run_status`). Payload includes `run_id`, `pipeline_id`, `dataset_version_id`, optional `model_id` / `dataset_id`, `status`, `updated_at`.
 - `buffer.threshold_met`: published when a dataset accumulation buffer’s **`current_size`** crosses from **below** to **at or above** **`target_threshold`** on buffer upsert (`_upsert_dataset_buffer`). Payload includes `dataset_id`, `source_type`, `current_size`, `target_threshold`, `accumulation_strategy`, `window_status`, `updated_at`. UI invalidates the same Hub keys as `dataset.buffer.updated`.
 - Envelope and per-type **`payload`** field matrix: [Realtime event envelope (v1)](../api/realtime-event-envelope.md).
+- Execution sync (Phase 1): `run.created`, `run.updated`, and `task.updated` payloads include **`pipeline_id`** when known; the UI invalidates **`pipelines.list`** and **`pipelines.dag`** for that pipeline. See [Execution realtime architecture](../guides/execution-realtime-architecture.md).
 
 ## Backpressure
 
