@@ -19,7 +19,11 @@ import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { pipelineFromDagQueryData } from "@/lib/adapt-pipeline-dag"
+import {
+  dagDataMatchesPipeline,
+  normalizePipelineForDag,
+  pipelineFromDagQueryData,
+} from "@/lib/adapt-pipeline-dag"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
 
 const statusConfig = {
@@ -135,17 +139,27 @@ export default function PipelinesPage() {
     retry: false,
   })
 
+  const dagDataReady =
+    Boolean(selectedId) && dagDataMatchesPipeline(dagQuery.data, selectedId || "")
+
   const dagPipeline = useMemo(
-    () => (selectedId ? pipelineFromDagQueryData(selectedId, dagQuery.data) : null),
-    [selectedId, dagQuery.data],
+    () =>
+      selectedId && dagDataReady ? pipelineFromDagQueryData(selectedId, dagQuery.data) : null,
+    [selectedId, dagQuery.data, dagDataReady],
   )
+
+  const dagLoading =
+    dagEnabled &&
+    Boolean(selectedId) &&
+    !dagDataReady &&
+    (dagQuery.isLoading || dagQuery.isFetching)
 
   const displayPipeline: Pipeline | null = useMemo(() => {
     if (!selectedId) return null
-    if (dagPipeline) return dagPipeline
+    if (dagPipeline) return normalizePipelineForDag(dagPipeline) ?? dagPipeline
     const label = !dagEnabled
       ? "Select a single tenant + project to load DAG"
-      : dagQuery.isLoading
+      : dagLoading
         ? "Loading DAG…"
         : dagQuery.isError
           ? `DAG error — ${formatApiClientError(dagQuery.error)}`
@@ -166,12 +180,12 @@ export default function PipelinesPage() {
           id: "_preview",
           name: label.slice(0, 120),
           type: "transform",
-          status: dagQuery.isLoading ? "running" : "idle",
+          status: dagLoading ? "running" : "idle",
           dependencies: [],
         },
       ],
     }
-  }, [selectedId, dagPipeline, dagQuery.isLoading, dagQuery.isError, dagQuery.error, dagEnabled, selected])
+  }, [selectedId, dagPipeline, dagLoading, dagQuery.isError, dagQuery.error, dagEnabled, selected])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -330,7 +344,7 @@ export default function PipelinesPage() {
 
                   <div>
                     <h3 className="mb-3 text-sm font-medium text-muted-foreground">Pipeline DAG</h3>
-                    <PipelineDAG pipeline={displayPipeline} />
+                    <PipelineDAG key={selectedId} pipeline={displayPipeline} />
                   </div>
 
                   <div>

@@ -147,23 +147,28 @@ interface PipelineDAGProps {
 export function PipelineDAG({ pipeline }: PipelineDAGProps) {
   const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme()
 
+  const stages = Array.isArray(pipeline?.stages) ? pipeline.stages : []
+
   const { nodes, edges, canvasHeight } = useMemo(() => {
-    const stageMap = new Map(pipeline.stages.map((s) => [s.id, s]))
-    const nodeIds = pipeline.stages.map((s) => s.id)
-    const dagEdges = pipeline.stages.flatMap((stage) =>
-      stage.dependencies.map((depId) => ({ source: depId, target: stage.id }))
+    const stageMap = new Map(stages.map((s) => [s.id, s]))
+    const nodeIds = stages.map((s) => s.id)
+    const dagEdges = stages.flatMap((stage) =>
+      (Array.isArray(stage.dependencies) ? stage.dependencies : []).map((depId) => ({
+        source: depId,
+        target: stage.id,
+      })),
     )
     const positions = layoutDagPositions(nodeIds, dagEdges)
 
-    const initialNodes: Node<StageNodeData>[] = pipeline.stages.map((stage) => ({
+    const initialNodes: Node<StageNodeData>[] = stages.map((stage) => ({
       id: stage.id,
       type: "stage",
       position: positions[stage.id] ?? { x: 0, y: 0 },
       data: { stage },
     }))
 
-    const initialEdges: Edge[] = pipeline.stages.flatMap((stage) =>
-      stage.dependencies.map((depId) => ({
+    const initialEdges: Edge[] = stages.flatMap((stage) =>
+      (Array.isArray(stage.dependencies) ? stage.dependencies : []).map((depId) => ({
         id: `${depId}-${stage.id}`,
         source: depId,
         target: stage.id,
@@ -183,7 +188,7 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
     const canvasHeight = estimateDagCanvasHeight(nodeIds, dagEdges, { minHeight: 260 })
 
     return { nodes: initialNodes, edges: initialEdges, canvasHeight }
-  }, [pipeline, flowEdgeStroke])
+  }, [stages, flowEdgeStroke])
 
   const [nodesState] = useNodesState(nodes)
   const [edgesState] = useEdgesState(edges)

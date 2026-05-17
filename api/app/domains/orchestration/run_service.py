@@ -462,6 +462,23 @@ def _dag_from_pipeline_config(cfg: Any) -> tuple[list[dict[str, str]], list[dict
 
 
 def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
+    """
+    Pipeline DAG shape comes from the latest pipeline **version config** (``depends_on``).
+    When a latest run exists, task statuses are overlaid on matching node ids only.
+    """
+    nodes: list[dict[str, str]] = []
+    edges: list[dict[str, str]] = []
+    from_config = False
+
+    vid = pvs.get_latest_version_id(tenant_id, project_id, pipeline_id)
+    if vid:
+        ver = pvs.get_pipeline_version(vid)
+        cfg = (ver or {}).get("config")
+        nodes, edges = _dag_from_pipeline_config(cfg)
+        from_config = bool(nodes)
+
+    status_by_task: dict[str, str] = {}
+    run_id: str | None = None
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -475,37 +492,50 @@ def get_pipeline_dag(tenant_id: str, project_id: str, pipeline_id: str) -> dict:
                 (tenant_id, project_id, pipeline_id),
             )
             latest = cur.fetchone()
+            if latest:
+                run_id = str(latest[0])
+                cur.execute(
+                    """
+                    SELECT task_id, status
+                    FROM tasks
+                    WHERE run_id = %s
+                    ORDER BY created_at ASC
+                    """,
+                    (run_id,),
+                )
+                for row in cur.fetchall():
+                    status_by_task[str(row[0])] = str(row[1])
 
-            if not latest:
-                vid = pvs.get_latest_version_id(tenant_id, project_id, pipeline_id)
-                if not vid:
-                    return {"pipeline_id": pipeline_id, "nodes": [], "edges": []}
-                ver = pvs.get_pipeline_version(vid)
-                cfg = (ver or {}).get("config")
-                nodes, edges = _dag_from_pipeline_config(cfg)
-                return {"pipeline_id": pipeline_id, "nodes": nodes, "edges": edges, "from_config": True}
+    if nodes:
+        if status_by_task:
+            nodes = [
+                {
+                    "id": n["id"],
+                    "label": n["label"],
+                    "status": status_by_task.get(n["id"], n.get("status", "PENDING")),
+                }
+                for n in nodes
+            ]
+        out: dict[str, Any] = {
+            "pipeline_id": pipeline_id,
+            "nodes": nodes,
+            "edges": edges,
+            "from_config": from_config,
+        }
+        if run_id:
+            out["run_id"] = run_id
+        return out
 
-            run_id = latest[0]
-            cur.execute(
-                """
-                SELECT task_id, status
-                FROM tasks
-                WHERE run_id = %s
-                ORDER BY created_at ASC
-                """,
-                (run_id,),
-            )
-            task_rows = cur.fetchall()
+    if status_by_task:
+        task_ids = list(status_by_task.keys())
+        nodes = [{"id": tid, "label": tid, "status": status_by_task[tid]} for tid in task_ids]
+        edges = [
+            {"source": task_ids[i - 1], "target": task_ids[i]}
+            for i in range(1, len(task_ids))
+        ]
+        return {"pipeline_id": pipeline_id, "run_id": run_id, "nodes": nodes, "edges": edges}
 
-    nodes = [
-        {"id": row[0], "label": row[0], "status": row[1]}
-        for row in task_rows
-    ]
-    edges = []
-    for idx in range(1, len(task_rows)):
-        edges.append({"source": task_rows[idx - 1][0], "target": task_rows[idx][0]})
-
-    return {"pipeline_id": pipeline_id, "run_id": run_id, "nodes": nodes, "edges": edges}
+    return {"pipeline_id": pipeline_id, "nodes": [], "edges": []}
 
 
 def get_latest_run_for_pipeline(tenant_id: str, project_id: str, pipeline_id: str) -> dict | None:

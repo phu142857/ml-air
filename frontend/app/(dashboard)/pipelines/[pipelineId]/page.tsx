@@ -12,7 +12,11 @@ import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { PipelineDAG } from "@/components/mlops/pipeline-dag";
-import { pipelineFromDagQueryData } from "@/lib/adapt-pipeline-dag";
+import {
+  dagDataMatchesPipeline,
+  normalizePipelineForDag,
+  pipelineFromDagQueryData,
+} from "@/lib/adapt-pipeline-dag";
 import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
 import { DetailSection } from "@/components/mlops/layout";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
@@ -86,10 +90,15 @@ export default function PipelineDetailPage() {
     return items.reduce((a, b) => (a.version >= b.version ? a : b));
   }, [versionsData]);
 
+  const dagDataReady = dagDataMatchesPipeline(data, pipelineId);
+
   const dagPipeline = useMemo(
-    () => pipelineFromDagQueryData(pipelineId, data),
-    [data, pipelineId],
+    () => (dagDataReady ? pipelineFromDagQueryData(pipelineId, data) : null),
+    [data, pipelineId, dagDataReady],
   );
+
+  const dagLoading =
+    scopePinned && !dagDataReady && (dagQuery.isLoading || dagQuery.isFetching);
 
   const scopeRole = useMemo(() => {
     const t = String(tenantId || "").trim();
@@ -295,12 +304,16 @@ export default function PipelineDetailPage() {
             <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-4 text-center text-sm text-muted-foreground">
               Pin a tenant and project in the header to load the pipeline DAG.
             </div>
-          ) : dagQuery.isLoading ? (
+          ) : dagLoading ? (
+            <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-border bg-muted/30 text-sm text-muted-foreground">
+              Loading DAG…
+            </div>
+          ) : dagQuery.isError ? (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               Could not load DAG: {String(dagQuery.error)}
             </div>
           ) : dagPipeline ? (
-            <PipelineDAG pipeline={dagPipeline} />
+            <PipelineDAG key={pipelineId} pipeline={normalizePipelineForDag(dagPipeline)!} />
           ) : (
             <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
               No DAG data for this pipeline.
