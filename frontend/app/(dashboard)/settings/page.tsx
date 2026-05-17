@@ -23,7 +23,8 @@ import {
 } from "@/lib/runtime-config"
 import { PluginsSettingsTab } from "@/components/settings/plugins-settings-tab"
 import { useAppContext, type AccessibleScopeRow } from "@/lib/app-context"
-import { switchScopeContext, fetchTenantQuotas, fetchTenantQuotaUsage, upsertTenantQuotas } from "@/lib/api"
+import { fetchTenantQuotas, fetchTenantQuotaUsage, upsertTenantQuotas } from "@/lib/api"
+import { switchScopeWithRetry } from "@/lib/scope-switch"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -147,18 +148,19 @@ function SettingsPageContent() {
     }
     setScopeSwitching(true)
     try {
-      await switchScopeContext(token, {
-        tenant_id: nextTenant,
-        project_id: nextProject,
-        expected_mapping_version: mappingVersion,
-      })
-      await refreshBootstrap({ withSpinner: false })
+      await switchScopeWithRetry(
+        { token, tenant_id: nextTenant, project_id: nextProject, expected_mapping_version: mappingVersion },
+        { refreshBootstrap, getMappingVersion: () => mappingVersion },
+      )
       toast({ title: "Scope updated", description: `${nextTenant} / ${nextProject}` })
     } catch (e) {
+      const msg = String((e as Error)?.message || e).slice(0, 480)
       toast({
         variant: "destructive",
         title: "Scope switch failed",
-        description: String((e as Error)?.message || e).slice(0, 480),
+        description: msg.includes("mapping_version_stale")
+          ? "Workspace mapping changed. Refresh the page or try again."
+          : msg,
       })
     } finally {
       setScopeSwitching(false)

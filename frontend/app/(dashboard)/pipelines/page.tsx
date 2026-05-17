@@ -2,9 +2,8 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { GitBranch, Plus, Play, Clock, CheckCircle2, XCircle, Loader2, Calendar } from "lucide-react"
+import { GitBranch, Plus, Database, Clock, CheckCircle2, XCircle, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PipelineDAG } from "@/components/mlops/pipeline-dag"
@@ -14,8 +13,6 @@ import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
 import { fetchPipelineDag, fetchPipelines } from "@/lib/api"
-import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
-import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
@@ -95,20 +92,10 @@ const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
 ]
 
 export default function PipelinesPage() {
-  const router = useRouter()
   const { tenantId, projectId, token } = useAppContext()
   const scopePinned = isScopePinned(tenantId, projectId)
   const isAggregate = !scopePinned
-  const [triggerOpen, setTriggerOpen] = useState(false)
-  const [triggerPipelineId, setTriggerPipelineId] = useState<string | undefined>()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const openGatedTrigger = (pipelineId?: string) => {
-    const pid = pipelineId || selectedId || undefined
-    if (pid) setSelectedId(pid)
-    setTriggerPipelineId(pid)
-    setTriggerOpen(true)
-  }
 
   const pipelinesQuery = useQuery({
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
@@ -189,16 +176,6 @@ export default function PipelinesPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <TriggerRunUrlSync enabled={scopePinned} onOpen={({ pipelineId }) => openGatedTrigger(pipelineId)} />
-      <TriggerRunDialog
-        open={triggerOpen}
-        onOpenChange={setTriggerOpen}
-        defaultPipelineId={triggerPipelineId || selectedId || undefined}
-        mode="gated"
-        lockPipeline={Boolean(triggerPipelineId)}
-        onSuccess={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
-      />
-
       <ResourcePageHeader
         icon={GitBranch}
         accent="amber"
@@ -313,32 +290,38 @@ export default function PipelinesPage() {
                         className="h-8 gap-2 bg-amber-600 text-white hover:bg-amber-500 hover:text-white disabled:bg-amber-600/50 disabled:text-white/90"
                         disabled={!selectedId}
                         title={!selectedId ? "Select a pipeline to add a config version" : undefined}
-                        onClick={() => router.push(`/pipelines/${encodeURIComponent(selectedId!)}/versions`)}
+                        asChild={Boolean(selectedId)}
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                        New version
+                        {selectedId ? (
+                          <Link href={`/pipelines/${encodeURIComponent(selectedId)}/versions`}>
+                            <Plus className="h-3.5 w-3.5" />
+                            New version
+                          </Link>
+                        ) : (
+                          <span>
+                            <Plus className="h-3.5 w-3.5" />
+                            New version
+                          </span>
+                        )}
                       </Button>
-                      <span
-                        className="inline-flex"
-                        title={
-                          !scopePinned
-                            ? "Select a specific tenant and project to start a run."
-                            : !selectedId
-                              ? "Select a pipeline first."
-                              : undefined
-                        }
+                      <Button
+                        size="sm"
+                        className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+                        disabled={!scopePinned}
+                        asChild={scopePinned}
                       >
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="gap-2 bg-sky-600 text-white hover:bg-sky-500 hover:text-white disabled:bg-sky-600/50 disabled:text-white/90"
-                          disabled={!token.trim() || !scopePinned || !selectedId}
-                          onClick={() => openGatedTrigger(selectedId || undefined)}
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                          Trigger run
-                        </Button>
-                      </span>
+                        {scopePinned ? (
+                          <Link href="/datasets">
+                            <Database className="h-3.5 w-3.5" />
+                            Run / Train
+                          </Link>
+                        ) : (
+                          <span>
+                            <Database className="h-3.5 w-3.5" />
+                            Run / Train
+                          </span>
+                        )}
+                      </Button>
                     </div>
                   </div>
 

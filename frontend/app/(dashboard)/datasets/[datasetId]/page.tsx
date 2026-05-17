@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
+import { ExecutionIntentPanel } from "@/components/mlops/execution-intent-panel";
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -44,19 +44,15 @@ import {
   materializeScheduledDatasetBuffers,
   patchDatasetBuffer,
   patchDatasetVersionMetadata,
-  fetchModels,
-  fetchModelResolvedPipeline,
-  fetchPipelineVersions,
   fetchRuntimeConfig,
   upsertDatasetTrainingPolicy,
-  normalizeProjectId,
   type DatasetVersionItem
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import { datasetSourceTypeBadge, datasetVersionSourceBadge } from "@/lib/dataset-source-type";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
-import { executeTrainingIntent } from "@/lib/training-intent";
+import { describeTrainError } from "@/lib/describe-train-error";
 import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
@@ -67,7 +63,7 @@ const DATASET_TABS = [
   { id: "versions", label: "Versions" },
   { id: "readiness", label: "Readiness" },
   { id: "accumulation", label: "Accumulation" },
-  { id: "training", label: "Training" },
+  { id: "training", label: "Run / Train" },
 ] as const;
 
 function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string; className: string } {
@@ -114,23 +110,6 @@ function formatEvaluationReasons(reasons: Array<string | Record<string, unknown>
     .join(" · ");
 }
 
-function describeTrainError(err: unknown): string {
-  const fallback = String((err as { message?: string })?.message || err || "Unknown error");
-  try {
-    const parsed = JSON.parse(fallback);
-    const detail = parsed?.detail;
-    if (detail?.status === "BLOCKED") {
-      const reason = String(detail?.reason || "BLOCKED");
-      const details = String(detail?.details || "");
-      return details ? `Train blocked (${reason}): ${details}` : `Train blocked (${reason})`;
-    }
-    if (typeof detail === "string" && detail.trim()) return `Train failed: ${detail}`;
-  } catch {
-    // keep fallback
-  }
-  return `Train failed: ${fallback}`;
-}
-
 const POLICY_TRIGGER_MODE_OPTIONS = [
   { value: "manual", label: "manual" },
   { value: "auto_ready", label: "auto_ready" },
@@ -169,11 +148,7 @@ export default function DatasetHubPage() {
   const queryClient = useQueryClient();
   const { tenantId, projectId, token, accessibleScopes } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
-  const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("");
-  const [trainingMode, setTrainingMode] = useState("standard");
-  const [requiredSize, setRequiredSize] = useState("1000");
-  const [trainMsg, setTrainMsg] = useState("");
   const [policyMsg, setPolicyMsg] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "versions" | "readiness" | "accumulation" | "training">("overview");
   const isTabLoading = useTabLoading(activeTab);
@@ -566,18 +541,6 @@ export default function DatasetHubPage() {
     [policiesQuery.data?.items]
   );
 
-  const modelsQuery = useQuery({
-    queryKey: mlairKeys.models.list(tenantId, projectId),
-    queryFn: () => fetchModels(tenantId, projectId, token),
-    ...realtimeFallbackPolling()
-  });
-  const trainingModelSelectOptions = useMemo(
-    () => [
-      { value: "", label: "— select model —" },
-      ...(modelsQuery.data?.items || []).map((m) => ({ value: m.model_id, label: m.name }))
-    ],
-    [modelsQuery.data?.items]
-  );
   const trainingEligibilityRows = useMemo(() => {
     const items = eligibilityQuery.data?.items ?? [];
     return items.map((it) => ({
@@ -607,114 +570,6 @@ export default function DatasetHubPage() {
     })();
     return { strat, cur, tgt, rowsToThreshold, lastVid, lastAt, lastVersionLabel };
   }, [bufferQuery.data, versionsQuery.data?.items]);
-
-  const resolvedPipelineQuery = useQuery({
-    queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, selectedModelId),
-    queryFn: () => fetchModelResolvedPipeline(tenantId, projectId, selectedModelId, token),
-    enabled: Boolean(selectedModelId && token)
-  });
-
-  const effectivePipeline = resolvedPipelineQuery.data?.pipeline_id || "";
-  const pipelineVersionsQuery = useQuery({
-    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, effectivePipeline),
-    queryFn: () => fetchPipelineVersions(tenantId, projectId, effectivePipeline, token),
-    enabled: Boolean(effectivePipeline && token)
-  });
-  const pluginPrecheck = useMemo(() => {
-    if (!effectivePipeline) return { ok: false, reason: "Select a model with a resolved pipeline" };
-    const items = pipelineVersionsQuery.data?.items || [];
-    if (!items.length) return { ok: false, reason: "Pipeline has no version" };
-    const latest = items[0];
-    const cfg = (latest?.config || {}) as Record<string, unknown>;
-    const tasks = cfg.tasks;
-    if (!Array.isArray(tasks) || tasks.length === 0) {
-      return { ok: false, reason: "Pipeline tasks are not configured" };
-    }
-    const hasPlugin = tasks.every((t) => {
-      if (!t || typeof t !== "object") return false;
-      return Boolean(String((t as Record<string, unknown>).plugin || "").trim());
-    });
-    if (!hasPlugin) return { ok: false, reason: "Task plugin is missing in pipeline config" };
-    return { ok: true, reason: "" };
-  }, [effectivePipeline, pipelineVersionsQuery.data]);
-
-  const trainingVersionColumns: DataTableColumn<DatasetVersionItem>[] = useMemo(
-    () => [
-      {
-        id: "version",
-        header: "Version",
-        cell: (v) => <span className="whitespace-nowrap font-mono text-xs">{v.version}</span>,
-      },
-      {
-        id: "status",
-        header: "Status",
-        cell: (v) => (
-          <span
-            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
-          >
-            {normalizeDatasetStatus(v.status)}
-          </span>
-        ),
-      },
-      {
-        id: "action",
-        header: "Action",
-        cell: (v) => (
-          <Button
-            type="button"
-            className="px-3 py-1 text-xs"
-            disabled={
-              !selectedModelId ||
-              normalizeDatasetStatus(v.status) === "FAILED" ||
-              !pluginPrecheck.ok ||
-              pipelineVersionsQuery.isLoading
-            }
-            title={pluginPrecheck.ok ? "Train" : pluginPrecheck.reason}
-            onClick={(e) => {
-              e.stopPropagation();
-              setTrainMsg("");
-              setSelectedVersionId(v.version_id);
-              void (async () => {
-                try {
-                  const scopedPid = normalizeProjectId(String(projectId || "").trim());
-                  const runContext: Record<string, string> = {};
-                  if (scopedPid.startsWith("clinic_")) {
-                    runContext.clinic_id = scopedPid.slice("clinic_".length);
-                  }
-                  runContext.mlair_model_id = selectedModelId;
-                  const res = await executeTrainingIntent(tenantId, projectId, token, {
-                    kind: "model_dataset",
-                    modelId: selectedModelId,
-                    datasetId,
-                    datasetVersionId: v.version_id,
-                    idempotencyKey: `dataset-hub-train-${Date.now()}`,
-                    trainingMode,
-                    context: Object.keys(runContext).length ? runContext : undefined,
-                  });
-                  if (res.run_id) router.push(`/runs/${res.run_id}`);
-                } catch (err) {
-                  setTrainMsg(describeTrainError(err));
-                }
-              })();
-            }}
-          >
-            Train
-          </Button>
-        ),
-      },
-    ],
-    [
-      datasetId,
-      pipelineVersionsQuery.isLoading,
-      pluginPrecheck,
-      projectId,
-      router,
-      selectedModelId,
-      tenantId,
-      token,
-      trainingMode,
-    ],
-  );
 
   const allEvaluationItems = readinessEvaluationsQuery.data?.items ?? [];
   const filteredEvaluations = useMemo(() => {
@@ -1781,72 +1636,16 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "training" ? (
-        <DetailSection title="Train model (intent)" accentBorder="violet" className="min-w-0">
-          <p className="mb-3 text-xs text-muted-foreground">
-            Uses <code className="rounded px-1 font-mono text-foreground">POST …/runs/trigger</code>. Each row pins that row&apos;s{" "}
-            <code className="rounded px-1 font-mono text-foreground">dataset_version_id</code>.
-          </p>
-          {!strictDatasetVersionOnTrigger ? (
-            <div className="mb-3 rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-xs text-[color:var(--status-pending-fg)]">
-              <span className="font-semibold">strict_dataset_version_required</span> is off — API may accept trigger without a
-              version; the table still pins the row you click.
-            </div>
-          ) : null}
-          {strictDatasetVersionAllPostRuns ? (
-            <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">strict_dataset_version_all_post_runs</span> — API may require a
-              pinned <code className="font-mono text-foreground">dataset_version_id</code> for generic{" "}
-              <code className="font-mono text-foreground">POST …/runs</code>, pipeline run, and check-readiness calls even when the
-              pipeline omits dataset inputs.
-            </div>
-          ) : null}
-          <div className="mb-3">
-            <label className="text-xs text-muted-foreground">Model</label>
-            <SelectDropdown
-              value={selectedModelId}
-              onChange={setSelectedModelId}
-              options={trainingModelSelectOptions}
-              className="mt-1"
-              buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
-              aria-label="Model to train"
-            />
-          </div>
-          <div className="mb-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Pipeline:{" "}
-            <span className="font-mono text-foreground">{effectivePipeline || "—"}</span>
-            {resolvedPipelineQuery.data?.source ? (
-              <span className="text-muted-foreground"> ({resolvedPipelineQuery.data.source})</span>
-            ) : null}
-          </div>
-          <TrainingGateFields
-            trainingMode={trainingMode}
-            onTrainingModeChange={setTrainingMode}
-            requiredSize={requiredSize}
-            onRequiredSizeChange={setRequiredSize}
-            className="mb-3"
+        <DetailSection title="Run / Train" accentBorder="violet" className="min-w-0">
+          <ExecutionIntentPanel
+            datasetId={datasetId}
+            tenantId={tenantId}
+            projectId={projectId}
+            token={token}
+            scopePinned={scopePinned}
+            versions={versionsQuery.data?.items || []}
+            versionsLoading={versionsQuery.isLoading}
           />
-          {trainMsg ? <div className="mb-2 text-xs text-[color:var(--status-pending-fg)]">{trainMsg}</div> : null}
-          {versionsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : (versionsQuery.data?.items || []).length === 0 ? (
-            <MlopsEmptyState
-              icon={Database}
-              title="No versions yet"
-              description="Create a dataset version before training from this hub."
-            />
-          ) : (
-            <MlopsDataTable
-              columns={trainingVersionColumns}
-              data={versionsQuery.data?.items || []}
-              keyExtractor={(v) => v.version_id}
-              onRowClick={(v) => setSelectedVersionId(v.version_id)}
-              rowClassName={(v) =>
-                selectedVersionForReadiness === v.version_id ? "bg-secondary/40" : undefined
-              }
-              emptyMessage="No versions yet."
-              className="text-sm"
-            />
-          )}
         </DetailSection>
       ) : null}
 

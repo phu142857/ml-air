@@ -1,9 +1,13 @@
 /**
- * Optional client-side beacon for “where did training intent originate?” (Hub vs pipeline).
- * No-op unless `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` is set; set `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG=1` to log payloads in the console.
+ * Optional client-side beacon for execution intent origin.
+ * No-op unless `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` is set.
  */
 
-export type TrainIntentSource = "hub_runs_trigger" | "pipeline_gated_run";
+export type TrainIntentSource =
+  | "hub_train_model"
+  | "hub_run_pipeline"
+  | "hub_runs_trigger"
+  | "pipeline_gated_run";
 
 export type TrainIntentTelemetryFields = {
   intent: TrainIntentSource;
@@ -28,7 +32,7 @@ export function recordTrainIntentTelemetry(fields: TrainIntentTelemetryFields): 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      keepalive: true
+      keepalive: true,
     }).catch(() => {
       /* best-effort */
     });

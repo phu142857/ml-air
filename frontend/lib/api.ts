@@ -1,4 +1,3 @@
-import { recordTrainIntentTelemetry } from "./train-intent-telemetry";
 import { buildAuditTimelineSearchParams, type AuditTimelineFilters } from "./audit-timeline-filters";
 
 type RuntimeConfigGlobal = {
@@ -896,12 +895,6 @@ export async function triggerPipelineRunWithGating(
   }
 ) {
   const scopedProjectId = normalizeProjectId(projectId);
-  recordTrainIntentTelemetry({
-    intent: "pipeline_gated_run",
-    tenant_id: tenantId,
-    project_id: scopedProjectId,
-    pipeline_id: pipelineId
-  });
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/pipelines/${encodeURIComponent(pipelineId)}/run`,
     {
@@ -1740,13 +1733,6 @@ export async function triggerRunFromModelDataset(
   }
 ) {
   const scopedProjectId = normalizeProjectId(projectId);
-  recordTrainIntentTelemetry({
-    intent: "hub_runs_trigger",
-    tenant_id: tenantId,
-    project_id: scopedProjectId,
-    dataset_id: payload.dataset_id,
-    model_id: payload.model_id
-  });
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/trigger`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },

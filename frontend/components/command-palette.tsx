@@ -61,9 +61,8 @@ const navigationItems = [
 ]
 
 const quickActions = [
-  { name: "Trigger run", href: "/runs?trigger=1", icon: Play, description: "Open trigger-run dialog" },
-  { name: "Trigger gated run", href: "/pipelines?trigger=gated", icon: Play, description: "Gated pipeline run (Pipelines)" },
-  { name: "Dataset Hub", href: "/datasets", icon: Database, description: "Browse datasets and versions" },
+  { name: "Dataset Hub", href: "/datasets", icon: Database, description: "Browse datasets — run / train from a dataset" },
+  { name: "Train model", href: "/datasets", icon: Play, description: "Open Dataset Hub to train with a model" },
   { name: "Search page", href: "/search", icon: Search, description: "Full search results" },
 ]
 

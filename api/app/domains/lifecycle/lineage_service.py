@@ -1199,9 +1199,22 @@ def create_dataset_version_from_csv_upload(
         f"{_safe_token(source_filename) or 'data.csv'}"
     )
     out_path = _file_uri_to_path(artifact_uri)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "wb") as f:
-        f.write(csv_bytes)
+    try:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "wb") as f:
+            f.write(csv_bytes)
+    except Exception:
+        # Failed before version row exists — remove orphan dataset so Hub list stays consistent.
+        try:
+            delete_dataset(tenant_id, project_id, dataset_id)
+        except Exception:
+            logger.warning(
+                "csv_upload rollback delete_dataset failed dataset_id=%s project=%s",
+                dataset_id,
+                project_id,
+                exc_info=True,
+            )
+        raise
 
     _upsert_dataset(
         tenant_id=tenant_id,
@@ -1361,6 +1374,25 @@ def _materialize_runtime_feedback_lineage_item_if_applicable(
     )
 
 
+def _skip_unpinned_lineage_version_row(
+    *,
+    source_type: str,
+    ver_raw: Any,
+    materialized_version_id: str | None,
+) -> bool:
+    """
+  When ``runtime_feedback`` omits an explicit ``version``, only the accumulation buffer
+  should grow until ``snapshot_on_threshold`` materializes. Do not insert ephemeral ``vN``
+  rows on every ingest (Vet-AI feedback mirror path).
+    """
+    if materialized_version_id:
+        return False
+    if str(source_type or "").strip() != "runtime_feedback":
+        return False
+    explicit = str(ver_raw).strip() if ver_raw is not None else ""
+    return not explicit
+
+
 def ingest_lineage_from_task(
     tenant_id: str,
     project_id: str,
@@ -1408,17 +1440,23 @@ def ingest_lineage_from_task(
             ver = materialized_version
         touched_dataset_ids.add(str(ingest["dataset_id"]))
         item_source_type = str(ingest["source_type"])
-        input_vids.append(
-            materialized_version_id
-            or _upsert_dataset_version(
-                ingest["dataset_id"],
-                ver,
-                str(ingest["uri"]) if ingest.get("uri") else None,
-                str(ingest["checksum"]) if ingest.get("checksum") else None,
-                source_type=item_source_type,
-                record_count=ingest["size"],
+        if materialized_version_id:
+            input_vids.append(materialized_version_id)
+        elif not _skip_unpinned_lineage_version_row(
+            source_type=item_source_type,
+            ver_raw=ver_raw,
+            materialized_version_id=materialized_version_id,
+        ):
+            input_vids.append(
+                _upsert_dataset_version(
+                    ingest["dataset_id"],
+                    ver,
+                    str(ingest["uri"]) if ingest.get("uri") else None,
+                    str(ingest["checksum"]) if ingest.get("checksum") else None,
+                    source_type=item_source_type,
+                    record_count=ingest["size"],
+                )
             )
-        )
 
     if not input_vids and not outs:
         _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)
@@ -1451,17 +1489,23 @@ def ingest_lineage_from_task(
             ver = materialized_version
         touched_dataset_ids.add(str(ingest["dataset_id"]))
         item_source_type = str(ingest["source_type"])
-        output_vids.append(
-            materialized_version_id
-            or _upsert_dataset_version(
-                ingest["dataset_id"],
-                ver,
-                str(ingest["uri"]) if ingest.get("uri") else None,
-                str(ingest["checksum"]) if ingest.get("checksum") else None,
-                source_type=item_source_type,
-                record_count=ingest["size"],
+        if materialized_version_id:
+            output_vids.append(materialized_version_id)
+        elif not _skip_unpinned_lineage_version_row(
+            source_type=item_source_type,
+            ver_raw=ver_raw,
+            materialized_version_id=materialized_version_id,
+        ):
+            output_vids.append(
+                _upsert_dataset_version(
+                    ingest["dataset_id"],
+                    ver,
+                    str(ingest["uri"]) if ingest.get("uri") else None,
+                    str(ingest["checksum"]) if ingest.get("checksum") else None,
+                    source_type=item_source_type,
+                    record_count=ingest["size"],
+                )
             )
-        )
 
     if not output_vids:
         _flush_touched_datasets(tenant_id, project_id, touched_dataset_ids)

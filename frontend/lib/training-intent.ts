@@ -1,7 +1,8 @@
 /**
- * Intent-driven training façade: prefer /runs/trigger (model + dataset); keep pipeline run for compat / advanced DAG execution.
+ * Intent-driven execution façade: model+dataset (Hub train) or explicit pipeline run.
  */
 import { triggerPipelineRunWithGating, triggerRunFromModelDataset } from "./api";
+import { recordTrainIntentTelemetry } from "./train-intent-telemetry";
 
 export type TrainingIntentFromModelDataset = {
   kind: "model_dataset";
@@ -21,6 +22,7 @@ export type TrainingIntentPipelineCompat = {
   kind: "pipeline_compat";
   pipelineId: string;
   trainingMode: string;
+  datasetId?: string;
   datasetVersionId?: string;
   overrideConfig?: Record<string, unknown>;
   idempotencyKey?: string | null;
@@ -40,6 +42,13 @@ export async function executeTrainingIntent(
   intent: TrainingIntent
 ) {
   if (intent.kind === "model_dataset") {
+    recordTrainIntentTelemetry({
+      intent: "hub_train_model",
+      tenant_id: tenantId,
+      project_id: projectId,
+      dataset_id: intent.datasetId,
+      model_id: intent.modelId,
+    });
     return triggerRunFromModelDataset(tenantId, projectId, token, {
       model_id: intent.modelId,
       dataset_id: intent.datasetId,
@@ -53,6 +62,13 @@ export async function executeTrainingIntent(
       context: intent.context
     });
   }
+  recordTrainIntentTelemetry({
+    intent: "hub_run_pipeline",
+    tenant_id: tenantId,
+    project_id: projectId,
+    pipeline_id: intent.pipelineId,
+    dataset_id: intent.datasetId,
+  });
   return triggerPipelineRunWithGating(tenantId, projectId, intent.pipelineId, token, {
     pipeline_id: intent.pipelineId,
     idempotency_key: intent.idempotencyKey,

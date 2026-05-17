@@ -25,7 +25,7 @@ describe("recordTrainIntentTelemetry", () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     recordTrainIntentTelemetry({
-      intent: "hub_runs_trigger",
+      intent: "hub_train_model",
       tenant_id: "t1",
       project_id: "p1",
       dataset_id: "d1",
@@ -39,7 +39,7 @@ describe("recordTrainIntentTelemetry", () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     recordTrainIntentTelemetry({
-      intent: "pipeline_gated_run",
+      intent: "hub_run_pipeline",
       tenant_id: "t1",
       project_id: "p1",
       pipeline_id: "pipe-1"
@@ -50,7 +50,7 @@ describe("recordTrainIntentTelemetry", () => {
     expect(init?.method).toBe("POST");
     expect(init?.keepalive).toBe(true);
     const body = JSON.parse(String(init?.body));
-    expect(body.intent).toBe("pipeline_gated_run");
+    expect(body.intent).toBe("hub_run_pipeline");
     expect(body.tenant_id).toBe("t1");
     expect(body.project_id).toBe("p1");
     expect(body.pipeline_id).toBe("pipe-1");
