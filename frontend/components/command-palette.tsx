@@ -21,6 +21,7 @@ import {
   Loader2,
   ExternalLink,
   ListTodo,
+  BarChart3,
 } from "lucide-react"
 import {
   CommandDialog,
@@ -67,6 +68,7 @@ const executionNavigation = [
 ]
 
 const quickActions = [
+  { name: "Semantic metrics index", href: "/lifecycle?metrics=1", icon: BarChart3, description: "Lifecycle metrics, events, and Grafana dashboards" },
   { name: "Lifecycle timeline", href: "/lifecycle", icon: History, description: "Semantic audit — readiness, train, promote" },
   { name: "Dataset Hub", href: "/datasets", icon: Database, description: "Browse datasets — run / train from a dataset" },
   { name: "Train model", href: "/datasets", icon: Play, description: "Open Dataset Hub to train with a model" },

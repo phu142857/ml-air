@@ -53,6 +53,7 @@ const IMMEDIATE_INVALIDATE_KEY_HEADS = new Set([
   "datasets",
   "models",
   "execution-projection",
+  "tasks-recent",
 ]);
 
 function isImmediateInvalidateKey(key: readonly unknown[]): boolean {
@@ -149,7 +150,10 @@ function keysForEvent(
   const runId = typeof ev.payload?.run_id === "string" ? ev.payload.run_id : undefined;
 
   if (t === "run.created" || t === "run.updated") {
-    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
+    const keys: unknown[][] = [
+      [...mlairKeys.runs.list(tenantId, projectId)],
+      [...mlairKeys.tasks.recentPrefix(tenantId, projectId)],
+    ];
     if (rid) {
       keys.push(
         [...mlairKeys.run.detail(rid)],
@@ -164,7 +168,13 @@ function keysForEvent(
   }
   if (t === "task.updated") {
     const r = runId || rid;
-    const keys: unknown[][] = [[...mlairKeys.runs.list(tenantId, projectId)]];
+    const keys: unknown[][] = [
+      [...mlairKeys.runs.list(tenantId, projectId)],
+      [...mlairKeys.tasks.recentPrefix(tenantId, projectId)],
+    ];
+    if (rid) {
+      keys.push(["task", rid]);
+    }
     if (r) {
       keys.push(
         [...mlairKeys.run.tasks(r)],
@@ -479,6 +489,21 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
       });
       return changed ? { ...old, items } : old;
     });
+    type RecentTaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string };
+    queryClient.setQueriesData<RecentTaskRow[]>(
+      { queryKey: mlairKeys.tasks.recentPrefix(tenantId, projectId) },
+      (old) => {
+        if (!Array.isArray(old)) return old;
+        let changed = false;
+        const next = old.map((row) => {
+          if (row.task_id !== rid || row.run_id !== runFromPayload) return row;
+          if (updatedAtMs(row.updated_at) > uaMs) return row;
+          changed = true;
+          return { ...row, status, updated_at: iso };
+        });
+        return changed ? next : old;
+      },
+    );
   }
 
   if (typ === "model.promoted") {

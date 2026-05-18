@@ -137,8 +137,10 @@ def build_event(
 
 def publish_mlair_event(event: dict[str, Any]) -> None:
     from app.domains.lifecycle.semantic_event_contract import validate_semantic_event_if_enabled
+    from app.otel_api import inject_redis_trace_carrier
 
     event = dict(event)
+    inject_redis_trace_carrier(event)
     if event_signing_service.signing_enabled():
         try:
             event = event_signing_service.sign_event(event)

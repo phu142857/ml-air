@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ListTodo, Loader2 } from "lucide-react"
 import { fetchTaskResolved, normalizeProjectId } from "@/lib/api"
@@ -38,6 +39,8 @@ function TaskDetailContent() {
   const hint = useMemo(() => parseTaskScopeHint(searchParams), [searchParams])
   const scopeKey = taskScopeHintKey(hint)
 
+  const poll = useRealtimeQueryPolling()
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: mlairKeys.task.detail(taskId, scopeKey),
     queryFn: () =>
@@ -47,6 +50,8 @@ function TaskDetailContent() {
         runId: hint.runId,
       }),
     enabled: Boolean(taskId?.trim() && token?.trim()),
+    refetchOnMount: "always",
+    ...poll,
   })
 
   const resolved = data?.resolved_scope

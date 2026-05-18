@@ -314,8 +314,8 @@ def _strict_dataset_version_required() -> bool:
 
 
 def _strict_dataset_version_all_post_runs() -> bool:
-    """Opt-in Phase-1 lever: require a pinned version on generic POST run paths (not only declared-input runs)."""
-    return os.getenv("ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS", "0") == "1"
+    """Require a pinned version on generic POST run paths (not only declared-input runs). Default on."""
+    return os.getenv("ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS", "1") == "1"
 
 
 def _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_override: dict) -> None:
@@ -1257,6 +1257,7 @@ def runtime_config_v1() -> dict:
         **promotion_governance_runtime(),
     }
     jaeger_ui = os.getenv("ML_AIR_JAEGER_UI_URL", "").strip() or None
+    grafana_ui = os.getenv("ML_AIR_GRAFANA_URL", "").strip() or None
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
         "api_base_url": os.getenv("ML_AIR_RUNTIME_API_BASE_URL", "").strip() or None,
@@ -1267,6 +1268,7 @@ def runtime_config_v1() -> dict:
         "features": features,
         "observability": {
             "jaeger_ui_url": jaeger_ui,
+            "grafana_ui_url": grafana_ui,
             "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
         },
         "build": {

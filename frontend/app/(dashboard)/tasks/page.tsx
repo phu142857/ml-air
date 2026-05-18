@@ -3,7 +3,6 @@
 import { useMemo, useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
 import { ListTodo } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,15 +11,12 @@ import { StatusBadge } from "@/components/mlops/status-badge"
 import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { SCOPE_AGGREGATE_TASKS } from "@/lib/scope-messages"
-import { useAppContext } from "@/lib/app-context"
-import { fetchRunTasks, fetchRuns, type TaskItem } from "@/lib/api"
-import { mlairKeys } from "@/lib/query-keys"
+import { useTasksListLive, type TaskRow } from "@/hooks/use-tasks-list-live"
 import { isScopePinned } from "@/lib/scope"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { formatApiClientError, formatRelativeTime } from "@/lib/utils"
 import { normalizeStatus, statusToMlopsBadge } from "@/lib/status-style"
-
-type TaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string }
+import { useAppContext } from "@/lib/app-context"
 
 export default function TasksPage() {
   const router = useRouter()
@@ -29,54 +25,9 @@ export default function TasksPage() {
   const isAggregate = !scopePinned
   const [taskId, setTaskId] = useState("")
 
-  const runsQuery = useQuery({
-    queryKey: mlairKeys.runs.list(tenantId, projectId),
-    queryFn: () => fetchRuns(tenantId, projectId, token),
-    enabled: Boolean(token?.trim()),
-  })
-
-  const recentRuns = useMemo(() => {
-    const items = runsQuery.data?.items ?? []
-    return [...items]
-      .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
-      .slice(0, scopePinned ? 8 : 5)
-  }, [runsQuery.data, scopePinned])
-
-  const recentTasksQuery = useQuery({
-    queryKey: [
-      "recent-tasks",
-      tenantId,
-      projectId,
-      recentRuns.map((r) => `${r.tenant_id}:${r.project_id}:${r.run_id}`).join(","),
-    ] as const,
-    queryFn: async (): Promise<TaskRow[]> => {
-      const batches = await Promise.all(
-        recentRuns.map(async (run) => {
-          const tid = run.tenant_id || tenantId
-          const pid = run.project_id || projectId
-          if (tid === "all" || pid === "all") return []
-          try {
-            const data = await fetchRunTasks(tid, pid, run.run_id, token)
-            return (data.items ?? []).map((t) => ({
-              ...t,
-              run_id: run.run_id,
-              tenant_id: tid,
-              project_id: pid,
-            }))
-          } catch {
-            return []
-          }
-        }),
-      )
-      return batches
-        .flat()
-        .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
-        .slice(0, 28)
-    },
-    enabled: Boolean(token?.trim()) && recentRuns.length > 0,
-  })
-
-  const rows = recentTasksQuery.data ?? []
+  const { items: rows, recentRuns, runsQuery, isLoading, isError, error, isFetching } = useTasksListLive(
+    Boolean(token?.trim()),
+  )
 
   const taskColumns: DataTableColumn<TaskRow>[] = useMemo(
     () => [
@@ -146,6 +97,8 @@ export default function TasksPage() {
     [router],
   )
 
+  const queryError = runsQuery.error ?? error
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
@@ -153,7 +106,13 @@ export default function TasksPage() {
         icon={ListTodo}
         accent="violet"
         title="Tasks"
-        subtitle={isAggregate ? "Fan-out across workspaces — pin scope to filter" : "Attempts, payloads, and worker metadata"}
+        subtitle={
+          isAggregate
+            ? "Fan-out across workspaces — pin scope to filter"
+            : isFetching
+              ? "Live updates from runs and task events"
+              : "Attempts, payloads, and worker metadata"
+        }
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden p-6">
@@ -190,20 +149,15 @@ export default function TasksPage() {
             <h3 className="text-sm font-medium text-foreground">Recent tasks</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
               From {recentRuns.length} recent run{recentRuns.length === 1 ? "" : "s"}
-              {isAggregate ? " (aggregate scope)" : ""}.
+              {isAggregate ? " (aggregate scope)" : ""}
+              {isFetching ? " · syncing…" : ""}.
             </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
             <ScopedListContent
-              isLoading={runsQuery.isLoading || recentTasksQuery.isLoading}
-              isError={runsQuery.isError || recentTasksQuery.isError}
-              errorMessage={
-                runsQuery.error
-                  ? formatApiClientError(runsQuery.error)
-                  : recentTasksQuery.error
-                    ? formatApiClientError(recentTasksQuery.error)
-                    : undefined
-              }
+              isLoading={isLoading}
+              isError={isError}
+              errorMessage={queryError ? formatApiClientError(queryError) : undefined}
               isEmpty={rows.length === 0}
               emptyIcon={ListTodo}
               emptyTitle="No tasks in recent runs"
@@ -224,3 +178,4 @@ export default function TasksPage() {
     </div>
   )
 }
+

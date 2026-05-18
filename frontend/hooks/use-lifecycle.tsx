@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchAuditTimeline, fetchRuns } from "@/lib/api"
 import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
+import { jaegerTraceDeepLink } from "@/lib/jaeger-trace-url"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
@@ -72,10 +73,13 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   const lifecycleQuery = useQuery({
     queryKey: mlairKeys.audit.timeline(tenantId, projectId),
     queryFn: async () => {
-      const { items } = await fetchAuditTimeline(tenantId, projectId, token, {
+      const { items, traceparent } = await fetchAuditTimeline(tenantId, projectId, token, {
         limit: 100,
       })
-      return mapAuditTimelineItems(items)
+      return {
+        events: mapAuditTimelineItems(items),
+        traceparent,
+      }
     },
     enabled,
     staleTime: 30_000,
@@ -102,10 +106,17 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     retry: 0,
   })
 
-  const events: AuditEvent[] = Array.isArray(lifecycleQuery.data) ? lifecycleQuery.data : []
+  const events: AuditEvent[] = Array.isArray(lifecycleQuery.data?.events)
+    ? lifecycleQuery.data.events
+    : []
+
+  const auditFetchJaegerUrl = useMemo(
+    () => jaegerTraceDeepLink(jaegerUrl, lifecycleQuery.data?.traceparent ?? null),
+    [jaegerUrl, lifecycleQuery.data?.traceparent],
+  )
 
   useEffect(() => {
-    const data = lifecycleQuery.data
+    const data = lifecycleQuery.data?.events
     if (!Array.isArray(data) || data.length === 0) return
     const ids = new Set(data.map((e) => e.id))
     if (!hasSeededRef.current) {
@@ -136,7 +147,7 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
       })
     }, 2500)
     return () => clearTimeout(t)
-  }, [lifecycleQuery.data, isLive, toast])
+  }, [lifecycleQuery.data?.events, isLive, toast])
 
   const errorType: ErrorType = useMemo(() => {
     if (!lifecycleQuery.error) return null
@@ -239,5 +250,6 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     refresh,
     refreshJaeger,
     toggleLive,
+    auditFetchJaegerUrl,
   }
 }

@@ -119,6 +119,25 @@ def otel_subprocess_env() -> dict[str, str]:
         return {}
 
 
+def inject_w3c_carrier_on_event(event: dict[str, Any]) -> None:
+    """Merge W3C trace context from the active span into a Redis JSON payload."""
+    if not otel_worker_enabled():
+        return
+    try:
+        from opentelemetry import propagate, trace
+
+        span = trace.get_current_span()
+        if not span.is_recording() or not span.get_span_context().is_valid:
+            return
+        carrier: dict[str, str] = {}
+        propagate.inject(carrier)
+        for k, v in carrier.items():
+            if isinstance(v, str) and v.strip():
+                event[str(k)] = v.strip()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("otel_event_carrier_inject_failed err=%s", exc)
+
+
 def set_span_mlair_trace_id(trace_id: str) -> None:
     if not (trace_id or "").strip():
         return

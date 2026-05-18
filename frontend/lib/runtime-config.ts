@@ -12,6 +12,7 @@ declare global {
       features?: Record<string, boolean>;
       observability?: {
         jaeger_ui_url?: string | null;
+        grafana_ui_url?: string | null;
         semantic_observability_surfaces?: SemanticObservabilitySurface[];
       };
       tenantId?: string;

@@ -114,12 +114,27 @@ def _append_event_streams(client: Redis, event: dict[str, Any]) -> None:
         )
 
 
+def _finalize_event_trace(event: dict[str, Any]) -> dict[str, Any]:
+    """Attach correlation id + W3C carrier from the active scheduler span when OTel is on."""
+    event = dict(event)
+    try:
+        from otel_bootstrap import inject_w3c_carrier_on_event, resolve_trace_id_for_event
+
+        if not str(event.get("trace_id") or "").strip():
+            event["trace_id"] = resolve_trace_id_for_event(event)
+        inject_w3c_carrier_on_event(event)
+    except ImportError:
+        pass
+    return event
+
+
 def _publish(client: Redis, event: dict[str, Any]) -> None:
     tenant_id = str(event.get("tenant_id") or "").strip()
     project_id = str(event.get("project_id") or "").strip()
     ev_type = str(event.get("type") or "")
     if not tenant_id or not project_id or not ev_type:
         return
+    event = _finalize_event_trace(event)
     event = _assign_sequence_and_buffer(client, event)
     _append_event_streams(client, event)
     channel = f"mlair.events.{tenant_id}.{project_id}"

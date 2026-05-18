@@ -189,6 +189,7 @@ export type SemanticObservabilitySurface = {
 
 export type RuntimeConfigObservability = {
   jaeger_ui_url?: string | null;
+  grafana_ui_url?: string | null;
   semantic_observability_surfaces?: SemanticObservabilitySurface[];
 };
 

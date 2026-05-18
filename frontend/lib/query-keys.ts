@@ -24,6 +24,12 @@ export const mlairKeys = {
   task: {
     detail: (taskId: string, scopeKey = "") => ["task", taskId, scopeKey] as const
   },
+  tasks: {
+    /** Recent tasks fan-out from recent runs (Tasks tab). */
+    recent: (tenantId: string, projectId: string, runsFingerprint: string) =>
+      ["tasks-recent", tenantId, projectId, runsFingerprint] as const,
+    recentPrefix: (tenantId: string, projectId: string) => ["tasks-recent", tenantId, projectId] as const
+  },
   datasets: {
     list: (tenantId: string, projectId: string) => ["datasets", tenantId, projectId] as const,
     detail: (tenantId: string, projectId: string, datasetId: string) =>

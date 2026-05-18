@@ -4,7 +4,7 @@
 
 Move all environments to **version-centric** dataset and readiness behavior, with a **bounded** window for legacy implicit “latest head” resolution.
 
-**In-repo default today:** strict readiness (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`), strict trigger pin (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`), declared-inputs-only for generic `POST .../runs` unless `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1`.
+**In-repo default today:** strict readiness (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`), strict trigger pin (`ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`), **blanket pin on generic run paths** (`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1` — set `0` only for legacy non-dataset pipelines).
 
 ## Product-owned calendar (fill per org)
 

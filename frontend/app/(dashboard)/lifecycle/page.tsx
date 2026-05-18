@@ -45,6 +45,8 @@ import { auditEventsToCsv } from "@/lib/audit-event"
 import { useAppContext } from "@/lib/app-context"
 import { useJaegerUiUrl } from "@/lib/use-jaeger-ui-url"
 import { useSemanticObservabilitySurfaces, shouldOpenLifecycleMetricsIndex } from "@/lib/use-semantic-observability-surfaces"
+import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
+import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
 import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { SCOPE_AGGREGATE_LIFECYCLE } from "@/lib/scope-messages"
 import { cn, downloadBlob, formatApiClientError } from "@/lib/utils"
@@ -55,6 +57,7 @@ function LifecycleContent() {
   const searchParams = useSearchParams()
   const runtimeJaegerUrl = useJaegerUiUrl()
   const semanticObservabilitySurfaces = useSemanticObservabilitySurfaces()
+  const grafanaUiUrl = useGrafanaUiUrl()
   const [metricsIndexOpen, setMetricsIndexOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -97,6 +100,7 @@ function LifecycleContent() {
     refreshJaeger,
     toggleLive,
     scopePinned,
+    auditFetchJaegerUrl,
   } = useLifecycle({ jaegerUrl })
 
   const handleExport = useCallback(async () => {
@@ -436,6 +440,16 @@ function LifecycleContent() {
             <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} />
           </div>
         ) : null}
+        {auditFetchJaegerUrl ? (
+          <div className="mb-4 flex justify-end">
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
+              <a href={auditFetchJaegerUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3 w-3" />
+                Open last audit fetch in Jaeger
+              </a>
+            </Button>
+          </div>
+        ) : null}
         <div
           className={cn(
             "grid grid-cols-5 gap-4 transition-opacity duration-300",
@@ -571,9 +585,28 @@ function LifecycleContent() {
                       </div>
                     ) : null}
                     {surf.grafana_dashboards?.length ? (
-                      <p className="mt-2 text-[10px] text-muted-foreground/90">
-                        Grafana: {surf.grafana_dashboards.join(", ")}
-                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {surf.grafana_dashboards.map((file) => {
+                          const href = grafanaDashboardUrl(grafanaUiUrl, file)
+                          const label = file.replace(/\.json$/i, "")
+                          return href ? (
+                            <a
+                              key={file}
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] text-sky-400 hover:bg-muted/50"
+                            >
+                              {label}
+                              <ExternalLink className="h-2.5 w-2.5" />
+                            </a>
+                          ) : (
+                            <span key={file} className="text-[10px] text-muted-foreground/90">
+                              Grafana: {file}
+                            </span>
+                          )
+                        })}
+                      </div>
                     ) : null}
                   </div>
                 ))}
