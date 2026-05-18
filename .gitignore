@@ -89,3 +89,10 @@ build/
 frontend/tsconfig.tsbuildinfo
 ideal_architecture.md
 ideal_architecture_gap_vi.md
+
+# Local runtime stores / scratch (e.g. state_store index bins)
+data/
+
+# Script test caches (under scripts/ when running smoke locally)
+scripts/__pycache__/
+scripts/**/*.pyc

@@ -83,6 +83,41 @@ class TestPromotionEligibility(unittest.TestCase):
         self.assertFalse(out["eligible"])
         self.assertEqual(out["reasons"][-1]["code"], "approval_rejected")
 
+    def test_rollback_production_to_staging_without_approval(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_SKIP_APPROVAL_FOR_PROMOTE": "0"}, clear=False):
+            out = compute_promotion_eligibility(
+                model_id="m1",
+                version=3,
+                target_stage="staging",
+                current_stage="production",
+                approval_status=None,
+                artifact_uri=None,
+            )
+        self.assertTrue(out["eligible"])
+        self.assertEqual(out["transition"], "rollback")
+        self.assertFalse(out["requires_approval"])
+
+    def test_forward_skip_staging_blocked(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ML_AIR_SKIP_APPROVAL_FOR_PROMOTE": "1",
+                "ML_AIR_PROMOTION_STAGE_ORDER": "staging,production",
+                "ML_AIR_PROMOTION_ALLOW_SKIP_STAGES": "0",
+            },
+            clear=False,
+        ):
+            out = compute_promotion_eligibility(
+                model_id="m1",
+                version=1,
+                target_stage="production",
+                current_stage="dev",
+                approval_status=APPROVAL_APPROVED,
+                artifact_uri=None,
+            )
+        self.assertFalse(out["eligible"])
+        self.assertEqual(out["reasons"][0]["code"], "invalid_stage_transition")
+
     def test_staging_promote_without_approval_when_only_production_gated(self) -> None:
         with patch.dict(
             os.environ,

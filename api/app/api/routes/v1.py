@@ -804,7 +804,7 @@ def trigger_run_by_model_dataset_v1(
         trace_id=_tr,
     )
     if not check.get("ready"):
-        semantic_metrics.record_readiness_blocked(path="runs_trigger")
+        semantic_metrics.record_readiness_blocked(path="runs_trigger", tenant_id=tenant_id)
         set_run_status(run["run_id"], "FAILED")
         append_run_log(
             run_id=run["run_id"],
@@ -1021,7 +1021,7 @@ def run_pipeline_with_gating_v1(
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
     if not check.get("ready"):
-        semantic_metrics.record_readiness_blocked(path="pipeline_run")
+        semantic_metrics.record_readiness_blocked(path="pipeline_run", tenant_id=tenant_id)
         set_run_status(run["run_id"], "FAILED")
         append_run_log(
             run_id=run["run_id"],
@@ -1213,6 +1213,13 @@ def whoami_v1(authorization: str | None = Header(default=None)) -> dict:
     }
 
 
+def _hub_default_route() -> str:
+    """Hub `/` redirect target: datasets | lifecycle | dashboard | models."""
+    raw = os.getenv("ML_AIR_HUB_DEFAULT_ROUTE", "datasets").strip().lower() or "datasets"
+    allowed = frozenset({"datasets", "lifecycle", "dashboard", "models"})
+    return raw if raw in allowed else "datasets"
+
+
 def _runtime_realtime_base_url() -> str:
     """Browser WebSocket root; default on so Hub sync works without per-deploy frontend env."""
     explicit = os.getenv("ML_AIR_RUNTIME_REALTIME_BASE_URL", "").strip()
@@ -1255,6 +1262,7 @@ def runtime_config_v1() -> dict:
         "realtime_base_url": _runtime_realtime_base_url() or None,
         "default_tenant_hint": os.getenv("ML_AIR_DEFAULT_TENANT", "default"),
         "default_project_hint": os.getenv("ML_AIR_DEFAULT_PROJECT", "default_project"),
+        "hub_default_route": _hub_default_route(),
         "features": features,
         "observability": {
             "jaeger_ui_url": jaeger_ui,
@@ -1573,6 +1581,19 @@ async def upload_dataset_v1(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="required_cols_must_be_json_array") from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "dataset_artifact_storage_unavailable",
+                "message": str(exc),
+                "hint": (
+                    "API cannot write under ML_AIR_DATASET_ARTIFACT_ROOT. "
+                    "Ensure /mlair/artifacts/datasets is writable by appuser (see api/docker-entrypoint.sh "
+                    "or: docker exec -u root <api> chown -R appuser:appuser /mlair/artifacts/datasets)."
+                ),
+            },
+        ) from exc
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
@@ -1776,7 +1797,7 @@ def post_dataset_readiness_evaluate_v1(
         tenant_id, project_id, dataset_id, result, source=src, force_persist=force_persist
     )
     if inserted_new and not bool(result.get("ready")):
-        semantic_metrics.record_eligibility_denied_persist(source=src, result=result)
+        semantic_metrics.record_eligibility_denied_persist(source=src, result=result, tenant_id=tenant_id)
     return {
         **result,
         "evaluation_id": evaluation_id,
@@ -3048,6 +3069,13 @@ def promote_model_v1(
                 detail="approval_required_for_production: PUT .../versions/{v}/approval with approved, "
                 "or ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1 for dev-only bypass.",
             ) from exc
+        if code in {
+            "invalid_stage_transition",
+            "rollback_disabled",
+            "unknown_target_stage",
+            "invalid_rollback",
+        }:
+            raise HTTPException(status_code=422, detail=code) from exc
         raise HTTPException(status_code=404, detail=code) from exc
     notify_model_promotion_webhook(
         tenant_id=tenant_id,

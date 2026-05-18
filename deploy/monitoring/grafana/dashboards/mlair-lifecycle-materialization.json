@@ -1,0 +1,138 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "icon": "dashboard",
+      "keepTime": true,
+      "title": "Lifecycle overview",
+      "type": "link",
+      "url": "/d/mlair-lifecycle-semantic/mlair-lifecycle-semantic"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_lifecycle_buffer_threshold_met_total[5m])) by (accumulation_strategy)",
+          "legendFormat": "{{accumulation_strategy}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Buffer threshold met (rate, by strategy)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_dataset_materialization_attempt_total[5m])) by (strategy, source_type)",
+          "legendFormat": "{{strategy}} / {{source_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Materialization attempts (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_dataset_materialization_version_created_total[5m]))",
+          "legendFormat": "created",
+          "refId": "A"
+        }
+      ],
+      "title": "Versions created (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_dataset_materialization_failure_total[5m])) by (reason)",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Materialization failures (rate, by reason)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_dataset_materialization_unique_violation_total[5m]))",
+          "legendFormat": "unique_violation",
+          "refId": "A"
+        }
+      ],
+      "title": "Unique constraint collisions (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mlair_dataset_materialization_latency_seconds_bucket[5m])) by (le, strategy))",
+          "legendFormat": "p95 {{strategy}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Materialization latency p95 (by strategy)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 7,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "max(mlair_dataset_accumulation_current_size) by (accumulation_strategy)",
+          "legendFormat": "current {{accumulation_strategy}}",
+          "refId": "A"
+        },
+        {
+          "expr": "max(mlair_dataset_accumulation_target_threshold) by (accumulation_strategy)",
+          "legendFormat": "target {{accumulation_strategy}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Buffer size vs threshold (max gauge)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["mlair", "lifecycle", "materialization"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "MLAir lifecycle — Materialization",
+  "uid": "mlair-lifecycle-materialization",
+  "version": 1
+}

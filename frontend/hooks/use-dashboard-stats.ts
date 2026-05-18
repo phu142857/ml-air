@@ -1,7 +1,7 @@
 "use client"
 
 import { useQueries } from "@tanstack/react-query"
-import { fetchDatasets, fetchModels, fetchPipelines, fetchRuns } from "@/lib/api"
+import { fetchAuditTimeline, fetchDatasets, fetchModels, fetchPipelines, fetchRuns } from "@/lib/api"
 import { useAppContext } from "@/lib/app-context"
 import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
@@ -39,10 +39,20 @@ export function useDashboardStats() {
         enabled,
         ...poll,
       },
+      {
+        queryKey: mlairKeys.audit.timeline(tenantId, projectId, { readinessStatus: "blocked" }),
+        queryFn: () =>
+          fetchAuditTimeline(tenantId, projectId, token, {
+            limit: 200,
+            filters: { readinessStatus: "blocked", kind: "dataset.readiness.evaluated" },
+          }),
+        enabled: enabled && !isAggregate,
+        ...poll,
+      },
     ],
   })
 
-  const [datasetsQ, pipelinesQ, runsQ, modelsQ] = results
+  const [datasetsQ, pipelinesQ, runsQ, modelsQ, blockedReadinessQ] = results
   const isLoading = results.some((r) => r.isLoading)
 
   const datasets = datasetsQ.data?.items ?? []
@@ -51,6 +61,7 @@ export function useDashboardStats() {
   const models = modelsQ.data?.items ?? []
 
   const datasetsWithRows = datasets.filter((d) => (d.current_size ?? 0) > 0).length
+  const blockedReadinessCount = blockedReadinessQ.data?.items?.length ?? 0
   const runningPipelines = pipelines.filter((p) =>
     String(p.latest_status || "")
       .toUpperCase()
@@ -71,6 +82,7 @@ export function useDashboardStats() {
         label: "Datasets",
         value: datasets.length,
         ready: datasetsWithRows,
+        blocked: isAggregate ? undefined : blockedReadinessCount,
         href: "/datasets",
         color: "from-emerald-500 to-emerald-600",
       },

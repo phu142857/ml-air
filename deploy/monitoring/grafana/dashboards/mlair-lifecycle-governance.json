@@ -1,0 +1,96 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "icon": "dashboard",
+      "keepTime": true,
+      "title": "Lifecycle overview",
+      "type": "link",
+      "url": "/d/mlair-lifecycle-semantic/mlair-lifecycle-semantic"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_lifecycle_model_promoted_total[5m])) by (stage)",
+          "legendFormat": "{{stage}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Model promoted (rate, by target stage)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_lifecycle_model_version_approval_set_total[5m])) by (approval_status)",
+          "legendFormat": "{{approval_status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Model version approval set (rate, by status)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_lifecycle_training_triggered_total[5m])) by (blocked_by_gate, tenant_id)",
+          "legendFormat": "blocked={{blocked_by_gate}} tenant={{tenant_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Training triggered (rate, blocked + tenant)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(mlair_lifecycle_training_completed_total[5m]))",
+          "legendFormat": "completed",
+          "refId": "A"
+        }
+      ],
+      "title": "Training completed (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 16 },
+      "id": 5,
+      "options": { "content": "Promotion stage order and rollback policy: see Hub model detail and [`docs/guides/model-promotion-governance.md`](https://github.com). Trace attributes: `mlair.target_stage`, `mlair.model_version` on promote/eligibility routes when OTel is enabled.", "mode": "markdown" },
+      "title": "Governance notes",
+      "type": "text"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["mlair", "lifecycle", "governance"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "MLAir lifecycle — Governance",
+  "uid": "mlair-lifecycle-governance",
+  "version": 1
+}

@@ -23,7 +23,7 @@ These counters track semantic lifecycle emits (independent of whether Redis Pub/
 
 | Metric | Labels | Where incremented |
 | --- | --- | --- |
-| `mlair_lifecycle_training_triggered_total` | `blocked_by_gate` (`true` / `false`) | API on `training.triggered` |
+| `mlair_lifecycle_training_triggered_total` | `blocked_by_gate`, `tenant_id` | API on `training.triggered` |
 | `mlair_lifecycle_training_completed_total` | (none) | API when emitting `training.completed` from a run row; scheduler on scheduler publish path |
 | `mlair_lifecycle_buffer_threshold_met_total` | `accumulation_strategy` | API when buffer upsert crosses threshold |
 | `mlair_lifecycle_model_promoted_total` | `stage` (normalized target stage, e.g. `production`) | API when `emit_model_promoted` runs after a successful promote |
@@ -40,8 +40,10 @@ curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (bl
 
 | Metric | Labels | Where incremented |
 | --- | --- | --- |
-| `mlair_readiness_blocked_total` | `path` (`runs_trigger`, `pipeline_run`) | After `check_run_readiness` returns not ready on gated train paths |
-| `mlair_eligibility_denied_total` | `source` (audit source, bucketed), `reason` (canonical bucket: `threshold_not_met`, `freshness_not_met`, `model_policy_mismatch`, `governance_blocked`, `legacy_compatibility_fallback`, `other`, `unknown`) | After `POST .../readiness/evaluate` **inserts a new** row when `ready` is false (deduplicated repeats do not increment) |
+| `mlair_readiness_blocked_total` | `path`, `tenant_id` | After `check_run_readiness` returns not ready on gated train paths |
+| `mlair_eligibility_denied_total` | `source`, `reason`, `tenant_id` | After `POST .../readiness/evaluate` **inserts a new** row when `ready` is false (deduplicated repeats do not increment) |
+
+**Tenant-aware alerts (Wave 1):** Prometheus group `mlair-lifecycle-semantic-tenant` fires per `tenant_id`; route in Alertmanager — see [wave1-production-maturity](../runbooks/wave1-production-maturity.md).
 
 Stable internal → canonical → `reason` mapping: [Readiness and gating — Canonical readiness reason codes](./readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair).
 
@@ -96,7 +98,17 @@ Materialization heuristics remain in the **`mlair-runtime`** group of the same f
 
 ## Grafana (quickstart)
 
-Dashboard JSON lives under [`deploy/monitoring/grafana/dashboards/`](../../deploy/monitoring/grafana/dashboards/). The quickstart Compose file mounts that directory into Grafana. Open **MLAir lifecycle (semantic metrics)** (`uid` `mlair-lifecycle-semantic`, [`mlair-lifecycle-semantic.json`](../../deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json)) for lifecycle, readiness gate, persisted eligibility, materialization, and **model governance** (promote + approval counters), and **MLAir Runtime Overview** (`mlair-runtime-overview`, [`mlair-overview.json`](../../deploy/monitoring/grafana/dashboards/mlair-overview.json)) for executor/scheduler views.
+Dashboard JSON lives under [`deploy/monitoring/grafana/dashboards/`](../../deploy/monitoring/grafana/dashboards/). The quickstart Compose file mounts that directory into Grafana.
+
+| Dashboard | UID | Focus |
+| --- | --- | --- |
+| [MLAir lifecycle (semantic metrics)](../../deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json) | `mlair-lifecycle-semantic` | Overview + links to split boards |
+| [MLAir lifecycle — Eligibility](../../deploy/monitoring/grafana/dashboards/mlair-lifecycle-eligibility.json) | `mlair-lifecycle-eligibility` | Readiness gate, eligibility denied, tenant breakdown |
+| [MLAir lifecycle — Materialization](../../deploy/monitoring/grafana/dashboards/mlair-lifecycle-materialization.json) | `mlair-lifecycle-materialization` | Buffer threshold, materialization rates, latency, gauges |
+| [MLAir lifecycle — Governance](../../deploy/monitoring/grafana/dashboards/mlair-lifecycle-governance.json) | `mlair-lifecycle-governance` | Promote, approval, train triggered/completed |
+| [MLAir Runtime Overview](../../deploy/monitoring/grafana/dashboards/mlair-overview.json) | `mlair-runtime-overview` | Executor / scheduler |
+
+**MLAir Runtime Overview** remains the entry point for queue/worker metrics.
 
 ## Result
 

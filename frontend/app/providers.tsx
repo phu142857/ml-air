@@ -19,27 +19,30 @@ export function AppProviders({ children }: PropsWithChildren) {
   // try to load runtime config from the same origin (reverse-proxy setups).
   useEffect(() => {
     hydrateRuntimeConfigOverride();
-    const g = window as any;
-    const existing = String(g?.__ML_AIR_RUNTIME_CONFIG__?.api_base_url || "").trim();
+    const g = window as Window & {
+      __ML_AIR_RUNTIME_CONFIG__?: Record<string, unknown> & {
+        features?: Record<string, boolean>;
+      };
+    };
     (async () => {
-      if (!existing) {
-        try {
-          const rc = await fetchRuntimeConfig({ preferRelative: true });
-          g.__ML_AIR_RUNTIME_CONFIG__ = {
-            ...(g.__ML_AIR_RUNTIME_CONFIG__ || {}),
-            ...(rc || {}),
-            features: {
-              ...(g.__ML_AIR_RUNTIME_CONFIG__?.features || {}),
-              ...(rc?.features || {}),
-              realtime_enabled: rc?.features?.realtime_enabled !== false,
-            },
-          };
-          window.dispatchEvent(new Event("mlair-runtime-config-updated"));
-        } catch {
-          // ignore: env/build-time config fallback remains
-        }
+      try {
+        const rc = await fetchRuntimeConfig({ preferRelative: true });
+        const prev = g.__ML_AIR_RUNTIME_CONFIG__ || {};
+        g.__ML_AIR_RUNTIME_CONFIG__ = {
+          ...prev,
+          ...(rc || {}),
+          features: {
+            ...(prev.features || {}),
+            ...(rc?.features || {}),
+            realtime_enabled: rc?.features?.realtime_enabled !== false,
+          },
+        };
+      } catch {
+        // env / mlair-runtime-config.js fallback remains
+      } finally {
+        hydrateRuntimeConfigOverride();
+        window.dispatchEvent(new Event("mlair-runtime-config-updated"));
       }
-      hydrateRuntimeConfigOverride();
     })();
   }, []);
 

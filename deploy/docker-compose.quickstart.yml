@@ -124,7 +124,7 @@ services:
       dockerfile: scheduler/Dockerfile
       args:
         PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
-    container_name: ml-air-scheduler
+    # No fixed container_name — allows `docker compose up -d --scale scheduler=2` for HA sign-off.
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
       ML_AIR_DATABASE_URL: ${ML_AIR_DATABASE_URL:-postgresql://mlair:mlair@postgres:5432/mlair}

@@ -10,7 +10,7 @@ Default is **off** so local tests and quickstart do not require a collector.
 
 | Process | `ML_AIR_OTEL_ENABLED=1` behavior |
 |---------|----------------------------------|
-| **API** (`api`) | `FastAPIInstrumentor` server spans; `mlair.trace_id` copied from `X-Trace-Id` onto the active span when present. `/health` and `/metrics` excluded from auto-instrumentation noise. **Lifecycle attrs** on the HTTP span when the URL matches `/v1/tenants/{tid}/projects/{pid}/…` (`mlair.tenant_id`, `mlair.project_id`, `mlair.dataset_id`, `mlair.model_id`, `mlair.run_id`, `mlair.pipeline_id`, `mlair.task_id`, path `dataset-versions/{id}`, `pipelines/.../versions/{id}`) plus query `dataset_version_id`, `policy_id`, `readiness_status`, `pipeline_version_id` when not already set from the path. |
+| **API** (`api`) | `FastAPIInstrumentor` server spans; `mlair.trace_id` copied from `X-Trace-Id` onto the active span when present. `/health` and `/metrics` excluded from auto-instrumentation noise. **Lifecycle attrs** on the HTTP span when the URL matches `/v1/tenants/{tid}/projects/{pid}/…` (`mlair.tenant_id`, `mlair.project_id`, `mlair.dataset_id`, `mlair.model_id`, `mlair.run_id`, `mlair.pipeline_id`, `mlair.task_id`, path `dataset-versions/{id}`, `datasets/{id}/versions/{id}`, `models/{id}/versions/{v}`, `pipelines/.../versions/{id}`) plus query `dataset_version_id`, `policy_id`, `readiness_status`, `pipeline_version_id`, `target_stage`, `model_id` when not already set from the path. |
 | **Scheduler** | OTLP `TracerProvider`; spans `scheduler.consume_run` and `scheduler.task_done` with `mlair.run_id`, `mlair.trace_id`, etc. |
 | **Executor** | OTLP `TracerProvider`; span `executor.execute_task` with `mlair.run_id`, `mlair.task_id`, `mlair.pipeline_version_id`, … |
 | **Realtime** | `FastAPIInstrumentor` on the WebSocket service; `/healthz` excluded. |
@@ -26,7 +26,7 @@ Default is **off** so local tests and quickstart do not require a collector.
 
 **W3C Trace Context:** incoming `traceparent` / `tracestate` headers are honored on FastAPI services when OTel is enabled.
 
-**HTTP span enrichment:** after each handled request (same point as `mlair.trace_id` from `X-Trace-Id`), the API sets the path/query attributes above on the active server span when it is still recording.
+**HTTP span enrichment:** after each handled request (same point as `mlair.trace_id` from `X-Trace-Id`), the API sets path/query attributes on the active server span. For **`POST .../readiness/evaluate`** and **`POST .../promote`**, small JSON bodies also contribute `dataset_version_id`, `policy_id`, `stage`, `version` when present (Wave 4).
 
 **Redis propagation (API → scheduler → executor):** `publish_run_event` / `publish_task_finished` always set **`trace_id`** on the JSON payload from the active correlation id (`get_trace_id()`). When OTel is enabled on the API, the same call also injects W3C **`traceparent`** / **`tracestate`** from the current span. Scheduler and executor continue the trace as child spans and **re-resolve** `trace_id` from the active OTel span (32-hex, matching Jaeger/Tempo) so semantic events, logs, and backends stay aligned. With OTel off, behavior is unchanged: optional **`X-Trace-Id`** on HTTP requests, or a generated UUID per request.
 

@@ -9,7 +9,14 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from app.api.routes.v1 import router as v1_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
-from app.otel_api import attach_mlair_trace_id_to_current_span, attach_otel_w3c_response_headers, enrich_http_span_from_request, init_fastapi_otel
+from app.otel_api import (
+    attach_mlair_trace_id_to_current_span,
+    attach_otel_w3c_response_headers,
+    enrich_http_span_from_request,
+    init_fastapi_otel,
+    mlair_span_attrs_from_json_body,
+    otel_enabled,
+)
 from app.plugins.registry import plugin_registry
 from app.domains.shared.db_service import assert_db_connection
 from app.domains.lifecycle.lineage_service import DatasetVersionSnapshotIntegrityError
@@ -66,11 +73,26 @@ def on_startup() -> None:
     logger.info("api_startup_completed")
 
 
+def _otel_capture_post_body(path: str, method: str) -> bool:
+    if method != "POST" or not otel_enabled():
+        return False
+    p = path.lower()
+    return "readiness/evaluate" in p or p.endswith("/promote")
+
+
 @app.middleware("http")
 async def tracing_and_metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
     bind_request_trace_id(request.headers.get("x-trace-id"))
     started = time.perf_counter()
     route_path = request.url.path
+    if _otel_capture_post_body(route_path, request.method):
+        body = await request.body()
+        request.state.mlair_otel_body_attrs = mlair_span_attrs_from_json_body(body)
+
+        async def receive() -> dict:
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request(request.scope, receive)
     try:
         response = await call_next(request)
     except Exception:

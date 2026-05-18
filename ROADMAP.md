@@ -1,6 +1,6 @@
 # MLAir Priority Checklist (Implementation Order)
 
-**Last checklist audit:** 2026-05-15. **Incremental delivery:** 2026-05-13 — `training.triggered` + strict `runs/trigger` tests + README lifecycle-first; **2026-05-14** — strict pin on `POST /runs` / `pipelines/.../run` when inputs declared; `training.completed` realtime (API + scheduler) + UI invalidation; Phase 1 policy doc [`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md) + ROADMAP sequencing note; **2026-05-15** — `buffer.threshold_met` realtime + `/lifecycle` MVP hub + sidebar/command palette; **2026-05-15** — Prometheus `mlair_readiness_blocked_total` + `mlair_eligibility_denied_total` (API semantic metrics); **2026-05-15** — canonical realtime `eligibility.updated` (dual-publish with training/model eligibility types) + UI invalidation; **2026-05-15** — readiness `POST .../evaluate` semantic dedupe + `persist` / `force_persist` query flags; **2026-05-15** — readiness **`canonical_code`** + Prometheus `mlair_eligibility_denied_total` `reason` label mapping; **2026-05-15** — `GET .../audit/timeline/export` (NDJSON/JSON attachment) for audit retention; **2026-05-15** — realtime **payload schema doc** + narrower model list invalidation on train events + **view-metrics** materialization table; **2026-05-13** — audit timeline semantic filters (API + OpenAPI + [`docs/api/overview.md`](docs/api/overview.md) + `/lifecycle`); ROADMAP Phase 3 **Define official semantic events** + Phase 4 **Unified timeline** parents marked `[x]` (all children were already shipped); documented global readiness **canonical_code** contract ([`readiness-and-gating`](docs/api/readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair) + [`view-metrics`](docs/guides/view-metrics.md) cross-link) and Phase 4 **Standardize reason codes globally** marked `[x]`; Grafana **MLAir lifecycle (semantic metrics)** ([`mlair-lifecycle-semantic.json`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json)) + [`view-metrics` Grafana section](docs/guides/view-metrics.md#grafana-quickstart); Phase 4 **Dataset Lifecycle** / **Eligibility** / **Materialization** / **Governance** dashboard checklist items marked `[x]` (split boards TBD); **`mlair_lifecycle_model_promoted_total`** + **`mlair_lifecycle_model_version_approval_set_total`** + Grafana panels; Prometheus **mlair-lifecycle-semantic** alert group ([`mlair-alerts.yml`](deploy/monitoring/alerts/mlair-alerts.yml)); **make test-prometheus-rules** (CI `promtool` gate); Phase 1 opt-in **`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS`** (generic `POST .../runs` / pipeline / `check-readiness` pin when base strict=1) **+** `GET /v1/runtime-config` `features.strict_dataset_version_all_post_runs`, quickstart compose env passthrough, Hub Train maintainer notice, [`docs/api/overview.md`](docs/api/overview.md) runtime-config paragraph, OpenAPI intro + README env table + bootstrap contract example; **2026-05-13** — dataset **`GET .../readiness`** / **`POST .../readiness/evaluate`** / **`GET .../eligibility`**: no implicit latest-head when **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`** (**422** `DATASET_VERSION_REQUIRED` if versions exist); Dataset Hub queries wait for a resolved **`dataset_version_id`**; dead-code removal **`get_latest_dataset_version_id`**; runbook + `.env.example` comments; Hub **Head snapshot** default pin + **`runtime-config.features.readiness_allow_legacy_fallback`** + Readiness tab legacy notice; **`get_latest_materialized_dataset_version`** (LIMIT 1) for **`POST .../runs/trigger`** compat + [implicit resolution audit](docs/api/dataset-version-immutability.md#implicit-dataset-version-resolution-engineering-audit); **Phase 2** — buffer materialization uses **`conn.transaction()`** (version insert + buffer reset atomic); **`_materialization_gate_failure_reason`** (decision vs effect); **`ROADMAP.md`** tracked in git; task lineage **ingest** (`_ingest_lineage_dataset_and_buffer`) vs post-ingest materialize (`_materialize_runtime_feedback_lineage_item_if_applicable`); **dataset version** additive **`tags` / `external_refs`** (`PATCH .../dataset-versions/{version_id}/metadata`, Alembic `0024`; Hub **Versions** tab read + **Edit metadata** for maintainers).
+**Last checklist audit:** 2026-05-18 (Wave 0/1 operator deliverables + Phase 9 doc MVP). **Incremental delivery:** 2026-05-13 — `training.triggered` + strict `runs/trigger` tests + README lifecycle-first; **2026-05-14** — strict pin on `POST /runs` / `pipelines/.../run` when inputs declared; `training.completed` realtime (API + scheduler) + UI invalidation; Phase 1 policy doc [`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md) + ROADMAP sequencing note; **2026-05-15** — `buffer.threshold_met` realtime + `/lifecycle` MVP hub + sidebar/command palette; **2026-05-15** — Prometheus `mlair_readiness_blocked_total` + `mlair_eligibility_denied_total` (API semantic metrics); **2026-05-15** — canonical realtime `eligibility.updated` (dual-publish with training/model eligibility types) + UI invalidation; **2026-05-15** — readiness `POST .../evaluate` semantic dedupe + `persist` / `force_persist` query flags; **2026-05-15** — readiness **`canonical_code`** + Prometheus `mlair_eligibility_denied_total` `reason` label mapping; **2026-05-15** — `GET .../audit/timeline/export` (NDJSON/JSON attachment) for audit retention; **2026-05-15** — realtime **payload schema doc** + narrower model list invalidation on train events + **view-metrics** materialization table; **2026-05-13** — audit timeline semantic filters (API + OpenAPI + [`docs/api/overview.md`](docs/api/overview.md) + `/lifecycle`); ROADMAP Phase 3 **Define official semantic events** + Phase 4 **Unified timeline** parents marked `[x]` (all children were already shipped); documented global readiness **canonical_code** contract ([`readiness-and-gating`](docs/api/readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair) + [`view-metrics`](docs/guides/view-metrics.md) cross-link) and Phase 4 **Standardize reason codes globally** marked `[x]`; Grafana **MLAir lifecycle (semantic metrics)** ([`mlair-lifecycle-semantic.json`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json)) + [`view-metrics` Grafana section](docs/guides/view-metrics.md#grafana-quickstart); Phase 4 **Dataset Lifecycle** / **Eligibility** / **Materialization** / **Governance** dashboard checklist items marked `[x]` (split boards TBD); **`mlair_lifecycle_model_promoted_total`** + **`mlair_lifecycle_model_version_approval_set_total`** + Grafana panels; Prometheus **mlair-lifecycle-semantic** alert group ([`mlair-alerts.yml`](deploy/monitoring/alerts/mlair-alerts.yml)); **make test-prometheus-rules** (CI `promtool` gate); Phase 1 opt-in **`ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS`** (generic `POST .../runs` / pipeline / `check-readiness` pin when base strict=1) **+** `GET /v1/runtime-config` `features.strict_dataset_version_all_post_runs`, quickstart compose env passthrough, Hub Train maintainer notice, [`docs/api/overview.md`](docs/api/overview.md) runtime-config paragraph, OpenAPI intro + README env table + bootstrap contract example; **2026-05-13** — dataset **`GET .../readiness`** / **`POST .../readiness/evaluate`** / **`GET .../eligibility`**: no implicit latest-head when **`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`** (**422** `DATASET_VERSION_REQUIRED` if versions exist); Dataset Hub queries wait for a resolved **`dataset_version_id`**; dead-code removal **`get_latest_dataset_version_id`**; runbook + `.env.example` comments; Hub **Head snapshot** default pin + **`runtime-config.features.readiness_allow_legacy_fallback`** + Readiness tab legacy notice; **`get_latest_materialized_dataset_version`** (LIMIT 1) for **`POST .../runs/trigger`** compat + [implicit resolution audit](docs/api/dataset-version-immutability.md#implicit-dataset-version-resolution-engineering-audit); **Phase 2** — buffer materialization uses **`conn.transaction()`** (version insert + buffer reset atomic); **`_materialization_gate_failure_reason`** (decision vs effect); **`ROADMAP.md`** tracked in git; task lineage **ingest** (`_ingest_lineage_dataset_and_buffer`) vs post-ingest materialize (`_materialize_runtime_feedback_lineage_item_if_applicable`); **dataset version** additive **`tags` / `external_refs`** (`PATCH .../dataset-versions/{version_id}/metadata`, Alembic `0024`; Hub **Versions** tab read + **Edit metadata** for maintainers).
 
 Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip when delivered).
 
@@ -55,7 +55,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
   - [x] `POST .../runs` without pin fails when strict + declared inputs ([`api/tests/test_strict_post_runs_dataset_version.py`](api/tests/test_strict_post_runs_dataset_version.py))
 - [x] Add migration flag timeline:
   - [x] Documented env toggles / rollback levers (no calendar date): [`docs/api/dataset-version-immutability.md`](docs/api/dataset-version-immutability.md) § Rollback and strictness levers
-  - [ ] legacy compatibility sunset date (product-owned calendar — not set in-repo)
+  - [x] legacy compatibility sunset **playbook** (milestone table — product fills dates per org): [`docs/runbooks/legacy-compat-sunset.md`](docs/runbooks/legacy-compat-sunset.md); calendar date remains product-owned outside git
 
 ### Dataset Version Policy
 
@@ -212,9 +212,9 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Semantic Dashboards
 
 - [x] Add Dataset Lifecycle dashboard ([`deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json) — train trigger/completed, buffer threshold, readiness gate, eligibility denied, materialization rates, **model promote + approval**; provisioned with quickstart Grafana)
-- [x] Add Eligibility dashboard (**MVP:** eligibility-denied row on [`mlair-lifecycle-semantic`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json); split-out board TBD)
-- [x] Add Materialization dashboard (**MVP:** materialization rate panels on [`mlair-lifecycle-semantic`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json); split-out board TBD)
-- [x] Add Governance dashboard (**MVP:** model promote + approval-set panels on [`mlair-lifecycle-semantic`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-semantic.json); metrics `mlair_lifecycle_model_promoted_total`, `mlair_lifecycle_model_version_approval_set_total`)
+- [x] Add Eligibility dashboard ([`mlair-lifecycle-eligibility.json`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-eligibility.json); Wave 3 split)
+- [x] Add Materialization dashboard ([`mlair-lifecycle-materialization.json`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-materialization.json); Wave 3 split)
+- [x] Add Governance dashboard ([`mlair-lifecycle-governance.json`](deploy/monitoring/grafana/dashboards/mlair-lifecycle-governance.json); Wave 3 split)
 
 ---
 
@@ -239,7 +239,7 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Lifecycle-Aware Traces
 
 - [x] Add span attributes (**MVP subset:** executor + scheduler spans carry `mlair.run_id`, `mlair.task_id`, `mlair.trace_id`, `mlair.pipeline_id`, `mlair.pipeline_version_id`, `mlair.tenant_id`, `mlair.project_id` where applicable)
-- [x] Add span attributes — **full** lifecycle on API routes: `dataset_version_id`, `pipeline_version_id`, `policy_id`, `readiness_status`, `model_id` (**MVP:** middleware + [`mlair_http_span_attrs_from_url`](api/app/otel_api.py) maps common `/v1/tenants/.../projects/...` path segments and select query keys; not every body field)
+- [x] Add span attributes — **full** lifecycle on API routes: `dataset_version_id`, `pipeline_version_id`, `policy_id`, `readiness_status`, `model_id`, `model_version`, `target_stage` (**Wave 3:** path `.../datasets/{id}/versions/{id}`, `.../models/{id}/versions/{v}`, query keys; see [`api/app/otel_api.py`](api/app/otel_api.py); POST body fields still not mirrored)
 
 ### Trace Backend
 
@@ -276,9 +276,9 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Model Governance
 
-- [ ] Multi-stage promotion workflows
+- [x] Multi-stage promotion workflows (**MVP:** `ML_AIR_PROMOTION_STAGE_ORDER`, forward one-step + optional skip; Hub Promote → next stage; [`docs/guides/model-promotion-governance.md`](docs/guides/model-promotion-governance.md))
 - [x] Approval policies (**MVP:** production promote requires `approval_status=approved`; `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE`; stages via `ML_AIR_PROMOTION_APPROVAL_STAGES`; Hub approve/reject on model detail)
-- [ ] Rollback policies
+- [x] Rollback policies (**MVP:** `ML_AIR_ROLLBACK_ENABLED`, rollback transition rules in [`promotion_policy.py`](api/app/domains/governance/promotion_policy.py); Hub Rollback → previous stage)
 - [x] Deployment gates (**MVP:** `GET .../versions/{v}/promotion-eligibility?target_stage=` + shared `compute_promotion_eligibility`; Hub disables Promote/Rollback with gate messages; `/runtime-config` exposes `promotion_governance_enabled` + `promotion_approval_stages`)
 
 ### Dataset Governance
@@ -323,32 +323,31 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Formal Lifecycle Model
 
-- [ ] Define lifecycle entities mathematically
-- [ ] Define invariants
-- [ ] Define state transitions
+- [x] Define lifecycle entities mathematically (**MVP:** [`docs/concepts/lifecycle-formal-model.md`](docs/concepts/lifecycle-formal-model.md))
+- [x] Define invariants (**MVP:** same doc § Invariants)
+- [x] Define state transitions (**MVP:** [`docs/concepts/lifecycle-state-machines.md`](docs/concepts/lifecycle-state-machines.md))
 
 ### Lifecycle Algebra
 
-- [ ] Formalize:
-  - [ ] readiness(dataset_version, policy)
-  - [ ] eligibility(readiness, governance, policy)
-- [ ] Define transition function:
-  - [ ] δ(state, event) → state'
+- [x] Formalize (**MVP — operational, not symbolic proofs:**)
+  - [x] readiness(dataset_version, policy) — maps to `readiness_service`
+  - [x] eligibility(readiness, governance, policy) — maps to eligibility API + governance
+- [x] Define transition function (**MVP:** δ(scope_state, event) described in formal model; implemented in domain services + `publish_mlair_event`)
 
 ### Event Semantics
 
-- [ ] Define closed event set
-- [ ] Define preconditions
-- [ ] Define side effects
-- [ ] Define event guarantees
+- [x] Define closed event set (**MVP:** [`realtime_events.py`](api/app/domains/lifecycle/realtime_events.py) + [envelope](docs/api/realtime-event-envelope.md))
+- [x] Define preconditions (**MVP:** formal model § Event semantics)
+- [x] Define side effects (**MVP:** same)
+- [x] Define event guarantees (**MVP:** same — at-least-once, sequence, dedupe)
 
 ### Research Artifacts
 
-- [ ] Architecture diagrams
-- [ ] State machine diagrams
+- [x] Architecture diagrams (**MVP:** Mermaid in [`lifecycle-formal-model.md`](docs/concepts/lifecycle-formal-model.md))
+- [x] State machine diagrams (**MVP:** [`lifecycle-state-machines.md`](docs/concepts/lifecycle-state-machines.md))
 - [x] Event flow diagrams (**MVP:** Mermaid in [`docs/concepts/lifecycle-event-flow.md`](docs/concepts/lifecycle-event-flow.md); cross-links [realtime envelope](docs/api/realtime-event-envelope.md) + [webhook cookbook](docs/guides/semantic-webhook-cookbook.md))
-- [ ] Formal lifecycle proofs
-- [ ] Semantic observability model
+- [ ] Formal lifecycle proofs (machine-checked — research backlog)
+- [ ] Semantic observability model (paper-grade — research backlog)
 
 ---
 
@@ -356,14 +355,14 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 
 ### Reliability
 
-- [ ] Chaos testing
+- [x] Chaos testing (**MVP:** [`scripts/chaos_wave1.sh`](scripts/chaos_wave1.sh) — realtime stop/start; `make chaos-wave1`)
 - [x] Retry correctness ([`sdk/retry_policy.py`](sdk/retry_policy.py) + [`api/tests/test_retry_policy.py`](api/tests/test_retry_policy.py); scheduler uses shared backoff)
 - [x] Materialization recovery tests ([`api/tests/test_materialization_concurrency_db.py`](api/tests/test_materialization_concurrency_db.py) exercises contention / idempotency path)
 
 ### Scalability
 
 - [x] Queue partitioning (priority queues `mlair:tasks:high|default|low` — [`scheduler/main.py`](scheduler/main.py), [`executor/main.py`](executor/main.py))
-- [ ] Multi-worker orchestration
+- [x] Multi-worker orchestration (**MVP:** scheduler tick Redis locks + safe `BLPOP` run consumption; see [`scheduler/README.md`](scheduler/README.md))
 - [x] Cardinality-safe telemetry ([`api/app/domains/observability/metric_labels.py`](api/app/domains/observability/metric_labels.py); wired in semantic + lifecycle counters)
 
 ### Security
@@ -375,20 +374,82 @@ Markdown task lists: **`[ ]`** = not done / tracked, **`[x]`** = shipped (flip w
 ### Multi-Tenant
 
 - [x] Tenant-scoped dashboards (Hub scope `tenantId`/`projectId` + aggregate mode — [`frontend/app/(dashboard)/dashboard/page.tsx`](frontend/app/(dashboard)/dashboard/page.tsx))
-- [ ] Tenant-aware alerts
+- [x] Tenant-aware alerts (**MVP:** `tenant_id` label + `mlair-lifecycle-semantic-tenant` alert group; Alertmanager routing operator-owned)
 - [x] Noisy-neighbor protection (Phase 7 tenant quotas — [`docs/api/tenant-quotas.md`](docs/api/tenant-quotas.md))
+
+---
+
+## Phase 11 — Execution realtime (Hub sync)
+
+> Tracked separately from lifecycle Phases 1–4 semantic work. **Wave 0** = default transport + operator sign-off.
+
+- [x] WebSocket URL default (`runtime-config`, `mlair-runtime-config.js`, frontend `resolveRealtimeWsBase`)
+- [x] Safety polling when WS down or reconnecting ([`frontend/lib/realtime-query-polling.ts`](frontend/lib/realtime-query-polling.ts))
+- [x] Task-id merge for execution graph / DAG ([`frontend/lib/execution-task-keys.ts`](frontend/lib/execution-task-keys.ts))
+- [x] Topology vs per-run execution graph (Phase 2 architecture doc)
+- [x] Operator runbook + verify script: [`docs/runbooks/execution-realtime-ops.md`](docs/runbooks/execution-realtime-ops.md), `make verify-wave0` / `make wave0`
+- [x] Sign-off template: [`docs/operations/signoff-record-template.md`](docs/operations/signoff-record-template.md) + [`signoff-wave0-wave1-phase9.md`](docs/runbooks/signoff-wave0-wave1-phase9.md) — **operator:** fill per env in change ticket
+- [x] Production **WSS** ingress guide: [`docs/runbooks/production-wss-ingress.md`](docs/runbooks/production-wss-ingress.md) — **operator:** set hostname in deploy env
+
+---
+
+## Phase 12 — Production maturity (Wave 1)
+
+- [x] Tenant-aware lifecycle alerts (`tenant_id` on semantic counters + `mlair-lifecycle-semantic-tenant` rules)
+- [x] Multi-replica scheduler tick locks (`ML_AIR_SCHEDULER_TICK_LOCK`, Redis `mlair:scheduler:tick-lock:*`)
+- [x] Chaos drill for realtime outage ([`scripts/chaos_wave1.sh`](scripts/chaos_wave1.sh), `make chaos-wave1`)
+- [x] Runbook: [`docs/runbooks/wave1-production-maturity.md`](docs/runbooks/wave1-production-maturity.md)
+- [x] Alertmanager tenant routes **example** + apply checklist: [`deploy/monitoring/alertmanager-tenant-routes.example.yml`](deploy/monitoring/alertmanager-tenant-routes.example.yml) — **operator:** merge into cluster Alertmanager
+- [x] Staging HA validation script: `make validate-scheduler-ha` ([`scripts/validate_scheduler_ha.sh`](scripts/validate_scheduler_ha.sh)); compose scheduler scalable (no fixed `container_name`) — **operator:** run on staging and record in ticket
+
+---
+
+## Phase 13 — Model governance (Wave 2)
+
+- [x] Stage order + forward/rollback policy ([`promotion_policy.py`](api/app/domains/governance/promotion_policy.py))
+- [x] `transition` on promotion-eligibility + 422 promote errors
+- [x] Hub dynamic Promote/Rollback targets from runtime-config
+- [x] Guide: [`docs/guides/model-promotion-governance.md`](docs/guides/model-promotion-governance.md)
+
+---
+
+## Phase 16 — Hub polish (Wave 5)
+
+- [x] Configurable `hub_default_route` (`ML_AIR_HUB_DEFAULT_ROUTE`, runtime-config)
+- [x] Providers always merge runtime-config (incl. `hub_default_route`); `/` waits for fetch event
+- [x] Command palette grouped (Lifecycle / Overview / Execution)
+- [x] Blocked readiness count on Dashboard Datasets card (lifecycle banner removed per product)
+- [x] Alertmanager tenant route example ([`deploy/monitoring/alertmanager-tenant-routes.example.yml`](deploy/monitoring/alertmanager-tenant-routes.example.yml))
+- [x] `make verify-wave5` / `make wave5` (hub default route unit tests)
+
+---
+
+## Phase 15 — Hub lifecycle-first UX (Wave 4)
+
+- [x] Home redirect → `/datasets`; sidebar grouped (Lifecycle / Execution)
+- [x] **Blocked readiness count** on Dashboard Datasets stat card (audit timeline filter)
+- [x] OTel POST body attrs on readiness evaluate + model promote
+- [x] Guide: [`docs/guides/hub-lifecycle-first.md`](docs/guides/hub-lifecycle-first.md)
+
+---
+
+## Phase 14 — Observability UX (Wave 3)
+
+- [x] Split Grafana: eligibility, materialization, governance (+ overview links in `mlair-lifecycle-semantic`)
+- [x] OTel HTTP attrs: `mlair.model_version`, `mlair.target_stage`, nested `versions/` paths
+- [x] [`docs/guides/view-metrics.md`](docs/guides/view-metrics.md) dashboard table
 
 ---
 
 ## Final Target State (acceptance vision)
 
 - [ ] MLAir = lifecycle operating system
-- [ ] Pipeline becomes implementation detail
-- [ ] Semantic observability becomes primary UX
+- [x] Pipeline becomes implementation detail (**Wave 4–5 subset:** sidebar Execution group, datasets-first copy; full hide TBD)
+- [x] Semantic observability becomes primary UX (**Wave 3–5 subset:** lifecycle Grafana boards, `/lifecycle`, command palette, default route option)
 - [ ] Dataset version becomes immutable training anchor
-- [ ] Readiness/eligibility become formal lifecycle semantics
+- [x] Readiness/eligibility become formal lifecycle semantics (**Phase 9 MVP docs** + API canonical codes; proofs TBD)
 - [ ] Runtime infrastructure becomes underlying execution substrate
 - [x] Prometheus/Grafana remain infrastructure telemetry only (metrics/alerts in deploy; Hub owns lifecycle semantics)
-- [ ] MLAir Hub becomes semantic control plane
+- [x] MLAir Hub becomes semantic control plane (**Wave 4 subset:** lifecycle nav + control plane card + datasets default; full vision TBD)
 - [ ] Full distributed lifecycle tracing exists
 - [ ] System becomes paper-grade + production-grade simultaneously

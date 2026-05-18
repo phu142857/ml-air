@@ -31,6 +31,11 @@ Each guide follows:
 ### Run and Orchestration
 
 - [Runbook: Realtime / WebSocket service](./runbooks/realtime-service.md)
+- [Runbook: Execution realtime ops (Wave 0)](./runbooks/execution-realtime-ops.md)
+- [Runbook: Production WSS ingress](./runbooks/production-wss-ingress.md)
+- [Runbook: Wave 1 production maturity](./runbooks/wave1-production-maturity.md)
+- [Sign-off: Wave 0 / 1 / Phase 9](./runbooks/signoff-wave0-wave1-phase9.md)
+- [Sign-off record template](./operations/signoff-record-template.md)
 - [Runbook: Readiness v2 Cutover](./runbooks/readiness-v2-cutover.md)
 - [Run a Pipeline](./guides/run-pipeline.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)
@@ -94,6 +99,8 @@ Each guide follows:
 ## Concepts
 
 - [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md)
+- [Lifecycle formal model (MVP)](./concepts/lifecycle-formal-model.md)
+- [Lifecycle state machines (MVP)](./concepts/lifecycle-state-machines.md)
 - [Pipeline](./concepts/pipeline.md)
 - [Run](./concepts/run.md)
 - [Task](./concepts/task.md)

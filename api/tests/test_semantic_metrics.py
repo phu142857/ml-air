@@ -33,6 +33,11 @@ class TestSemanticMetricsHelpers(unittest.TestCase):
     def test_primary_eligibility_denial_reason_empty(self) -> None:
         self.assertEqual(sm.primary_eligibility_denial_reason({"ready": False}), "unknown")
 
+    def test_normalize_tenant_metric_label(self) -> None:
+        self.assertEqual(sm.normalize_tenant_metric_label("Default"), "default")
+        self.assertEqual(sm.normalize_tenant_metric_label(""), "unknown")
+        self.assertEqual(sm.normalize_tenant_metric_label("Acme-Corp"), "acme_corp")
+
 
 if __name__ == "__main__":
     unittest.main()

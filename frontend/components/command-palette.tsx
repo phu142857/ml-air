@@ -47,20 +47,27 @@ interface CommandPaletteProps {
   onOpenChange: (open: boolean) => void
 }
 
-const navigationItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, shortcut: "D" },
+const lifecycleNavigation = [
   { name: "Datasets", href: "/datasets", icon: Database, shortcut: "S" },
+  { name: "Lifecycle", href: "/lifecycle", icon: History, shortcut: "L" },
+  { name: "Models", href: "/models", icon: Box, shortcut: "M" },
+]
+
+const platformNavigation = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, shortcut: "D" },
+  { name: "Search", href: "/search", icon: Search, shortcut: "/" },
+]
+
+const executionNavigation = [
   { name: "Pipelines", href: "/pipelines", icon: GitBranch, shortcut: "P" },
   { name: "Runs", href: "/runs", icon: Play, shortcut: "R" },
   { name: "Tasks", href: "/tasks", icon: ListTodo, shortcut: "T" },
-  { name: "Search", href: "/search", icon: Search, shortcut: "/" },
-  { name: "Lifecycle", href: "/lifecycle", icon: History, shortcut: "L" },
-  { name: "Models", href: "/models", icon: Box, shortcut: "M" },
   { name: "Lineage", href: "/lineage", icon: Network, shortcut: "G" },
   { name: "Settings", href: "/settings", icon: Settings, shortcut: "," },
 ]
 
 const quickActions = [
+  { name: "Lifecycle timeline", href: "/lifecycle", icon: History, description: "Semantic audit — readiness, train, promote" },
   { name: "Dataset Hub", href: "/datasets", icon: Database, description: "Browse datasets — run / train from a dataset" },
   { name: "Train model", href: "/datasets", icon: Play, description: "Open Dataset Hub to train with a model" },
   { name: "Search page", href: "/search", icon: Search, description: "Full search results" },
@@ -305,8 +312,44 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
         {!trimmedQuery ? (
           <>
-            <CommandGroup heading="Navigation">
-              {navigationItems.map((item) => (
+            <CommandGroup heading="Lifecycle">
+              {lifecycleNavigation.map((item) => (
+                <CommandItem
+                  key={item.href}
+                  onSelect={() => handleSelect(item.href)}
+                  className="flex items-center gap-3"
+                >
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
+                  <span>{item.name}</span>
+                  <CommandShortcut className="ml-auto">
+                    <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                      {item.shortcut}
+                    </kbd>
+                  </CommandShortcut>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Overview">
+              {platformNavigation.map((item) => (
+                <CommandItem
+                  key={item.href}
+                  onSelect={() => handleSelect(item.href)}
+                  className="flex items-center gap-3"
+                >
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
+                  <span>{item.name}</span>
+                  <CommandShortcut className="ml-auto">
+                    <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                      {item.shortcut}
+                    </kbd>
+                  </CommandShortcut>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Execution">
+              {executionNavigation.map((item) => (
                 <CommandItem
                   key={item.href}
                   onSelect={() => handleSelect(item.href)}

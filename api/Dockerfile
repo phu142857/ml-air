@@ -40,13 +40,17 @@ RUN if [ -d "/app/builtin_reference_plugins" ]; then \
       pip install --no-cache-dir /app/builtin_reference_plugins; \
     fi
 
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN useradd -m appuser && chown -R appuser:appuser /app \
+    && mkdir -p /mlair/artifacts/datasets /mlair/artifacts/models \
+    && chown -R appuser:appuser /mlair/artifacts
 
-USER appuser
+COPY api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8080"]

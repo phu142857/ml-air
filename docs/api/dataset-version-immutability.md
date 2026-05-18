@@ -49,9 +49,9 @@ These are the **only** product paths where a **dataset** snapshot may be chosen 
 
 **Observability:** set **`ML_AIR_WARN_IMPLICIT_DATASET_HEAD=1`** to emit **`WARNING`** logs whenever the API resolves an implicit dataset head (`get_latest_materialized_dataset_version` or readiness latest-row under legacy fallback), so operators can grep logs before tightening env flags.
 
-## Rollback and strictness levers (no calendar sunset yet)
+## Rollback and strictness levers
 
-Version-centric behavior is controlled by environment variables; there is **no committed calendar sunset** for legacy modes in-repo — operators set policy in their own change windows.
+Version-centric behavior is controlled by environment variables. A **product-owned sunset calendar** is not hard-coded in git — use the milestone table in [Legacy compatibility sunset (runbook)](../runbooks/legacy-compat-sunset.md) and copy dates into your change ticket.
 
 | Variable | Effect |
 | --- | --- |

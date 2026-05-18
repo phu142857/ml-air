@@ -137,3 +137,32 @@ groups:
         annotations:
           summary: "Burst of model version rejections"
           description: "More than 3 approval_status=rejected updates in 15 minutes. Review governance workflow and model artifacts."
+
+  - name: mlair-lifecycle-semantic-tenant
+    rules:
+      - alert: MlAirLifecycleEligibilityDeniedBurstByTenant
+        expr: sum by (tenant_id) (increase(mlair_eligibility_denied_total[15m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }}: eligibility denied burst"
+          description: "More than 10 persisted not-ready readiness evaluations for tenant {{ $labels.tenant_id }} in 15 minutes. Route to tenant owner; tune policy or investigate data drift."
+
+      - alert: MlAirLifecycleReadinessGateBlockedBurstByTenant
+        expr: sum by (tenant_id) (increase(mlair_readiness_blocked_total[15m])) > 8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }}: execution readiness gate blocks"
+          description: "More than 8 mlair_readiness_blocked_total increments for tenant {{ $labels.tenant_id }} in 15 minutes (runs_trigger / pipeline_run)."
+
+      - alert: MlAirLifecycleTrainIntentBlockedBurstByTenant
+        expr: sum by (tenant_id) (increase(mlair_lifecycle_training_triggered_total{blocked_by_gate="true"}[15m])) > 12
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant {{ $labels.tenant_id }}: Hub train intents blocked"
+          description: "More than 12 training.triggered events with blocked_by_gate=true for tenant {{ $labels.tenant_id }} in 15 minutes."

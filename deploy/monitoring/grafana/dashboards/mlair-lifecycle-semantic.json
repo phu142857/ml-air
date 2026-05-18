@@ -4,20 +4,46 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "icon": "dashboard",
+      "keepTime": true,
+      "title": "Eligibility",
+      "type": "link",
+      "url": "/d/mlair-lifecycle-eligibility/mlair-lifecycle-eligibility"
+    },
+    {
+      "icon": "dashboard",
+      "keepTime": true,
+      "title": "Materialization",
+      "type": "link",
+      "url": "/d/mlair-lifecycle-materialization/mlair-lifecycle-materialization"
+    },
+    {
+      "icon": "dashboard",
+      "keepTime": true,
+      "title": "Governance",
+      "type": "link",
+      "url": "/d/mlair-lifecycle-governance/mlair-lifecycle-governance"
+    }
+  ],
   "panels": [
     {
       "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "id": 1,
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
       "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
+        "content": "**Split dashboards (Wave 3):** [Eligibility](/d/mlair-lifecycle-eligibility/mlair-lifecycle-eligibility) · [Materialization](/d/mlair-lifecycle-materialization/mlair-lifecycle-materialization) · [Governance](/d/mlair-lifecycle-governance/mlair-lifecycle-governance)",
+        "mode": "markdown"
       },
+      "title": "Navigation",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 3 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
         {
           "expr": "sum(rate(mlair_lifecycle_training_triggered_total[5m])) by (blocked_by_gate)",
@@ -30,16 +56,9 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 3 },
       "id": 2,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
         {
           "expr": "sum(rate(mlair_lifecycle_training_completed_total[5m]))",
@@ -52,179 +71,48 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 11 },
       "id": 3,
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
         {
-          "expr": "sum(rate(mlair_lifecycle_buffer_threshold_met_total[5m])) by (accumulation_strategy)",
-          "legendFormat": "{{accumulation_strategy}}",
+          "expr": "sum(increase(mlair_eligibility_denied_total[1h]))",
+          "legendFormat": "eligibility denied",
           "refId": "A"
         }
       ],
-      "title": "Buffer threshold met (rate, by strategy)",
-      "type": "timeseries"
+      "title": "Eligibility denied (1h)",
+      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 11 },
       "id": 4,
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
         {
-          "expr": "sum(rate(mlair_readiness_blocked_total[5m])) by (path)",
-          "legendFormat": "{{path}}",
+          "expr": "sum(increase(mlair_dataset_materialization_version_created_total[1h]))",
+          "legendFormat": "versions created",
           "refId": "A"
         }
       ],
-      "title": "Readiness gate blocked (rate, by path)",
-      "type": "timeseries"
+      "title": "Materialized versions (1h)",
+      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 16 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 11 },
       "id": 5,
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
         {
-          "expr": "sum(rate(mlair_eligibility_denied_total[5m])) by (reason, source)",
-          "legendFormat": "{{reason}} / {{source}}",
+          "expr": "sum(increase(mlair_lifecycle_model_promoted_total[1h]))",
+          "legendFormat": "promoted",
           "refId": "A"
         }
       ],
-      "title": "Eligibility denied on persisted evaluate (rate, by reason + source)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 25 },
-      "id": 6,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(mlair_dataset_materialization_attempt_total[5m]))",
-          "legendFormat": "attempt",
-          "refId": "A"
-        }
-      ],
-      "title": "Materialization attempts (rate)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 25 },
-      "id": 7,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(mlair_dataset_materialization_version_created_total[5m]))",
-          "legendFormat": "version_created",
-          "refId": "A"
-        }
-      ],
-      "title": "Versions created (rate)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 25 },
-      "id": 8,
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(mlair_dataset_materialization_failure_total[5m]))",
-          "legendFormat": "failure",
-          "refId": "A"
-        }
-      ],
-      "title": "Materialization failures (rate)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
-      "id": 9,
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(mlair_lifecycle_model_promoted_total[5m])) by (stage)",
-          "legendFormat": "{{stage}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Model promoted (rate, by target stage)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "mlair-prometheus" },
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
-      "id": 10,
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(mlair_lifecycle_model_version_approval_set_total[5m])) by (approval_status)",
-          "legendFormat": "{{approval_status}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Model version approval set (rate, by status)",
-      "type": "timeseries"
+      "title": "Model promotions (1h)",
+      "type": "stat"
     }
   ],
   "refresh": "10s",
@@ -233,10 +121,9 @@
   "tags": ["mlair", "lifecycle", "semantic"],
   "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
-  "timepicker": {},
   "timezone": "browser",
   "title": "MLAir lifecycle (semantic metrics)",
   "uid": "mlair-lifecycle-semantic",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

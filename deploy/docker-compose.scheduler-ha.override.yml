@@ -1,0 +1,7 @@
+# HA sign-off only: drop host port publish on scheduler so `docker compose up --scale scheduler=2`
+# does not fail with "bind: address already in use" on :9102.
+# Used by scripts/validate_scheduler_ha.sh — not for normal single-replica dev.
+services:
+  scheduler:
+    # Compose merges lists by default; !reset clears base quickstart host publish.
+    ports: !reset []

@@ -5,6 +5,7 @@ declare global {
       apiBaseUrl?: string;
       api_base_url?: string | null;
       realtime_base_url?: string | null;
+      hub_default_route?: string | null;
       environment?: string;
       features?: Record<string, boolean>;
       observability?: { jaeger_ui_url?: string | null };

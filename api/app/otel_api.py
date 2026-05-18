@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import TYPE_CHECKING, Any
@@ -47,6 +48,20 @@ def mlair_http_span_attrs_from_url(path: str, query: str | None) -> dict[str, st
     except ValueError:
         pass
     try:
+        vi = parts.index("versions")
+        if vi >= 2 and vi + 1 < len(parts):
+            resource = parts[vi - 2]
+            resource_id = parts[vi - 1][:_ATTR_MAX]
+            seg = parts[vi + 1][:_ATTR_MAX]
+            if resource == "datasets" and "mlair.dataset_version_id" not in out:
+                out.setdefault("mlair.dataset_id", resource_id)
+                out["mlair.dataset_version_id"] = seg
+            elif resource == "models":
+                out.setdefault("mlair.model_id", resource_id)
+                out["mlair.model_version"] = seg
+    except ValueError:
+        pass
+    try:
         pi = parts.index("pipelines")
         if pi + 3 < len(parts) and parts[pi + 2] == "versions":
             out["mlair.pipeline_version_id"] = parts[pi + 3][:_ATTR_MAX]
@@ -58,6 +73,8 @@ def mlair_http_span_attrs_from_url(path: str, query: str | None) -> dict[str, st
         ("policy_id", "mlair.policy_id"),
         ("readiness_status", "mlair.readiness_status"),
         ("pipeline_version_id", "mlair.pipeline_version_id"),
+        ("target_stage", "mlair.target_stage"),
+        ("model_id", "mlair.model_id"),
     ):
         if ak in out:
             continue
@@ -65,6 +82,46 @@ def mlair_http_span_attrs_from_url(path: str, query: str | None) -> dict[str, st
         if vals and vals[0]:
             out[ak] = str(vals[0]).strip()[:_ATTR_MAX]
     return out
+
+
+def mlair_span_attrs_from_json_body(body: bytes | None) -> dict[str, str]:
+    """Best-effort lifecycle fields from small JSON POST bodies (readiness evaluate, promote)."""
+    out: dict[str, str] = {}
+    if not body:
+        return out
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return out
+    if not isinstance(data, dict):
+        return out
+    mapping = (
+        ("dataset_version_id", "mlair.dataset_version_id"),
+        ("policy_id", "mlair.policy_id"),
+        ("readiness_status", "mlair.readiness_status"),
+        ("stage", "mlair.target_stage"),
+        ("version", "mlair.model_version"),
+    )
+    for src, attr in mapping:
+        val = data.get(src)
+        if val is not None and str(val).strip():
+            out[attr] = str(val).strip()[:_ATTR_MAX]
+    return out
+
+
+def apply_mlair_span_attrs(attrs: dict[str, str]) -> None:
+    if not otel_enabled() or not attrs:
+        return
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        if not span.is_recording():
+            return
+        for key, val in attrs.items():
+            span.set_attribute(key, val)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("otel_span_attrs_apply_failed err=%s", exc)
 
 
 def otel_enabled() -> bool:
@@ -105,7 +162,11 @@ def enrich_http_span_from_request(request: "Request") -> None:
         if not span.is_recording():
             return
         u = request.url
-        for key, val in mlair_http_span_attrs_from_url(u.path, u.query).items():
+        merged = {**mlair_http_span_attrs_from_url(u.path, u.query)}
+        body_attrs = getattr(getattr(request, "state", None), "mlair_otel_body_attrs", None)
+        if isinstance(body_attrs, dict):
+            merged.update(body_attrs)
+        for key, val in merged.items():
             span.set_attribute(key, val)
     except Exception as exc:  # noqa: BLE001
         logger.debug("otel_http_span_enrich_failed err=%s", exc)

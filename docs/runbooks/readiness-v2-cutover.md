@@ -76,3 +76,7 @@ If strict mode causes operational disruption:
 - Strict mode enabled (`ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0`) in target environments.
 - No sustained `no_materialized_dataset_version` errors.
 - Training and readiness workflows are fully version-centric.
+
+## Sunset calendar (Wave 0b)
+
+For org-wide milestone dates and optional `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` rollout, use [Legacy compatibility sunset](./legacy-compat-sunset.md).

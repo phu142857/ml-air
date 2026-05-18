@@ -27,10 +27,12 @@ WebSocket is **transport only**, not the source of truth.
 | Frontend | `useMlairRealtime`: debounced invalidation + selective cache patch |
 | DAG | `GET .../pipelines/{id}/dag` overlays **latest run** task statuses (server-built) |
 
+**Wave 0 (ops):** Realtime is **on by default** (runtime-config + frontend inference). Operator sign-off: [execution-realtime-ops](../runbooks/execution-realtime-ops.md) and `make verify-wave0`.
+
 Known gaps before full projection model:
 
 - Pipeline DAG/list were not invalidated on every `run.updated` / `task.updated` (fixed Phase 1).
-- Runs/pipelines pages lacked polling fallback when WS is unset (fixed Phase 1).
+- Runs/pipelines pages lacked polling fallback when WS is unset (fixed Phase 1 + default WS URL).
 - Out-of-order WS delivery is guarded by monotonic **`sequence`** (Phase 3) plus timestamp checks on hot patches.
 
 ## Phase 1 (implemented)
@@ -62,6 +64,7 @@ Known gaps before full projection model:
 
 ## Related docs
 
+- [Execution realtime ops (Wave 0)](../runbooks/execution-realtime-ops.md)
 - [Realtime service runbook](../runbooks/realtime-service.md)
 - [Realtime event envelope](../api/realtime-event-envelope.md)
 - [Readiness and gating API](../api/readiness-and-gating.md)

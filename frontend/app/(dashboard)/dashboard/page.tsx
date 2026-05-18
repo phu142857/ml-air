@@ -151,6 +151,14 @@ export default function DashboardPage() {
                       </div>
                     )}
 
+                    {"blocked" in stat &&
+                      typeof stat.blocked === "number" &&
+                      stat.blocked > 0 && (
+                        <div className="mt-2 text-[10px] text-amber-400">
+                          {stat.blocked} blocked readiness
+                        </div>
+                      )}
+
                     {"running" in stat &&
                       typeof stat.running === "number" &&
                       stat.running > 0 && (

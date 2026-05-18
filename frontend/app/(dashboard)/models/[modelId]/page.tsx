@@ -43,11 +43,15 @@ import { SCOPE_AGGREGATE_MODEL_DETAIL } from "@/lib/scope-messages";
 import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
 import {
   canPromoteVersionToStage,
+  canRollbackVersionToStage,
   modelApprovalDisplayLabel,
   modelApprovalPillClass,
   modelStageIndicator,
   modelStagePillClass,
+  nextPromotionStage,
+  previousPromotionStage,
   promotionBlockMessage,
+  transitionKind,
   type PromotionGovernanceFeatures,
 } from "@/lib/model-governance-ui";
 import { getRuntimeConfig } from "@/lib/runtime-config";
@@ -273,8 +277,13 @@ export default function ModelDetailPage() {
   const requestPromote = useCallback(
     async (version: number, stage: string, row: ModelVersionItem) => {
       if (projectId === "all" || !token) return;
-      if (!canPromoteVersionToStage(row, stage, promotionFeatures)) {
-        setVersionBanner(promotionBlockMessage(row, stage));
+      const kind = transitionKind(row.stage, stage, promotionFeatures);
+      const allowed =
+        kind === "rollback"
+          ? canRollbackVersionToStage(row, stage, promotionFeatures)
+          : canPromoteVersionToStage(row, stage, promotionFeatures);
+      if (!allowed) {
+        setVersionBanner(promotionBlockMessage(row, stage, promotionFeatures));
         return;
       }
       try {
@@ -370,28 +379,42 @@ export default function ModelDetailPage() {
         header: "Actions",
         className: "text-right",
         cell: (v) => {
-          const canPromoteProd = canPromoteVersionToStage(v, "production", promotionFeatures);
-          const canRollbackStaging = canPromoteVersionToStage(v, "staging", promotionFeatures);
+          const promoteTarget = nextPromotionStage(v.stage, promotionFeatures);
+          const rollbackTarget = previousPromotionStage(v.stage, promotionFeatures);
+          const canPromote = promoteTarget
+            ? canPromoteVersionToStage(v, promoteTarget, promotionFeatures)
+            : false;
+          const canRollback = rollbackTarget
+            ? canRollbackVersionToStage(v, rollbackTarget, promotionFeatures)
+            : false;
           return (
           <div className="flex flex-wrap justify-end gap-2">
+            {promoteTarget ? (
             <button
               type="button"
-              onClick={() => void requestPromote(v.version, "production", v)}
+              onClick={() => void requestPromote(v.version, promoteTarget, v)}
               className="action-btn-sm btn-action-promote rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-              disabled={promoteMutation.isPending || !canPromoteProd}
-              title={!canPromoteProd ? promotionBlockMessage(v, "production") : undefined}
+              disabled={promoteMutation.isPending || !canPromote}
+              title={
+                !canPromote ? promotionBlockMessage(v, promoteTarget, promotionFeatures) : undefined
+              }
             >
-              Promote
+              Promote{promoteTarget !== "production" ? ` → ${promoteTarget}` : ""}
             </button>
+            ) : null}
+            {rollbackTarget ? (
             <button
               type="button"
-              onClick={() => void requestPromote(v.version, "staging", v)}
+              onClick={() => void requestPromote(v.version, rollbackTarget, v)}
               className="action-btn-md btn-action-rollback rounded-lg px-2 py-1 text-xs disabled:opacity-60"
-              disabled={promoteMutation.isPending || !canRollbackStaging}
-              title={!canRollbackStaging ? promotionBlockMessage(v, "staging") : undefined}
+              disabled={promoteMutation.isPending || !canRollback}
+              title={
+                !canRollback ? promotionBlockMessage(v, rollbackTarget, promotionFeatures) : undefined
+              }
             >
-              Rollback
+              Rollback → {rollbackTarget}
             </button>
+            ) : null}
             <button
               type="button"
               onClick={() =>

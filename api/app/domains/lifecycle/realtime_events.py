@@ -43,7 +43,7 @@ def _lifecycle_counter(name: str, documentation: str, labelnames: tuple[str, ...
 LIFECYCLE_TRAINING_TRIGGERED_TOTAL = _lifecycle_counter(
     "mlair_lifecycle_training_triggered_total",
     "Hub train intent: POST .../runs/trigger path emitted training.triggered (blocked_by_gate label)",
-    ("blocked_by_gate",),
+    ("blocked_by_gate", "tenant_id"),
 )
 LIFECYCLE_TRAINING_COMPLETED_TOTAL = _lifecycle_counter(
     "mlair_lifecycle_training_completed_total",
@@ -627,7 +627,10 @@ def emit_training_triggered(
             },
         )
     )
-    LIFECYCLE_TRAINING_TRIGGERED_TOTAL.labels(blocked_by_gate="true" if blocked_by_gate else "false").inc()
+    LIFECYCLE_TRAINING_TRIGGERED_TOTAL.labels(
+        blocked_by_gate="true" if blocked_by_gate else "false",
+        tenant_id=sanitize_label_value(tenant_id or "unknown"),
+    ).inc()
 
 
 def maybe_emit_training_completed_from_run_row(row: dict[str, Any]) -> None:

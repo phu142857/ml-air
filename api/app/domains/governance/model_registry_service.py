@@ -7,6 +7,12 @@ import re
 from uuid import uuid4
 from urllib.parse import urlparse
 
+from app.domains.governance.promotion_policy import (
+    evaluate_stage_transition,
+    promotion_policy_runtime,
+    rollback_requires_approval,
+    transition_kind,
+)
 from app.domains.shared.db_service import db_conn
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
@@ -36,6 +42,7 @@ def promotion_governance_runtime() -> dict:
     return {
         "promotion_governance_enabled": _require_approval_for_production_promote(),
         "promotion_approval_stages": sorted(_stages_requiring_approval()),
+        **promotion_policy_runtime(),
     }
 
 
@@ -58,21 +65,31 @@ def compute_promotion_eligibility(
     """Pure eligibility evaluation (also used by promote + GET promotion-eligibility)."""
     target = (target_stage or "production").strip().lower() or "production"
     current = (current_stage or "").strip().lower() or None
+    kind = transition_kind(current_stage, target)
     requires_approval = _promotion_requires_approval_for_stage(target)
+    if kind == "rollback":
+        requires_approval = rollback_requires_approval()
+    elif kind != "forward":
+        requires_approval = False
     reasons: list[dict] = []
     eligible = True
 
-    if current == target:
+    allowed, trans_code, trans_msg, _ = evaluate_stage_transition(
+        current_stage=current_stage,
+        target_stage=target,
+    )
+    if not allowed and trans_code:
         eligible = False
         reasons.append(
             {
-                "code": "already_at_stage",
-                "message": f"Version is already at stage '{target}'.",
-                "canonical_code": None,
+                "code": trans_code,
+                "message": trans_msg or trans_code,
+                "canonical_code": "GOVERNANCE_BLOCKED" if trans_code != "already_at_stage" else None,
+                "promote_error": trans_code,
             }
         )
 
-    if requires_approval:
+    if requires_approval and eligible:
         ast = str(approval_status or "")
         if ast != APPROVAL_APPROVED:
             eligible = False
@@ -101,6 +118,7 @@ def compute_promotion_eligibility(
         "version": int(version),
         "target_stage": target,
         "current_stage": current_stage,
+        "transition": kind,
         "approval_status": approval_status,
         "artifact_uri_present": bool(str(artifact_uri or "").strip()),
         "requires_approval": requires_approval,

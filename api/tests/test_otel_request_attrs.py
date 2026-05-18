@@ -51,3 +51,17 @@ class TestOtelRequestAttrs(unittest.TestCase):
             "/v1/tenants/t/projects/p/dataset-versions/from-path", q
         )
         self.assertEqual(a.get("mlair.dataset_version_id"), "from-path")
+
+    def test_dataset_and_model_version_path_segments(self) -> None:
+        a = otel_api.mlair_http_span_attrs_from_url(
+            "/v1/tenants/t/projects/p/datasets/ds1/versions/dv-42/readiness", ""
+        )
+        self.assertEqual(a.get("mlair.dataset_id"), "ds1")
+        self.assertEqual(a.get("mlair.dataset_version_id"), "dv-42")
+        b = otel_api.mlair_http_span_attrs_from_url(
+            "/v1/tenants/t/projects/p/models/m1/versions/3/promotion-eligibility",
+            "target_stage=production",
+        )
+        self.assertEqual(b.get("mlair.model_id"), "m1")
+        self.assertEqual(b.get("mlair.model_version"), "3")
+        self.assertEqual(b.get("mlair.target_stage"), "production")

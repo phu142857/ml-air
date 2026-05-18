@@ -49,6 +49,37 @@ down:
 health:
 	python scripts/check_quickstart_health.py --compose-file $(COMPOSE_FILE)
 
+.PHONY: verify-wave0
+verify-wave0:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/verify_execution_realtime.py
+
+.PHONY: wave0
+wave0: health verify-wave0
+
+.PHONY: chaos-wave1
+chaos-wave1:
+	bash scripts/chaos_wave1.sh
+
+.PHONY: wave1
+wave1: test-prometheus-rules chaos-wave1
+
+.PHONY: validate-scheduler-ha
+validate-scheduler-ha:
+	bash scripts/validate_scheduler_ha.sh
+
+.PHONY: signoff-local
+signoff-local: wave0 wave1 validate-scheduler-ha
+
+.PHONY: verify-wave5
+verify-wave5:
+	cd frontend && npm run test -- lib/hub-default-route.test.ts
+
+.PHONY: wave5
+wave5: verify-wave5
+
 .PHONY: doctor
 doctor:
 	python scripts/doctor.py --compose-file $(COMPOSE_FILE)

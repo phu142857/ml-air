@@ -3,8 +3,10 @@
 ## What breaks if realtime is down
 
 - The **API and scheduler keep working**; runs, tasks, and datasets still update in Postgres and Redis queues.
-- The **UI** loses push updates: without `NEXT_PUBLIC_MLAIR_REALTIME_WS`, the app uses **5s polling** on runs, run detail, pipelines, dashboard, datasets, and models so data stays usable, only slightly delayed.
-- With the WS URL set but the realtime process dead, open pages **reconnect with backoff**; until then, data may look stale until refetch (tab focus or manual refresh).
+- The **UI** resolves a WebSocket URL by default (`/v1/runtime-config`, static `mlair-runtime-config.js`, or host inference — see [execution-realtime-ops](./execution-realtime-ops.md)). It **always** runs safety polling (faster when WS is down/reconnecting) on runs, pipelines, dashboard, datasets, and models.
+- With the realtime process dead, open pages **reconnect with backoff**; polling should still converge within seconds without a full page reload.
+
+**Wave 0 sign-off:** `make verify-wave0` (after `make up` / `make health`).
 
 ## Quick checks
 

@@ -1,0 +1,39 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+
+import { hubDefaultRoutePath, resolveHubDefaultRouteFromWindow } from "@/lib/hub-default-route";
+
+/** Client redirect for `/` using runtime-config `hub_default_route` (Wave 5). */
+export function HubEntryRedirect() {
+  const router = useRouter();
+  const [pending, setPending] = useState(true);
+
+  useEffect(() => {
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      const route = resolveHubDefaultRouteFromWindow();
+      router.replace(hubDefaultRoutePath(route));
+      setPending(false);
+    };
+    window.addEventListener("mlair-runtime-config-updated", go);
+    const fallback = window.setTimeout(go, 2500);
+    return () => {
+      window.removeEventListener("mlair-runtime-config-updated", go);
+      window.clearTimeout(fallback);
+    };
+  }, [router]);
+
+  if (!pending) return null;
+
+  return (
+    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+      <p className="text-sm">Opening Hub…</p>
+    </div>
+  );
+}

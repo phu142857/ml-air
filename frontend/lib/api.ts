@@ -176,6 +176,7 @@ export type RuntimeConfigResponse = {
   environment: string;
   api_base_url?: string | null;
   realtime_base_url?: string | null;
+  hub_default_route?: string | null;
   default_tenant_hint?: string | null;
   default_project_hint?: string | null;
   features?: Record<string, boolean>;

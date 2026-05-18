@@ -54,6 +54,11 @@ RUN_REQUEUED_TOTAL = Counter(
     "mlair_scheduler_run_requeued_total",
     "Number of runs requeued due to max parallel limits",
 )
+SCHEDULER_TICK_LOCK_SKIPPED_TOTAL = Counter(
+    "mlair_scheduler_tick_lock_skipped_total",
+    "Periodic scheduler ticks skipped because another replica holds the Redis tick lock",
+    ["tick"],
+)
 RETRY_ENQUEUED_TOTAL = Counter(
     "mlair_scheduler_retry_enqueued_total",
     "Number of retry tasks enqueued by scheduler",
@@ -1283,6 +1288,29 @@ def _load_run_event_for_scheduler(run_id: str) -> dict | None:
     }
 
 
+def _scheduler_tick_lock_enabled() -> bool:
+    return os.getenv("ML_AIR_SCHEDULER_TICK_LOCK", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _scheduler_worker_id() -> str:
+    explicit = os.getenv("ML_AIR_SCHEDULER_WORKER_ID", "").strip()
+    if explicit:
+        return explicit
+    host = os.getenv("HOSTNAME", "").strip()
+    if host:
+        return host
+    return f"scheduler-{os.getpid()}"
+
+
+def _try_acquire_scheduler_tick_lock(client: Redis, tick_name: str, ttl_seconds: int) -> bool:
+    """Only one scheduler replica should run trigger-policy / materialization ticks per interval."""
+    if not _scheduler_tick_lock_enabled():
+        return True
+    ttl = max(1, int(ttl_seconds))
+    key = f"mlair:scheduler:tick-lock:{tick_name}"
+    return bool(client.set(key, _scheduler_worker_id(), nx=True, ex=ttl))
+
+
 def _requeue_expired_leases(client: Redis) -> int:
     if _task_execution_mode() != "external":
         return 0
@@ -1344,16 +1372,24 @@ def main() -> None:
                 logger.warning("lease_reaper_failed err=%s", exc)
             next_lease_reap_tick = loop_started + lease_reap_interval_seconds
         if loop_started >= next_policy_tick:
-            try:
-                _process_trigger_policies()
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("process_trigger_policies_failed err=%s", exc)
+            lock_ttl = max(5, policy_interval_seconds - 1)
+            if _try_acquire_scheduler_tick_lock(client, "trigger_policy", lock_ttl):
+                try:
+                    _process_trigger_policies()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("process_trigger_policies_failed err=%s", exc)
+            else:
+                SCHEDULER_TICK_LOCK_SKIPPED_TOTAL.labels(tick="trigger_policy").inc()
             next_policy_tick = loop_started + policy_interval_seconds
         if loop_started >= next_materialization_tick:
-            try:
-                _process_dataset_materialization_ticks()
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("process_dataset_materialization_ticks_failed err=%s", exc)
+            lock_ttl = max(5, materialization_interval_seconds - 1)
+            if _try_acquire_scheduler_tick_lock(client, "dataset_materialization", lock_ttl):
+                try:
+                    _process_dataset_materialization_ticks()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("process_dataset_materialization_ticks_failed err=%s", exc)
+            else:
+                SCHEDULER_TICK_LOCK_SKIPPED_TOTAL.labels(tick="dataset_materialization").inc()
             next_materialization_tick = loop_started + materialization_interval_seconds
         run_msg = client.blpop("mlair:runs:new", timeout=1)
         if run_msg:
