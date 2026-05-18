@@ -7,7 +7,7 @@ type RuntimeConfigGlobal = {
     realtime_base_url?: string | null;
     environment?: string;
     features?: Record<string, boolean>;
-    observability?: { jaeger_ui_url?: string | null };
+    observability?: RuntimeConfigObservability;
   } | null;
 };
 
@@ -172,6 +172,26 @@ export type WhoAmIResponse = {
   project_ids?: string[];
 };
 
+export type SemanticObservabilityMetricRef = {
+  name: string;
+  kind: string;
+  labels: string[];
+};
+
+export type SemanticObservabilitySurface = {
+  id?: string;
+  title?: string;
+  description?: string;
+  metrics?: SemanticObservabilityMetricRef[];
+  event_types?: string[];
+  grafana_dashboards?: string[];
+};
+
+export type RuntimeConfigObservability = {
+  jaeger_ui_url?: string | null;
+  semantic_observability_surfaces?: SemanticObservabilitySurface[];
+};
+
 export type RuntimeConfigResponse = {
   environment: string;
   api_base_url?: string | null;
@@ -180,7 +200,7 @@ export type RuntimeConfigResponse = {
   default_tenant_hint?: string | null;
   default_project_hint?: string | null;
   features?: Record<string, boolean>;
-  observability?: { jaeger_ui_url?: string | null };
+  observability?: RuntimeConfigObservability;
   build?: { frontend_version?: string | null; frontend_commit?: string | null };
 };
 

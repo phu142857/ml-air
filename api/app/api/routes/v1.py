@@ -47,6 +47,7 @@ from app.domains.lifecycle import lineage_service
 from app.domains.lifecycle import readiness_service
 from app.domains.lifecycle import realtime_events as rt
 from app.domains.observability import semantic_metrics
+from app.domains.observability.semantic_observability_model import semantic_observability_surfaces_dict
 from app.domains.observability import audit_timeline_service
 from app.domains.observability import event_outbox_service
 from app.domains.observability import event_sequence_service
@@ -1266,6 +1267,7 @@ def runtime_config_v1() -> dict:
         "features": features,
         "observability": {
             "jaeger_ui_url": jaeger_ui,
+            "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
         },
         "build": {
             "frontend_version": os.getenv("ML_AIR_FRONTEND_VERSION", "").strip() or None,

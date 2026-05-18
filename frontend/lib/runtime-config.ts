@@ -1,3 +1,5 @@
+import type { SemanticObservabilitySurface } from "./api";
+
 declare global {
   interface Window {
     __ML_AIR_RUNTIME_CONFIG__?: {
@@ -8,7 +10,10 @@ declare global {
       hub_default_route?: string | null;
       environment?: string;
       features?: Record<string, boolean>;
-      observability?: { jaeger_ui_url?: string | null };
+      observability?: {
+        jaeger_ui_url?: string | null;
+        semantic_observability_surfaces?: SemanticObservabilitySurface[];
+      };
       tenantId?: string;
       projectId?: string;
     };

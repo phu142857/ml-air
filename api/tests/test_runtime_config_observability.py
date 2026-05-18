@@ -26,3 +26,16 @@ class TestRuntimeConfigObservability(unittest.TestCase):
             os.environ.pop("ML_AIR_JAEGER_UI_URL", None)
             out = v1.runtime_config_v1()
         self.assertIsNone(out.get("observability", {}).get("jaeger_ui_url"))
+
+    def test_observability_includes_semantic_surfaces(self) -> None:
+        try:
+            from app.api.routes import v1
+        except ImportError:
+            self.skipTest("API dependencies (fastapi) not installed")
+        out = v1.runtime_config_v1()
+        surfaces = out.get("observability", {}).get("semantic_observability_surfaces")
+        self.assertIsInstance(surfaces, list)
+        self.assertTrue(surfaces)
+        ids = {s.get("id") for s in surfaces}
+        self.assertIn("readiness_gate", ids)
+        self.assertIn("buffer_materialization", ids)

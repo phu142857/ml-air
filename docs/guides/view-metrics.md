@@ -19,6 +19,8 @@ curl "http://localhost:9090/api/v1/query?query=mlair_scheduler_queue_depth"
 
 ## Lifecycle counters (API and scheduler)
 
+Machine-readable index (surfaces → metrics, labels, related event types, Grafana files): [`api/app/domains/observability/semantic_observability_model.py`](../../api/app/domains/observability/semantic_observability_model.py).
+
 These counters track semantic lifecycle emits (independent of whether Redis Pub/Sub delivery succeeds). The API process increments them from `realtime_events`; the scheduler increments `mlair_lifecycle_training_completed_total` when a run reaches `SUCCESS` and `publish_training_completed` runs (same metric name as the API counter so dashboards can `sum` across jobs).
 
 | Metric | Labels | Where incremented |

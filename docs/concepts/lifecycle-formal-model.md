@@ -68,7 +68,7 @@ Canonical types are enumerated in [`realtime_events.py`](../../api/app/domains/l
 | **Side effects** | DB commit before or with publish; Hub invalidates on `type` map |
 | **Persistence** | Optional outbox (`ML_AIR_EVENT_OUTBOX`); audit timeline for readiness/promote |
 
-Formal proofs and full observability algebra: **deferred** (Phase 9 research backlog). **Partial machine check:** event `type` enum ↔ JSON Schema — [`api/tests/test_semantic_event_type_schema_parity.py`](../../api/tests/test_semantic_event_type_schema_parity.py).
+Formal proofs and full observability algebra: **deferred** (Phase 9 research backlog). **Partial machine check:** event `type` enum ↔ JSON Schema — [`api/tests/test_semantic_event_type_schema_parity.py`](../../api/tests/test_semantic_event_type_schema_parity.py). **Semantic observability MVP:** [`semantic_observability_model.py`](../../api/app/domains/observability/semantic_observability_model.py).
 
 ## Architecture diagram (logical)
 
