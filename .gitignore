@@ -96,3 +96,10 @@ data/
 # Script test caches (under scripts/ when running smoke locally)
 scripts/__pycache__/
 scripts/**/*.pyc
+
+# Local-only roadmap overlay (optional; keep committed ROADMAP.md canonical)
+ROADMAP.local.md
+
+# Cursor IDE (if present under repo root)
+.cursor/
+ROADMAP.md
