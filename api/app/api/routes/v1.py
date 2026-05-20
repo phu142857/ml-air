@@ -187,6 +187,20 @@ class DatasetBufferPatchIn(BaseModel):
     )
 
 
+class DatasetBufferAppendIn(BaseModel):
+    """Append manifest-like rows into the dataset accumulation buffer (no immediate dataset_version)."""
+
+    rows: list[dict] = Field(min_length=1, max_length=100_000)
+    source_type: str | None = Field(
+        default="runtime_manifest",
+        description="Caller-owned label for buffer provenance (e.g. runtime_manifest, video_frames, embeddings).",
+    )
+    execution_id: str | None = Field(
+        default=None,
+        description="Optional provenance id written onto rows as execution_id when missing.",
+    )
+
+
 class ExternalRefAppendIn(BaseModel):
     url: str = Field(min_length=1, max_length=2048)
     label: str | None = Field(default=None, max_length=256)
@@ -2410,6 +2424,82 @@ def patch_dataset_buffer_v1(
     if not row:
         raise HTTPException(status_code=404, detail="dataset_not_found")
     return row
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/buffer/append")
+def append_dataset_buffer_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    payload: DatasetBufferAppendIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    try:
+        return lineage_service.append_dataset_buffer_rows(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            rows=list(payload.rows or []),
+            source_type=str(payload.source_type or "runtime_manifest").strip() or "runtime_manifest",
+            execution_id=str(payload.execution_id).strip() if payload.execution_id else None,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail in {"dataset_not_found"}:
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "dataset_artifact_storage_unavailable",
+                "message": str(exc),
+                "hint": (
+                    "API cannot write under ML_AIR_DATASET_ARTIFACT_ROOT. "
+                    "Ensure /mlair/artifacts/datasets is writable by appuser."
+                ),
+            },
+        ) from exc
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/by-name/{dataset_name}/buffer/append")
+def append_dataset_buffer_by_name_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_name: str,
+    payload: DatasetBufferAppendIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    try:
+        return lineage_service.append_dataset_buffer_rows_by_name(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_name=dataset_name,
+            rows=list(payload.rows or []),
+            source_type=str(payload.source_type or "runtime_manifest").strip() or "runtime_manifest",
+            execution_id=str(payload.execution_id).strip() if payload.execution_id else None,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(status_code=400, detail=detail) from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "dataset_artifact_storage_unavailable",
+                "message": str(exc),
+                "hint": (
+                    "API cannot write under ML_AIR_DATASET_ARTIFACT_ROOT. "
+                    "Ensure /mlair/artifacts/datasets is writable by appuser."
+                ),
+            },
+        ) from exc
 
 
 def _materialize_dataset_buffer_http_response(tenant_id: str, project_id: str, dataset_id: str) -> dict:

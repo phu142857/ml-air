@@ -430,6 +430,158 @@ def update_dataset_buffer_threshold(
     )
 
 
+def append_dataset_buffer_rows(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    rows: list[dict[str, Any]],
+    source_type: str = "runtime_manifest",
+    execution_id: str | None = None,
+) -> dict[str, Any]:
+    """Append manifest-like rows into the dataset accumulation buffer.
+
+    This is the lightweight ingestion contract for high-frequency workloads (CV/video/active-learning):
+    - rows are appended into a per-buffer **window artifact** (NDJSON) under ``ML_AIR_DATASET_ARTIFACT_ROOT``.
+    - ``dataset_accumulation_buffers.current_size`` is incremented by row count.
+    - materialization happens automatically when the buffer hits threshold under ``snapshot_on_threshold``.
+
+    Notes:
+    - This does not run CSV schema validation; callers own the row schema.
+    - The materialized dataset_version points to the window artifact URI and uses ``record_count`` as size.
+    """
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("rows_required")
+    ds = get_dataset(tenant_id, project_id, dataset_id)
+    if not ds:
+        raise ValueError("dataset_not_found")
+
+    buf = get_dataset_buffer(tenant_id, project_id, dataset_id)
+    if not buf:
+        # Default buffer row, matching the current dataset current_size (which may be 0).
+        _upsert_dataset_buffer(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            source_type=source_type,
+            current_size=int(ds.get("current_size") or 0),
+            target_threshold=1000,
+            accumulation_strategy=DEFAULT_ACCUMULATION_STRATEGY,
+            window_status="active",
+            window_start=datetime.now(timezone.utc),
+        )
+        buf = get_dataset_buffer(tenant_id, project_id, dataset_id) or {}
+
+    window_start_iso = str(buf.get("window_start") or "").strip()
+    if not window_start_iso:
+        window_start = datetime.now(timezone.utc)
+    else:
+        try:
+            window_start = datetime.fromisoformat(window_start_iso.replace("Z", "+00:00"))
+        except Exception:
+            window_start = datetime.now(timezone.utc)
+
+    root = _dataset_artifact_root()
+    # Keep buffer artifacts separate from immutable versions.
+    window_label = window_start.strftime("%Y%m%dT%H%M%S%fZ")
+    artifact_uri = (
+        f"{root}/"
+        f"{_safe_token(tenant_id)}/"
+        f"{_safe_token(project_id)}/"
+        f"{_safe_token(str(ds.get('name') or dataset_id))}/"
+        f"buffer_windows/"
+        f"{window_label}.jsonl"
+    )
+    out_path = _file_uri_to_path(artifact_uri)
+    try:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "ab") as f:
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError("rows_must_be_objects")
+                payload = dict(row)
+                if execution_id and "execution_id" not in payload:
+                    payload["execution_id"] = execution_id
+                if "timestamp" not in payload:
+                    payload["timestamp"] = datetime.now(timezone.utc).isoformat()
+                f.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
+    except PermissionError:
+        raise
+    except Exception as exc:
+        raise ValueError("buffer_append_failed") from exc
+
+    prev_size = int(buf.get("current_size") or 0)
+    now_size = prev_size + len(rows)
+    _upsert_dataset_buffer(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        source_type=source_type,
+        current_size=now_size,
+        target_threshold=int(buf.get("target_threshold") or 1000),
+        accumulation_strategy=str(buf.get("accumulation_strategy") or DEFAULT_ACCUMULATION_STRATEGY),
+        window_status=str(buf.get("window_status") or "active"),
+        window_start=window_start,
+    )
+    _upsert_dataset(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        name=str(ds.get("name") or dataset_id),
+        current_size=now_size,
+    )
+
+    version_id, version = _materialize_runtime_feedback_if_needed(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        source_type=source_type,
+        uri=artifact_uri,
+        checksum=None,
+        size=now_size,
+        force=False,
+    )
+    return {
+        "status": "ok",
+        "dataset_id": dataset_id,
+        "appended_rows": len(rows),
+        "current_size": now_size,
+        "artifact_uri": artifact_uri,
+        "materialized": bool(version_id),
+        "dataset_version_id": version_id,
+        "dataset_version": version,
+    }
+
+
+def append_dataset_buffer_rows_by_name(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_name: str,
+    rows: list[dict[str, Any]],
+    source_type: str = "runtime_manifest",
+    execution_id: str | None = None,
+) -> dict[str, Any]:
+    safe_name = str(dataset_name or "").strip()
+    if not safe_name:
+        raise ValueError("dataset_name_required")
+    dataset_id = _upsert_dataset(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        name=safe_name,
+        current_size=0,
+    )
+    out = append_dataset_buffer_rows(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        rows=rows,
+        source_type=source_type,
+        execution_id=execution_id,
+    )
+    out["dataset_name"] = safe_name
+    return out
+
+
 def _reset_dataset_buffer(
     tenant_id: str,
     project_id: str,
