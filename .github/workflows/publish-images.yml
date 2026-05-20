@@ -26,6 +26,9 @@ jobs:
           - name: executor
             context: .
             dockerfile: executor/Dockerfile
+          - name: realtime
+            context: .
+            dockerfile: realtime/Dockerfile
           - name: frontend
             context: .
             dockerfile: frontend/Dockerfile
