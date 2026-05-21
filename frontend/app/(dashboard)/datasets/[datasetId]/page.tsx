@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Database, GitBranch, Trash2 } from "lucide-react";
+import { ChevronRight, Database, Download, GitBranch, Tags, Trash2 } from "lucide-react";
 import {
   DetailSection,
   DetailTabBar,
@@ -42,6 +42,7 @@ import {
   applyDatasetRetention,
   deleteDataset,
   deleteDatasetVersion,
+  downloadDatasetVersion,
   materializeDatasetBuffer,
   materializeScheduledDatasetBuffers,
   patchDatasetBuffer,
@@ -197,6 +198,8 @@ export default function DatasetHubPage() {
   const [deleteDatasetOpen, setDeleteDatasetOpen] = useState(false);
   const [deleteVersionId, setDeleteVersionId] = useState<string | null>(null);
   const [deleteMsg, setDeleteMsg] = useState("");
+  const [downloadingVersionId, setDownloadingVersionId] = useState<string | null>(null);
+  const [downloadMsg, setDownloadMsg] = useState("");
   const [retentionMaxAgeDays, setRetentionMaxAgeDays] = useState("");
   const [retentionProtectReferenced, setRetentionProtectReferenced] = useState(true);
   const [retentionMsg, setRetentionMsg] = useState("");
@@ -849,52 +852,98 @@ export default function DatasetHubPage() {
         cell: (v) => <span className="whitespace-nowrap">{formatDateTimeCompact(v.created_at)}</span>,
       },
     ];
-    if (canEditVersionMetadata) {
+    if (scopePinned || canEditVersionMetadata) {
       cols.push({
-        id: "metadata",
-        header: "Metadata",
-        cell: (v) => (
-          <Button
-            type="button"
-            variant="secondary"
-            className="px-2 py-1 text-[10px]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setVersionMetaMsg("");
-              setVersionMetaId(v.version_id);
-              setVersionMetaLabel(String(v.version));
-              setVersionMetaTagInput("");
-              setVersionMetaRefUrl("");
-              setVersionMetaRefLabel("");
-              setVersionMetaOpen(true);
-            }}
-          >
-            Edit metadata
-          </Button>
-        ),
-      });
-      cols.push({
-        id: "delete",
+        id: "actions",
         header: "",
+        className: "w-[7.5rem]",
         cell: (v) => (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-7 gap-1 border-[var(--status-failed-border)] px-2 text-[10px] text-[color:var(--status-failed-fg)]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDeleteMsg("");
-              setDeleteVersionId(v.version_id);
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-            Delete
-          </Button>
+          <div className="flex items-center justify-end gap-0.5">
+            {canEditVersionMetadata ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="Edit metadata"
+                aria-label={`Edit metadata for ${v.version}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setVersionMetaMsg("");
+                  setVersionMetaId(v.version_id);
+                  setVersionMetaLabel(String(v.version));
+                  setVersionMetaTagInput("");
+                  setVersionMetaRefUrl("");
+                  setVersionMetaRefLabel("");
+                  setVersionMetaOpen(true);
+                }}
+              >
+                <Tags className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            {scopePinned ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="Download version"
+                aria-label={`Download ${v.version}`}
+                disabled={downloadingVersionId === v.version_id}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setDownloadMsg("");
+                  setDownloadingVersionId(v.version_id);
+                  try {
+                    const base = (dataset?.name || "dataset").replace(/[^\w.-]+/g, "_");
+                    await downloadDatasetVersion(
+                      tenantId,
+                      projectId,
+                      v.version_id,
+                      token,
+                      `${base}_${v.version}.csv`
+                    );
+                  } catch (err) {
+                    setDownloadMsg(`Download failed: ${String((err as Error)?.message || err)}`);
+                  } finally {
+                    setDownloadingVersionId(null);
+                  }
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            {canEditVersionMetadata ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-[color:var(--status-failed-fg)] hover:bg-[var(--status-failed-bg)]"
+                title="Delete version"
+                aria-label={`Delete ${v.version}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteMsg("");
+                  setDeleteVersionId(v.version_id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
         ),
       });
     }
     return cols;
-  }, [canEditVersionMetadata]);
+  }, [
+    canEditVersionMetadata,
+    scopePinned,
+    tenantId,
+    projectId,
+    token,
+    dataset?.name,
+    downloadingVersionId,
+  ]);
 
   const datasetSubtitle = dataset ? `Updated ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)}` : "";
 
@@ -982,6 +1031,21 @@ export default function DatasetHubPage() {
                 </>
               )}
             </Button>
+            {canEditVersionMetadata && scopePinned ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 border-[var(--status-failed-border)] bg-card text-xs text-[color:var(--status-failed-fg)]"
+                onClick={() => {
+                  setDeleteMsg("");
+                  setDeleteDatasetOpen(true);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            ) : null}
           </div>
         }
       />
@@ -999,6 +1063,12 @@ export default function DatasetHubPage() {
         {datasetQuery.isError && datasetQuery.isFetched ? (
           <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
             Could not load dataset (check scope or id).
+          </div>
+        ) : null}
+
+        {downloadMsg ? (
+          <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
+            {downloadMsg}
           </div>
         ) : null}
 
@@ -1090,30 +1160,6 @@ export default function DatasetHubPage() {
                 </div>
               ) : null}
             </DetailSection>
-
-            {canEditVersionMetadata && scopePinned ? (
-              <DetailSection
-                title="Danger zone"
-                accentBorder="amber"
-                description="Permanent delete. Does not remove runs that already referenced a version; use retention for bulk version pruning."
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-1.5 border-[var(--status-failed-border)] text-[color:var(--status-failed-fg)]"
-                  onClick={() => {
-                    setDeleteMsg("");
-                    setDeleteDatasetOpen(true);
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete dataset
-                </Button>
-                {deleteMsg && activeTab === "overview" ? (
-                  <p className="mt-2 text-xs text-[color:var(--status-failed-fg)]">{deleteMsg}</p>
-                ) : null}
-              </DetailSection>
-            ) : null}
 
             {!scopePinned ? (
               <DetailSection

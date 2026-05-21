@@ -1787,6 +1787,40 @@ export async function deleteDatasetByName(
   return data as { dataset_id: string; dataset_name: string; deleted: boolean };
 }
 
+export async function downloadDatasetVersion(
+  tenantId: string,
+  projectId: string,
+  versionId: string,
+  token: string,
+  suggestedFilename?: string
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${encodeURIComponent(versionId)}/download`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    try {
+      throw new Error(JSON.stringify(JSON.parse(text)));
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("{")) throw err;
+      throw new Error(text || `download_failed_${res.status}`);
+    }
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const match = /filename="([^"]+)"/i.exec(cd);
+  const filename = match?.[1] || suggestedFilename || `${versionId}.csv`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function deleteDatasetVersion(
   tenantId: string,
   projectId: string,
