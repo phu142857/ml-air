@@ -1772,6 +1772,21 @@ export async function deleteDataset(tenantId: string, projectId: string, dataset
   return data as { dataset_id: string; deleted: boolean };
 }
 
+export async function deleteDatasetByName(
+  tenantId: string,
+  projectId: string,
+  datasetName: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/by-name/${encodeURIComponent(datasetName)}`,
+    { method: "DELETE", headers: authHeaders(token) }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { dataset_id: string; dataset_name: string; deleted: boolean };
+}
+
 export async function deleteDatasetVersion(
   tenantId: string,
   projectId: string,

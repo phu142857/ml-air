@@ -2025,7 +2025,40 @@ def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: s
     raise FileNotFoundError("dataset_version_uri_unsupported")
 
 
+def get_dataset_id_by_name(tenant_id: str, project_id: str, dataset_name: str) -> str | None:
+    safe_name = str(dataset_name or "").strip()
+    if not safe_name:
+        return None
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT dataset_id FROM datasets
+                WHERE tenant_id = %s AND project_id = %s AND name = %s
+                """,
+                (tenant_id, project_id, safe_name),
+            )
+            row = cur.fetchone()
+    return str(row[0]) if row and row[0] else None
+
+
+def _best_effort_remove_file_uri(uri: str | None) -> None:
+    """Remove a local ``file://`` artifact if present (no-op for remote URIs or missing paths)."""
+    if not str(uri or "").strip():
+        return
+    try:
+        path = _file_uri_to_path(str(uri).strip())
+        if os.path.isfile(path):
+            os.remove(path)
+    except Exception as exc:
+        logger.debug("best_effort_remove_file_uri failed uri=%s err=%s", uri, exc)
+
+
 def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, version_id: str) -> bool:
+    ver = get_dataset_version(tenant_id, project_id, version_id)
+    if not ver or str(ver.get("dataset_id") or "") != dataset_id:
+        return False
+    _best_effort_remove_file_uri(str(ver.get("uri") or "") or None)
     with db_conn() as conn:
         with conn.cursor() as cur:
             # Remove lineage links tied to this dataset version first.
@@ -2058,6 +2091,10 @@ def delete_dataset_version(tenant_id: str, project_id: str, dataset_id: str, ver
 
 
 def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
+    if not get_dataset(tenant_id, project_id, dataset_id):
+        return False
+    for ver in list_dataset_versions(tenant_id, project_id, dataset_id):
+        _best_effort_remove_file_uri(str(ver.get("uri") or "") or None)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -2070,6 +2107,13 @@ def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
                 (tenant_id, project_id, dataset_id),
             )
             version_ids = [str(r[0]) for r in (cur.fetchall() or [])]
+            cur.execute(
+                """
+                DELETE FROM dataset_accumulation_buffers
+                WHERE tenant_id = %s AND project_id = %s AND dataset_id = %s
+                """,
+                (tenant_id, project_id, dataset_id),
+            )
             if version_ids:
                 cur.execute(
                     """
@@ -2102,6 +2146,14 @@ def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
     if ok:
         _notify_dataset_updated(tenant_id, project_id, dataset_id, action="dataset_deleted")
     return ok
+
+
+def delete_dataset_by_name(tenant_id: str, project_id: str, dataset_name: str) -> tuple[bool, str | None]:
+    dataset_id = get_dataset_id_by_name(tenant_id, project_id, dataset_name)
+    if not dataset_id:
+        return False, None
+    ok = delete_dataset(tenant_id, project_id, dataset_id)
+    return ok, dataset_id if ok else dataset_id
 
 
 def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: int = 50, offset: int = 0) -> list[dict]:

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Database, GitBranch } from "lucide-react";
+import { ChevronRight, Database, GitBranch, Trash2 } from "lucide-react";
 import {
   DetailSection,
   DetailTabBar,
@@ -40,6 +40,8 @@ import {
   upsertDatasetRetentionPolicy,
   previewDatasetRetention,
   applyDatasetRetention,
+  deleteDataset,
+  deleteDatasetVersion,
   materializeDatasetBuffer,
   materializeScheduledDatasetBuffers,
   patchDatasetBuffer,
@@ -192,6 +194,9 @@ export default function DatasetHubPage() {
   const [versionMetaMsg, setVersionMetaMsg] = useState("");
   const [retentionEnabled, setRetentionEnabled] = useState(false);
   const [retentionMaxVersions, setRetentionMaxVersions] = useState("50");
+  const [deleteDatasetOpen, setDeleteDatasetOpen] = useState(false);
+  const [deleteVersionId, setDeleteVersionId] = useState<string | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState("");
   const [retentionMaxAgeDays, setRetentionMaxAgeDays] = useState("");
   const [retentionProtectReferenced, setRetentionProtectReferenced] = useState(true);
   const [retentionMsg, setRetentionMsg] = useState("");
@@ -725,6 +730,30 @@ export default function DatasetHubPage() {
     return r === "maintainer" || r === "admin";
   }, [accessibleScopes, tenantId, projectId]);
 
+  const deleteDatasetMutation = useMutation({
+    mutationFn: () => deleteDataset(tenantId, projectId, datasetId, token),
+    onSuccess: async () => {
+      setDeleteDatasetOpen(false);
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.list(tenantId, projectId) });
+      router.push("/datasets");
+    },
+    onError: (err) => setDeleteMsg(String((err as Error)?.message || err)),
+  });
+
+  const deleteVersionMutation = useMutation({
+    mutationFn: (versionId: string) =>
+      deleteDatasetVersion(tenantId, projectId, datasetId, versionId, token),
+    onSuccess: async () => {
+      setDeleteVersionId(null);
+      setDeleteMsg("");
+      await queryClient.invalidateQueries({
+        queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
+      });
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId) });
+    },
+    onError: (err) => setDeleteMsg(String((err as Error)?.message || err)),
+  });
+
   const versionColumns: DataTableColumn<DatasetVersionItem>[] = useMemo(() => {
     const cols: DataTableColumn<DatasetVersionItem>[] = [
       {
@@ -841,6 +870,25 @@ export default function DatasetHubPage() {
             }}
           >
             Edit metadata
+          </Button>
+        ),
+      });
+      cols.push({
+        id: "delete",
+        header: "",
+        cell: (v) => (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-7 gap-1 border-[var(--status-failed-border)] px-2 text-[10px] text-[color:var(--status-failed-fg)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteMsg("");
+              setDeleteVersionId(v.version_id);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+            Delete
           </Button>
         ),
       });
@@ -1042,6 +1090,30 @@ export default function DatasetHubPage() {
                 </div>
               ) : null}
             </DetailSection>
+
+            {canEditVersionMetadata && scopePinned ? (
+              <DetailSection
+                title="Danger zone"
+                accentBorder="amber"
+                description="Permanent delete. Does not remove runs that already referenced a version; use retention for bulk version pruning."
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5 border-[var(--status-failed-border)] text-[color:var(--status-failed-fg)]"
+                  onClick={() => {
+                    setDeleteMsg("");
+                    setDeleteDatasetOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete dataset
+                </Button>
+                {deleteMsg && activeTab === "overview" ? (
+                  <p className="mt-2 text-xs text-[color:var(--status-failed-fg)]">{deleteMsg}</p>
+                ) : null}
+              </DetailSection>
+            ) : null}
 
             {!scopePinned ? (
               <DetailSection
@@ -1821,6 +1893,61 @@ export default function DatasetHubPage() {
               onClick={() => patchVersionMetadataMutation.mutate()}
             >
               {patchVersionMetadataMutation.isPending ? "Saving…" : "Append"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDatasetOpen} onOpenChange={setDeleteDatasetOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete dataset</DialogTitle>
+            <DialogDescription>
+              Permanently delete <span className="font-mono text-foreground">{dataset?.name ?? datasetId}</span>, all
+              versions, and the accumulation buffer. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteMsg ? (
+            <p className="text-xs text-[color:var(--status-failed-fg)]">{deleteMsg}</p>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setDeleteDatasetOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteDatasetMutation.isPending}
+              onClick={() => deleteDatasetMutation.mutate()}
+            >
+              {deleteDatasetMutation.isPending ? "Deleting…" : "Delete dataset"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteVersionId)} onOpenChange={(open) => !open && setDeleteVersionId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete dataset version</DialogTitle>
+            <DialogDescription>
+              Remove this immutable snapshot and its lineage edges. Other versions are kept.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteMsg ? (
+            <p className="text-xs text-[color:var(--status-failed-fg)]">{deleteMsg}</p>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setDeleteVersionId(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteVersionMutation.isPending || !deleteVersionId}
+              onClick={() => deleteVersionId && deleteVersionMutation.mutate(deleteVersionId)}
+            >
+              {deleteVersionMutation.isPending ? "Deleting…" : "Delete version"}
             </Button>
           </DialogFooter>
         </DialogContent>

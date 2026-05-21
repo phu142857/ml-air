@@ -2636,6 +2636,21 @@ def apply_dataset_retention_v1(
     )
 
 
+@router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/by-name/{dataset_name}")
+def delete_dataset_by_name_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_name: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    ok, dataset_id = lineage_service.delete_dataset_by_name(tenant_id, project_id, dataset_name)
+    if not ok or not dataset_id:
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    return {"dataset_id": dataset_id, "dataset_name": dataset_name, "deleted": True}
+
+
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}")
 def delete_dataset_v1(
     tenant_id: str, project_id: str, dataset_id: str, authorization: str | None = Header(default=None)
