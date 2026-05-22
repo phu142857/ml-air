@@ -30,10 +30,16 @@ class HeartbeatIn(BaseModel):
     worker_id: str = Field(min_length=1, max_length=256)
 
 
+class TaskArtifactIn(BaseModel):
+    path: str = Field(min_length=1, max_length=512)
+    uri: str = Field(min_length=1, max_length=2048)
+
+
 class CompleteTaskIn(BaseModel):
     worker_id: str = Field(min_length=1, max_length=256)
     metrics: dict[str, Any] = Field(default_factory=dict)
     artifact_uri: str | None = None
+    artifacts: list[TaskArtifactIn] | None = None
 
 
 class FailTaskIn(BaseModel):
@@ -88,10 +94,16 @@ def post_task_complete(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, Any]:
     principal = authenticate_worker_lease_principal(authorization)
+    artifacts = (
+        [{"path": a.path, "uri": a.uri} for a in body.artifacts]
+        if body.artifacts
+        else None
+    )
     outcome, detail = complete_task(
         task_id=task_id,
         worker_id=body.worker_id,
         metrics=body.metrics,
+        artifacts=artifacts,
         artifact_uri=body.artifact_uri,
         principal=principal,
     )

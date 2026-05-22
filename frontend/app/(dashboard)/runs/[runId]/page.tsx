@@ -301,6 +301,9 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryKey: mlairKeys.run.tracking(runId),
     queryFn: () => fetchRunTracking(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
+    refetchOnMount: "always",
+    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
 

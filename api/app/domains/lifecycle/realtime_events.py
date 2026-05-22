@@ -71,6 +71,7 @@ logger = logging.getLogger("mlair.api.realtime_events")
 class EventType(str, Enum):
     RUN_CREATED = "run.created"
     RUN_UPDATED = "run.updated"
+    RUN_TRACKING_UPDATED = "run.tracking.updated"
     TASK_UPDATED = "task.updated"
     MODEL_PROMOTED = "model.promoted"
     MODEL_ELIGIBILITY_UPDATED = "model.eligibility.updated"
@@ -302,6 +303,32 @@ def emit_task_updated(
                 run_id=run_id,
                 pipeline_id=pipeline_id,
             ),
+        )
+    )
+
+
+def emit_run_tracking_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    task_id: str,
+    plugin: str | None = None,
+    trace_id: str | None = None,
+) -> None:
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.RUN_TRACKING_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=run_id,
+            trace_id=trace_id,
+            payload={
+                "run_id": run_id,
+                "task_id": task_id,
+                "plugin": plugin,
+                "updated_at": time.time(),
+            },
         )
     )
 

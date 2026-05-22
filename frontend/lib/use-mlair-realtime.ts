@@ -166,6 +166,11 @@ function keysForEvent(
     }
     return keys;
   }
+  if (t === "run.tracking.updated") {
+    const r = runId || rid;
+    if (!r) return [];
+    return [[...mlairKeys.run.tracking(r)]];
+  }
   if (t === "task.updated") {
     const r = runId || rid;
     const keys: unknown[][] = [

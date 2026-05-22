@@ -38,7 +38,7 @@ Create a run through the normal API (for example your control plane calling MLAi
 1. `POST /v1/tasks/lease` with `worker_id`, `capabilities` (plugin names you implement), `max_tasks`.
 2. For each leased task: run your logic (train, ETL, etc.).
 3. While **RUNNING**, stream stdout-style lines: `POST /v1/tasks/{task_id}/logs` (see [Streaming logs](#streaming-logs)).
-4. On success: `POST /v1/tasks/{task_id}/complete` with `worker_id`, optional `metrics`, `artifact_uri`.
+4. On success: `POST /v1/tasks/{task_id}/complete` with `worker_id`, optional `metrics`, and `artifacts` (or legacy `artifact_uri`). Metrics and artifacts are persisted to `run_metrics` / `run_artifacts` (same as the internal executor) and appear in Hub **Metrics** / **Artifacts**.
 5. On failure: `POST /v1/tasks/{task_id}/fail` with `worker_id`, `error`.
 6. For long jobs: `POST /v1/tasks/{task_id}/heartbeat` with `worker_id` before `lease_expires_at`.
 
@@ -66,6 +66,25 @@ python scripts/external_worker_example.py
 | `ML_AIR_WORKER_TOKEN` | API only | (empty) | If set, Bearer must match for unconstrained worker lease (optional). |
 | `ML_AIR_TASK_LEASE_SECONDS` | API | `30` | Lease TTL; heartbeat extends it. |
 | `ML_AIR_LEASE_REAP_INTERVAL_SECONDS` | scheduler | `5` | How often expired leases are reset to `PENDING` and rescheduled. |
+
+## Complete payload (metrics + artifacts)
+
+```json
+{
+  "worker_id": "demo-worker-1",
+  "metrics": {
+    "mAP50": 0.91,
+    "precision": 0.88,
+    "recall": {"value": 0.84, "step": 10}
+  },
+  "artifacts": [
+    {"path": "train/best.pt", "uri": "minio://models/run123/best.pt"},
+    {"path": "eval/confusion_matrix.png", "uri": "minio://eval/run123/cm.png"}
+  ]
+}
+```
+
+Metric keys are stored as `{plugin}.{key}` (for example `app_train_adapter.mAP50`). Hub receives **`run.tracking.updated`** over realtime when complete/fail persists tracking.
 
 ## Streaming logs
 
@@ -97,7 +116,7 @@ Content-Type: application/json
 | POST | `/v1/tasks/lease` | `worker_id`, `capabilities[]`, `max_tasks` |
 | POST | `/v1/tasks/{task_id}/logs` | `worker_id`, `lines[]` with `level`, `message` |
 | POST | `/v1/tasks/{task_id}/heartbeat` | `worker_id` |
-| POST | `/v1/tasks/{task_id}/complete` | `worker_id`, `metrics`, `artifact_uri?` |
+| POST | `/v1/tasks/{task_id}/complete` | `worker_id`, `metrics`, `artifacts[]` (`path`, `uri`), or `artifact_uri?` |
 | POST | `/v1/tasks/{task_id}/fail` | `worker_id`, `error` |
 
 ## Result

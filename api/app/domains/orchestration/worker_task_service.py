@@ -13,6 +13,7 @@ from psycopg import connect
 from app.domains.governance.auth_service import Principal
 from app.domains.shared.db_service import database_url
 from app.domains.orchestration.log_service import append_task_run_log
+from app.domains.orchestration.tracking_service import log_artifact, log_metric
 from app.domains.shared.queue_service import publish_task_finished
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
@@ -304,6 +305,79 @@ def _load_task_run_row(task_id: str) -> dict[str, Any] | None:
     }
 
 
+def _normalize_complete_artifacts(
+    artifacts: list[dict[str, Any]] | None,
+    artifact_uri: str | None,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    if isinstance(artifacts, list):
+        for item in artifacts:
+            if not isinstance(item, dict):
+                continue
+            uri = str(item.get("uri") or "").strip()
+            if not uri:
+                continue
+            path = str(item.get("path") or "artifact").strip() or "artifact"
+            out.append({"path": path[:512], "uri": uri[:2048]})
+    if not out and artifact_uri:
+        uri = str(artifact_uri).strip()
+        if uri:
+            out.append({"path": "model", "uri": uri[:2048]})
+    return out
+
+
+def _persist_run_plugin_tracking(
+    *,
+    run_id: str,
+    plugin_name: str,
+    metrics: dict[str, Any] | None,
+    artifacts: list[dict[str, Any]] | None,
+) -> None:
+    plugin = (plugin_name or "plugin").strip() or "plugin"
+    prefix = f"{plugin}."
+
+    if isinstance(metrics, dict):
+        for key, value in metrics.items():
+            metric_key = str(key).strip()
+            if not metric_key:
+                continue
+            metric_value: Any = value
+            step = 0
+            if isinstance(value, dict):
+                metric_value = value.get("value")
+                try:
+                    step = int(value.get("step", 0) or 0)
+                except (TypeError, ValueError):
+                    step = 0
+            try:
+                numeric = float(metric_value)
+            except (TypeError, ValueError):
+                continue
+            log_metric(run_id=run_id, key=f"{prefix}{metric_key}", value=numeric, step=step)
+
+    if isinstance(artifacts, list):
+        for item in artifacts:
+            if not isinstance(item, dict):
+                continue
+            uri = str(item.get("uri") or "").strip()
+            if not uri:
+                continue
+            path = str(item.get("path") or "artifact").strip() or "artifact"
+            log_artifact(run_id=run_id, path=path[:512], uri=uri[:2048])
+
+
+def _emit_run_tracking_updated(row: dict[str, Any], *, task_id: str, trace_id: str | None) -> None:
+    plugin = str(row.get("plugin") or row.get("plugin_name") or "") or None
+    rt.emit_run_tracking_updated(
+        tenant_id=str(row["tenant_id"]),
+        project_id=str(row["project_id"]),
+        run_id=str(row["run_id"]),
+        task_id=task_id,
+        plugin=plugin,
+        trace_id=trace_id,
+    )
+
+
 def _authorize_task_row(principal: Principal | None, row: dict[str, Any]) -> None:
     from fastapi import HTTPException
 
@@ -321,6 +395,7 @@ def complete_task(
     task_id: str,
     worker_id: str,
     metrics: dict[str, Any] | None,
+    artifacts: list[dict[str, Any]] | None,
     artifact_uri: str | None,
     principal: Principal | None,
 ) -> tuple[str, dict[str, Any]]:
@@ -347,11 +422,13 @@ def complete_task(
     started_iso = row["started_at"].isoformat() if row.get("started_at") else finished_at
 
     metrics = metrics if isinstance(metrics, dict) else {}
-    artifacts: list[dict[str, Any]] = []
-    if artifact_uri:
-        artifacts.append({"path": "model", "uri": artifact_uri})
+    artifact_list = _normalize_complete_artifacts(artifacts, artifact_uri)
 
-    plugin_exec = {"ok": True, "result": {"params": {}, "metrics": metrics, "artifacts": artifacts, "lineage": {}}}
+    plugin_exec = {
+        "ok": True,
+        "result": {"params": {}, "metrics": metrics, "artifacts": artifact_list, "lineage": {}},
+    }
+    plugin_name = str(row.get("plugin") or row.get("plugin_name") or "plugin")
 
     with connect(database_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -391,6 +468,13 @@ def complete_task(
                 (duration_ms, task_id),
             )
 
+    _persist_run_plugin_tracking(
+        run_id=str(row["run_id"]),
+        plugin_name=plugin_name,
+        metrics=metrics,
+        artifacts=artifact_list,
+    )
+
     ctx = dict(row["plugin_context"])
     ctx.setdefault("run_id", row["run_id"])
     ctx.setdefault("task_id", task_id)
@@ -424,6 +508,7 @@ def complete_task(
             urow = cur.fetchone()
             if urow and isinstance(urow[0], datetime):
                 task_updated_at = urow[0]
+    trace = done_payload.get("trace_id") or get_trace_id()
     rt.emit_task_updated(
         tenant_id=str(row["tenant_id"]),
         project_id=str(row["project_id"]),
@@ -432,8 +517,9 @@ def complete_task(
         status="SUCCESS",
         updated_at=task_updated_at,
         pipeline_id=str(row.get("pipeline_id") or "") or None,
-        trace_id=done_payload.get("trace_id") or get_trace_id(),
+        trace_id=trace,
     )
+    _emit_run_tracking_updated(row, task_id=task_id, trace_id=trace)
     append_task_run_log(
         str(row["run_id"]),
         task_id=task_id,
@@ -485,6 +571,12 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
             if cur.rowcount == 0:
                 raise HTTPException(status_code=409, detail="task_lease_conflict")
 
+    plugin_name = str(row.get("plugin") or row.get("plugin_name") or "plugin")
+    try:
+        log_metric(run_id=str(row["run_id"]), key=f"{plugin_name}.passed", value=0.0, step=0)
+    except Exception:
+        pass
+
     ctx = dict(row["plugin_context"])
     ctx.setdefault("run_id", row["run_id"])
     ctx.setdefault("task_id", task_id)
@@ -518,6 +610,7 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
             urow = cur.fetchone()
             if urow and isinstance(urow[0], datetime):
                 task_updated_at_fail = urow[0]
+    fail_trace = done_payload.get("trace_id") or get_trace_id()
     rt.emit_task_updated(
         tenant_id=str(row["tenant_id"]),
         project_id=str(row["project_id"]),
@@ -526,8 +619,9 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         status="FAILED",
         updated_at=task_updated_at_fail,
         pipeline_id=str(row.get("pipeline_id") or "") or None,
-        trace_id=done_payload.get("trace_id") or get_trace_id(),
+        trace_id=fail_trace,
     )
+    _emit_run_tracking_updated(row, task_id=task_id, trace_id=fail_trace)
     append_task_run_log(
         str(row["run_id"]),
         task_id=task_id,

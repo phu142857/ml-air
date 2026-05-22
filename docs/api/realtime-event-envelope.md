@@ -35,6 +35,7 @@ MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.
 | `model.promoted` | `model_id` | `model_id`, `version`, `stage`, `updated_at`, … |
 | `model.eligibility.updated` | `model_id` | `model_id`, `action`, `updated_at`, optional `version`, `stage`, `approval_status` |
 | `run.created` / `run.updated` | `run_id` | `status`, `updated_at`, `run_id`, optional `pipeline_id` |
+| `run.tracking.updated` | `run_id` | `run_id`, `task_id`, optional `plugin`, `updated_at` |
 | `task.updated` | `task_id` | `run_id`, `status`, `updated_at`, optional `pipeline_id` |
 
 Aliases and additional types are defined in [`api/app/domains/lifecycle/realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py) (`EventType`).

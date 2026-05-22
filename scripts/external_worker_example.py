@@ -92,7 +92,11 @@ def main() -> None:
                 _post_json(
                     f"{base}/v1/tasks/{urllib.parse.quote(tid, safe=':')}/complete",
                     token,
-                    {"worker_id": worker_id, "metrics": {"note": {"value": 1.0, "step": 0}}},
+                    {
+                        "worker_id": worker_id,
+                        "metrics": {"note": {"value": 1.0, "step": 0}},
+                        "artifacts": [{"path": "demo/out.json", "uri": f"file:///tmp/{tid}.json"}],
+                    },
                 )
                 print(f"[Worker] success task_id={tid}", flush=True)
             except Exception as exc:  # noqa: BLE001
