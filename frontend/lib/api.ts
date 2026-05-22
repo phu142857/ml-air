@@ -90,10 +90,19 @@ export type TaskItem = {
   memory_rss_kb?: number | null;
 };
 
+export type LogItemPayload = {
+  task_id?: string;
+  plugin?: string;
+  worker_id?: string;
+  [key: string]: unknown;
+};
+
 export type LogItem = {
   ts: string;
   level: string;
   message: string;
+  trace_id?: string;
+  payload?: LogItemPayload;
 };
 
 export type PipelineItem = {

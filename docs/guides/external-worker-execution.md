@@ -37,9 +37,10 @@ Create a run through the normal API (for example your control plane calling MLAi
 
 1. `POST /v1/tasks/lease` with `worker_id`, `capabilities` (plugin names you implement), `max_tasks`.
 2. For each leased task: run your logic (train, ETL, etc.).
-3. On success: `POST /v1/tasks/{task_id}/complete` with `worker_id`, optional `metrics`, `artifact_uri`.
-4. On failure: `POST /v1/tasks/{task_id}/fail` with `worker_id`, `error`.
-5. For long jobs: `POST /v1/tasks/{task_id}/heartbeat` with `worker_id` before `lease_expires_at`.
+3. While **RUNNING**, stream stdout-style lines: `POST /v1/tasks/{task_id}/logs` (see [Streaming logs](#streaming-logs)).
+4. On success: `POST /v1/tasks/{task_id}/complete` with `worker_id`, optional `metrics`, `artifact_uri`.
+5. On failure: `POST /v1/tasks/{task_id}/fail` with `worker_id`, `error`.
+6. For long jobs: `POST /v1/tasks/{task_id}/heartbeat` with `worker_id` before `lease_expires_at`.
 
 ### 4. Auth
 
@@ -66,11 +67,35 @@ python scripts/external_worker_example.py
 | `ML_AIR_TASK_LEASE_SECONDS` | API | `30` | Lease TTL; heartbeat extends it. |
 | `ML_AIR_LEASE_REAP_INTERVAL_SECONDS` | scheduler | `5` | How often expired leases are reset to `PENDING` and rescheduled. |
 
+## Streaming logs
+
+While a task is **RUNNING** and leased by your `worker_id`, append lines to the **run log stream** (visible in Hub **Runner logs** and via `GET .../runs/{run_id}/logs`):
+
+```http
+POST /v1/tasks/{task_id}/logs
+Authorization: Bearer <worker-or-maintainer-token>
+Content-Type: application/json
+
+{
+  "worker_id": "demo-worker-1",
+  "lines": [
+    { "level": "INFO", "message": "epoch 1 loss=0.42" },
+    { "level": "WARN", "message": "learning rate clipped" }
+  ]
+}
+```
+
+- Up to **100** lines per request; `message` required; `level` defaults to `INFO` (`DEBUG`, `WARN`, `ERROR` allowed).
+- The API stores each line in Redis `mlair:logs:{run_id}` with payload `{ "task_id", "plugin", "worker_id" }` so the Hub can filter by task.
+- Lease / complete / fail also write summary lines (leased, success, failed) with the same payload shape.
+- Task-scoped read (maintainer/viewer token): `GET /v1/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs`.
+
 ## API summary
 
 | Method | Path | Body highlights |
 |--------|------|-----------------|
 | POST | `/v1/tasks/lease` | `worker_id`, `capabilities[]`, `max_tasks` |
+| POST | `/v1/tasks/{task_id}/logs` | `worker_id`, `lines[]` with `level`, `message` |
 | POST | `/v1/tasks/{task_id}/heartbeat` | `worker_id` |
 | POST | `/v1/tasks/{task_id}/complete` | `worker_id`, `metrics`, `artifact_uri?` |
 | POST | `/v1/tasks/{task_id}/fail` | `worker_id`, `error` |

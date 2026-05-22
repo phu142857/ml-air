@@ -7,7 +7,7 @@ MLAir API is exposed under `/v1`.
 Core resources:
 
 - runs (including **`POST .../runs`**, **`POST .../pipelines/{id}/run`** with readiness gate, **`GET .../runs/{id}/readiness`**, DLQ replay, partial replay, logs, manifest; and **`POST .../runs/trigger`** — train from **model + dataset**; see [POST /runs/trigger](./post-runs-trigger.md) and [Model-centric pipeline mapping and run trigger](../guides/model-centric-pipeline-mapping-and-trigger.md))
-- tasks (including **external worker** lease/complete under `/v1/tasks/…`; see [External worker execution](../guides/external-worker-execution.md))
+- tasks (including **external worker** lease/complete/logs under `/v1/tasks/…`; **`GET .../tasks/{task_id}/logs`** for task-scoped tail; see [External worker execution](../guides/external-worker-execution.md))
 - pipelines and pipeline versions (**`POST|GET .../pipelines/{id}/versions`**, **`GET .../pipeline-versions/{id}`**, **`.../diff`**, **`POST .../check-readiness`**, **`POST /v1/pipelines/validate`**)
 - models (registry CRUD, versions, import, promote — see prior list in OpenAPI **Models** tag; narrative [POST /models](./post-models.md), [POST /versions](./post-model-versions.md), [GET /versions](./get-model-versions.md))
 - **datasets** (list, CSV upload/preview, versions, download, additive **`PATCH .../dataset-versions/{version_id}/metadata`** for `tags` / `external_refs`, **`GET|PATCH .../datasets/{id}/buffer`**, **`POST .../datasets/{id}/materialize`**, policy-driven readiness, training-policies CRUD-lite) and **lineage** (neighborhood query, run slice, ingest)

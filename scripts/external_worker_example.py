@@ -79,6 +79,14 @@ def main() -> None:
             plugin = t.get("plugin", "")
             print(f"[Worker] leased task_id={tid} plugin={plugin}", flush=True)
             try:
+                _post_json(
+                    f"{base}/v1/tasks/{urllib.parse.quote(tid, safe=':')}/logs",
+                    token,
+                    {
+                        "worker_id": worker_id,
+                        "lines": [{"level": "INFO", "message": f"starting plugin={plugin}"}],
+                    },
+                )
                 # Replace with real train/ETL; placeholder proves end-to-end callback.
                 time.sleep(0.5)
                 _post_json(

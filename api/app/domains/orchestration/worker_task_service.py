@@ -12,6 +12,7 @@ from psycopg import connect
 
 from app.domains.governance.auth_service import Principal
 from app.domains.shared.db_service import database_url
+from app.domains.orchestration.log_service import append_task_run_log
 from app.domains.shared.queue_service import publish_task_finished
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
@@ -214,6 +215,14 @@ def lease_tasks(
                 pipeline_id=str(pipeline_id or "") or None,
                 trace_id=get_trace_id(),
             )
+        append_task_run_log(
+            run_id,
+            task_id=full_task_id,
+            level="INFO",
+            message=f"Task leased by worker {wid}",
+            plugin=plugin or None,
+            worker_id=wid,
+        )
     return out
 
 
@@ -425,6 +434,14 @@ def complete_task(
         pipeline_id=str(row.get("pipeline_id") or "") or None,
         trace_id=done_payload.get("trace_id") or get_trace_id(),
     )
+    append_task_run_log(
+        str(row["run_id"]),
+        task_id=task_id,
+        level="INFO",
+        message="Task completed successfully",
+        plugin=str(row.get("plugin") or "") or None,
+        worker_id=wid,
+    )
     return "ok", {"task_id": task_id, "status": "SUCCESS"}
 
 
@@ -511,3 +528,56 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         pipeline_id=str(row.get("pipeline_id") or "") or None,
         trace_id=done_payload.get("trace_id") or get_trace_id(),
     )
+    append_task_run_log(
+        str(row["run_id"]),
+        task_id=task_id,
+        level="ERROR",
+        message=f"Task failed: {err[:500]}",
+        plugin=str(row.get("plugin") or "") or None,
+        worker_id=wid,
+    )
+
+
+def append_worker_task_logs(
+    *,
+    task_id: str,
+    worker_id: str,
+    lines: list[dict[str, Any]],
+    principal: Principal | None,
+) -> dict[str, Any]:
+    from fastapi import HTTPException
+
+    if not external_execution_enabled():
+        raise HTTPException(status_code=503, detail="external_execution_disabled")
+
+    row = _load_task_run_row(task_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="task_not_found")
+
+    _authorize_task_row(principal, row)
+
+    wid = (worker_id or "").strip()
+    if str(row["status"]).upper() != "RUNNING" or str(row.get("leased_by") or "") != wid:
+        raise HTTPException(status_code=409, detail="task_not_leased_by_worker")
+
+    plugin = str(row.get("plugin") or "") or None
+    run_id = str(row["run_id"])
+    appended = 0
+    for line in lines[:100]:
+        if not isinstance(line, dict):
+            continue
+        message = str(line.get("message") or "").strip()
+        if not message:
+            continue
+        level = str(line.get("level") or "INFO").strip().upper()[:16] or "INFO"
+        append_task_run_log(
+            run_id,
+            task_id=task_id,
+            level=level,
+            message=message[:8000],
+            plugin=plugin,
+            worker_id=wid,
+        )
+        appended += 1
+
+    return {"ok": True, "task_id": task_id, "appended": appended}

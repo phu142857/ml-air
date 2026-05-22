@@ -37,7 +37,7 @@ from app.plugins.compatibility_service import (
 )
 from app.plugins.registry import plugin_registry
 from app.domains.governance.auth_service import authenticate_bearer, authorize_scope
-from app.domains.orchestration.log_service import append_run_log, read_run_logs
+from app.domains.orchestration.log_service import append_run_log, read_run_logs, read_task_logs
 from app.domains.governance.project_service import list_projects, list_tenants, register_project
 from app.domains.shared.queue_service import replay_dlq_for_run
 from app.domains.orchestration import pipeline_version_service
@@ -1154,6 +1154,28 @@ def get_task_v1(
     if not task:
         raise HTTPException(status_code=404, detail="task_not_found")
     return task
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs")
+def get_task_logs_v1(
+    tenant_id: str,
+    project_id: str,
+    task_id: str,
+    offset: int = 0,
+    limit: int = 200,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    task = get_task_by_id(tenant_id=tenant_id, project_id=project_id, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task_not_found")
+    return {
+        "task_id": task_id,
+        "run_id": task["run_id"],
+        "offset": offset,
+        "items": read_task_logs(task_id=task_id, offset=offset, limit=limit),
+    }
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/dlq/replay")

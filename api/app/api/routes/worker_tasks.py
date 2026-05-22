@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.domains.governance.auth_service import authenticate_worker_lease_principal
 from app.domains.orchestration.worker_task_service import (
+    append_worker_task_logs,
     complete_task,
     external_execution_enabled,
     fail_task,
@@ -38,6 +39,16 @@ class CompleteTaskIn(BaseModel):
 class FailTaskIn(BaseModel):
     worker_id: str = Field(min_length=1, max_length=256)
     error: str = Field(min_length=1, max_length=8000)
+
+
+class TaskLogLineIn(BaseModel):
+    level: str = Field(default="INFO", max_length=16)
+    message: str = Field(min_length=1, max_length=8000)
+
+
+class AppendTaskLogsIn(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=256)
+    lines: list[TaskLogLineIn] = Field(min_length=1, max_length=100)
 
 
 @router.post("/lease")
@@ -87,6 +98,24 @@ def post_task_complete(
     if outcome == "idempotent":
         return {"ok": True, "idempotent": True, **detail}
     return {"ok": True, **detail}
+
+
+@router.post("/{task_id}/logs")
+def post_task_logs(
+    task_id: str,
+    body: AppendTaskLogsIn,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict[str, Any]:
+    principal = authenticate_worker_lease_principal(authorization)
+    if not external_execution_enabled():
+        raise HTTPException(status_code=503, detail="external_execution_disabled")
+    lines = [{"level": ln.level, "message": ln.message} for ln in body.lines]
+    return append_worker_task_logs(
+        task_id=task_id,
+        worker_id=body.worker_id,
+        lines=lines,
+        principal=principal,
+    )
 
 
 @router.post("/{task_id}/fail")

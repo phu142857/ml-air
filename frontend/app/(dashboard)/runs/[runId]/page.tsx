@@ -55,11 +55,19 @@ import {
   fetchRunReadiness,
   fetchAuditTimeline,
   normalizeProjectId,
+  type LogItem,
   type RunItem,
   type TaskItem,
   type RunReadiness,
   type ReadinessItem,
 } from "@/lib/api"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
@@ -98,6 +106,48 @@ function RunTabPanel({
 }) {
   if (loading) return <DetailTabSkeleton variant={variant} />
   return <>{children}</>
+}
+
+function logTaskSuffix(log: LogItem): string | null {
+  const p = log.payload
+  if (!p) return null
+  const parts: string[] = []
+  if (typeof p.plugin === "string" && p.plugin) parts.push(p.plugin)
+  if (typeof p.task_id === "string" && p.task_id) {
+    const short = p.task_id.includes(":") ? p.task_id.split(":").pop()! : p.task_id
+    parts.push(short)
+  }
+  return parts.length ? parts.join(" · ") : null
+}
+
+function LogLineRow({ log }: { log: LogItem }) {
+  const suffix = logTaskSuffix(log)
+  return (
+    <div className="flex gap-3">
+      <span className="w-[84px] shrink-0 tabular-nums text-muted-foreground/80">
+        {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
+      </span>
+      <span
+        className={cn(
+          "w-14 shrink-0",
+          String(log.level).toUpperCase() === "INFO" && "text-sky-400",
+          String(log.level).toUpperCase() === "DEBUG" && "text-violet-400",
+          String(log.level).toUpperCase() === "WARN" && "text-amber-400",
+          String(log.level).toUpperCase() === "ERROR" && "text-red-400",
+        )}
+      >
+        [{log.level}]
+      </span>
+      {suffix ? (
+        <span className="w-[min(140px,22vw)] shrink-0 truncate text-muted-foreground/70" title={suffix}>
+          {suffix}
+        </span>
+      ) : (
+        <span className="w-[min(140px,22vw)] shrink-0" />
+      )}
+      <span className="min-w-0 break-words text-foreground/90">{log.message}</span>
+    </div>
+  )
 }
 
 const statusConfig = {
@@ -240,7 +290,12 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryKey: mlairKeys.run.logs(runId),
     queryFn: () => fetchRunLogs(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
+    refetchOnMount: "always",
+    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
+
+  const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
 
   const trackingQuery = useQuery({
     queryKey: mlairKeys.run.tracking(runId),
@@ -287,6 +342,25 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     if (fromStore.length) return fromStore
     return tasksQuery.data?.items ?? []
   }, [storeTasks, tasksQuery.data?.items])
+
+  const logTaskOptions = useMemo(() => {
+    const ids = new Set<string>()
+    for (const t of tasks) {
+      if (t.task_id) ids.add(t.task_id)
+    }
+    for (const log of logsQuery.data?.items ?? []) {
+      const tid = log.payload?.task_id
+      if (typeof tid === "string" && tid) ids.add(tid)
+    }
+    return Array.from(ids).sort()
+  }, [tasks, logsQuery.data?.items])
+
+  const displayedLogs = useMemo(() => {
+    const items = logsQuery.data?.items ?? []
+    if (logTaskFilter === "all") return items
+    return items.filter((log) => log.payload?.task_id === logTaskFilter)
+  }, [logsQuery.data?.items, logTaskFilter])
+
   const gateResults = useMemo(() => readinessToGateRows(readinessQuery.data), [readinessQuery.data])
   const timelineEvents = useMemo(
     () => mapAuditTimelineItems(timelineQuery.data?.items ?? []),
@@ -624,11 +698,28 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.logs}>
             <DetailSection
               title="Runner logs"
-              description="Log tail from the API."
+              description="Run log stream (orchestration + worker). Filter by task when payload includes task_id."
               bodyClassName="p-0"
             >
-              <div className="flex items-center justify-between border-b border-border bg-background/80 px-4 py-2">
-                <span className="text-xs text-muted-foreground">stdout / stderr</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/80 px-4 py-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">stdout / stderr</span>
+                  {logTaskOptions.length > 0 ? (
+                    <Select value={logTaskFilter} onValueChange={setLogTaskFilter}>
+                      <SelectTrigger className="h-7 w-[min(320px,70vw)] font-mono text-xs">
+                        <SelectValue placeholder="All tasks" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All tasks</SelectItem>
+                        {logTaskOptions.map((tid) => (
+                          <SelectItem key={tid} value={tid} className="font-mono text-xs">
+                            {tid}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                </div>
                 <div className="flex min-w-0 items-center gap-3">
                   {logsQuery.isFetching ? (
                     <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -646,27 +737,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               <div className="max-h-[min(520px,55vh)] space-y-1 overflow-auto bg-muted/30 p-4 font-mono text-xs leading-relaxed">
                 {logsQuery.isError ? (
                   <p className="text-red-300">{formatApiClientError(logsQuery.error)}</p>
-                ) : (logsQuery.data?.items ?? []).length === 0 ? (
-                  <p className="text-muted-foreground">No log lines yet.</p>
+                ) : displayedLogs.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    {logTaskFilter === "all" ? "No log lines yet." : "No log lines for this task."}
+                  </p>
                 ) : (
-                  (logsQuery.data?.items ?? []).map((log, index) => (
-                    <div key={`${log.ts}-${index}`} className="flex gap-3">
-                      <span className="w-[84px] shrink-0 tabular-nums text-muted-foreground/80">
-                        {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
-                      </span>
-                      <span
-                        className={cn(
-                          "w-14 shrink-0",
-                          String(log.level).toUpperCase() === "INFO" && "text-sky-400",
-                          String(log.level).toUpperCase() === "DEBUG" && "text-violet-400",
-                          String(log.level).toUpperCase() === "WARN" && "text-amber-400",
-                          String(log.level).toUpperCase() === "ERROR" && "text-red-400",
-                        )}
-                      >
-                        [{log.level}]
-                      </span>
-                      <span className="min-w-0 break-words text-foreground/90">{log.message}</span>
-                    </div>
+                  displayedLogs.map((log, index) => (
+                    <LogLineRow key={`${log.ts}-${log.payload?.task_id ?? ""}-${index}`} log={log} />
                   ))
                 )}
               </div>
