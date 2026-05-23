@@ -19,7 +19,8 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+# Empty = browser same-origin /v1 proxy; set at build only when UI and API are on different public hosts.
+ARG NEXT_PUBLIC_API_BASE_URL=
 ARG NEXT_PUBLIC_MLAIR_REALTIME_WS=
 
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}

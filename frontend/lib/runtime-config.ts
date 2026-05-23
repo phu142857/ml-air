@@ -26,6 +26,46 @@ export function getRuntimeConfig() {
   return window.__ML_AIR_RUNTIME_CONFIG__ ?? null;
 }
 
+export type RuntimeConfigSlice = NonNullable<Window["__ML_AIR_RUNTIME_CONFIG__"]>;
+
+function nonEmptyUrl(value: string | null | undefined): string | null {
+  const s = String(value ?? "").trim();
+  return s ? s : null;
+}
+
+/** Apply absolute api_base_url only for split-host deploys; same-origin Hub keeps relative `/v1`. */
+export function shouldApplyRuntimeApiBaseUrl(url: string | null | undefined): boolean {
+  const api = nonEmptyUrl(url);
+  if (!api) return false;
+  if (typeof window === "undefined") return true;
+  try {
+    return new URL(api).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+/** Merge API/runtime-config without letting null/empty URLs overwrite deploy inject. */
+export function mergeRuntimeConfig(
+  prev: RuntimeConfigSlice,
+  next: Partial<RuntimeConfigSlice>,
+): RuntimeConfigSlice {
+  const api = nonEmptyUrl(next.api_base_url ?? next.apiBaseUrl);
+  const realtime = nonEmptyUrl(next.realtime_base_url);
+  const merged: RuntimeConfigSlice = {
+    ...prev,
+    ...(api ? { api_base_url: api, apiBaseUrl: api } : {}),
+    ...(realtime ? { realtime_base_url: realtime } : {}),
+    ...(nonEmptyUrl(next.environment) ? { environment: String(next.environment).trim() } : {}),
+    ...(nonEmptyUrl(next.hub_default_route) ? { hub_default_route: String(next.hub_default_route).trim() } : {}),
+    ...(next.features ? { features: { ...(prev.features ?? {}), ...next.features } } : {}),
+    ...(next.observability
+      ? { observability: { ...(prev.observability ?? {}), ...next.observability } }
+      : {}),
+  };
+  return merged;
+}
+
 const OVERRIDE_STORAGE_KEY = "mlair.runtime-config.override";
 
 export type RuntimeConfigOverride = {

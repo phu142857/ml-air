@@ -22,8 +22,8 @@ export function inferRealtimeWsBaseFromLocation(): string | null {
     return DEFAULT_DEV_REALTIME_WS;
   }
 
-  // Published quickstart: UI :38080, realtime :8001 on same host.
-  return `${wsProto}://${hostname}:8001`;
+  // ALB / reverse-proxy: realtime on same host as Hub (path `/ws` added at connect time).
+  return `${wsProto}://${window.location.host}`;
 }
 
 /**

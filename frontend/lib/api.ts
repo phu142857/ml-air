@@ -16,11 +16,28 @@ function stripTrailingSlash(url: string): string {
 }
 
 /**
- * Absolute API URL from build-time env (always non-empty). Used when same-origin ``/v1`` proxy fails.
- * In Docker quickstart this is ``http://localhost:8080`` so the **browser** can reach the published API port.
+ * Browser-reachable API base when an absolute URL is required (Settings preview, legacy paths).
+ * Production browsers use same-origin; server/build uses internal URL — never hardcode localhost in prod browser.
  */
 export function getPublicApiBaseUrl(): string {
-  return stripTrailingSlash(process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080");
+  if (typeof window !== "undefined") {
+    return stripTrailingSlash(window.location.origin);
+  }
+  const fromEnv = String(process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
+  if (fromEnv && fromEnv !== "/") {
+    return stripTrailingSlash(fromEnv);
+  }
+  return stripTrailingSlash(
+    process.env.MLAIR_NEXT_INTERNAL_API_URL || process.env.ML_AIR_API_BASE_URL || "http://api:8080",
+  );
+}
+
+/** Fallback when runtime-config omits api_base_url (browser: same-origin; SSR: public/internal env). */
+export function runtimeConfigApiBaseFallback(): string {
+  if (typeof window !== "undefined") {
+    return stripTrailingSlash(window.location.origin);
+  }
+  return getPublicApiBaseUrl();
 }
 
 export function getApiBaseUrl(): string {
@@ -388,8 +405,9 @@ export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): P
     }
     const out = await readOk(rel);
     const patched = { ...out };
-    if (!String(patched.api_base_url || "").trim()) {
-      patched.api_base_url = getPublicApiBaseUrl();
+    // Leave empty when same-origin proxy is used; Settings can still read inferred URL from response object.
+    if (!String(patched.api_base_url || "").trim() && typeof window === "undefined") {
+      patched.api_base_url = runtimeConfigApiBaseFallback();
     }
     if (!String(patched.realtime_base_url || "").trim()) {
       patched.realtime_base_url = resolveRealtimeWsBase(null, process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS);
@@ -399,13 +417,13 @@ export async function fetchRuntimeConfig(opts?: { preferRelative?: boolean }): P
 
   const base =
     typeof window !== "undefined"
-      ? stripTrailingSlash(String(getApiBaseUrl() || getPublicApiBaseUrl()))
+      ? stripTrailingSlash(String(getApiBaseUrl() || runtimeConfigApiBaseFallback()))
       : stripTrailingSlash(getApiBaseUrl());
   const res = await fetch(`${base}/v1/runtime-config`, { cache: "no-store" });
   const out = await readOk(res);
   const patched = { ...out };
-  if (typeof window !== "undefined" && !String(patched.api_base_url || "").trim()) {
-    patched.api_base_url = getPublicApiBaseUrl();
+  if (typeof window === "undefined" && !String(patched.api_base_url || "").trim()) {
+    patched.api_base_url = runtimeConfigApiBaseFallback();
   }
   if (!String(patched.realtime_base_url || "").trim()) {
     patched.realtime_base_url = resolveRealtimeWsBase(null, process.env.NEXT_PUBLIC_MLAIR_REALTIME_WS);

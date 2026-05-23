@@ -7,7 +7,11 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMlairRealtime } from "@/lib/use-mlair-realtime";
 import { fetchRuntimeConfig } from "@/lib/api";
-import { hydrateRuntimeConfigOverride } from "@/lib/runtime-config";
+import {
+  hydrateRuntimeConfigOverride,
+  mergeRuntimeConfig,
+  shouldApplyRuntimeApiBaseUrl,
+} from "@/lib/runtime-config";
 
 function MlairRealtimeSubscriber() {
   useMlairRealtime();
@@ -27,16 +31,21 @@ export function AppProviders({ children }: PropsWithChildren) {
     (async () => {
       try {
         const rc = await fetchRuntimeConfig({ preferRelative: true });
-        const prev = g.__ML_AIR_RUNTIME_CONFIG__ || {};
-        g.__ML_AIR_RUNTIME_CONFIG__ = {
-          ...prev,
-          ...(rc || {}),
+        const prev = (g.__ML_AIR_RUNTIME_CONFIG__ || {}) as Parameters<typeof mergeRuntimeConfig>[0];
+        g.__ML_AIR_RUNTIME_CONFIG__ = mergeRuntimeConfig(prev, {
+          ...(shouldApplyRuntimeApiBaseUrl(rc.api_base_url)
+            ? { api_base_url: rc.api_base_url }
+            : {}),
+          realtime_base_url: rc.realtime_base_url,
+          environment: rc.environment,
+          hub_default_route: rc.hub_default_route,
+          observability: rc.observability,
           features: {
             ...(prev.features || {}),
-            ...(rc?.features || {}),
-            realtime_enabled: rc?.features?.realtime_enabled !== false,
+            ...(rc.features || {}),
+            realtime_enabled: rc.features?.realtime_enabled !== false,
           },
-        };
+        });
       } catch {
         // env / mlair-runtime-config.js fallback remains
       } finally {

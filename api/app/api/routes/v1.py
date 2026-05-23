@@ -4,7 +4,7 @@ import logging
 import os
 import re
 
-from fastapi import APIRouter, Body, File, Form, Header, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Body, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 from prometheus_client import Counter
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,10 @@ from app.plugins.compatibility_service import (
 )
 from app.plugins.registry import plugin_registry
 from app.domains.governance.auth_service import authenticate_bearer, authorize_scope
+from app.domains.platform.runtime_url_service import (
+    resolve_runtime_api_base_url,
+    resolve_runtime_realtime_base_url,
+)
 from app.domains.orchestration.log_service import append_run_log, read_run_logs, read_task_logs
 from app.domains.governance.project_service import list_projects, list_tenants, register_project
 from app.domains.shared.queue_service import replay_dlq_for_run
@@ -1257,18 +1261,8 @@ def _hub_default_route() -> str:
     return raw if raw in allowed else "datasets"
 
 
-def _runtime_realtime_base_url() -> str:
-    """Browser WebSocket root; default on so Hub sync works without per-deploy frontend env."""
-    explicit = os.getenv("ML_AIR_RUNTIME_REALTIME_BASE_URL", "").strip()
-    if explicit:
-        return explicit
-    if os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-        return ""
-    return os.getenv("ML_AIR_RUNTIME_REALTIME_DEFAULT_URL", "ws://localhost:8001").strip() or "ws://localhost:8001"
-
-
 @router.get("/runtime-config")
-def runtime_config_v1() -> dict:
+def runtime_config_v1(request: Request) -> dict:
     features = {
         "realtime_enabled": os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower()
         not in {"0", "false", "no", "off"},
@@ -1294,10 +1288,12 @@ def runtime_config_v1() -> dict:
     }
     jaeger_ui = os.getenv("ML_AIR_JAEGER_UI_URL", "").strip() or None
     grafana_ui = os.getenv("ML_AIR_GRAFANA_URL", "").strip() or None
+    api_base_url = resolve_runtime_api_base_url(request)
+    realtime_base_url = resolve_runtime_realtime_base_url(request, api_base_url=api_base_url)
     return {
         "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
-        "api_base_url": os.getenv("ML_AIR_RUNTIME_API_BASE_URL", "").strip() or None,
-        "realtime_base_url": _runtime_realtime_base_url() or None,
+        "api_base_url": api_base_url,
+        "realtime_base_url": realtime_base_url,
         "default_tenant_hint": os.getenv("ML_AIR_DEFAULT_TENANT", "default"),
         "default_project_hint": os.getenv("ML_AIR_DEFAULT_PROJECT", "default_project"),
         "hub_default_route": _hub_default_route(),

@@ -122,6 +122,12 @@ function forwardRequestHeaders(req: NextRequest): Headers {
     if (HOP_BY_HOP.has(lk)) return;
     out.set(key, value);
   });
+  const host = req.headers.get("host");
+  if (host) {
+    out.set("x-forwarded-host", host);
+    const proto = req.nextUrl.protocol.replace(/:$/, "") || "http";
+    out.set("x-forwarded-proto", proto);
+  }
   return out;
 }
 
