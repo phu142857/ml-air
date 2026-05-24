@@ -23,6 +23,7 @@ import { cn, formatRelativeTime, formatRowCount, formatApiClientError } from "@/
 import { useAppContext } from "@/lib/app-context"
 import { fetchDatasets, previewDatasetUpload, uploadDatasetCsv, type DatasetItem } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { SCOPE_AGGREGATE_DATASETS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { useToast } from "@/hooks/use-toast"
@@ -87,10 +88,13 @@ export default function DatasetsPage() {
   const [file, setFile] = useState<File | null>(null)
   const [previewRows, setPreviewRows] = useState<number | null>(null)
 
+  const poll = useRealtimeQueryPolling()
   const datasetsQuery = useQuery({
     queryKey: mlairKeys.datasets.list(tenantId, projectId),
     queryFn: () => fetchDatasets(tenantId, projectId, token),
-    enabled: Boolean(token?.trim())
+    enabled: Boolean(token?.trim()),
+    refetchOnMount: "always",
+    ...poll,
   })
 
   const items = datasetsQuery.data?.items ?? []

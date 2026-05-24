@@ -52,7 +52,7 @@ import {
   type DatasetVersionItem
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { datasetSourceTypeBadge, datasetVersionSourceBadge } from "@/lib/dataset-source-type";
 import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
 import { describeTrainError } from "@/lib/describe-train-error";
@@ -208,11 +208,14 @@ export default function DatasetHubPage() {
     candidates: Array<{ version_id: string; version?: string | null; reasons: string[] }>;
   } | null>(null);
 
+  const poll = useRealtimeQueryPolling();
+
   const datasetQuery = useQuery({
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
     queryFn: () => fetchDataset(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
   const dataset = datasetQuery.data ?? null;
 
@@ -220,14 +223,16 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetVersions(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
 
   const retentionPolicyQuery = useQuery({
     queryKey: mlairKeys.datasets.retentionPolicy(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetRetentionPolicy(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && !scopePinned),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
 
   useEffect(() => {
@@ -346,13 +351,15 @@ export default function DatasetHubPage() {
     queryFn: () =>
       fetchDatasetReadiness(tenantId, projectId, datasetId, token, 1000, selectedVersionForReadiness, selectedPolicyId || undefined),
     enabled: Boolean(datasetId && token && dataset && selectedPolicyId && selectedVersionForReadiness),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
   const bufferQuery = useQuery({
     queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetBuffer(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
 
   useEffect(() => {
@@ -428,7 +435,8 @@ export default function DatasetHubPage() {
     queryFn: () =>
       fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 200, 0),
     enabled: Boolean(datasetId && token && dataset),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
   const [evaluatePersistMsg, setEvaluatePersistMsg] = useState<string | null>(null);
   const evaluatePersistMutation = useMutation({
@@ -494,7 +502,8 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetTrainingPolicies(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
   const evaluationPolicyFilterOptions = useMemo(() => {
     return [
@@ -521,7 +530,8 @@ export default function DatasetHubPage() {
         (policiesQuery.data?.items?.length ?? 0) > 0 &&
         selectedVersionForReadiness
     ),
-    ...realtimeFallbackPolling()
+    refetchOnMount: "always",
+    ...poll,
   });
 
   const readinessVersionSelectOptions = useMemo(() => {
