@@ -1848,6 +1848,82 @@ export async function downloadDatasetVersion(
   URL.revokeObjectURL(url);
 }
 
+export const DATASET_VERSION_PAGE_SIZE = 50;
+
+export type DatasetVersionPreviewPage = {
+  version_id: string;
+  dataset_id: string;
+  version: string;
+  filename: string;
+  format: "csv" | "jsonl";
+  byte_size: number;
+  editable: boolean;
+  max_editor_bytes: number;
+  checksum?: string | null;
+  record_count?: number | null;
+  offset: number;
+  limit: number;
+  total_count: number;
+  has_more: boolean;
+  columns?: string[];
+  rows?: Array<{ row_index: number; values: Record<string, string> }>;
+  lines?: Array<{ line_index: number; line: string }>;
+};
+
+export async function previewDatasetVersion(
+  tenantId: string,
+  projectId: string,
+  versionId: string,
+  token: string,
+  opts: { offset?: number; limit?: number } = {}
+): Promise<DatasetVersionPreviewPage> {
+  const sp = new URLSearchParams({
+    offset: String(opts.offset ?? 0),
+    limit: String(opts.limit ?? DATASET_VERSION_PAGE_SIZE),
+  });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${encodeURIComponent(versionId)}/preview?${sp}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetVersionPreviewPage;
+}
+
+export async function patchDatasetVersionContent(
+  tenantId: string,
+  projectId: string,
+  versionId: string,
+  token: string,
+  body: {
+    row_patches?: Array<{ row_index: number; values: Record<string, string> }>;
+    row_deletes?: number[];
+    row_inserts?: Array<{ after_index: number; values: Record<string, string> }>;
+    line_patches?: Array<{ line_index: number; line: string }>;
+    line_deletes?: number[];
+    line_inserts?: Array<{ after_index: number; line: string }>;
+  }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${encodeURIComponent(versionId)}/content`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store"
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    version_id: string;
+    record_count: number;
+    checksum: string;
+    byte_size: number;
+    version: DatasetVersionItem;
+  };
+}
+
 export async function deleteDatasetVersion(
   tenantId: string,
   projectId: string,
@@ -1983,15 +2059,42 @@ export async function previewDatasetUpload(tenantId: string, projectId: string, 
   };
 }
 
+export type DatasetCsvUploadResult = {
+  dataset_id: string;
+  dataset_name: string;
+  version_id: string;
+  version: string;
+  uri?: string;
+  checksum: string;
+  status: "ready" | "warning" | "failed";
+  quality_score: number;
+  summary: string[];
+  details: Array<Record<string, unknown>>;
+  columns: string[];
+  row_count: number;
+  record_count?: number;
+  null_ratio?: Record<string, number>;
+  preview?: Array<Record<string, string>>;
+  merged_rows?: number;
+};
+
 export async function uploadDatasetCsv(
   tenantId: string,
   projectId: string,
   token: string,
-  payload: { dataset_name: string; file: File; required_cols?: string[] }
+  payload: {
+    dataset_name: string;
+    file: File;
+    required_cols?: string[];
+    merge_into_version_id?: string;
+  }
 ) {
   const form = new FormData();
   form.append("dataset_name", payload.dataset_name);
   form.append("file", payload.file);
+  if (payload.merge_into_version_id?.trim()) {
+    form.append("merge_into_version_id", payload.merge_into_version_id.trim());
+  }
   if (payload.required_cols && payload.required_cols.length > 0) {
     form.append("required_cols", JSON.stringify(payload.required_cols));
   }
@@ -2003,22 +2106,30 @@ export async function uploadDatasetCsv(
   });
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as {
-    dataset_id: string;
-    dataset_name: string;
-    version_id: string;
-    version: string;
-    uri: string;
-    checksum: string;
-    status: "ready" | "warning" | "failed";
-    quality_score: number;
-    summary: string[];
-    details: Array<Record<string, unknown>>;
-    columns: string[];
-    row_count: number;
-    null_ratio: Record<string, number>;
-    preview: Array<Record<string, string>>;
-  };
+  return data as DatasetCsvUploadResult;
+}
+
+export async function mergeDatasetVersionCsv(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  versionId: string,
+  token: string,
+  payload: { file: File; required_cols?: string[] }
+) {
+  const form = new FormData();
+  form.append("file", payload.file);
+  if (payload.required_cols && payload.required_cols.length > 0) {
+    form.append("required_cols", JSON.stringify(payload.required_cols));
+  }
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/datasets/${encodeURIComponent(datasetId)}/versions/${encodeURIComponent(versionId)}/merge`,
+    { method: "POST", headers: authHeaders(token), body: form }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetCsvUploadResult;
 }
 
 export async function fetchModelTriggerPolicy(tenantId: string, projectId: string, modelId: string, token: string) {

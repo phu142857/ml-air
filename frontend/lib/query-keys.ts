@@ -52,6 +52,8 @@ export const mlairKeys = {
       ["dataset-retention-preview", tenantId, projectId, datasetId] as const,
     versions: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-versions", tenantId, projectId, datasetId] as const,
+    versionPreview: (tenantId: string, projectId: string, versionId: string) =>
+      ["dataset-version-preview", tenantId, projectId, versionId] as const,
     readiness: (tenantId: string, projectId: string, datasetId: string, requiredSize: number) =>
       ["dataset-readiness", tenantId, projectId, datasetId, requiredSize] as const
   },

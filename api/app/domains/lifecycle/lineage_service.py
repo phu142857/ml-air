@@ -1318,6 +1318,137 @@ def _business_validate_from_analysis(
     }
 
 
+def _merge_csv_byte_streams(existing_bytes: bytes, incoming_bytes: bytes) -> tuple[bytes, dict[str, Any], int]:
+    """Append incoming CSV rows onto existing CSV. Returns (merged_bytes, analysis, appended_row_count)."""
+    existing_text = existing_bytes.decode("utf-8", errors="replace")
+    incoming_text = incoming_bytes.decode("utf-8", errors="replace")
+    ex_reader = csv.DictReader(io.StringIO(existing_text))
+    in_reader = csv.DictReader(io.StringIO(incoming_text))
+    fieldnames = list(ex_reader.fieldnames or [])
+    in_cols = list(in_reader.fieldnames or [])
+    if not fieldnames:
+        raise ValueError("dataset_version_csv_empty")
+    if not in_cols:
+        raise ValueError("merge_csv_empty")
+    if set(fieldnames) != set(in_cols):
+        missing = sorted(set(fieldnames) - set(in_cols))
+        extra = sorted(set(in_cols) - set(fieldnames))
+        raise ValueError(
+            json.dumps(
+                {
+                    "code": "merge_columns_mismatch",
+                    "missing_in_upload": missing,
+                    "extra_in_upload": extra,
+                    "expected_columns": fieldnames,
+                }
+            )
+        )
+    existing_rows = list(ex_reader)
+    incoming_rows = list(in_reader)
+    appended = len(incoming_rows)
+    if appended <= 0:
+        raise ValueError("merge_csv_empty")
+    combined = existing_rows + [{k: str(row.get(k, "")) for k in fieldnames} for row in incoming_rows]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(combined)
+    encoded = buf.getvalue().encode("utf-8")
+    analysis = _analyze_csv(encoded)
+    return encoded, analysis, appended
+
+
+def merge_csv_into_dataset_version(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    csv_bytes: bytes,
+    *,
+    required_cols: list[str] | None = None,
+) -> dict[str, Any]:
+    """Append CSV rows into an existing local ``file://`` dataset version snapshot."""
+    ver = get_dataset_version(tenant_id, project_id, version_id)
+    if not ver or str(ver.get("dataset_id") or "") != dataset_id:
+        raise ValueError("dataset_version_not_found")
+    ds = get_dataset(tenant_id, project_id, dataset_id)
+    if not ds:
+        raise ValueError("dataset_not_found")
+
+    data, filename, _row = _read_dataset_version_file_bytes(tenant_id, project_id, version_id)
+    fmt = _detect_version_content_format(filename, data)
+    if fmt != "csv":
+        raise ValueError("merge_format_unsupported")
+
+    merged_bytes, analysis, appended_rows = _merge_csv_byte_streams(data, csv_bytes)
+    if len(merged_bytes) > MAX_DATASET_VERSION_EDITOR_BYTES:
+        raise ValueError("dataset_version_content_too_large")
+
+    business_validation = _business_validate_from_analysis(analysis, required_cols=required_cols)
+    parsed = urlparse(str(ver.get("uri") or "").strip())
+    path = parsed.path if parsed.scheme == "file" else str(ver.get("uri") or "")
+    if not path:
+        raise FileNotFoundError("dataset_version_uri_invalid")
+
+    checksum = hashlib.sha256(merged_bytes).hexdigest()
+    record_count = int(analysis.get("row_count") or 0)
+    status = str(business_validation.get("status") or "ready")
+    quality_score = int(business_validation.get("quality_score") or 0)
+    summary = [str(x) for x in (business_validation.get("summary") or [])]
+    details = [d for d in (business_validation.get("details") or []) if isinstance(d, dict)]
+
+    with open(path, "wb") as f:
+        f.write(merged_bytes)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE dataset_versions
+                SET checksum = %s,
+                    record_count = %s,
+                    status = %s,
+                    quality_score = %s,
+                    summary = %s::jsonb,
+                    details = %s::jsonb
+                WHERE version_id = %s
+                """,
+                (
+                    checksum,
+                    record_count,
+                    status,
+                    quality_score,
+                    json.dumps(summary),
+                    json.dumps(details),
+                    version_id,
+                ),
+            )
+
+    _upsert_dataset(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        name=str(ds.get("name") or dataset_id),
+        checksum=checksum,
+        current_size=record_count,
+    )
+    _notify_dataset_updated(tenant_id, project_id, dataset_id, action="version_merged")
+    updated = get_dataset_version(tenant_id, project_id, version_id)
+    return {
+        "dataset_id": dataset_id,
+        "dataset_name": str(ds.get("name") or ""),
+        "version_id": version_id,
+        "version": ver.get("version"),
+        "merged_rows": appended_rows,
+        "record_count": record_count,
+        "checksum": checksum,
+        "status": status,
+        "quality_score": quality_score,
+        "summary": summary,
+        "details": details,
+        "version": updated,
+        **analysis,
+    }
+
+
 def create_dataset_version_from_csv_upload(
     tenant_id: str,
     project_id: str,
@@ -2004,7 +2135,13 @@ def patch_dataset_version_additive_metadata(
     return get_dataset_version(tenant_id, project_id, version_id)
 
 
-def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: str) -> tuple[bytes, str]:
+MAX_DATASET_VERSION_EDITOR_BYTES = 5 * 1024 * 1024
+DEFAULT_DATASET_VERSION_PAGE_SIZE = 50
+MAX_DATASET_VERSION_PAGE_SIZE = 100
+MAX_DATASET_VERSION_PATCHES = 5000
+
+
+def _read_dataset_version_file_bytes(tenant_id: str, project_id: str, version_id: str) -> tuple[bytes, str, dict[str, Any]]:
     row = get_dataset_version(tenant_id, project_id, version_id)
     if not row:
         raise FileNotFoundError("dataset_version_not_found")
@@ -2012,17 +2149,300 @@ def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: s
     if not raw_uri:
         raise FileNotFoundError("dataset_version_uri_missing")
     parsed = urlparse(raw_uri)
-    if parsed.scheme in {"", "file"}:
-        path = parsed.path if parsed.scheme == "file" else raw_uri
-        if not path:
-            raise FileNotFoundError("dataset_version_uri_invalid")
-        if not os.path.isfile(path):
-            raise FileNotFoundError("dataset_version_file_not_found")
-        with open(path, "rb") as f:
-            data = f.read()
-        filename = os.path.basename(path) or f"{version_id}.csv"
-        return data, filename
-    raise FileNotFoundError("dataset_version_uri_unsupported")
+    if parsed.scheme not in {"", "file"}:
+        raise FileNotFoundError("dataset_version_uri_unsupported")
+    path = parsed.path if parsed.scheme == "file" else raw_uri
+    if not path:
+        raise FileNotFoundError("dataset_version_uri_invalid")
+    if not os.path.isfile(path):
+        raise FileNotFoundError("dataset_version_file_not_found")
+    with open(path, "rb") as f:
+        data = f.read()
+    filename = os.path.basename(path) or f"{version_id}.csv"
+    return data, filename, row
+
+
+def get_dataset_version_csv_bytes(tenant_id: str, project_id: str, version_id: str) -> tuple[bytes, str]:
+    data, filename, _row = _read_dataset_version_file_bytes(tenant_id, project_id, version_id)
+    return data, filename
+
+
+def _detect_version_content_format(filename: str, data: bytes) -> str:
+    name = str(filename or "").lower()
+    if name.endswith(".jsonl") or name.endswith(".ndjson"):
+        return "jsonl"
+    if name.endswith(".csv"):
+        return "csv"
+    sample = data[:4096].lstrip()
+    if sample.startswith(b"{") or sample.startswith(b"["):
+        return "jsonl"
+    return "csv"
+
+
+def preview_dataset_version_content(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    *,
+    offset: int = 0,
+    limit: int = DEFAULT_DATASET_VERSION_PAGE_SIZE,
+) -> dict[str, Any]:
+    data, filename, row = _read_dataset_version_file_bytes(tenant_id, project_id, version_id)
+    fmt = _detect_version_content_format(filename, data)
+    off = max(0, int(offset))
+    lim = max(1, min(int(limit), MAX_DATASET_VERSION_PAGE_SIZE))
+    editable = len(data) <= MAX_DATASET_VERSION_EDITOR_BYTES
+    text = data.decode("utf-8", errors="replace")
+    out: dict[str, Any] = {
+        "version_id": version_id,
+        "dataset_id": row.get("dataset_id"),
+        "version": row.get("version"),
+        "filename": filename,
+        "format": fmt,
+        "byte_size": len(data),
+        "editable": editable,
+        "max_editor_bytes": MAX_DATASET_VERSION_EDITOR_BYTES,
+        "checksum": row.get("checksum"),
+        "record_count": row.get("record_count"),
+        "offset": off,
+        "limit": lim,
+    }
+    if fmt == "jsonl":
+        lines = text.splitlines()
+        total = len(lines)
+        page = [{"line_index": off + i, "line": ln} for i, ln in enumerate(lines[off : off + lim])]
+        out["total_count"] = total
+        out["has_more"] = off + len(page) < total
+        out["lines"] = page
+    else:
+        reader = csv.DictReader(io.StringIO(text))
+        fieldnames = list(reader.fieldnames or [])
+        page_rows: list[dict[str, Any]] = []
+        total = 0
+        for raw in reader:
+            if total >= off and len(page_rows) < lim:
+                page_rows.append(
+                    {
+                        "row_index": total,
+                        "values": {k: str(raw.get(k, "")) for k in fieldnames},
+                    }
+                )
+            total += 1
+        out["columns"] = fieldnames
+        out["rows"] = page_rows
+        out["total_count"] = total
+        out["has_more"] = off + len(page_rows) < total
+    return out
+
+
+def _write_dataset_version_encoded(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    *,
+    path: str,
+    dataset_id: str,
+    fmt: str,
+    encoded: bytes,
+    record_count: int,
+) -> dict[str, Any]:
+    if len(encoded) > MAX_DATASET_VERSION_EDITOR_BYTES:
+        raise ValueError("dataset_version_content_too_large")
+    checksum = hashlib.sha256(encoded).hexdigest()
+    with open(path, "wb") as f:
+        f.write(encoded)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE dataset_versions
+                SET checksum = %s, record_count = %s
+                WHERE version_id = %s
+                """,
+                (checksum, record_count, version_id),
+            )
+    _notify_dataset_updated(tenant_id, project_id, dataset_id, action="version_content_updated")
+    updated = get_dataset_version(tenant_id, project_id, version_id)
+    return {
+        "version_id": version_id,
+        "dataset_id": dataset_id,
+        "format": fmt,
+        "record_count": record_count,
+        "checksum": checksum,
+        "byte_size": len(encoded),
+        "version": updated,
+    }
+
+
+def replace_dataset_version_content(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    *,
+    content: str,
+) -> dict[str, Any]:
+    """Overwrite local ``file://`` snapshot bytes (maintainer). Updates checksum and row/line count."""
+    body = content if isinstance(content, str) else ""
+    encoded = body.encode("utf-8")
+    if len(encoded) > MAX_DATASET_VERSION_EDITOR_BYTES:
+        raise ValueError("dataset_version_content_too_large")
+    data, filename, row = _read_dataset_version_file_bytes(tenant_id, project_id, version_id)
+    dataset_id = str(row.get("dataset_id") or "")
+    fmt = _detect_version_content_format(filename, data)
+    parsed = urlparse(str(row.get("uri") or "").strip())
+    path = parsed.path if parsed.scheme == "file" else str(row.get("uri") or "")
+    if not path:
+        raise FileNotFoundError("dataset_version_uri_invalid")
+
+    new_count = 0
+    if fmt == "jsonl":
+        lines = [ln for ln in body.splitlines() if ln.strip()]
+        new_count = len(lines)
+        normalized = "\n".join(lines)
+        if lines:
+            normalized += "\n"
+        encoded = normalized.encode("utf-8")
+    else:
+        reader = csv.DictReader(io.StringIO(body))
+        if not reader.fieldnames:
+            raise ValueError("dataset_version_csv_empty")
+        rows = list(reader)
+        new_count = len(rows)
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=reader.fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+        encoded = buf.getvalue().encode("utf-8")
+
+    return _write_dataset_version_encoded(
+        tenant_id,
+        project_id,
+        version_id,
+        path=path,
+        dataset_id=dataset_id,
+        fmt=fmt,
+        encoded=encoded,
+        record_count=new_count,
+    )
+
+
+def patch_dataset_version_content(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    *,
+    row_patches: list[dict[str, Any]] | None = None,
+    row_deletes: list[int] | None = None,
+    row_inserts: list[dict[str, Any]] | None = None,
+    line_patches: list[dict[str, Any]] | None = None,
+    line_deletes: list[int] | None = None,
+    line_inserts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Apply row/line patches, deletes, and inserts to a local ``file://`` snapshot (maintainer)."""
+    patches_rows = list(row_patches or [])
+    deletes_rows = list(row_deletes or [])
+    inserts_rows = list(row_inserts or [])
+    patches_lines = list(line_patches or [])
+    deletes_lines = list(line_deletes or [])
+    inserts_lines = list(line_inserts or [])
+
+    total_ops = (
+        len(patches_rows) + len(deletes_rows) + len(inserts_rows)
+        + len(patches_lines) + len(deletes_lines) + len(inserts_lines)
+    )
+    if total_ops == 0:
+        raise ValueError("patch_empty")
+    if total_ops > MAX_DATASET_VERSION_PATCHES:
+        raise ValueError("patch_too_many")
+
+    data, filename, row = _read_dataset_version_file_bytes(tenant_id, project_id, version_id)
+    if len(data) > MAX_DATASET_VERSION_EDITOR_BYTES:
+        raise ValueError("dataset_version_content_too_large")
+    dataset_id = str(row.get("dataset_id") or "")
+    fmt = _detect_version_content_format(filename, data)
+    parsed = urlparse(str(row.get("uri") or "").strip())
+    path = parsed.path if parsed.scheme == "file" else str(row.get("uri") or "")
+    if not path:
+        raise FileNotFoundError("dataset_version_uri_invalid")
+    text = data.decode("utf-8", errors="replace")
+
+    if fmt == "jsonl":
+        if patches_rows or deletes_rows or inserts_rows:
+            raise ValueError("patch_format_mismatch")
+        lines = text.splitlines()
+        # Apply patches (edit value)
+        for patch in patches_lines:
+            idx = int(patch.get("line_index", -1))
+            if idx < 0 or idx >= len(lines):
+                raise ValueError("line_index_out_of_range")
+            lines[idx] = str(patch.get("line", ""))
+        # Apply deletes (sorted descending to preserve indices)
+        for idx in sorted(set(deletes_lines), reverse=True):
+            if idx < 0 or idx >= len(lines):
+                raise ValueError("line_index_out_of_range")
+            lines.pop(idx)
+        # Apply inserts (sorted ascending by after_index so earlier inserts don't shift later ones)
+        for ins in sorted(inserts_lines, key=lambda x: int(x.get("after_index", -1))):
+            after = int(ins.get("after_index", -1))
+            new_line = str(ins.get("line", ""))
+            insert_at = after + 1  # after_index=-1 → insert_at=0 (prepend)
+            lines.insert(max(0, min(insert_at, len(lines))), new_line)
+        non_empty = [ln for ln in lines if ln.strip()]
+        normalized = "\n".join(lines)
+        if lines and not normalized.endswith("\n"):
+            normalized += "\n"
+        encoded = normalized.encode("utf-8")
+        record_count = len(non_empty)
+    else:
+        if patches_lines or deletes_lines or inserts_lines:
+            raise ValueError("patch_format_mismatch")
+        reader = csv.DictReader(io.StringIO(text))
+        fieldnames = list(reader.fieldnames or [])
+        if not fieldnames:
+            raise ValueError("dataset_version_csv_empty")
+        rows_list = [{k: str(raw.get(k, "")) for k in fieldnames} for raw in reader]
+        # Apply patches
+        for patch in patches_rows:
+            idx = int(patch.get("row_index", -1))
+            if idx < 0 or idx >= len(rows_list):
+                raise ValueError("row_index_out_of_range")
+            values = patch.get("values") or {}
+            if not isinstance(values, dict):
+                raise ValueError("patch_values_invalid")
+            for col in fieldnames:
+                if col in values:
+                    rows_list[idx][col] = str(values[col])
+        # Apply deletes (descending to preserve indices)
+        for idx in sorted(set(deletes_rows), reverse=True):
+            if idx < 0 or idx >= len(rows_list):
+                raise ValueError("row_index_out_of_range")
+            rows_list.pop(idx)
+        # Apply inserts
+        for ins in sorted(inserts_rows, key=lambda x: int(x.get("after_index", -1))):
+            after = int(ins.get("after_index", -1))
+            values = ins.get("values") or {}
+            if not isinstance(values, dict):
+                raise ValueError("patch_values_invalid")
+            new_row = {col: str(values.get(col, "")) for col in fieldnames}
+            insert_at = after + 1
+            rows_list.insert(max(0, min(insert_at, len(rows_list))), new_row)
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows_list)
+        encoded = buf.getvalue().encode("utf-8")
+        record_count = len(rows_list)
+
+    return _write_dataset_version_encoded(
+        tenant_id,
+        project_id,
+        version_id,
+        path=path,
+        dataset_id=dataset_id,
+        fmt=fmt,
+        encoded=encoded,
+        record_count=record_count,
+    )
 
 
 def get_dataset_id_by_name(tenant_id: str, project_id: str, dataset_name: str) -> str | None:

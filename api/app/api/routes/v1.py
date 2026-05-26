@@ -217,6 +217,36 @@ class DatasetVersionMetadataPatchIn(BaseModel):
     append_external_refs: list[ExternalRefAppendIn] = Field(default_factory=list, max_length=32)
 
 
+class DatasetVersionRowPatchIn(BaseModel):
+    row_index: int = Field(ge=0)
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+class DatasetVersionRowInsertIn(BaseModel):
+    after_index: int = Field(ge=-1)  # -1 = prepend before first row
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+class DatasetVersionLinePatchIn(BaseModel):
+    line_index: int = Field(ge=0)
+    line: str = ""
+
+
+class DatasetVersionLineInsertIn(BaseModel):
+    after_index: int = Field(ge=-1)  # -1 = prepend
+    line: str = ""
+
+
+class DatasetVersionContentPutIn(BaseModel):
+    content: str | None = None
+    row_patches: list[DatasetVersionRowPatchIn] = Field(default_factory=list, max_length=5000)
+    row_deletes: list[int] = Field(default_factory=list, max_length=5000)
+    row_inserts: list[DatasetVersionRowInsertIn] = Field(default_factory=list, max_length=5000)
+    line_patches: list[DatasetVersionLinePatchIn] = Field(default_factory=list, max_length=5000)
+    line_deletes: list[int] = Field(default_factory=list, max_length=5000)
+    line_inserts: list[DatasetVersionLineInsertIn] = Field(default_factory=list, max_length=5000)
+
+
 class CreatePipelineVersionIn(BaseModel):
     config: dict = Field(default_factory=dict)
 
@@ -1590,6 +1620,7 @@ async def upload_dataset_v1(
     tenant_id: str,
     project_id: str,
     dataset_name: str = Form(...),
+    merge_into_version_id: str | None = Form(default=None),
     required_cols: str | None = Form(default=None),
     file: UploadFile = File(...),
     authorization: str | None = Header(default=None),
@@ -1597,14 +1628,27 @@ async def upload_dataset_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     try:
-        if not tenant_quota_service.dataset_exists_by_name(tenant_id, project_id, dataset_name):
-            _enforce_tenant_quota(tenant_id, "datasets", project_id=project_id)
         csv_bytes = await file.read()
         required_columns: list[str] | None = None
         if required_cols:
             parsed = json.loads(required_cols)
             if isinstance(parsed, list):
                 required_columns = [str(col) for col in parsed]
+        merge_vid = str(merge_into_version_id or "").strip()
+        if merge_vid:
+            dataset_id = lineage_service.get_dataset_id_by_name(tenant_id, project_id, dataset_name)
+            if not dataset_id:
+                raise HTTPException(status_code=404, detail="dataset_not_found")
+            return lineage_service.merge_csv_into_dataset_version(
+                tenant_id,
+                project_id,
+                dataset_id,
+                merge_vid,
+                csv_bytes,
+                required_cols=required_columns,
+            )
+        if not tenant_quota_service.dataset_exists_by_name(tenant_id, project_id, dataset_name):
+            _enforce_tenant_quota(tenant_id, "datasets", project_id=project_id)
         return lineage_service.create_dataset_version_from_csv_upload(
             tenant_id=tenant_id,
             project_id=project_id,
@@ -2683,6 +2727,45 @@ def delete_dataset_v1(
     return {"dataset_id": dataset_id, "deleted": True}
 
 
+@router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/merge")
+async def merge_dataset_version_csv_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    required_cols: str | None = Form(default=None),
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    try:
+        csv_bytes = await file.read()
+        required_columns: list[str] | None = None
+        if required_cols:
+            parsed = json.loads(required_cols)
+            if isinstance(parsed, list):
+                required_columns = [str(col) for col in parsed]
+        return lineage_service.merge_csv_into_dataset_version(
+            tenant_id,
+            project_id,
+            dataset_id,
+            version_id,
+            csv_bytes,
+            required_cols=required_columns,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        status = 413 if code == "dataset_version_content_too_large" else 400
+        raise HTTPException(status_code=status, detail=code) from exc
+    except FileNotFoundError as exc:
+        raise _dataset_version_file_http_error(exc) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="required_cols_must_be_json_array") from exc
+
+
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}")
 def delete_dataset_version_v1(
     tenant_id: str,
@@ -2775,28 +2858,92 @@ def download_dataset_version_v1(
     try:
         data, filename = lineage_service.get_dataset_version_csv_bytes(tenant_id, project_id, version_id)
     except FileNotFoundError as exc:
-        code = str(exc) or "dataset_version_file_not_found"
-        if code == "dataset_version_file_not_found":
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "code": code,
-                    "hint": (
-                        "CSV was recorded in the DB but the file is missing under ML_AIR_DATASET_ARTIFACT_ROOT "
-                        "(common after mlair-api recreate without a Docker volume). "
-                        "Mount a named volume on /mlair/artifacts/datasets, set ML_AIR_DATASET_ARTIFACT_ROOT if needed, "
-                        "then re-upload the dataset version."
-                    ),
-                },
-            )
-        status = 404 if code == "dataset_version_not_found" else 400
-        raise HTTPException(status_code=status, detail=code)
+        raise _dataset_version_file_http_error(exc) from exc
     safe_name = filename.replace('"', "")
     return Response(
         content=data,
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )
+
+
+def _dataset_version_file_http_error(exc: FileNotFoundError) -> HTTPException:
+    code = str(exc) or "dataset_version_file_not_found"
+    if code == "dataset_version_file_not_found":
+        return HTTPException(
+            status_code=404,
+            detail={
+                "code": code,
+                "hint": (
+                    "File was recorded in the DB but is missing under ML_AIR_DATASET_ARTIFACT_ROOT "
+                    "(common after mlair-api recreate without a Docker volume)."
+                ),
+            },
+        )
+    status = 404 if code in {"dataset_version_not_found", "dataset_version_uri_missing"} else 400
+    return HTTPException(status_code=status, detail=code)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/preview")
+def preview_dataset_version_v1(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    offset: int = 0,
+    limit: int = 50,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    try:
+        return lineage_service.preview_dataset_version_content(
+            tenant_id, project_id, version_id, offset=offset, limit=limit
+        )
+    except FileNotFoundError as exc:
+        raise _dataset_version_file_http_error(exc) from exc
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/content")
+def put_dataset_version_content_v1(
+    tenant_id: str,
+    project_id: str,
+    version_id: str,
+    body: DatasetVersionContentPutIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    has_content = body.content is not None
+    has_ops = bool(
+        body.row_patches or body.row_deletes or body.row_inserts
+        or body.line_patches or body.line_deletes or body.line_inserts
+    )
+    if has_content and has_ops:
+        raise HTTPException(status_code=422, detail="content_and_patches_mutually_exclusive")
+    if not has_content and not has_ops:
+        raise HTTPException(status_code=422, detail="content_or_patches_required")
+    try:
+        if has_content:
+            return lineage_service.replace_dataset_version_content(
+                tenant_id, project_id, version_id, content=body.content or ""
+            )
+        return lineage_service.patch_dataset_version_content(
+            tenant_id,
+            project_id,
+            version_id,
+            row_patches=[p.model_dump() for p in body.row_patches],
+            row_deletes=list(body.row_deletes),
+            row_inserts=[p.model_dump() for p in body.row_inserts],
+            line_patches=[p.model_dump() for p in body.line_patches],
+            line_deletes=list(body.line_deletes),
+            line_inserts=[p.model_dump() for p in body.line_inserts],
+        )
+    except FileNotFoundError as exc:
+        raise _dataset_version_file_http_error(exc) from exc
+    except ValueError as exc:
+        code = str(exc)
+        status = 413 if code == "dataset_version_content_too_large" else 422
+        raise HTTPException(status_code=status, detail=code) from exc
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/lineage/runs/{run_id}")

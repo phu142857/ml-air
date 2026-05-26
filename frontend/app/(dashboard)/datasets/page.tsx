@@ -21,7 +21,12 @@ import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatRowCount, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
-import { fetchDatasets, previewDatasetUpload, uploadDatasetCsv, type DatasetItem } from "@/lib/api"
+import {
+  fetchDatasets,
+  previewDatasetUpload,
+  uploadDatasetCsv,
+  type DatasetItem,
+} from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { SCOPE_AGGREGATE_DATASETS } from "@/lib/scope-messages"
@@ -102,13 +107,19 @@ export default function DatasetsPage() {
   const uploadMutation = useMutation({
     mutationFn: () => {
       if (!file) throw new Error("Choose a CSV file")
-      return uploadDatasetCsv(tenantId, projectId, token, { dataset_name: datasetName.trim(), file })
+      return uploadDatasetCsv(tenantId, projectId, token, {
+        dataset_name: datasetName.trim(),
+        file,
+      })
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.list(tenantId, projectId), exact: false })
+      const merged = typeof result.merged_rows === "number"
       toast({
         title: "Dataset uploaded",
-        description: `${result.dataset_name} · ${result.row_count} rows · ${result.status}`,
+        description: merged
+          ? `${result.dataset_name} · +${result.merged_rows} rows · ${result.record_count} total`
+          : `${result.dataset_name} · ${result.row_count} rows · ${result.status}`,
       })
       setUploadOpen(false)
       setDatasetName("")
@@ -175,7 +186,9 @@ export default function DatasetsPage() {
               <Label className="text-muted-foreground">Dataset name</Label>
               <Input
                 value={datasetName}
-                onChange={(e) => setDatasetName(e.target.value)}
+                onChange={(e) => {
+                  setDatasetName(e.target.value)
+                }}
                 placeholder="customer_transactions"
                 className="border-border bg-background font-mono text-sm"
               />
@@ -207,10 +220,16 @@ export default function DatasetsPage() {
             <Button
               type="button"
               className="bg-emerald-600 hover:bg-emerald-500"
-              disabled={!datasetName.trim() || !file || uploadMutation.isPending}
+              disabled={
+                !datasetName.trim() || !file || uploadMutation.isPending
+              }
               onClick={() => uploadMutation.mutate()}
             >
-              {uploadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Upload"}
+              {uploadMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Upload"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

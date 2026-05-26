@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Database, Download, GitBranch, Tags, Trash2 } from "lucide-react";
+import { ChevronRight, Database, Download, Eye, GitBranch, Loader2, Plus, Tags, Trash2, X } from "lucide-react";
 import {
   DetailSection,
   DetailTabBar,
@@ -15,13 +15,26 @@ import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
 import { useTabLoading } from "@/hooks/use-tab-loading";
 import { Badge } from "@/components/ui/badge";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ExecutionIntentPanel } from "@/components/mlops/execution-intent-panel";
+import {
+  DatasetVersionScrollEditor,
+  type DatasetVersionScrollEditorHandle,
+} from "@/components/mlops/dataset-version-scroll-editor";
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -193,6 +206,14 @@ export default function DatasetHubPage() {
   const [versionMetaRefUrl, setVersionMetaRefUrl] = useState("");
   const [versionMetaRefLabel, setVersionMetaRefLabel] = useState("");
   const [versionMetaMsg, setVersionMetaMsg] = useState("");
+  const [versionEditorOpen, setVersionEditorOpen] = useState(false);
+  const [versionEditorId, setVersionEditorId] = useState("");
+  const [versionEditorLabel, setVersionEditorLabel] = useState("");
+  const [versionEditorMsg, setVersionEditorMsg] = useState("");
+  const [versionEditorDirty, setVersionEditorDirty] = useState(false);
+  const [versionEditorSaving, setVersionEditorSaving] = useState(false);
+  const [versionEditorDiscardOpen, setVersionEditorDiscardOpen] = useState(false);
+  const versionEditorRef = useRef<DatasetVersionScrollEditorHandle>(null);
   const [retentionEnabled, setRetentionEnabled] = useState(false);
   const [retentionMaxVersions, setRetentionMaxVersions] = useState("50");
   const [deleteDatasetOpen, setDeleteDatasetOpen] = useState(false);
@@ -743,6 +764,37 @@ export default function DatasetHubPage() {
     return r === "maintainer" || r === "admin";
   }, [accessibleScopes, tenantId, projectId]);
 
+  const closeVersionEditor = useCallback(() => {
+    setVersionEditorOpen(false);
+    setVersionEditorMsg("");
+    setVersionEditorDirty(false);
+    setVersionEditorDiscardOpen(false);
+  }, []);
+
+  const saveVersionEditorChanges = useCallback(async (): Promise<boolean> => {
+    setVersionEditorSaving(true);
+    setVersionEditorMsg("");
+    const ok = (await versionEditorRef.current?.save()) ?? false;
+    setVersionEditorSaving(false);
+    if (ok) {
+      await queryClient.invalidateQueries({
+        queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
+      });
+      setVersionEditorDirty(false);
+    } else {
+      setVersionEditorMsg("Save failed — check edits above.");
+    }
+    return ok;
+  }, [datasetId, projectId, queryClient, tenantId]);
+
+  const requestVersionEditorClose = useCallback(() => {
+    if (canEditVersionMetadata && versionEditorDirty) {
+      setVersionEditorDiscardOpen(true);
+      return;
+    }
+    closeVersionEditor();
+  }, [canEditVersionMetadata, closeVersionEditor, versionEditorDirty]);
+
   const deleteDatasetMutation = useMutation({
     mutationFn: () => deleteDataset(tenantId, projectId, datasetId, token),
     onSuccess: async () => {
@@ -866,9 +918,29 @@ export default function DatasetHubPage() {
       cols.push({
         id: "actions",
         header: "",
-        className: "w-[7.5rem]",
+        className: "w-[9.5rem]",
         cell: (v) => (
           <div className="flex items-center justify-end gap-0.5">
+            {scopePinned ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title={canEditVersionMetadata ? "Preview and edit content" : "Preview content"}
+                aria-label={`Preview ${v.version}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setVersionEditorMsg("");
+                  setVersionEditorId(v.version_id);
+                  setVersionEditorLabel(String(v.version));
+                  setVersionEditorDirty(false);
+                  setVersionEditorOpen(true);
+                }}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
             {canEditVersionMetadata ? (
               <Button
                 type="button"
@@ -1879,6 +1951,101 @@ export default function DatasetHubPage() {
         </>
         )}
       </div>
+
+      <Dialog
+        open={versionEditorOpen}
+        onOpenChange={(open) => {
+          if (open) setVersionEditorOpen(true);
+          else requestVersionEditorClose();
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[min(92vh,56rem)] w-[min(96vw,80rem)] max-w-[min(96vw,80rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,80rem)]"
+        >
+          <DialogHeader
+            className={cn(
+              "relative shrink-0 border-b border-border py-4 pl-6",
+              canEditVersionMetadata && versionEditorDirty ? "pr-52" : "pr-14"
+            )}
+          >
+            <div className="absolute top-3 right-4 flex items-center gap-2">
+              {canEditVersionMetadata && versionEditorDirty ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={versionEditorSaving}
+                  onClick={() => void saveVersionEditorChanges()}
+                >
+                  {versionEditorSaving ? "Saving…" : "Save changes"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                aria-label="Close preview"
+                onClick={requestVersionEditorClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <DialogTitle>Dataset version preview</DialogTitle>
+            <DialogDescription>
+              <span className="font-mono text-foreground">v{versionEditorLabel}</span>
+              <span className="text-muted-foreground"> — scroll to load more; edit cells inline</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 py-4">
+            {versionEditorId ? (
+              <DatasetVersionScrollEditor
+                ref={versionEditorRef}
+                tenantId={tenantId}
+                projectId={projectId}
+                versionId={versionEditorId}
+                token={token}
+                canEdit={canEditVersionMetadata}
+                onDirtyChange={setVersionEditorDirty}
+              />
+            ) : null}
+            {versionEditorMsg ? (
+              <div className="mt-2 shrink-0 rounded-md border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-2 py-1.5 text-xs text-[color:var(--status-failed-fg)]">
+                {versionEditorMsg}
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={versionEditorDiscardOpen} onOpenChange={setVersionEditorDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved edits. Do you want to save before closing?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <Button type="button" variant="secondary" onClick={() => closeVersionEditor()}>
+              Don&apos;t save
+            </Button>
+            <Button
+              type="button"
+              disabled={versionEditorSaving}
+              onClick={() => {
+                void (async () => {
+                  const ok = await saveVersionEditorChanges();
+                  if (ok) closeVersionEditor();
+                })();
+              }}
+            >
+              {versionEditorSaving ? "Saving…" : "Save"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={versionMetaOpen}
