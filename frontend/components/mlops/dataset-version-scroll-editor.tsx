@@ -4,6 +4,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Minus, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
   DATASET_VERSION_PAGE_SIZE,
@@ -21,6 +22,72 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+const DEFAULT_COL_WIDTH = 128;
+const DEFAULT_ROW_HEIGHT = 28;
+const MIN_COL_WIDTH = 48;
+const MAX_COL_WIDTH = 720;
+const MIN_ROW_HEIGHT = 24;
+const MAX_ROW_HEIGHT = 200;
+
+function usePerKeyResize(defaultPx: number, minPx: number, maxPx: number) {
+  const [sizes, setSizes] = useState<Record<string, number>>({});
+
+  const get = useCallback(
+    (key: string | number) => sizes[String(key)] ?? defaultPx,
+    [sizes, defaultPx]
+  );
+
+  const setSize = useCallback(
+    (key: string | number, px: number) => {
+      const clamped = Math.min(maxPx, Math.max(minPx, px));
+      setSizes((prev) => ({ ...prev, [String(key)]: clamped }));
+    },
+    [minPx, maxPx]
+  );
+
+  const reset = useCallback(() => setSizes({}), []);
+
+  const startResize = useCallback(
+    (key: string | number, startClient: number, axis: "x" | "y") => {
+      const startSize = sizes[String(key)] ?? defaultPx;
+      const onMove = (ev: PointerEvent) => {
+        const delta = axis === "x" ? ev.clientX - startClient : ev.clientY - startClient;
+        setSize(key, startSize + delta);
+      };
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.body.style.cursor = axis === "x" ? "col-resize" : "row-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    },
+    [sizes, defaultPx, setSize]
+  );
+
+  return { get, reset, startResize };
+}
+
+function renderSizedCellInput(
+  height: number,
+  value: string,
+  onChange: (value: string) => void,
+  extraClass = ""
+) {
+  const shared = [
+    "min-h-0 resize-none rounded-none border-0 bg-transparent px-2 py-1 font-mono text-[11px] shadow-none focus-visible:ring-1",
+    extraClass || "size-full",
+  ].join(" ");
+  const style = { height, minHeight: height };
+  if (height > 36) {
+    return <Textarea className={shared} style={style} value={value} onChange={(e) => onChange(e.target.value)} spellCheck={false} />;
+  }
+  return <Input className={shared} style={style} value={value} onChange={(e) => onChange(e.target.value)} spellCheck={false} />;
 }
 
 // Structural operations that add/remove rows (applied on top of the base loaded data)
@@ -59,6 +126,13 @@ export const DatasetVersionScrollEditor = forwardRef<
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const colResize = usePerKeyResize(DEFAULT_COL_WIDTH, MIN_COL_WIDTH, MAX_COL_WIDTH);
+  const rowResize = usePerKeyResize(DEFAULT_ROW_HEIGHT, MIN_ROW_HEIGHT, MAX_ROW_HEIGHT);
+  const lineResize = usePerKeyResize(DEFAULT_ROW_HEIGHT, MIN_ROW_HEIGHT, MAX_ROW_HEIGHT);
+  const resetColWidths = colResize.reset;
+  const resetRowHeights = rowResize.reset;
+  const resetLineHeights = lineResize.reset;
+
   const previewQuery = useInfiniteQuery({
     queryKey: mlairKeys.datasets.versionPreview(tenantId, projectId, versionId),
     queryFn: ({ pageParam }) =>
@@ -76,8 +150,10 @@ export const DatasetVersionScrollEditor = forwardRef<
     refetchOnMount: "always",
   });
 
+  const previewColumns = previewQuery.data?.pages[0]?.columns ?? [];
+
   const meta = previewQuery.data?.pages[0];
-  const columns = meta?.columns ?? [];
+  const columns = previewColumns;
   const format = meta?.format ?? "csv";
   const editable = Boolean(meta?.editable && canEdit);
 
@@ -150,7 +226,14 @@ export const DatasetVersionScrollEditor = forwardRef<
     setRowOps([]);
     setLineOps([]);
     setSaveError("");
-  }, [versionId]);
+    resetColWidths();
+    resetRowHeights();
+    resetLineHeights();
+  }, [versionId, resetColWidths, resetRowHeights, resetLineHeights]);
+
+  useEffect(() => {
+    resetColWidths();
+  }, [previewColumns.join("\0"), resetColWidths]);
 
   const fetchNext = previewQuery.fetchNextPage;
   const hasNext = previewQuery.hasNextPage;
@@ -366,20 +449,43 @@ export const DatasetVersionScrollEditor = forwardRef<
                 <th className="sticky left-0 z-20 w-12 border-r border-border bg-muted/95 px-2 py-1.5 text-center font-semibold">
                   #
                 </th>
-                {columns.map((col) => (
-                  <th key={col} className="whitespace-nowrap px-3 py-1.5 font-semibold">
-                    {col}
-                  </th>
-                ))}
+                {columns.map((col) => {
+                  const w = colResize.get(col);
+                  return (
+                    <th
+                      key={col}
+                      className="relative max-w-none overflow-hidden px-3 py-1.5 font-semibold"
+                      style={{ width: w, minWidth: w, maxWidth: w }}
+                    >
+                      <span className="block truncate pr-2" title={col}>
+                        {col}
+                      </span>
+                      <div
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label={`Resize column ${col}`}
+                        className="absolute top-0 right-0 z-30 h-full w-1.5 cursor-col-resize touch-none hover:bg-primary/40"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          colResize.startResize(col, e.clientX, "x");
+                        }}
+                      />
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {csvRows.map(({ row_index, values }, displayIdx) => {
                 const isSynthetic = row_index < 0;
+                const rowKey = isSynthetic ? `new:${displayIdx}` : String(row_index);
+                const rowH = rowResize.get(rowKey);
                 return (
                   <tr
                     key={isSynthetic ? `new:${displayIdx}` : row_index}
                     className="group border-b border-border/60 hover:bg-muted/20"
+                    style={{ height: rowH }}
                   >
                     {editable ? (
                       <td className="sticky left-0 z-[1] border-r border-border bg-background p-0 text-center">
@@ -427,44 +533,62 @@ export const DatasetVersionScrollEditor = forwardRef<
                         </div>
                       </td>
                     ) : null}
-                    <td className="sticky left-0 z-[1] border-r border-border bg-background px-2 py-0.5 text-center font-mono text-[10px] text-muted-foreground">
+                    <td className="relative sticky left-0 z-[1] border-r border-border bg-background px-2 py-0.5 text-center font-mono text-[10px] text-muted-foreground">
                       {isSynthetic ? (
                         <span className="text-emerald-600 dark:text-emerald-400">+</span>
                       ) : (
                         row_index + 1
                       )}
+                      <div
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label={`Resize row ${row_index + 1}`}
+                        className="absolute right-0 bottom-0 left-0 z-10 h-1.5 cursor-row-resize touch-none hover:bg-primary/40"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          rowResize.startResize(rowKey, e.clientY, "y");
+                        }}
+                      />
                     </td>
-                    {columns.map((col) => (
-                      <td key={`${row_index}:${col}`} className="p-0">
-                        {editable ? (
-                          <Input
-                            className="h-7 min-w-[8rem] rounded-none border-0 bg-transparent px-2 font-mono text-[11px] shadow-none focus-visible:ring-1"
-                            value={
-                              isSynthetic
-                                ? (syntheticRowEdits.get(row_index)?.[col] ?? values[col] ?? "")
-                                : (values[col] ?? "")
-                            }
-                            onChange={(e) => {
-                              if (isSynthetic) {
-                                setSyntheticRowEdits((prev) => {
-                                  const next = new Map(prev);
-                                  const existing = next.get(row_index) ?? { ...values };
-                                  next.set(row_index, { ...existing, [col]: e.target.value });
-                                  return next;
-                                });
-                              } else {
-                                onCsvCellChange(row_index, col, e.target.value, values);
-                              }
-                            }}
-                            spellCheck={false}
-                          />
-                        ) : (
-                          <span className="block whitespace-nowrap px-3 py-1 font-mono text-[11px]">
-                            {values[col] ?? ""}
-                          </span>
-                        )}
-                      </td>
-                    ))}
+                    {columns.map((col) => {
+                      const w = colResize.get(col);
+                      const cellStyle = {
+                        width: w,
+                        minWidth: w,
+                        maxWidth: w,
+                        height: rowH,
+                        minHeight: rowH,
+                      };
+                      const cellValue = isSynthetic
+                        ? (syntheticRowEdits.get(row_index)?.[col] ?? values[col] ?? "")
+                        : (values[col] ?? "");
+                      return (
+                        <td key={`${row_index}:${col}`} className="p-0 align-top" style={cellStyle}>
+                          {editable
+                            ? renderSizedCellInput(rowH, cellValue, (next) => {
+                                if (isSynthetic) {
+                                  setSyntheticRowEdits((prev) => {
+                                    const map = new Map(prev);
+                                    const existing = map.get(row_index) ?? { ...values };
+                                    map.set(row_index, { ...existing, [col]: next });
+                                    return map;
+                                  });
+                                } else {
+                                  onCsvCellChange(row_index, col, next, values);
+                                }
+                              })
+                            : (
+                              <span
+                                className="block overflow-auto px-2 py-1 font-mono text-[11px] break-words whitespace-pre-wrap"
+                                style={{ height: rowH, minHeight: rowH }}
+                              >
+                                {cellValue}
+                              </span>
+                            )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
@@ -493,13 +617,16 @@ export const DatasetVersionScrollEditor = forwardRef<
           <div className="divide-y divide-border">
             {jsonlLines.map(({ line_index, line }, displayIdx) => {
               const isSynthetic = line_index < 0;
+              const lineKey = isSynthetic ? `new:${displayIdx}` : String(line_index);
+              const lineH = lineResize.get(lineKey);
               const currentLine = isSynthetic
                 ? (syntheticLineEdits.get(line_index) ?? line)
                 : line;
               return (
                 <div
                   key={isSynthetic ? `new:${displayIdx}` : line_index}
-                  className="group flex items-center gap-1 px-1 py-0.5"
+                  className="group relative flex items-start gap-1 px-1 py-0.5"
+                  style={{ minHeight: lineH }}
                 >
                   <div className="flex shrink-0 flex-col gap-0.5">
                     {editable ? (
@@ -554,28 +681,39 @@ export const DatasetVersionScrollEditor = forwardRef<
                       line_index + 1
                     )}
                   </span>
-                  {editable ? (
-                    <Input
-                      className="h-auto min-h-7 flex-1 font-mono text-[11px]"
-                      value={currentLine}
-                      onChange={(e) => {
+                  <div className="min-w-0 flex-1 self-stretch pt-0.5">
+                  {editable
+                    ? renderSizedCellInput(lineH, currentLine, (next) => {
                         if (isSynthetic) {
                           setSyntheticLineEdits((prev) => {
-                            const next = new Map(prev);
-                            next.set(line_index, e.target.value);
-                            return next;
+                            const map = new Map(prev);
+                            map.set(line_index, next);
+                            return map;
                           });
                         } else {
-                          onJsonlLineChange(line_index, e.target.value);
+                          onJsonlLineChange(line_index, next);
                         }
-                      }}
-                      spellCheck={false}
-                    />
-                  ) : (
-                    <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-[11px] whitespace-pre">
+                      }, "size-full min-w-0")
+                    : (
+                      <pre
+                        className="min-w-0 flex-1 overflow-auto font-mono text-[11px] whitespace-pre-wrap break-words"
+                        style={{ minHeight: lineH, height: lineH }}
+                      >
                       {line}
                     </pre>
-                  )}
+                    )}
+                  </div>
+                  <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label={`Resize line ${line_index + 1}`}
+                    className="absolute right-0 bottom-0 left-0 z-10 h-1.5 cursor-row-resize touch-none hover:bg-primary/40"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      lineResize.startResize(lineKey, e.clientY, "y");
+                    }}
+                  />
                 </div>
               );
             })}
