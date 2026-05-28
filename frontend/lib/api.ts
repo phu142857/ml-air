@@ -913,6 +913,17 @@ export async function replayDlq(tenantId: string, projectId: string, runId: stri
   return data as { run_id: string; replayed: number };
 }
 
+export async function cancelRun(tenantId: string, projectId: string, runId: string, token: string) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/cancel`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunItem;
+}
+
 export async function fetchPipelines(tenantId: string, projectId: string, token: string) {
   const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {

@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Play,
   Clock,
@@ -54,6 +54,7 @@ import {
   fetchRunTracking,
   fetchRunReadiness,
   fetchAuditTimeline,
+  cancelRun,
   normalizeProjectId,
   type LogItem,
   type RunItem,
@@ -193,6 +194,7 @@ function taskStatusForBadge(status: string) {
   if (t === "SUCCESS") return "success" as const
   if (t === "FAILED") return "failed" as const
   if (t === "RUNNING") return "running" as const
+  if (t === "CANCELLED") return "cancelled" as const
   if (t === "QUEUED" || t === "PENDING") return "pending" as const
   return "pending" as const
 }
@@ -255,6 +257,19 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const chartTheme = useChartTheme()
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
+
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelRun(tenantId, projectId, runId, token),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.detail(runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.tasks(runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.logs(runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.tracking(runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.readiness(runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.executionGraph(tenantId, projectId, runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.runs.list(tenantId, projectId), exact: false })
+    },
+  })
 
   const poll = useRealtimeQueryPolling()
   const hydrateRunSnapshot = useExecutionStore((s) => s.hydrateRunSnapshot)
@@ -595,6 +610,26 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 }}
               >
                 Gated re-run
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2 border-border bg-card text-xs"
+                disabled={
+                  !canScope ||
+                  cancelMutation.isPending ||
+                  !run ||
+                  !["PENDING", "QUEUED", "RUNNING"].includes(String(run.status || "").toUpperCase())
+                }
+                onClick={() => {
+                  if (!run) return
+                  if (!window.confirm(`Cancel run ${runId}? Running tasks may continue until they finish.`)) return
+                  cancelMutation.mutate()
+                }}
+              >
+                {cancelMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                Cancel
               </Button>
               <TriggerRunDialog
                 open={rerunOpen}

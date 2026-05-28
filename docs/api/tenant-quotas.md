@@ -39,6 +39,11 @@ When a limit is `null` in the stored row, the service falls back to environment 
 | `ML_AIR_TENANT_QUOTA_MAX_MODELS_PER_PROJECT` | `200` | |
 | `ML_AIR_TENANT_QUOTA_MAX_RUNS_PER_PROJECT` | `50000` | |
 | `ML_AIR_TENANT_QUOTA_MAX_WEBHOOK_SUBSCRIPTIONS_PER_PROJECT` | `50` | |
+| `ML_AIR_TENANT_QUOTA_DEFAULT_MAX_PARALLEL_TASKS` | `1000` | Internal default concurrent **task** slots per project |
+
+## Execution parallelism
+
+Run/task execution concurrency is not governed via tenant quotas. The system allows up to **1000** concurrent task slots per project (`max_parallel_tasks`, default 1000, capped 1000) and does not expose a governance knob for it.
 
 `/runtime-config` exposes `features.tenant_quota_enforcement`.
 

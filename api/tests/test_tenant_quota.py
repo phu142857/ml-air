@@ -11,6 +11,7 @@ from app.domains.governance.tenant_quota_service import (
     assert_within_quota,
     default_quota_limits,
     is_webhook_host_allowed_for_tenant,
+    resolve_max_parallel_tasks,
 )
 
 
@@ -18,6 +19,18 @@ class TestTenantQuota(unittest.TestCase):
     def test_default_limits_from_env(self) -> None:
         limits = default_quota_limits()
         self.assertGreaterEqual(int(limits["max_projects"] or 0), 1)
+        self.assertGreaterEqual(int(limits["max_parallel_tasks"] or 0), 1)
+
+    @patch("app.domains.governance.tenant_quota_service.get_tenant_quotas")
+    def test_resolve_max_parallel_uses_tenant_default(self, mock_quotas) -> None:
+        mock_quotas.return_value = {"max_parallel_tasks": 5}
+        self.assertEqual(resolve_max_parallel_tasks("t1", None), 5)
+
+    @patch("app.domains.governance.tenant_quota_service.get_tenant_quotas")
+    def test_resolve_max_parallel_caps_explicit_request(self, mock_quotas) -> None:
+        mock_quotas.return_value = {"max_parallel_tasks": 3}
+        self.assertEqual(resolve_max_parallel_tasks("t1", 10), 3)
+        self.assertEqual(resolve_max_parallel_tasks("t1", 2), 2)
 
     @patch.dict(os.environ, {"ML_AIR_TENANT_QUOTA_ENFORCE": "1"}, clear=False)
     @patch("app.domains.governance.tenant_quota_service.get_tenant_quotas")

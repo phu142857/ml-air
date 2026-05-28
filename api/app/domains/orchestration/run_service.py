@@ -99,6 +99,7 @@ def create_run(
     training_mode: str = "full",
     override_config: dict | None = None,
 ) -> dict:
+    effective_max_parallel = max(1, min(1000, int(max_parallel_tasks)))
     normalized_priority = priority.lower()
     if normalized_priority not in {"high", "normal", "low"}:
         normalized_priority = "normal"
@@ -186,7 +187,7 @@ def create_run(
                     "PENDING",
                     idempotency_key,
                     normalized_priority,
-                    max_parallel_tasks,
+                    effective_max_parallel,
                     experiment_id_f,
                     pv_id,
                     Json(cfg_snapshot) if cfg_snapshot is not None else None,
@@ -208,7 +209,7 @@ def create_run(
             "project_id": project_id,
             "pipeline_id": pipeline_id,
             "priority": normalized_priority,
-            "max_parallel_tasks": max_parallel_tasks,
+            "max_parallel_tasks": effective_max_parallel,
             "trace_id": trace_id,
             "plugin_name": plugin_name_f,
             "context": pctx,
@@ -262,7 +263,7 @@ def create_replay_run(
     from_task_id: str,
     idempotency_key: str | None,
     priority: str = "normal",
-    max_parallel_tasks: int = 1,
+    max_parallel_tasks: int | None = None,
     trace_id: str | None = None,
     plugin_name: str | None = None,
     plugin_context: dict | None = None,
@@ -270,13 +271,16 @@ def create_replay_run(
     parent = get_run(parent_run_id)
     if not parent or parent.get("tenant_id") != tenant_id or parent.get("project_id") != project_id:
         raise ValueError("replay_parent_not_found")
+    inherited_mp = max_parallel_tasks
+    if inherited_mp is None:
+        inherited_mp = int(parent.get("max_parallel_tasks") or 1)
     return create_run(
         tenant_id=tenant_id,
         project_id=project_id,
         pipeline_id=parent["pipeline_id"],
         idempotency_key=idempotency_key,
         priority=priority,
-        max_parallel_tasks=max_parallel_tasks,
+        max_parallel_tasks=inherited_mp,
         trace_id=trace_id,
         experiment_id=parent.get("experiment_id"),
         plugin_name=plugin_name,
@@ -331,7 +335,10 @@ def mark_run_running(run_id: str) -> None:
 
 def set_run_status(run_id: str, status: str) -> bool:
     normalized = str(status or "").strip().upper()
-    if normalized not in {"PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELED"}:
+    # Accept both spellings, but store the scheduler-consistent value.
+    if normalized == "CANCELED":
+        normalized = "CANCELLED"
+    if normalized not in {"PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"}:
         raise ValueError("invalid_run_status")
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -359,6 +366,28 @@ def set_run_status(run_id: str, status: str) -> bool:
             if normalized == "SUCCESS":
                 rt.maybe_emit_training_completed_from_run_row(row)
     return bool(updated)
+
+
+def cancel_run_and_tasks(run_id: str) -> bool:
+    """Soft-cancel: mark run CANCELLED and cancel remaining tasks in DB.
+
+    Notes:
+    - This does not kill a currently executing plugin subprocess; it prevents further scheduling.
+    - We keep SUCCESS/FAILED tasks intact; everything else becomes CANCELLED for UI consistency.
+    """
+    ok = set_run_status(run_id, "CANCELLED")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET status = 'CANCELLED', updated_at = NOW()
+                WHERE run_id = %s
+                  AND status NOT IN ('SUCCESS', 'FAILED', 'CANCELLED')
+                """,
+                (run_id,),
+            )
+    return ok
 
 
 def list_runs(tenant_id: str, project_id: str, limit: int = 50, offset: int = 0) -> list[dict]:

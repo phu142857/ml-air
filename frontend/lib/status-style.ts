@@ -1,4 +1,4 @@
-export type StatusTone = "SUCCESS" | "FAILED" | "RUNNING" | "QUEUED" | "PENDING";
+export type StatusTone = "SUCCESS" | "FAILED" | "RUNNING" | "QUEUED" | "PENDING" | "CANCELLED";
 export type DatasetStatusTone = "READY" | "WARNING" | "FAILED";
 
 const ALIASES: Record<string, StatusTone> = {
@@ -11,7 +11,9 @@ const ALIASES: Record<string, StatusTone> = {
   RUNNING: "RUNNING",
   IN_PROGRESS: "RUNNING",
   PENDING: "PENDING",
-  QUEUED: "QUEUED"
+  QUEUED: "QUEUED",
+  CANCELLED: "CANCELLED",
+  CANCELED: "CANCELLED"
 };
 
 export function normalizeStatus(raw: string | null | undefined): StatusTone {
@@ -58,6 +60,7 @@ export function statusToMlopsBadge(
   if (s === "SUCCESS") return "success";
   if (s === "FAILED") return "failed";
   if (s === "RUNNING") return "running";
+  if (s === "CANCELLED") return "cancelled";
   if (s === "QUEUED") return "pending";
   return "pending";
 }

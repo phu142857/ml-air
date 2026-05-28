@@ -19,6 +19,7 @@ import { normalizeStatus } from "@/lib/status-style"
 
 const statusConfig = {
   queued: { icon: Clock, label: "Queued", color: "text-muted-foreground", bg: "bg-muted", animate: false },
+  pending: { icon: Clock, label: "Pending", color: "text-amber-400", bg: "bg-amber-500/10", animate: false },
   running: { icon: Loader2, label: "Running", color: "text-sky-400", bg: "bg-sky-500/10", animate: true },
   success: { icon: CheckCircle2, label: "Success", color: "text-emerald-400", bg: "bg-emerald-500/10", animate: false },
   failed: { icon: XCircle, label: "Failed", color: "text-red-400", bg: "bg-red-500/10", animate: false },
@@ -30,6 +31,7 @@ function runStatusRowKey(status: string): keyof typeof statusConfig {
   if (t === "SUCCESS") return "success"
   if (t === "FAILED") return "failed"
   if (t === "RUNNING") return "running"
+  if (t === "PENDING") return "pending"
   if (t === "QUEUED") return "queued"
   return "cancelled"
 }

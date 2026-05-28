@@ -42,6 +42,7 @@ from app.domains.platform.runtime_url_service import (
     resolve_runtime_realtime_base_url,
 )
 from app.domains.orchestration.log_service import append_run_log, read_run_logs, read_task_logs
+from app.domains.orchestration.run_service import cancel_run_and_tasks
 from app.domains.governance.project_service import list_projects, list_tenants, register_project
 from app.domains.shared.queue_service import replay_dlq_for_run
 from app.domains.orchestration import pipeline_version_service
@@ -107,7 +108,7 @@ class TriggerRunIn(BaseModel):
     context: dict = Field(default_factory=dict)
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
-    max_parallel_tasks: int = Field(default=1, ge=1, le=20)
+    max_parallel_tasks: int = Field(default=1000, ge=1, le=1000)
     pipeline_version_id: str | None = None
     use_latest_pipeline_version: bool = False
     training_mode: str = "full"
@@ -132,7 +133,7 @@ class TriggerRunByModelIn(BaseModel):
     context: dict = Field(default_factory=dict)
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
-    max_parallel_tasks: int = Field(default=1, ge=1, le=20)
+    max_parallel_tasks: int = Field(default=1000, ge=1, le=1000)
     training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
 
@@ -990,7 +991,7 @@ def check_pipeline_readiness_v1(
         pipeline_id=pipeline_id,
         idempotency_key=None,
         priority="normal",
-        max_parallel_tasks=1,
+        max_parallel_tasks=1000,
         trace_id=get_trace_id(),
         training_mode=payload.training_mode,
         plugin_context=merged_ctx or None,
@@ -1155,6 +1156,25 @@ def update_run_status_v1(
         append_run_log(run_id=run_id, level="INFO", message="run status updated externally", payload={"reason": payload.reason, "status": payload.status})
     latest = get_run(run_id)
     return latest or {"run_id": run_id, "status": payload.status}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/cancel")
+def cancel_run_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    # Idempotent: allow repeated cancel.
+    cancel_run_and_tasks(run_id)
+    append_run_log(run_id=run_id, level="INFO", message="run cancelled", payload={"reason": "user_cancel"})
+    latest = get_run(run_id)
+    return latest or {"run_id": run_id, "status": "CANCELLED"}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/tasks")

@@ -32,11 +32,11 @@ RUN_ALLOWED_TRANSITIONS = {
 }
 
 TASK_ALLOWED_TRANSITIONS = {
-    "PENDING": {"RUNNING", "QUEUED", "FAILED", "SUCCESS"},
-    "QUEUED": {"RUNNING", "FAILED"},
-    "RUNNING": {"SUCCESS", "FAILED", "PENDING"},
+    "PENDING": {"RUNNING", "QUEUED", "FAILED", "SUCCESS", "CANCELLED"},
+    "QUEUED": {"RUNNING", "FAILED", "CANCELLED"},
+    "RUNNING": {"SUCCESS", "FAILED", "PENDING", "CANCELLED"},
     "FAILED": {"RETRY"},
-    "RETRY": {"RUNNING", "QUEUED"},
+    "RETRY": {"RUNNING", "QUEUED", "CANCELLED"},
     "SUCCESS": set(),
     "CANCELLED": set(),
 }
@@ -498,6 +498,55 @@ def _project_running_tasks(tenant_id: str, project_id: str) -> int:
             )
             row = cur.fetchone()
             return int(row[0]) if row else 0
+
+
+def _get_run_status(run_id: str) -> str | None:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT status FROM runs WHERE run_id = %s", (run_id,))
+            row = cur.fetchone()
+            return str(row[0]) if row and row[0] is not None else None
+
+
+def _cancel_tasks_for_run(run_id: str, *, only_pending_like: bool = True) -> int:
+    """Best-effort: mark tasks as CANCELLED in DB.
+
+    This keeps UI consistent when a run is cancelled or when downstream tasks become unreachable
+    due to a failed dependency.
+    """
+    if only_pending_like:
+        where = "run_id = %s AND status IN ('PENDING', 'QUEUED', 'RETRY')"
+    else:
+        where = "run_id = %s AND status NOT IN ('SUCCESS', 'FAILED', 'CANCELLED')"
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE tasks
+                SET status = 'CANCELLED', updated_at = NOW()
+                WHERE {where}
+                """,
+                (run_id,),
+            )
+            return int(cur.rowcount or 0)
+
+
+def _cancel_unreachable_downstream_tasks(
+    *, run_id: str, plan: dict[str, list[str]], selected: set[str], states: dict[str, tuple[str, int]]
+) -> int:
+    """Cancel tasks that are still PENDING but can never run because a dependency FAILED/CANCELLED."""
+    cancelled = 0
+    for key in sorted(selected):
+        st, attempt = states.get(key, ("PENDING", 1))
+        if st != "PENDING":
+            continue
+        deps = plan.get(key, [])
+        if not deps:
+            continue
+        if any(states.get(dep, ("PENDING", 1))[0] in {"FAILED", "CANCELLED"} for dep in deps):
+            _upsert_or_transition_task(task_id=f"{run_id}:{key}", run_id=run_id, next_status="CANCELLED", attempt=attempt)
+            cancelled += 1
+    return cancelled
 
 
 def _coerce_json_dict(value: object) -> dict:
@@ -1204,6 +1253,10 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
 
 def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
     run_id = run_event["run_id"]
+    st = _get_run_status(run_id)
+    if st and str(st).upper() == "CANCELLED":
+        _cancel_tasks_for_run(run_id, only_pending_like=False)
+        return 0
     plan = _build_task_plan(run_id=run_id, config_snapshot=run_event.get("config_snapshot"))
     selected, _ = _apply_replay_filter(plan, run_event.get("replay_from_task_id"), run_id)
     states = _list_run_task_states(run_id)
@@ -1233,6 +1286,8 @@ def _schedule_ready_tasks(client: Redis, run_event: dict) -> int:
 
 def _sync_run_status_after_task(run_id: str, plan: dict[str, list[str]], selected: set[str], redis_client: Redis) -> None:
     states = _list_run_task_states(run_id)
+    # If a task failed, downstream tasks blocked by dependency should not remain PENDING forever.
+    _cancel_unreachable_downstream_tasks(run_id=run_id, plan=plan, selected=selected, states=states)
     selected_states = [states.get(key, ("PENDING", 1))[0] for key in selected]
     if selected_states and all(s == "SUCCESS" for s in selected_states):
         _transition_run_status(run_id, "SUCCESS", redis_client)
@@ -1410,6 +1465,10 @@ def main() -> None:
                 tenant_id = run_event.get("tenant_id", "default")
                 project_id = run_event.get("project_id", "default_project")
                 max_parallel_tasks = int(run_event.get("max_parallel_tasks", 1))
+                cur_status = _get_run_status(run_id)
+                if cur_status and str(cur_status).upper() == "CANCELLED":
+                    _cancel_tasks_for_run(run_id, only_pending_like=False)
+                    continue
                 if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
                     client.rpush("mlair:runs:new", raw_payload)
                     RUN_REQUEUED_TOTAL.inc()
@@ -1479,6 +1538,10 @@ def main() -> None:
                     int((done_event.get("resource_usage") or {}).get("memory_rss_kb")) if (done_event.get("resource_usage") or {}).get("memory_rss_kb") is not None else None,
                 )
                 if done_event["status"] == "SUCCESS":
+                    cur_status = _get_run_status(done_event["run_id"])
+                    if cur_status and str(cur_status).upper() == "CANCELLED":
+                        _cancel_tasks_for_run(done_event["run_id"], only_pending_like=False)
+                        continue
                     max_parallel_tasks, replay_from_task_id, replay_of_run_id = _load_run_replay_meta(done_event["run_id"])
                     run_event = {
                         "run_id": done_event["run_id"],

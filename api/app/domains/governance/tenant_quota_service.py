@@ -18,6 +18,8 @@ QUOTA_RESOURCES = frozenset(
     }
 )
 
+MAX_PARALLEL_TASKS_HARD_LIMIT = 1000
+
 
 class TenantQuotaExceeded(ValueError):
     def __init__(self, resource: str, limit: int, current: int) -> None:
@@ -50,8 +52,31 @@ def default_quota_limits() -> dict:
         "max_webhook_subscriptions_per_project": _env_limit(
             "ML_AIR_TENANT_QUOTA_MAX_WEBHOOK_SUBSCRIPTIONS_PER_PROJECT", 50
         ),
+        # Internal scheduler throttle; not configured via governance UI.
+        "max_parallel_tasks": _env_limit("ML_AIR_TENANT_QUOTA_DEFAULT_MAX_PARALLEL_TASKS", 1000),
         "webhook_allowed_hosts": None,
     }
+
+
+def _clamp_parallel_tasks(value: int) -> int:
+    return max(1, min(MAX_PARALLEL_TASKS_HARD_LIMIT, int(value)))
+
+
+def tenant_max_parallel_tasks(tenant_id: str) -> int:
+    """Default and per-run cap for concurrent tasks within a project (all runs share the pool)."""
+    limits = get_tenant_quotas(tenant_id)
+    raw = limits.get("max_parallel_tasks")
+    if raw is None:
+        raw = _env_limit("ML_AIR_TENANT_QUOTA_DEFAULT_MAX_PARALLEL_TASKS", 1)
+    return _clamp_parallel_tasks(int(raw or 1))
+
+
+def resolve_max_parallel_tasks(tenant_id: str, requested: int | None) -> int:
+    """Apply tenant default when ``requested`` is None; cap explicit requests to the tenant limit."""
+    tenant_cap = tenant_max_parallel_tasks(tenant_id)
+    if requested is None:
+        return tenant_cap
+    return min(_clamp_parallel_tasks(int(requested)), tenant_cap)
 
 
 def _normalize_hosts(hosts: list[str] | None) -> list[str] | None:
@@ -66,7 +91,7 @@ def _row_to_quota(row: tuple) -> dict:
     hosts_out: list[str] | None = None
     if isinstance(hosts, list):
         hosts_out = _normalize_hosts([str(x) for x in hosts])
-    return {
+    out = {
         "tenant_id": row[0],
         "max_projects": row[1],
         "max_datasets_per_project": row[2],
@@ -76,6 +101,9 @@ def _row_to_quota(row: tuple) -> dict:
         "webhook_allowed_hosts": hosts_out,
         "updated_at": row[7].isoformat() if row[7] else None,
     }
+    if len(row) > 8:
+        out["max_parallel_tasks"] = row[8]
+    return out
 
 
 def get_tenant_quotas(tenant_id: str) -> dict:
@@ -87,7 +115,7 @@ def get_tenant_quotas(tenant_id: str) -> dict:
                 """
                 SELECT tenant_id, max_projects, max_datasets_per_project, max_models_per_project,
                        max_runs_per_project, max_webhook_subscriptions_per_project,
-                       webhook_allowed_hosts, updated_at
+                       webhook_allowed_hosts, updated_at, max_parallel_tasks
                 FROM tenant_quotas WHERE tenant_id = %s
                 """,
                 (tid,),
@@ -111,6 +139,7 @@ def upsert_tenant_quotas(
     max_models_per_project: int | None = None,
     max_runs_per_project: int | None = None,
     max_webhook_subscriptions_per_project: int | None = None,
+    max_parallel_tasks: int | None = None,
     webhook_allowed_hosts: list[str] | None = None,
 ) -> dict:
     tid = str(tenant_id or "").strip()
@@ -126,6 +155,11 @@ def upsert_tenant_quotas(
     _check_limit("max_models_per_project", max_models_per_project)
     _check_limit("max_runs_per_project", max_runs_per_project)
     _check_limit("max_webhook_subscriptions_per_project", max_webhook_subscriptions_per_project)
+    if max_parallel_tasks is not None:
+        if int(max_parallel_tasks) < 1:
+            raise ValueError("invalid_max_parallel_tasks")
+        if int(max_parallel_tasks) > MAX_PARALLEL_TASKS_HARD_LIMIT:
+            raise ValueError("max_parallel_tasks_exceeds_hard_limit")
 
     hosts_norm = _normalize_hosts(webhook_allowed_hosts) if webhook_allowed_hosts is not None else None
     now = datetime.now(timezone.utc)
@@ -138,9 +172,9 @@ def upsert_tenant_quotas(
                 INSERT INTO tenant_quotas (
                     tenant_id, max_projects, max_datasets_per_project, max_models_per_project,
                     max_runs_per_project, max_webhook_subscriptions_per_project,
-                    webhook_allowed_hosts, updated_at
+                    webhook_allowed_hosts, updated_at, max_parallel_tasks
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
                 ON CONFLICT (tenant_id) DO UPDATE SET
                     max_projects = EXCLUDED.max_projects,
                     max_datasets_per_project = EXCLUDED.max_datasets_per_project,
@@ -148,10 +182,11 @@ def upsert_tenant_quotas(
                     max_runs_per_project = EXCLUDED.max_runs_per_project,
                     max_webhook_subscriptions_per_project = EXCLUDED.max_webhook_subscriptions_per_project,
                     webhook_allowed_hosts = EXCLUDED.webhook_allowed_hosts,
+                    max_parallel_tasks = EXCLUDED.max_parallel_tasks,
                     updated_at = EXCLUDED.updated_at
                 RETURNING tenant_id, max_projects, max_datasets_per_project, max_models_per_project,
                           max_runs_per_project, max_webhook_subscriptions_per_project,
-                          webhook_allowed_hosts, updated_at
+                          webhook_allowed_hosts, updated_at, max_parallel_tasks
                 """,
                 (
                     tid,
@@ -162,6 +197,7 @@ def upsert_tenant_quotas(
                     max_webhook_subscriptions_per_project,
                     json.dumps(hosts_norm) if hosts_norm is not None else None,
                     now,
+                    max_parallel_tasks,
                 ),
             )
             row = cur.fetchone()
