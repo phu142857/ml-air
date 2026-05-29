@@ -7,6 +7,7 @@ import {
   FilterChips,
   MetadataGrid,
   MlopsEmptyState,
+  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
@@ -87,13 +88,13 @@ function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string
     return {
       label: "Dataset readiness",
       className:
-        "border-sky-500/40 bg-sky-100/60 text-sky-700 backdrop-blur-sm dark:border-sky-500/30 dark:bg-sky-950/25 dark:text-sky-400"
+        "border-primary/40 bg-primary/10 text-primary backdrop-blur-sm dark:border-primary/30 dark:bg-primary/15 dark:text-primary"
     };
   }
   return {
     label: "Training eligibility",
     className:
-      "border-violet-400/40 bg-violet-100/60 text-violet-700 backdrop-blur-sm dark:border-violet-400/35 dark:bg-violet-950/25 dark:text-violet-300"
+      "border-primary/40 bg-primary/10 text-primary backdrop-blur-sm dark:border-primary/30 dark:bg-primary/15 dark:text-primary/90"
   };
 }
 
@@ -887,7 +888,7 @@ export default function DatasetHubPage() {
                   return (
                     <li key={`${v.version_id}:ref:${idx}`} className="truncate">
                       {url ? (
-                        <a href={url} target="_blank" rel="noreferrer" className="text-sky-600 underline dark:text-sky-400">
+                        <a href={url} target="_blank" rel="noreferrer" className="text-primary underline dark:text-primary">
                           {lab}
                         </a>
                       ) : (
@@ -1072,7 +1073,7 @@ export default function DatasetHubPage() {
   }, [versionsQuery.data?.items, selectedVersionForReadiness]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
         segments={[
           { label: "Datasets", href: "/datasets" },
@@ -1139,8 +1140,9 @@ export default function DatasetHubPage() {
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
       />
 
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASET_DETAIL} /> : null}
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASET_DETAIL} /> : null}
+      >
 
         {datasetQuery.isError && datasetQuery.isFetched ? (
           <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
@@ -1169,7 +1171,7 @@ export default function DatasetHubPage() {
                       className={cn(
                         "text-[11px] font-medium",
                         i <= lifecycleStageIndex
-                          ? "border-emerald-500/50 text-emerald-600 bg-emerald-500/5 dark:text-emerald-300"
+                          ? "border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] bg-[color:var(--status-success-bg)] dark:text-[color:var(--status-success-fg)]"
                           : "border-border text-muted-foreground/80"
                       )}
                     >
@@ -1231,8 +1233,8 @@ export default function DatasetHubPage() {
                         className={cn(
                           "text-[11px]",
                           c.status === "pass"
-                            ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-                            : "border-red-500/40 text-red-600 dark:text-red-400"
+                            ? "border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] dark:text-[color:var(--status-success-fg)]"
+                            : "border-red-500/40 text-red-600 dark:text-[color:var(--status-failed-fg)]"
                         )}
                       >
                         {c.status === "pass" ? "PASS" : "FAIL"} · {c.label}
@@ -1336,7 +1338,7 @@ export default function DatasetHubPage() {
                     </Button>
                   </div>
                   {retentionPreview?.candidates?.length ? (
-                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                    <div className="inset-surface px-3 py-2 font-mono text-[11px] text-muted-foreground">
                       {retentionPreview.candidates.slice(0, 8).map((c) => (
                         <div key={c.version_id}>
                           {c.version || c.version_id.slice(0, 8)} · {c.reasons.join(", ")}
@@ -1361,7 +1363,7 @@ export default function DatasetHubPage() {
               <div className="space-y-2 text-xs">
                 {trainingEligibilityRows.length ? (
                   trainingEligibilityRows.map((r) => (
-                    <div key={r.policyId} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <div key={r.policyId} className="inset-surface px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 truncate font-mono text-foreground">{r.policyId}</span>
                         <span
@@ -1404,13 +1406,13 @@ export default function DatasetHubPage() {
               evaluations.
             </p>
             {readinessLegacyFallback ? (
-              <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <div className="mb-3 panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">readiness_allow_legacy_fallback</span> — API may infer latest
                 version if <code className="font-mono text-foreground">dataset_version_id</code> is omitted. Pin a version above
                 for reproducible audits.
               </div>
             ) : null}
-            <details className="mb-3 rounded-lg border border-border bg-muted/20 px-3 py-2" open>
+            <details className="mb-3 inset-surface px-3 py-2" open>
               <summary className="cursor-pointer select-none text-xs font-medium text-foreground hover:text-foreground/90">
                 Version, policy & required size
               </summary>
@@ -1423,7 +1425,7 @@ export default function DatasetHubPage() {
                   onChange={setSelectedVersionId}
                   options={readinessVersionSelectOptions}
                   className="mt-1"
-                  buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+                  buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
                   disabled={readinessVersionSelectOptions.length === 0}
                   aria-label="Dataset version for readiness"
                 />
@@ -1439,7 +1441,7 @@ export default function DatasetHubPage() {
                   }}
                   options={policySelectOptions}
                   className="mt-1"
-                  buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+                  buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
                   disabled={policySelectOptions.length === 0}
                   aria-label="Training policy for readiness"
                 />
@@ -1451,7 +1453,7 @@ export default function DatasetHubPage() {
                 onChange={setNewPolicyTriggerMode}
                 options={POLICY_TRIGGER_MODE_OPTIONS}
                 className="w-40 shrink-0"
-                buttonClassName="rounded-lg border border-border bg-muted/40 px-2 py-2 text-xs"
+                buttonClassName="panel-surface bg-muted/20 px-2 py-2 text-xs"
                 aria-label="Trigger mode for new policy"
               />
               <input
@@ -1459,7 +1461,7 @@ export default function DatasetHubPage() {
                 min={1}
                 value={policyRequiredSizeDraft}
                 onChange={(e) => setPolicyRequiredSizeDraft(e.target.value)}
-                className="w-48 appearance-none rounded-lg border border-border bg-muted/40 px-2 py-2 text-xs text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-48 appearance-none panel-surface bg-muted/20 px-2 py-2 text-xs text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <Button
                 type="button"
@@ -1568,7 +1570,7 @@ export default function DatasetHubPage() {
                       <span>Criteria</span>
                     </div>
                     {(readinessQuery.data.eligibility_criteria || []).map((c) => (
-                      <div key={c.code} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-2 py-1 text-xs">
+                      <div key={c.code} className="flex items-center justify-between inset-surface px-2 py-1 text-xs">
                         <span className="text-muted-foreground">{c.label}</span>
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
@@ -1601,7 +1603,7 @@ export default function DatasetHubPage() {
                   <span className="font-mono text-foreground">required_size</span> on the Readiness tab.
                 </p>
                 {accumulationStrategyDraft === "snapshot_on_schedule" && bufferMaterializationHints ? (
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                  <div className="inset-surface px-3 py-2 text-[11px] text-muted-foreground">
                     Schedule mode: buffer{" "}
                     <span className="font-mono text-foreground">{bufferMaterializationHints.cur}</span>/
                     <span className="font-mono text-foreground">{bufferMaterializationHints.tgt}</span> — versions come from
@@ -1617,13 +1619,13 @@ export default function DatasetHubPage() {
                 {accumulationStrategyDraft === "snapshot_on_threshold" &&
                 bufferMaterializationHints &&
                 bufferMaterializationHints.rowsToThreshold != null ? (
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                  <div className="inset-surface px-3 py-2 text-[11px] text-muted-foreground">
                     ~<span className="font-semibold text-foreground">{bufferMaterializationHints.rowsToThreshold}</span> rows to
                     target ({bufferMaterializationHints.cur}/{bufferMaterializationHints.tgt}).
                   </div>
                 ) : null}
                 {accumulationStrategyDraft === "manual_materialize_only" ? (
-                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                  <div className="inset-surface px-3 py-2 text-[11px] text-muted-foreground">
                     <span className="font-semibold text-foreground">Manual only</span> — row count won&apos;t auto-materialize;
                     use <span className="font-semibold">Materialize now</span>.
                   </div>
@@ -1639,7 +1641,7 @@ export default function DatasetHubPage() {
                       }}
                       options={ACCUMULATION_STRATEGY_OPTIONS}
                       className="min-w-[12rem]"
-                      buttonClassName="rounded-lg border border-border bg-muted/40 px-2 py-2 text-sm"
+                      buttonClassName="panel-surface bg-muted/20 px-2 py-2 text-sm"
                       aria-label="Accumulation strategy"
                     />
                   </label>
@@ -1653,7 +1655,7 @@ export default function DatasetHubPage() {
                         setAccumulationMsg("");
                         setAccumulationThresholdDraft(e.target.value);
                       }}
-                      className="w-32 appearance-none rounded-lg border border-border bg-muted/40 px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="w-32 appearance-none panel-surface bg-muted/20 px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </label>
                   <Button
@@ -1697,7 +1699,7 @@ export default function DatasetHubPage() {
                             setAccumulationMsg("");
                             setScheduleTickLimit(e.target.value);
                           }}
-                          className="w-24 appearance-none rounded-lg border border-border bg-muted/40 px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          className="w-24 appearance-none panel-surface bg-muted/20 px-2 py-2 text-sm text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </label>
                       <Button
@@ -1728,7 +1730,7 @@ export default function DatasetHubPage() {
                   </p>
                 ) : null}
                 {scheduleTickResult ? (
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px]">
+                  <div className="space-y-2 inset-surface px-3 py-2 text-[11px]">
                     <div className="text-muted-foreground">
                       Last tick: checked={scheduleTickResult.checked}, materialized={scheduleTickResult.materialized_count},
                       skipped={scheduleTickResult.skipped.length}
@@ -1762,7 +1764,7 @@ export default function DatasetHubPage() {
                     ) : null}
                   </div>
                 ) : null}
-                <details className="mt-2 rounded-lg border border-border bg-muted/20 px-3 py-2">
+                <details className="mt-2 inset-surface px-3 py-2">
                   <summary className="cursor-pointer select-none text-xs font-medium text-foreground">
                     All buffer fields (diagnostics)
                   </summary>
@@ -1885,7 +1887,7 @@ export default function DatasetHubPage() {
                   setEvaluationCurrentPage(1);
                 }}
                 options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
-                buttonClassName="rounded-lg border border-border bg-card/80 px-2 py-1 text-xs"
+                buttonClassName="panel-surface px-2 py-1 text-xs"
                 className="min-w-[10rem]"
                 aria-label="Filter evaluations by source"
               />
@@ -1896,7 +1898,7 @@ export default function DatasetHubPage() {
                   setEvaluationCurrentPage(1);
                 }}
                 options={evaluationPolicyFilterOptions}
-                buttonClassName="rounded-lg border border-border bg-card/80 px-2 py-1 text-xs"
+                buttonClassName="panel-surface px-2 py-1 text-xs"
                 className="min-w-[10rem]"
                 aria-label="Filter evaluations by policy"
               />
@@ -1950,7 +1952,7 @@ export default function DatasetHubPage() {
       ) : null}
         </>
         )}
-      </div>
+      </PageScrollBody>
 
       <Dialog
         open={versionEditorOpen}

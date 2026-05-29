@@ -19,14 +19,28 @@ export function MlopsEmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-6 py-12 text-center",
-        className
+        "flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center",
+        className,
       )}
     >
-      <Icon className="h-10 w-10 text-muted-foreground/80 mb-3" aria-hidden />
-      <h3 className="text-sm font-medium text-foreground/90">{title}</h3>
-      {description && <p className="text-xs text-muted-foreground mt-1 max-w-sm">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+      <div className="bezel-shell mb-4 rounded-2xl p-1">
+        <div className="bezel-inner flex h-12 w-12 items-center justify-center">
+          <Icon
+            strokeWidth={1.5}
+            className="h-5 w-5 text-muted-foreground"
+            aria-hidden
+          />
+        </div>
+      </div>
+      <h3 className="text-sm font-semibold tracking-tight text-foreground">
+        {title}
+      </h3>
+      {description && (
+        <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      )}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }

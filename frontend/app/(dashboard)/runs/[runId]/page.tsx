@@ -36,6 +36,7 @@ import {
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  tabPanelScrollClassName,
 } from "@/components/mlops/layout"
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
@@ -44,7 +45,13 @@ import { useExecutionStore } from "@/lib/execution-store"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
 import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
-import { statusToMlopsBadge } from "@/lib/status-style"
+import {
+  STATUS_CHIP_CLASS,
+  statusChipKey,
+  statusToMlopsBadge,
+  normalizeStatus,
+  type StatusChipKey,
+} from "@/lib/status-style"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { useAppContext } from "@/lib/app-context"
 import {
@@ -72,7 +79,6 @@ import {
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
-import { normalizeStatus } from "@/lib/status-style"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
 
@@ -131,10 +137,10 @@ function LogLineRow({ log }: { log: LogItem }) {
       <span
         className={cn(
           "w-14 shrink-0",
-          String(log.level).toUpperCase() === "INFO" && "text-sky-400",
-          String(log.level).toUpperCase() === "DEBUG" && "text-violet-400",
-          String(log.level).toUpperCase() === "WARN" && "text-amber-400",
-          String(log.level).toUpperCase() === "ERROR" && "text-red-400",
+          String(log.level).toUpperCase() === "INFO" && "text-primary",
+          String(log.level).toUpperCase() === "DEBUG" && "text-primary",
+          String(log.level).toUpperCase() === "WARN" && "text-[color:var(--status-pending-fg)]",
+          String(log.level).toUpperCase() === "ERROR" && "text-[color:var(--status-failed-fg)]",
         )}
       >
         [{log.level}]
@@ -151,24 +157,16 @@ function LogLineRow({ log }: { log: LogItem }) {
   )
 }
 
-const statusConfig = {
-  idle: { icon: Clock, label: "Idle", color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", animate: false },
-  pending: { icon: Clock, label: "Pending", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", animate: false },
-  queued: { icon: Clock, label: "Queued", color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", animate: false },
-  running: { icon: Loader2, label: "Running", color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30", animate: true },
-  success: { icon: CheckCircle2, label: "Success", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", animate: false },
-  failed: { icon: XCircle, label: "Failed", color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30", animate: false },
-  cancelled: { icon: Ban, label: "Cancelled", color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", animate: false },
-}
-
-function runStatusRowKey(status: string): keyof typeof statusConfig {
-  const t = normalizeStatus(status)
-  if (t === "SUCCESS") return "success"
-  if (t === "FAILED") return "failed"
-  if (t === "RUNNING") return "running"
-  if (t === "QUEUED") return "queued"
-  if (t === "PENDING") return "pending"
-  return "cancelled"
+const runStatusMeta: Record<
+  StatusChipKey,
+  { icon: typeof Clock; label: string; animate: boolean }
+> = {
+  queued: { icon: Clock, label: "Queued", animate: false },
+  pending: { icon: Clock, label: "Pending", animate: false },
+  running: { icon: Loader2, label: "Running", animate: true },
+  success: { icon: CheckCircle2, label: "Success", animate: false },
+  failed: { icon: XCircle, label: "Failed", animate: false },
+  cancelled: { icon: Ban, label: "Cancelled", animate: false },
 }
 
 function runDuration(r: RunItem): string {
@@ -352,8 +350,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     return { ...base, ...storeRun, status: storeRun.status ?? base.status }
   }, [runQuery.data, storeRun])
 
-  const sk = run ? runStatusRowKey(run.status) : "pending"
-  const status = statusConfig[sk]
+  const sk = run ? statusChipKey(run.status) : "pending"
+  const status = runStatusMeta[sk]
   const traceId = run ? pickTraceId(run) : null
   const tasks = useMemo(() => {
     const fromStore = storeTasks ? Object.values(storeTasks) : []
@@ -408,9 +406,9 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
             variant="outline"
             className={cn(
               "text-[10px] capitalize",
-              row.result === "pass" && "border-emerald-500/40 text-emerald-400",
-              row.result === "fail" && "border-red-500/40 text-red-400",
-              row.result === "pending" && "border-amber-500/40 text-amber-400",
+              row.result === "pass" && "border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]",
+              row.result === "fail" && "border-red-500/40 text-[color:var(--status-failed-fg)]",
+              row.result === "pending" && "border-[color:var(--status-pending-border)] text-[color:var(--status-pending-fg)]",
             )}
           >
             {row.result}
@@ -438,7 +436,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         header: "Task",
         cell: (row) => (
           <Link
-            className="font-mono text-xs text-sky-400 hover:text-sky-300"
+            className="font-mono text-xs text-primary hover:text-primary/80"
             href={buildTaskDetailHref(row.task_id, {
               tenant_id: run?.tenant_id ?? tenantId,
               project_id: run?.project_id ?? projectId,
@@ -524,7 +522,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   if (runQuery.isFetched && !runQuery.isLoading && !run && !runQuery.isError) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SubpageBreadcrumb
           segments={[
             { label: "Runs", href: "/runs" },
@@ -549,8 +547,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-border bg-background/50">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-border/70 bg-background/60 backdrop-blur-sm overflow-hidden">
         <SubpageBreadcrumb
           className="border-b border-border/80"
           segments={[
@@ -602,7 +600,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 gap-2 border-amber-500/30 bg-card text-xs text-amber-300"
+                className="h-8 gap-2 border-[color:var(--status-pending-border)] bg-card text-xs text-[color:var(--status-pending-fg)]"
                 disabled={!canScope || !run?.pipeline_id}
                 onClick={() => {
                   setRerunMode("gated")
@@ -650,22 +648,24 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         />
       </div>
 
-      {runQuery.isError ? (
-        <div className="mx-6 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {formatApiClientError(runQuery.error)}
-        </div>
-      ) : null}
-
-      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
         <DetailTabList accent="sky" tabs={[...RUN_TABS]} />
 
+        {runQuery.isError ? (
+          <div className="shrink-0 px-4 pt-3 sm:px-6">
+            <div className="rounded-lg border border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
+              {formatApiClientError(runQuery.error)}
+            </div>
+          </div>
+        ) : null}
+
         {isAggregate ? (
-          <div className="shrink-0 px-6 pt-4">
+          <div className="shrink-0 px-4 pt-3 sm:px-6">
             <ScopePinnedInline message={SCOPE_AGGREGATE_RUN_DETAIL} />
           </div>
         ) : null}
 
-        <TabsContent value="overview" className="flex-1 overflow-auto p-6 mt-0 space-y-6">
+        <TabsContent value="overview" className={tabPanelScrollClassName("space-y-6")}>
           <RunTabPanel loading={isTabLoading && !runQuery.isLoading} variant={RUN_TAB_SKELETON.overview}>
             {runQuery.isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -696,7 +696,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="graph" className="flex-1 overflow-auto p-6 mt-0">
+        <TabsContent value="graph" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.graph}>
             <DetailSection
               title="Execution graph"
@@ -715,7 +715,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="tasks" className="flex-1 overflow-auto p-6 mt-0">
+        <TabsContent value="tasks" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.tasks}>
             <DetailSection title="Tasks" description="Units of work recorded for this run.">
               {tasksQuery.isError ? (
@@ -732,7 +732,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="logs" className="flex-1 overflow-auto p-6 mt-0">
+        <TabsContent value="logs" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.logs}>
             <DetailSection
               title="Runner logs"
@@ -789,7 +789,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="metrics" className="flex-1 overflow-auto p-6 mt-0">
+        <TabsContent value="metrics" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.metrics}>
             <DetailSection title="Training metrics" description="Logged metrics for this run.">
               {trackingQuery.isError ? (
@@ -824,7 +824,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 <div className="overflow-hidden rounded-lg border border-border">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-border bg-card/80 text-left text-xs text-muted-foreground">
+                      <tr className="border-b border-border/60 bg-card text-left text-xs text-muted-foreground">
                         <th className="px-4 py-2">Key</th>
                         <th className="px-4 py-2">Value</th>
                         <th className="px-4 py-2">Step</th>
@@ -856,7 +856,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="artifacts" className="flex-1 overflow-auto p-6 mt-0">
+        <TabsContent value="artifacts" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.artifacts}>
             <DetailSection title="Artifacts" description="Output blobs produced by the runner.">
               {trackingQuery.isError ? (
@@ -874,7 +874,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                       {a.uri ? (
                         <a
                           href={a.uri}
-                          className="group inline-flex items-center gap-2 text-sm text-sky-400 hover:text-sky-300 hover:underline"
+                          className="group inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 hover:underline"
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -895,7 +895,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
 
-        <TabsContent value="timeline" className="flex-1 overflow-auto p-6 mt-0">
+        <TabsContent value="timeline" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.timeline}>
             <DetailSection
               title="Audit timeline"

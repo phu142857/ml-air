@@ -427,7 +427,7 @@ export const DatasetVersionScrollEditor = forwardRef<
         <span>
           {loaded} / {total} loaded
         </span>
-        {dirty ? <span className="text-amber-600 dark:text-amber-400">Unsaved edits</span> : null}
+        {dirty ? <span className="text-[color:var(--status-pending-fg)] dark:text-[color:var(--status-pending-fg)]">Unsaved edits</span> : null}
         {!meta.editable ? (
           <span>File &gt; {formatBytes(meta.max_editor_bytes)} — read-only</span>
         ) : !canEdit ? (
@@ -535,7 +535,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                     ) : null}
                     <td className="relative sticky left-0 z-[1] border-r border-border bg-background px-2 py-0.5 text-center font-mono text-[10px] text-muted-foreground">
                       {isSynthetic ? (
-                        <span className="text-emerald-600 dark:text-emerald-400">+</span>
+                        <span className="text-[color:var(--status-success-fg)]">+</span>
                       ) : (
                         row_index + 1
                       )}
@@ -676,7 +676,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                   </div>
                   <span className="w-10 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
                     {isSynthetic ? (
-                      <span className="text-emerald-600 dark:text-emerald-400">+</span>
+                      <span className="text-[color:var(--status-success-fg)]">+</span>
                     ) : (
                       line_index + 1
                     )}

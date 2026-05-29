@@ -14,8 +14,7 @@ export function JaegerLink({ traceId, variant = "button", size = "sm" }: JaegerL
   if (!traceId) return null
 
   const url = getJaegerTraceUrl(traceId)
-  
-  // If no Jaeger URL configured, show disabled state or fallback
+
   const isConfigured = !!url
   const href = url ?? `#trace-${traceId}`
 
@@ -25,7 +24,7 @@ export function JaegerLink({ traceId, variant = "button", size = "sm" }: JaegerL
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+        className="link-primary inline-flex items-center gap-1.5 text-xs"
         onClick={(e) => {
           if (!isConfigured) {
             e.preventDefault()
@@ -33,9 +32,9 @@ export function JaegerLink({ traceId, variant = "button", size = "sm" }: JaegerL
           }
         }}
       >
-        <Search className="h-3 w-3" />
+        <Search className="h-3 w-3" strokeWidth={1.75} />
         <span className="font-mono">{traceId.slice(0, 8)}...</span>
-        <ExternalLink className="h-3 w-3" />
+        <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
       </a>
     )
   }
@@ -45,22 +44,22 @@ export function JaegerLink({ traceId, variant = "button", size = "sm" }: JaegerL
       variant="outline"
       size={size}
       asChild={isConfigured}
-      className="gap-2 bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 hover:border-sky-500/40"
+      className="gap-2 border-primary/30 bg-primary/10 text-primary hover:border-primary/40 hover:bg-primary/15"
     >
       {isConfigured ? (
         <a href={href} target="_blank" rel="noopener noreferrer">
-          <Search className="h-3.5 w-3.5" />
+          <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
           View in Jaeger
-          <ExternalLink className="h-3 w-3" />
+          <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
         </a>
       ) : (
         <span
           onClick={() => console.log("Jaeger not configured. TraceID:", traceId)}
           className="cursor-pointer"
         >
-          <Search className="h-3.5 w-3.5" />
+          <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
           View in Jaeger
-          <ExternalLink className="h-3 w-3" />
+          <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
         </span>
       )}
     </Button>

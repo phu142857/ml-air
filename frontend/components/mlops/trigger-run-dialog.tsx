@@ -152,7 +152,7 @@ export function TriggerRunDialog({
             ) : pipelinesQuery.isLoading ? (
               <p className="text-xs text-muted-foreground">Loading pipelines…</p>
             ) : (
-              <p className="text-xs text-amber-400">No pipelines found in this scope.</p>
+              <p className="text-xs text-[color:var(--status-pending-fg)]">No pipelines found in this scope.</p>
             )}
           </div>
         </div>
@@ -167,7 +167,7 @@ export function TriggerRunDialog({
           </Button>
           <Button
             type="button"
-            className={gated ? "bg-amber-600 hover:bg-amber-500" : "bg-sky-600 hover:bg-sky-500"}
+            className={gated ? "bg-primary hover:bg-primary/90" : "bg-primary hover:bg-primary/90"}
             disabled={
               !effectivePipelineId ||
               triggerMutation.isPending ||

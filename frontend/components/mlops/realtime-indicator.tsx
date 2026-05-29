@@ -15,15 +15,12 @@ type ConnectionStatus = "connected" | "polling" | "disconnected"
 export function RealtimeIndicator() {
   const [status, setStatus] = useState<ConnectionStatus>("connected")
 
-  // Simulate connection status changes for demo
   useEffect(() => {
     const statuses: ConnectionStatus[] = ["connected", "polling", "disconnected"]
     let index = 0
-    
-    // For demo, cycle through statuses every 30 seconds
+
     const interval = setInterval(() => {
       index = (index + 1) % statuses.length
-      // Keep connected most of the time
       setStatus(Math.random() > 0.1 ? "connected" : statuses[index])
     }, 30000)
 
@@ -35,22 +32,22 @@ export function RealtimeIndicator() {
       icon: Wifi,
       label: "WebSocket Connected",
       description: "Real-time updates active",
-      color: "bg-emerald-500",
-      textColor: "text-emerald-400",
+      color: "bg-[color:var(--status-success-fg)]",
+      textColor: "text-[color:var(--status-success-fg)]",
     },
     polling: {
       icon: RefreshCw,
       label: "Polling Mode",
       description: "WebSocket unavailable, using polling fallback",
-      color: "bg-amber-500",
-      textColor: "text-amber-400",
+      color: "bg-[color:var(--status-pending-fg)]",
+      textColor: "text-[color:var(--status-pending-fg)]",
     },
     disconnected: {
       icon: WifiOff,
       label: "Disconnected",
       description: "Unable to connect to real-time service",
-      color: "bg-red-500",
-      textColor: "text-red-400",
+      color: "bg-destructive",
+      textColor: "text-destructive",
     },
   }
 
@@ -61,36 +58,38 @@ export function RealtimeIndicator() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/80">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-2.5 py-1.5 transition-premium hover:bg-muted/50 active:scale-[0.98]"
+          >
             <div className="relative">
-              <div
-                className={cn(
-                  "h-2 w-2 rounded-full",
-                  config.color
-                )}
-              />
+              <div className={cn("h-2 w-2 rounded-full", config.color)} />
               {status === "connected" && (
                 <div
                   className={cn(
-                    "absolute inset-0 h-2 w-2 rounded-full",
+                    "absolute inset-0 h-2 w-2 animate-ping rounded-full opacity-75",
                     config.color,
-                    "animate-ping opacity-75"
                   )}
                 />
               )}
               {status === "polling" && (
                 <div className="absolute -inset-0.5">
-                  <RefreshCw className="h-3 w-3 text-amber-400 animate-spin" />
+                  <RefreshCw
+                    strokeWidth={1.75}
+                    className="h-3 w-3 animate-spin text-[color:var(--status-pending-fg)]"
+                  />
                 </div>
               )}
             </div>
-            <Icon className={cn("h-3.5 w-3.5", config.textColor)} />
+            <Icon strokeWidth={1.75} className={cn("h-3.5 w-3.5", config.textColor)} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
           <div className="flex flex-col gap-1">
             <span className="font-medium">{config.label}</span>
-            <span className="text-xs text-muted-foreground">{config.description}</span>
+            <span className="text-xs text-muted-foreground">
+              {config.description}
+            </span>
           </div>
         </TooltipContent>
       </Tooltip>

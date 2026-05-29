@@ -1,6 +1,14 @@
 export type StatusTone = "SUCCESS" | "FAILED" | "RUNNING" | "QUEUED" | "PENDING" | "CANCELLED";
 export type DatasetStatusTone = "READY" | "WARNING" | "FAILED";
 
+export type StatusChipKey =
+  | "queued"
+  | "pending"
+  | "running"
+  | "success"
+  | "failed"
+  | "cancelled";
+
 const ALIASES: Record<string, StatusTone> = {
   SUCCESS: "SUCCESS",
   SUCCEEDED: "SUCCESS",
@@ -13,7 +21,43 @@ const ALIASES: Record<string, StatusTone> = {
   PENDING: "PENDING",
   QUEUED: "QUEUED",
   CANCELLED: "CANCELLED",
-  CANCELED: "CANCELLED"
+  CANCELED: "CANCELLED",
+};
+
+const successChip =
+  "border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]";
+const failedChip =
+  "border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] text-[color:var(--status-failed-fg)]";
+const pendingChip =
+  "border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]";
+const runningChip = "border-primary/30 bg-primary/10 text-primary";
+const neutralChip = "border-border/60 bg-muted text-muted-foreground";
+
+export const STATUS_CHIP_CLASS: Record<StatusChipKey, string> = {
+  queued: neutralChip,
+  pending: pendingChip,
+  running: runningChip,
+  success: successChip,
+  failed: failedChip,
+  cancelled: neutralChip,
+};
+
+export const STATUS_CHIP_TEXT: Record<StatusChipKey, string> = {
+  queued: "text-muted-foreground",
+  pending: "text-[color:var(--status-pending-fg)]",
+  running: "text-primary",
+  success: "text-[color:var(--status-success-fg)]",
+  failed: "text-[color:var(--status-failed-fg)]",
+  cancelled: "text-muted-foreground",
+};
+
+export const STATUS_CHIP_BG: Record<StatusChipKey, string> = {
+  queued: "bg-muted",
+  pending: "bg-[color:var(--status-pending-bg)]",
+  running: "bg-primary/10",
+  success: "bg-[color:var(--status-success-bg)]",
+  failed: "bg-[color:var(--status-failed-bg)]",
+  cancelled: "bg-muted",
 };
 
 export function normalizeStatus(raw: string | null | undefined): StatusTone {
@@ -24,15 +68,19 @@ export function normalizeStatus(raw: string | null | undefined): StatusTone {
   return ALIASES[key] || "PENDING";
 }
 
-/** Tailwind chip classes — light/dark aligned with reDesign StatusBadge. */
+export function statusChipKey(raw: string | null | undefined): StatusChipKey {
+  const s = normalizeStatus(raw);
+  if (s === "SUCCESS") return "success";
+  if (s === "FAILED") return "failed";
+  if (s === "RUNNING") return "running";
+  if (s === "QUEUED") return "queued";
+  if (s === "CANCELLED") return "cancelled";
+  return "pending";
+}
+
+/** Tailwind chip classes — aligned with StatusBadge CSS variables. */
 export function statusBadgeClass(status: string | null | undefined): string {
-  const s = normalizeStatus(status);
-  if (s === "SUCCESS")
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-  if (s === "FAILED") return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400";
-  if (s === "RUNNING") return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400";
-  if (s === "QUEUED") return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-400";
-  return "border-border bg-muted text-muted-foreground";
+  return STATUS_CHIP_CLASS[statusChipKey(status)];
 }
 
 export function normalizeDatasetStatus(raw: string | null | undefined): DatasetStatusTone {
@@ -47,9 +95,9 @@ export function normalizeDatasetStatus(raw: string | null | undefined): DatasetS
 
 export function datasetStatusBadgeClass(status: string | null | undefined): string {
   const s = normalizeDatasetStatus(status);
-  if (s === "FAILED") return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400";
-  if (s === "WARNING") return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-400";
-  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  if (s === "FAILED") return failedChip;
+  if (s === "WARNING") return pendingChip;
+  return successChip;
 }
 
 /** Map API status strings to `StatusBadge` variants. */

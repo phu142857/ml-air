@@ -15,16 +15,34 @@ interface SubpageBreadcrumbProps {
 
 export function SubpageBreadcrumb({ segments, className }: SubpageBreadcrumbProps) {
   return (
-    <nav aria-label="Breadcrumb" className={cn("flex items-center gap-1.5 px-6 py-2 border-b border-border/80 bg-background/30 text-xs", className)}>
+    <nav
+      aria-label="Breadcrumb"
+      className={cn(
+        "flex shrink-0 items-center gap-1.5 border-b border-border/70 bg-background/50 px-4 py-2.5 text-xs backdrop-blur-sm sm:px-6",
+        className,
+      )}
+    >
       {segments.map((segment, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/80" aria-hidden />}
+          {i > 0 && (
+            <ChevronRight
+              strokeWidth={1.75}
+              className="h-3 w-3 text-muted-foreground/80"
+              aria-hidden
+            />
+          )}
           {segment.href ? (
-            <Link href={segment.href} className="text-sky-400 hover:text-sky-300 transition-colors">
+            <Link href={segment.href} className="link-primary">
               {segment.label}
             </Link>
           ) : (
-            <span className={cn(segment.mono ? "font-mono text-foreground/90" : "text-muted-foreground")}>
+            <span
+              className={cn(
+                segment.mono
+                  ? "font-mono text-foreground/90"
+                  : "text-muted-foreground",
+              )}
+            >
               {segment.label}
             </span>
           )}

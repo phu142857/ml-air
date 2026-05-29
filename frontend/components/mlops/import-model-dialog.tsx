@@ -211,7 +211,7 @@ export function ImportModelDialog({
               variant={source === "upload" ? "default" : "outline"}
               className={
                 source === "upload"
-                  ? "gap-1.5 bg-violet-600 text-white hover:bg-violet-500"
+                  ? "gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
                   : "gap-1.5 border-border"
               }
               onClick={() => setSource("upload")}
@@ -225,7 +225,7 @@ export function ImportModelDialog({
               variant={source === "server_path" ? "default" : "outline"}
               className={
                 source === "server_path"
-                  ? "gap-1.5 bg-violet-600 text-white hover:bg-violet-500"
+                  ? "gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
                   : "gap-1.5 border-border"
               }
               onClick={() => setSource("server_path")}
@@ -284,7 +284,7 @@ export function ImportModelDialog({
           </Button>
           <Button
             type="button"
-            className="bg-violet-600 text-white hover:bg-violet-500 hover:text-white disabled:text-white/90"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-white disabled:text-white/90"
             disabled={!canSubmit}
             onClick={() => importMutation.mutate()}
           >

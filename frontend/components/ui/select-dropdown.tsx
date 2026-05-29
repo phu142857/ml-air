@@ -100,7 +100,7 @@ export function SelectDropdown({
           setOpen((o) => !o);
         }}
         className={cn(
-          "flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card/80 px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50",
+          "flex w-full min-w-0 items-center justify-between gap-2 panel-surface px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50",
           buttonClassName,
         )}
       >
@@ -114,7 +114,7 @@ export function SelectDropdown({
           role="listbox"
           style={menuStyle}
           className={cn(
-            "max-h-60 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg",
+            "max-h-60 overflow-y-auto rounded-xl border border-border/60 bg-card py-1 shadow-diffused",
             listClassName,
           )}
         >

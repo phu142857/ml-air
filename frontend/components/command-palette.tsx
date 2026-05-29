@@ -93,12 +93,12 @@ function searchItemLabel(it: SearchResultItem): string {
 }
 
 const statusIcons: Record<string, React.ReactNode> = {
-  success: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />,
-  failed: <AlertCircle className="h-3.5 w-3.5 text-red-500" />,
-  running: <Loader2 className="h-3.5 w-3.5 text-sky-500 animate-spin" />,
-  queued: <Clock className="h-3.5 w-3.5 text-amber-500" />,
+  success: <CheckCircle2 className="h-3.5 w-3.5 text-[color:var(--status-success-fg)]" />,
+  failed: <AlertCircle className="h-3.5 w-3.5 text-[color:var(--status-failed-fg)]" />,
+  running: <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />,
+  queued: <Clock className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />,
   cancelled: <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />,
-  pending: <Clock className="h-3.5 w-3.5 text-amber-500" />,
+  pending: <Clock className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />,
 }
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
@@ -202,7 +202,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
         {!scopePinned && trimmedQuery.length >= 2 && traceMode ? (
           <CommandGroup heading="Trace lookup">
-            <div className="px-2 py-2 text-xs text-amber-400">
+            <div className="px-2 py-2 text-xs text-[color:var(--status-pending-fg)]">
               Pin a workspace to load audit rows for this trace. Jaeger links below still work.
             </div>
           </CommandGroup>
@@ -235,8 +235,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     onSelect={() => handleTraceSelect(trimmedQuery)}
                     className="flex items-center gap-3 py-2"
                   >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-violet-500/20 bg-violet-500/10">
-                      <History className="h-3.5 w-3.5 text-violet-500" />
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
+                      <History className="h-3.5 w-3.5 text-primary" />
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="text-sm">{event.title}</span>
@@ -249,14 +249,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             ) : null}
             <CommandGroup heading="Jaeger">
               <CommandItem onSelect={() => openJaegerTrace(trimmedQuery)} className="flex items-center gap-3 py-2">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10">
-                  <ExternalLink className="h-3.5 w-3.5 text-amber-500" />
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)]">
+                  <ExternalLink className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="text-sm">Open trace in Jaeger</span>
                   <span className="font-mono text-xs text-muted-foreground">{trimmedQuery.slice(0, 24)}…</span>
                 </div>
-                <Badge variant="outline" className="h-5 border-amber-500/30 text-[10px] text-amber-500">
+                <Badge variant="outline" className="h-5 border-[color:var(--status-pending-border)] text-[10px] text-[color:var(--status-pending-fg)]">
                   External
                 </Badge>
               </CommandItem>
@@ -267,7 +267,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         {searchEnabled && !traceMode && trimmedQuery.length >= 2 ? (
           <CommandGroup heading="Search page">
             <CommandItem onSelect={openFullSearch} className="flex items-center gap-3 py-2">
-              <Search className="h-4 w-4 text-sky-500" />
+              <Search className="h-4 w-4 text-primary" />
               <span className="text-sm">Open full search for “{trimmedQuery}”</span>
               <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground/80" />
             </CommandItem>
@@ -283,11 +283,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 className="flex items-center gap-3 py-2"
               >
                 {it.type === "run" ? (
-                  <Play className="h-4 w-4 text-sky-500" />
+                  <Play className="h-4 w-4 text-primary" />
                 ) : it.type === "dataset" ? (
-                  <Database className="h-4 w-4 text-emerald-500" />
+                  <Database className="h-4 w-4 text-[color:var(--status-success-fg)]" />
                 ) : (
-                  <GitBranch className="h-4 w-4 text-amber-500" />
+                  <GitBranch className="h-4 w-4 text-[color:var(--status-pending-fg)]" />
                 )}
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex items-center gap-2">
@@ -377,8 +377,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   onSelect={() => handleSelect(item.href)}
                   className="flex items-center gap-3"
                 >
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-amber-500/10">
-                    <item.icon className="h-3.5 w-3.5 text-amber-500" />
+                  <div className="flex h-6 w-6 items-center justify-center rounded bg-[color:var(--status-pending-bg)]">
+                    <item.icon className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />
                   </div>
                   <div className="flex flex-col">
                     <span>{item.name}</span>
@@ -423,15 +423,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <CommandGroup heading="Search Tips">
               <div className="space-y-1.5 px-2 py-3 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <Hash className="h-3.5 w-3.5 text-violet-500" />
+                  <Hash className="h-3.5 w-3.5 text-primary" />
                   <span>
-                    Paste a <span className="font-mono text-violet-400">trace ID</span> (hex) for Jaeger + audit
+                    Paste a <span className="font-mono text-primary">trace ID</span> (hex) for Jaeger + audit
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Play className="h-3.5 w-3.5 text-sky-500" />
+                  <Play className="h-3.5 w-3.5 text-primary" />
                   <span>
-                    Type <span className="font-mono text-sky-400">2+ characters</span> to search runs, tasks, datasets
+                    Type <span className="font-mono text-primary">2+ characters</span> to search runs, tasks, datasets
                   </span>
                 </div>
               </div>

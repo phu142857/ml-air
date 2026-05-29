@@ -54,7 +54,7 @@ interface DetailTabBarProps extends DetailTabListProps {
 /** Self-contained tab control for pages that switch content without `<TabsContent>`. */
 export function DetailTabBar({ value, onValueChange, tabs, accent, className }: DetailTabBarProps) {
   return (
-    <Tabs value={value} onValueChange={onValueChange} className={cn("flex flex-col", className)}>
+    <Tabs value={value} onValueChange={onValueChange} className={cn("flex shrink-0 flex-col", className)}>
       <DetailTabList tabs={tabs} accent={accent} />
     </Tabs>
   )

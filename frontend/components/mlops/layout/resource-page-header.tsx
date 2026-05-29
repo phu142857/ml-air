@@ -3,31 +3,24 @@ import { cn } from "@/lib/utils"
 
 export type ResourceAccent = "emerald" | "sky" | "amber" | "violet" | "zinc"
 
-const accentStyles: Record<ResourceAccent, { gradient: string; border: string; icon: string }> = {
-  emerald: {
-    gradient: "from-emerald-500/20 to-emerald-600/10",
-    border: "border-emerald-500/20",
-    icon: "text-emerald-400",
-  },
-  sky: {
-    gradient: "from-sky-500/20 to-sky-600/10",
-    border: "border-sky-500/20",
-    icon: "text-sky-400",
-  },
-  amber: {
-    gradient: "from-amber-500/20 to-amber-600/10",
-    border: "border-amber-500/20",
-    icon: "text-amber-400",
-  },
-  violet: {
-    gradient: "from-violet-500/20 to-violet-600/10",
-    border: "border-violet-500/20",
-    icon: "text-violet-400",
-  },
+const primaryAccent = {
+  wash: "bg-primary/10",
+  icon: "text-primary",
+  ring: "ring-primary/25",
+} as const
+
+const accentStyles: Record<
+  ResourceAccent,
+  { wash: string; icon: string; ring: string }
+> = {
+  emerald: primaryAccent,
+  sky: primaryAccent,
+  amber: primaryAccent,
+  violet: primaryAccent,
   zinc: {
-    gradient: "from-muted-foreground/15 to-muted/30",
-    border: "border-border",
+    wash: "bg-muted/60",
     icon: "text-muted-foreground",
+    ring: "ring-border/80",
   },
 }
 
@@ -53,25 +46,40 @@ export function ResourcePageHeader({
   const styles = accentStyles[accent]
 
   return (
-    <header className={cn("border-b border-border bg-background/50 px-6 py-4", className)}>
+    <header
+      className={cn(
+        "relative z-[1] shrink-0 border-b border-border/70 bg-background/60 px-4 py-5 backdrop-blur-sm sm:px-6",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 items-center gap-4">
           {leading}
-          <span
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br border",
-              styles.gradient,
-              styles.border
-            )}
-          >
-            <Icon className={cn("h-5 w-5", styles.icon)} />
-          </span>
+          <div className="bezel-shell rounded-2xl p-1">
+            <span
+              className={cn(
+                "bezel-inner flex h-11 w-11 items-center justify-center ring-1",
+                styles.wash,
+                styles.ring,
+              )}
+            >
+              <Icon strokeWidth={1.75} className={cn("h-5 w-5", styles.icon)} />
+            </span>
+          </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-foreground truncate">{title}</h1>
-            {subtitle ? <p className="text-xs text-muted-foreground truncate">{subtitle}</p> : null}
+            <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-0.5 truncate text-sm leading-relaxed text-muted-foreground">
+                {subtitle}
+              </p>
+            ) : null}
           </div>
         </div>
-        {actions ? <div className="flex items-center gap-2 shrink-0">{actions}</div> : null}
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        ) : null}
       </div>
     </header>
   )

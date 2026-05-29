@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { PageScrollBody, PageToolbar, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatRowCount, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
@@ -151,8 +151,9 @@ export default function DatasetsPage() {
   }, [items, search])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
+        className="shrink-0"
         icon={Database}
         accent="emerald"
         title="Datasets"
@@ -161,7 +162,7 @@ export default function DatasetsPage() {
           <Button
             type="button"
             size="sm"
-            className="h-8 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+            className="h-8 gap-2"
             disabled={!token.trim() || !scopePinned}
             title={!scopePinned ? "Select a specific tenant and project" : undefined}
             onClick={() => setUploadOpen(true)}
@@ -219,7 +220,6 @@ export default function DatasetsPage() {
             </Button>
             <Button
               type="button"
-              className="bg-emerald-600 hover:bg-emerald-500"
               disabled={
                 !datasetName.trim() || !file || uploadMutation.isPending
               }
@@ -235,47 +235,53 @@ export default function DatasetsPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="border-b border-border bg-muted/50 px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search datasets…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-64 border-border bg-card pl-9 text-sm"
-            />
-          </div>
+      <PageToolbar>
+        <div className="relative">
+          <Search
+            strokeWidth={1.75}
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            placeholder="Search datasets"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9 w-64 pl-9 text-sm"
+          />
+        </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center overflow-hidden rounded-md border border-border">
-              <button
-                type="button"
-                onClick={() => setViewMode("table")}
-                className={cn(
-                  "p-1.5 transition-colors",
-                  viewMode === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "p-1.5 transition-colors",
-                  viewMode === "grid" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Grid className="h-4 w-4" />
-              </button>
-            </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center overflow-hidden rounded-xl border border-border/60 bg-muted/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={cn(
+                "rounded-lg p-1.5 transition-premium",
+                viewMode === "table"
+                  ? "bg-card text-foreground shadow-whisper"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <List className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={cn(
+                "rounded-lg p-1.5 transition-premium",
+                viewMode === "grid"
+                  ? "bg-card text-foreground shadow-whisper"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Grid className="h-4 w-4" strokeWidth={1.75} />
+            </button>
           </div>
         </div>
-      </div>
+      </PageToolbar>
 
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASETS} /> : null}
+      <PageScrollBody
+        header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASETS} /> : null}
+      >
         <ScopedListContent
           isLoading={datasetsQuery.isLoading}
           isError={datasetsQuery.isError}
@@ -296,34 +302,51 @@ export default function DatasetsPage() {
             emptyMessage="No datasets match."
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-{filtered.map((d) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((d) => (
               <Link
                 key={d.dataset_id}
                 href={`/datasets/${encodeURIComponent(d.dataset_id)}`}
-                className="rounded-lg border border-border bg-card/80 p-4 transition-colors hover:bg-card"
+                className="group transition-premium hover:-translate-y-0.5"
               >
-                <div className="mb-3 flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <Database className="h-5 w-5 text-emerald-500" />
-                    <div>
-                      <h3 className="text-sm font-medium text-foreground">{d.name}</h3>
-                      <p className="font-mono text-[10px] text-muted-foreground/80">{d.dataset_id}</p>
+                <div className="bezel-shell h-full">
+                  <div className="bezel-inner flex h-full flex-col p-5">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+                          <Database
+                            strokeWidth={1.75}
+                            className="h-4 w-4 text-primary"
+                          />
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                            {d.name}
+                          </h3>
+                          <p className="truncate font-mono text-[10px] text-muted-foreground">
+                            {d.dataset_id}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 rounded-full border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] px-2 py-1 text-[10px] font-medium text-[color:var(--status-success-fg)]">
+                        <CheckCircle2 className="h-3 w-3" strokeWidth={1.75} />
+                        listed
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1 rounded px-2 py-1 text-xs text-emerald-400 bg-emerald-500/10">
-                    <CheckCircle2 className="h-3 w-3" />
-                    listed
-                  </div>
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Rows</span>
-                    <span className="font-mono text-foreground/90">{formatRowCount(d.current_size)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-2 text-muted-foreground/80">
-                    <span>Updated</span>
-                    <span>{formatRelativeTime(d.updated_at || d.created_at)}</span>
+                    <div className="mt-auto space-y-2 text-xs">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Rows</span>
+                        <span className="font-mono tabular-nums text-foreground">
+                          {formatRowCount(d.current_size)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-border/60 pt-2 text-muted-foreground">
+                        <span>Updated</span>
+                        <span className="tabular-nums">
+                          {formatRelativeTime(d.updated_at || d.created_at)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -331,7 +354,7 @@ export default function DatasetsPage() {
           </div>
         )}
         </ScopedListContent>
-      </div>
+      </PageScrollBody>
     </div>
   )
 }

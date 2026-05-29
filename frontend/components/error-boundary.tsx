@@ -55,17 +55,17 @@ const errorConfig: Record<ErrorType, {
 }> = {
   "not-found": {
     icon: FileQuestion,
-    iconColor: "text-amber-400",
-    iconBgColor: "bg-amber-500/10",
-    borderColor: "border-amber-500/20",
+    iconColor: "text-[color:var(--status-pending-fg)]",
+    iconBgColor: "bg-[color:var(--status-pending-bg)]",
+    borderColor: "border-[color:var(--status-pending-border)]",
     title: "Resource Not Found",
     description: "The requested resource could not be found. It may have been moved, deleted, or the URL might be incorrect.",
     statusCode: "404",
   },
   "api-down": {
     icon: ServerCrash,
-    iconColor: "text-red-400",
-    iconBgColor: "bg-red-500/10",
+    iconColor: "text-[color:var(--status-failed-fg)]",
+    iconBgColor: "bg-[color:var(--status-failed-bg)]",
     borderColor: "border-red-500/20",
     title: "Service Unavailable",
     description: "The API service is currently unavailable. This could be due to maintenance or temporary server issues.",
@@ -73,8 +73,8 @@ const errorConfig: Record<ErrorType, {
   },
   "generic": {
     icon: AlertTriangle,
-    iconColor: "text-red-400",
-    iconBgColor: "bg-red-500/10",
+    iconColor: "text-[color:var(--status-failed-fg)]",
+    iconBgColor: "bg-[color:var(--status-failed-bg)]",
     borderColor: "border-red-500/20",
     title: "Something Went Wrong",
     description: "An unexpected error occurred. Please try again or contact support if the problem persists.",
@@ -107,20 +107,15 @@ export function ErrorDisplay({
       "flex flex-col items-center justify-center min-h-[400px] p-8",
       className
     )}>
-      <div className="relative">
-        {/* Glow effect */}
-        <div className={cn(
-          "absolute inset-0 blur-2xl opacity-20 rounded-full",
-          errorType === "not-found" ? "bg-amber-500" : "bg-red-500"
-        )} />
-        
-        {/* Icon container */}
-        <div className={cn(
-          "relative flex h-20 w-20 items-center justify-center rounded-2xl border",
-          config.iconBgColor,
-          config.borderColor
-        )}>
-          <Icon className={cn("h-10 w-10", config.iconColor)} />
+      <div className="bezel-shell rounded-2xl p-1">
+        <div
+          className={cn(
+            "bezel-inner flex h-20 w-20 items-center justify-center border",
+            config.iconBgColor,
+            config.borderColor,
+          )}
+        >
+          <Icon strokeWidth={1.75} className={cn("h-10 w-10", config.iconColor)} />
         </div>
       </div>
       
@@ -149,7 +144,7 @@ export function ErrorDisplay({
           <summary className="cursor-pointer text-xs text-muted-foreground/80 hover:text-muted-foreground transition-colors">
             Show technical details
           </summary>
-          <div className="mt-2 rounded-lg bg-background border border-border p-3 overflow-x-auto">
+          <div className="mt-2 overflow-x-auto rounded-xl border border-border/60 bg-muted/30 p-3">
             <code className="text-xs font-mono text-muted-foreground break-all">
               {error.message}
             </code>
@@ -193,7 +188,7 @@ export function ErrorDisplay({
             className={cn(
               "h-9 gap-2",
               errorType === "not-found" 
-                ? "bg-amber-600 hover:bg-amber-500 text-white"
+                ? "bg-primary hover:bg-primary/90 text-white"
                 : "bg-red-600 hover:bg-red-500 text-white"
             )}
           >
@@ -205,7 +200,7 @@ export function ErrorDisplay({
       
       {/* Helpful links for API down */}
       {errorType === "api-down" && (
-        <div className="mt-8 rounded-lg bg-card/80 border border-border p-4 max-w-md w-full">
+        <div className="mt-8 w-full max-w-md rounded-xl bezel-shell border-border/60 p-4">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Troubleshooting
           </h3>

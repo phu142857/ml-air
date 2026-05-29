@@ -34,10 +34,30 @@ import { mlairKeys } from "@/lib/query-keys"
 import { useChartTheme } from "@/hooks/use-chart-theme"
 
 const nodeTypeConfig = {
-  dataset: { icon: Database, color: "from-emerald-500 to-emerald-600", border: "border-emerald-500/30", bg: "bg-emerald-500/10" },
-  pipeline: { icon: GitBranch, color: "from-amber-500 to-amber-600", border: "border-amber-500/30", bg: "bg-amber-500/10" },
-  model: { icon: Box, color: "from-violet-500 to-violet-600", border: "border-violet-500/30", bg: "bg-violet-500/10" },
-  feature: { icon: Layers, color: "from-sky-500 to-sky-600", border: "border-sky-500/30", bg: "bg-sky-500/10" },
+  dataset: {
+    icon: Database,
+    iconClass: "bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]",
+    border: "border-[color:var(--status-success-border)]",
+    bg: "bg-card",
+  },
+  pipeline: {
+    icon: GitBranch,
+    iconClass: "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
+    border: "border-[color:var(--status-pending-border)]",
+    bg: "bg-card",
+  },
+  model: {
+    icon: Box,
+    iconClass: "bg-primary/10 text-primary",
+    border: "border-primary/30",
+    bg: "bg-card",
+  },
+  feature: {
+    icon: Layers,
+    iconClass: "bg-muted text-foreground",
+    border: "border-border/60",
+    bg: "bg-card",
+  },
 }
 
 type LineageGraphNode = {
@@ -60,10 +80,10 @@ function LineageNode({ data }: NodeProps<Node<LineageNodeData>>) {
   return (
     <>
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-border !bg-muted-foreground/50" />
-      <div className={cn("min-w-[140px] rounded-lg border bg-card/80 px-4 py-3", config.border)}>
+      <div className={cn("min-w-[140px] rounded-xl border px-4 py-3 shadow-whisper", config.border, config.bg)}>
         <div className="mb-1 flex items-center gap-2">
-          <div className={cn("rounded-md bg-gradient-to-br p-1.5", config.color)}>
-            <Icon className="h-3.5 w-3.5 text-white" />
+          <div className={cn("rounded-lg p-1.5", config.iconClass)}>
+            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
           </div>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{node.type}</span>
         </div>
@@ -410,8 +430,8 @@ function LineagePageInner() {
         subtitle={canScope ? "Run inputs/outputs and dataset versions" : undefined}
       />
 
-      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div className="page-toolbar">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 sm:flex-row sm:items-end">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Run ID</Label>
             <div className="flex gap-2">
@@ -461,15 +481,15 @@ function LineagePageInner() {
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-border bg-muted/50 px-6 py-3">
+      <div className="page-toolbar">
         <div className="flex flex-wrap items-center gap-6">
-          <span className="text-xs text-muted-foreground">Node types:</span>
+          <span className="text-xs font-medium text-muted-foreground">Node types</span>
           {Object.entries(nodeTypeConfig).map(([type, config]) => {
             const Icon = config.icon
             return (
               <div key={type} className="flex items-center gap-1.5">
-                <div className={cn("rounded bg-gradient-to-br p-1", config.color)}>
-                  <Icon className="h-3 w-3 text-white" />
+                <div className={cn("rounded-lg p-1", config.iconClass)}>
+                  <Icon className="h-3 w-3" strokeWidth={1.75} />
                 </div>
                 <span className="text-xs capitalize text-muted-foreground">{type}</span>
               </div>
@@ -479,7 +499,7 @@ function LineagePageInner() {
       </div>
 
       {activeError ? (
-        <div className="shrink-0 border-b border-border bg-red-500/10 px-6 py-2 text-xs text-destructive">
+        <div className="shrink-0 border-b border-border bg-[color:var(--status-failed-bg)] px-6 py-2 text-xs text-destructive">
           {formatApiClientError(activeError)}
         </div>
       ) : null}
@@ -500,7 +520,7 @@ function LineagePageInner() {
       ) : null}
 
       {mode && !activeLoading && graph.nodes.length === 0 && !activeError ? (
-        <div className="shrink-0 border-b border-border bg-card/40 px-6 py-4">
+        <div className="shrink-0 border-b border-border surface-muted px-6 py-4">
           <MlopsEmptyState
             icon={Network}
             title="No lineage edges"
@@ -510,13 +530,13 @@ function LineagePageInner() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
         {!canScope ? (
-          <div className="shrink-0 px-6 pt-4">
+          <div className="shrink-0 px-4 pt-4 sm:px-6">
             <ScopePinnedInline message={SCOPE_AGGREGATE_LINEAGE} />
           </div>
         ) : null}
-        <div className="relative min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1 scroll-region">
         {!mode ? (
           <div className="flex h-full items-center justify-center p-8">
             <MlopsEmptyState

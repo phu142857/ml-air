@@ -59,30 +59,34 @@ const settingsNav: NavItem[] = [
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const pathname = usePathname()
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-wider text-muted-foreground">
+    <SidebarGroup className="px-2">
+      <SidebarGroupLabel className="px-3 text-[11px] font-medium tracking-wide text-muted-foreground/80">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu>
+        <SidebarMenu className="gap-0.5">
           {items.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const isActive =
+              pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={isActive}>
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm transition-colors",
+                      "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-premium",
                       isActive
-                        ? "bg-muted/80 text-foreground"
-                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        ? "nav-active-rail bg-sidebar-accent text-foreground shadow-whisper"
+                        : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
                     )}
                   >
                     <item.icon
+                      strokeWidth={1.75}
                       className={cn(
-                        "h-4 w-4",
-                        isActive ? "text-sky-400" : "text-muted-foreground",
+                        "h-4 w-4 shrink-0 transition-premium",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground group-hover:text-foreground",
                       )}
                     />
                     <span>{item.title}</span>
@@ -99,28 +103,44 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 
 export function AppSidebar() {
   return (
-    <Sidebar className="border-r border-border/50">
-      <SidebarHeader className="border-b border-border/50 px-4 py-3">
-        <Link href="/datasets" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-emerald-500">
-            <Network className="h-4 w-4 text-white" />
+    <Sidebar className="border-r border-sidebar-border/80 bg-sidebar">
+      <SidebarHeader className="border-b border-sidebar-border/70 px-4 py-4">
+        <Link href="/datasets" className="group flex items-center gap-3">
+          <div className="bezel-shell rounded-2xl p-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[calc(var(--radius)+2px)] bg-primary shadow-whisper">
+              <Network
+                strokeWidth={1.75}
+                className="h-4 w-4 text-primary-foreground"
+              />
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-foreground">ML-Air Hub</span>
-            <span className="font-mono text-[10px] text-muted-foreground">lifecycle-first</span>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+              ML-Air Hub
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              lifecycle-first
+            </span>
           </div>
         </Link>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="gap-1 py-3">
         <NavGroup label="Lifecycle" items={lifecycleNav} />
         <NavGroup label="Overview" items={platformNav} />
         <NavGroup label="Execution" items={executionNav} />
         <NavGroup label="Admin" items={settingsNav} />
       </SidebarContent>
-      <SidebarFooter className="border-t border-border/50 p-4">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-          <span>API Connected</span>
+      <SidebarFooter className="border-t border-sidebar-border/70 p-4">
+        <div className="bezel-shell rounded-xl p-1">
+          <div className="bezel-inner flex items-center gap-2.5 px-3 py-2.5">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--status-success-fg)]" />
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">
+              API connected
+            </span>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

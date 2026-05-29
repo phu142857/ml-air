@@ -12,7 +12,7 @@ function Tabs({
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      className={cn('flex flex-col gap-2', className)}
+      className={cn('flex min-h-0 flex-col gap-2', className)}
       {...props}
     />
   )
@@ -26,7 +26,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
+        'bg-muted/50 text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-xl border border-border/60 p-[3px] shadow-whisper',
         className,
       )}
       {...props}
@@ -57,7 +57,11 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn('flex-1 outline-none', className)}
+      className={cn(
+        'min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
+        'data-[state=active]:overflow-x-hidden data-[state=active]:overflow-y-auto',
+        className,
+      )}
       {...props}
     />
   )

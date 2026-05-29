@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
@@ -108,8 +108,9 @@ export default function ModelsPage() {
   const items = modelsQuery.data?.items ?? []
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
+        className="shrink-0"
         icon={Box}
         accent="violet"
         title="Models"
@@ -131,7 +132,7 @@ export default function ModelsPage() {
             <Button
               type="button"
               size="sm"
-              className="h-8 gap-2 bg-violet-600 text-white hover:bg-violet-500 hover:text-white disabled:text-white/90"
+              className="h-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-white disabled:text-white/90"
               disabled={!token.trim() || !scopePinned}
               title={!scopePinned ? "Select a specific tenant and project" : undefined}
               onClick={() => setImportOpen(true)}
@@ -177,7 +178,7 @@ export default function ModelsPage() {
             </Button>
             <Button
               type="button"
-              className="bg-violet-600 hover:bg-violet-500"
+              className="bg-primary hover:bg-primary/90"
               disabled={!name.trim() || registerMutation.isPending}
               onClick={() => registerMutation.mutate()}
             >
@@ -193,8 +194,9 @@ export default function ModelsPage() {
         onSuccess={(model) => router.push(`/models/${encodeURIComponent(model.model_id)}`)}
       />
 
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODELS} /> : null}
+      <PageScrollBody
+        header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODELS} /> : null}
+      >
         <ScopedListContent
           isLoading={modelsQuery.isLoading}
           isError={modelsQuery.isError}
@@ -213,7 +215,7 @@ export default function ModelsPage() {
             emptyMessage="No models."
           />
         </ScopedListContent>
-      </div>
+      </PageScrollBody>
     </div>
   )
 }

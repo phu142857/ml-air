@@ -12,6 +12,7 @@ import { formatDateTimeCompact } from "@/lib/utils";
 import {
   DetailSection,
   MlopsEmptyState,
+  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
@@ -110,7 +111,7 @@ export default function PipelineVersionsPage() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
         segments={[
           { label: "Pipelines", href: "/pipelines" },
@@ -137,7 +138,7 @@ export default function PipelineVersionsPage() {
             <Button variant="outline" size="sm" className="border-border bg-card text-foreground/90 hover:bg-muted" asChild>
               <Link href={`/pipelines/${encodeURIComponent(pipelineId)}`}>DAG</Link>
             </Button>
-            <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-500" asChild>
+            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" asChild>
               <Link
                 href={`/pipelines/${encodeURIComponent(pipelineId)}/diff${
                   left && right ? `?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}` : ""
@@ -149,23 +150,24 @@ export default function PipelineVersionsPage() {
           </div>
         }
       />
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+      >
         <div className="grid gap-4 lg:grid-cols-2">
           <DetailSection title="Create version" accentBorder="amber">
               <p className="mb-2 text-xs text-muted-foreground">
                 POST creates the next monotonic version; previous rows are not modified.
               </p>
               <textarea
-                className="mb-2 h-40 w-full rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs text-foreground"
+                className="mb-2 h-40 w-full inset-surface p-2 font-mono text-xs text-foreground"
                 value={jsonText}
                 onChange={(e) => setJsonText(e.target.value)}
               />
-              {err ? <p className="mb-2 text-xs text-red-400">{err}</p> : null}
+              {err ? <p className="mb-2 text-xs text-[color:var(--status-failed-fg)]">{err}</p> : null}
               <Button
                 type="button"
                 disabled={createMut.isPending}
-                className="bg-amber-600 text-white hover:bg-amber-500"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => createMut.mutate()}
               >
                 {createMut.isPending ? "Creating…" : "Create new version"}
@@ -180,7 +182,7 @@ export default function PipelineVersionsPage() {
                     onChange={setLeft}
                     options={versionPickOptions}
                     className="mt-1"
-                    buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm text-foreground"
+                    buttonClassName="inset-surface px-2 py-1 text-sm text-foreground"
                     aria-label="Version A for diff"
                   />
                 </label>
@@ -191,7 +193,7 @@ export default function PipelineVersionsPage() {
                     onChange={setRight}
                     options={versionPickOptions}
                     className="mt-1"
-                    buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1 text-sm text-foreground"
+                    buttonClassName="inset-surface px-2 py-1 text-sm text-foreground"
                     aria-label="Version B for diff"
                   />
                 </label>
@@ -217,7 +219,7 @@ export default function PipelineVersionsPage() {
               />
             )}
         </DetailSection>
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

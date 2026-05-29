@@ -36,11 +36,11 @@ const eventTypeIcons: Record<string, React.ElementType> = {
 
 // Mapping Colors
 const eventTypeColors: Record<string, string> = {
-  run: "text-sky-400 bg-sky-500/10",
-  dataset: "text-emerald-400 bg-emerald-500/10",
-  model: "text-violet-400 bg-violet-500/10",
-  pipeline: "text-amber-400 bg-amber-500/10",
-  system: "text-red-400 bg-red-500/10",
+  run: "text-primary bg-primary/10",
+  dataset: "text-[color:var(--status-success-fg)] bg-[color:var(--status-success-bg)]",
+  model: "text-primary bg-primary/10",
+  pipeline: "text-[color:var(--status-pending-fg)] bg-[color:var(--status-pending-bg)]",
+  system: "text-[color:var(--status-failed-fg)] bg-[color:var(--status-failed-bg)]",
 }
 
 function ActorBadge({ actor }: { actor: AuditEvent["actor"] }) {
@@ -86,7 +86,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
   return (
     <div className={cn(
       "relative flex gap-4 pb-6 last:pb-0",
-      isNew && "rounded-lg ring-1 ring-sky-500/25 bg-sky-500/[0.04] animate-highlight-pulse"
+      isNew && "rounded-lg ring-1 ring-primary/25 bg-primary/[0.04] animate-highlight-pulse"
     )}>
       {/* Timeline line */}
       {!isLast && (
@@ -105,7 +105,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
       <div className="flex-1 min-w-0">
         <div
           className={cn(
-            "rounded-lg border border-border bg-card/80 transition-all duration-200",
+            "panel-surface transition-all duration-200",
             expanded && "border-border bg-card shadow-lg shadow-black/20"
           )}
         >
@@ -123,8 +123,8 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
                 {event.severity !== "info" && (
                   <span className={cn(
                     "text-[10px] uppercase font-bold px-1.5 py-0.5 rounded",
-                    event.severity === "warning" && "bg-amber-500/10 text-amber-400",
-                    event.severity === "error" && "bg-red-500/10 text-red-400",
+                    event.severity === "warning" && "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
+                    event.severity === "error" && "bg-[color:var(--status-failed-bg)] text-[color:var(--status-failed-fg)]",
                     event.severity === "critical" && "bg-red-500/20 text-red-300"
                   )}>
                     {event.severity}
@@ -213,7 +213,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
 export function AuditTimeline({ events, newEventIds }: AuditTimelineProps) {
   if (!events || events.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-xl bg-card/20">
+      <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-xl surface-muted">
         <div className="h-12 w-12 rounded-full bg-card flex items-center justify-center mb-4">
           <Clock className="h-6 w-6 text-muted-foreground" />
         </div>

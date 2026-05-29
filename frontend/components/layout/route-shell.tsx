@@ -28,9 +28,15 @@ export function RouteShell({ children }: RouteShellProps) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset className="flex h-svh max-h-svh min-h-0 flex-col overflow-hidden bg-background">
+      <SidebarInset className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden bg-background ambient-canvas">
+        <div
+          className="pointer-events-none fixed inset-0 z-[1] grain-overlay"
+          aria-hidden
+        />
         <Topbar onOpenCommandPalette={() => setCommandOpen(true)} />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+        <div className="relative z-[2] flex min-h-0 flex-1 flex-col overflow-hidden">
+          {children}
+        </div>
       </SidebarInset>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
     </SidebarProvider>

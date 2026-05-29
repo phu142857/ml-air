@@ -42,7 +42,7 @@ export function TrainingGateFields({
         <input
           value={requiredSize}
           onChange={(e) => onRequiredSizeChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 text-xs text-foreground"
+          className="mt-1 w-full inset-surface px-2 py-2 text-xs text-foreground"
         />
       </label>
     </div>

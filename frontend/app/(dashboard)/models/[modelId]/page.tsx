@@ -1,19 +1,22 @@
 "use client";
 
 import { Box, FolderUp, Play } from "lucide-react";
-import { ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
-
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
 import {
   DetailSection,
   DetailTabBar,
   FilterChips,
   MetadataGrid,
   MlopsEmptyState,
+  PageScrollBody,
+  ResourcePageHeader,
+  ScopePinnedInline,
+  SubpageBreadcrumb,
 } from "@/components/mlops/layout";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import type { ModelVersionItem } from "@/lib/api";
@@ -330,7 +333,7 @@ export default function ModelDetailPage() {
               <div className="flex flex-nowrap gap-1">
                 <button
                   type="button"
-                  className="rounded-md bg-sky-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-60"
+                  className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                   disabled={approvalMutation.isPending}
                   onClick={() => approvalMutation.mutate({ version: v.version, approval_status: "approved" })}
                 >
@@ -365,7 +368,7 @@ export default function ModelDetailPage() {
           v.run_id ? (
             <Link
               href={`/runs/${encodeURIComponent(v.run_id)}`}
-              className="inline-block max-w-full truncate font-mono text-xs text-sky-400 hover:text-sky-300"
+              className="inline-block max-w-full truncate font-mono text-xs text-primary hover:text-primary/80"
               onClick={(e) => e.stopPropagation()}
             >
               {v.run_id}
@@ -451,7 +454,7 @@ export default function ModelDetailPage() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
         segments={[
           { label: "Models", href: "/models" },
@@ -494,8 +497,9 @@ export default function ModelDetailPage() {
         }
       />
       <DetailTabBar accent="violet" tabs={[...MODEL_TABS]} value={tab} onValueChange={setTab} />
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODEL_DETAIL} /> : null}
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODEL_DETAIL} /> : null}
+      >
         {isTabLoading ? (
           <DetailTabSkeleton variant={MODEL_TAB_SKELETON[tab] ?? "grid"} />
         ) : (
@@ -577,7 +581,7 @@ export default function ModelDetailPage() {
               <input
                 value={debounceMinutes}
                 onChange={(e) => setDebounceMinutes(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 text-xs text-foreground"
+                className="mt-1 w-full inset-surface px-2 py-2 text-xs text-foreground"
               />
             </label>
             <label className="text-xs text-muted-foreground">
@@ -585,7 +589,7 @@ export default function ModelDetailPage() {
               <input
                 value={scheduleCron}
                 onChange={(e) => setScheduleCron(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-2 py-2 text-xs text-foreground"
+                className="mt-1 w-full inset-surface px-2 py-2 text-xs text-foreground"
               />
             </label>
           </div>
@@ -620,7 +624,7 @@ export default function ModelDetailPage() {
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
             {(recentRunsQuery.data || []).map((r) => (
               <li key={r.run_id} className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2.5">
-                <Link href={`/runs/${encodeURIComponent(r.run_id)}`} className="font-mono text-xs text-sky-400 hover:text-sky-300">
+                <Link href={`/runs/${encodeURIComponent(r.run_id)}`} className="font-mono text-xs text-primary hover:text-primary/80">
                   {r.run_id}
                 </Link>
                 <div className="flex items-center gap-2">
@@ -689,7 +693,7 @@ export default function ModelDetailPage() {
             <Button
               type="button"
               size="sm"
-              className="h-8 gap-1.5 bg-violet-600 text-white hover:bg-violet-500 hover:text-white disabled:text-white/90"
+              className="h-8 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-white disabled:text-white/90"
               disabled={!scopePinned}
               onClick={() => setImportVersionOpen(true)}
             >
@@ -762,7 +766,7 @@ export default function ModelDetailPage() {
         )}
         </>
         )}
-      </div>
+      </PageScrollBody>
       <ImportModelDialog
         open={importVersionOpen}
         onOpenChange={setImportVersionOpen}

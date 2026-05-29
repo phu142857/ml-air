@@ -229,7 +229,7 @@ export function ExecutionIntentPanel({
           className={cn(
             "h-8 gap-2",
             mode === "model_dataset"
-              ? "bg-violet-600 text-white hover:bg-violet-500"
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
               : "border-border bg-card text-foreground/90",
           )}
           onClick={() => setMode("model_dataset")}
@@ -244,7 +244,7 @@ export function ExecutionIntentPanel({
           className={cn(
             "h-8 gap-2",
             mode === "pipeline_compat"
-              ? "bg-sky-600 text-white hover:bg-sky-500"
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
               : "border-border bg-card text-foreground/90",
           )}
           onClick={() => setMode("pipeline_compat")}
@@ -275,7 +275,7 @@ export function ExecutionIntentPanel({
               onChange={setSelectedModelId}
               options={modelOptions}
               className="mt-1"
-              buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+              buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
               aria-label="Model to train"
             />
           </label>
@@ -287,7 +287,7 @@ export function ExecutionIntentPanel({
               onChange={setSelectedPipelineId}
               options={pipelineOptions}
               className="mt-1"
-              buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm"
+              buttonClassName="panel-surface bg-muted/20 px-3 py-2 font-mono text-sm"
               aria-label="Pipeline to run"
             />
           </label>
@@ -299,14 +299,14 @@ export function ExecutionIntentPanel({
             onChange={setSelectedVersionId}
             options={versionOptions}
             className="mt-1"
-            buttonClassName="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm"
+            buttonClassName="panel-surface bg-muted/20 px-3 py-2 font-mono text-sm"
             aria-label="Dataset version"
           />
         </label>
       </div>
 
       {mode === "model_dataset" ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <div className="panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           Resolved pipeline:{" "}
           <span className="font-mono text-foreground">{effectiveTrainPipeline || "—"}</span>
           {resolvedPipelineQuery.data?.source ? (
@@ -322,7 +322,7 @@ export function ExecutionIntentPanel({
           ) : null}
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <div className="panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           {runPipelineVersionsQuery.isLoading ? (
             <span className="inline-flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" /> Checking pipeline versions…
@@ -354,8 +354,8 @@ export function ExecutionIntentPanel({
         className={cn(
           "gap-2",
           mode === "model_dataset"
-            ? "bg-violet-600 hover:bg-violet-500"
-            : "bg-sky-600 hover:bg-sky-500",
+            ? "bg-primary hover:bg-primary/90"
+            : "bg-primary hover:bg-primary/90",
         )}
         disabled={mode === "model_dataset" ? !canTrain : !canRunPipeline}
         title={

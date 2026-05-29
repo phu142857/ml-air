@@ -80,11 +80,11 @@ export function PluginsSettingsTab() {
         header: "Compat",
         cell: (p) =>
           p.compatibility?.compatible === false ? (
-            <Badge variant="outline" className="border-red-500/40 text-red-400 text-[10px]">
+            <Badge variant="outline" className="border-red-500/40 text-[color:var(--status-failed-fg)] text-[10px]">
               blocked
             </Badge>
           ) : (
-            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-[10px]">
+            <Badge variant="outline" className="border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] text-[10px]">
               ok
             </Badge>
           ),
@@ -94,7 +94,7 @@ export function PluginsSettingsTab() {
         header: "Enabled",
         cell: (p) =>
           p.enabled ? (
-            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">
+            <Badge variant="outline" className="border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]">
               on
             </Badge>
           ) : (
@@ -155,15 +155,15 @@ export function PluginsSettingsTab() {
         ) : null}
 
         {pluginsQuery.isError ? (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          <p className="rounded-lg border border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] px-3 py-2 text-xs text-red-300">
             {(pluginsQuery.error as Error)?.message || "Failed to load plugins"}
           </p>
         ) : null}
 
         {loadErrors.length > 0 ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            <p className="mb-2 font-medium text-amber-100">Load-time errors</p>
-            <ul className="list-inside list-disc space-y-1 text-amber-200/90">
+          <div className="rounded-lg border border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)] p-3 text-xs text-[color:var(--status-pending-fg)]">
+            <p className="mb-2 font-medium text-[color:var(--status-pending-fg)]">Load-time errors</p>
+            <ul className="list-inside list-disc space-y-1 text-[color:var(--status-pending-fg)]/90">
               {loadErrors.map((e) => (
                 <li key={e.entry_point}>
                   <span className="font-mono">{e.entry_point}</span>: {e.error}
@@ -209,7 +209,7 @@ export function PluginsSettingsTab() {
                 aria-label="Plugin to validate"
               />
             ) : (
-              <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <p className="inset-surface px-3 py-2 text-xs text-muted-foreground">
                 No plugins loaded yet.
               </p>
             )}
@@ -228,7 +228,7 @@ export function PluginsSettingsTab() {
           <Button
             type="button"
             size="sm"
-            className="bg-sky-600 hover:bg-sky-500"
+            className="bg-primary hover:bg-primary/90"
             disabled={!pluginOptions.length || !selectedPlugin}
             onClick={async () => {
               setValidateResult("");
@@ -245,7 +245,7 @@ export function PluginsSettingsTab() {
           </Button>
         </div>
         {validateResult ? (
-          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-xs text-emerald-300 whitespace-pre-wrap">
+          <pre className="max-h-48 overflow-auto inset-surface p-3 font-mono text-xs text-[color:var(--status-success-fg)] whitespace-pre-wrap">
             {validateResult}
           </pre>
         ) : null}

@@ -140,18 +140,18 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!tenantIds.length || busy}
-            className="h-8 max-w-[200px] gap-2 text-foreground/90 hover:text-foreground hover:bg-muted/80"
+            className="h-9 max-w-[200px] gap-2 rounded-xl text-foreground/90 transition-premium hover:bg-muted/80 hover:text-foreground"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
             <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium font-mono">{tenantId || "—"}</span>
             {aggregateActive ? (
-              <Globe className="h-3 w-3 shrink-0 text-amber-400" aria-hidden />
+              <Globe className="h-3 w-3 shrink-0 text-[color:var(--status-pending-fg)]" aria-hidden />
             ) : null}
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56 bg-card border-border">
+        <DropdownMenuContent align="start" className="w-56 rounded-xl border-border/60 bg-card shadow-diffused">
           <DropdownMenuLabel className="text-xs text-muted-foreground">Tenant</DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-muted" />
           {!isBootstrapped && !tenantIds.length ? (
@@ -163,7 +163,7 @@ export function ScopeSwitcher() {
               onClick={onPickAggregate}
               className={aggregateActive ? "bg-muted/80 text-foreground" : "text-foreground/90"}
             >
-              <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-[color:var(--status-pending-fg)]" />
               <span className="font-mono text-xs">all (aggregate)</span>
             </DropdownMenuItem>
           ) : null}
@@ -191,18 +191,18 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!projectsForTenant.length || busy}
-            className="h-8 max-w-[220px] gap-2 text-foreground/90 hover:text-foreground hover:bg-muted/80"
+            className="h-9 max-w-[220px] gap-2 rounded-xl text-foreground/90 transition-premium hover:bg-muted/80 hover:text-foreground"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
             <FolderKanban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium font-mono">{projectId || "—"}</span>
             {tenantId !== "all" && projectId === "all" ? (
-              <Globe className="h-3 w-3 shrink-0 text-amber-400" aria-hidden />
+              <Globe className="h-3 w-3 shrink-0 text-[color:var(--status-pending-fg)]" aria-hidden />
             ) : null}
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64 bg-card border-border">
+        <DropdownMenuContent align="start" className="w-64 rounded-xl border-border/60 bg-card shadow-diffused">
           <DropdownMenuLabel className="text-xs text-muted-foreground">Project</DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-muted" />
           {projectsForTenant.map((pid) => (
@@ -213,7 +213,7 @@ export function ScopeSwitcher() {
               className={pid === projectId ? "bg-muted/80 text-foreground" : "text-foreground/90"}
             >
               {pid === "all" ? (
-                <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-[color:var(--status-pending-fg)]" />
               ) : (
                 <FolderKanban className="mr-2 h-3.5 w-3.5 shrink-0" />
               )}

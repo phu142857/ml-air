@@ -39,19 +39,19 @@ const stageTypeIcons = {
 }
 
 const stageTypeColors = {
-  ingest: "from-sky-500 to-sky-600",
-  transform: "from-violet-500 to-violet-600",
-  train: "from-amber-500 to-amber-600",
-  validate: "from-emerald-500 to-emerald-600",
-  deploy: "from-pink-500 to-pink-600",
+  ingest: "bg-primary/15 text-primary",
+  transform: "bg-muted text-foreground",
+  train: "bg-primary/15 text-primary",
+  validate: "bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]",
+  deploy: "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
 }
 
 const statusColors = {
-  idle: "border-border bg-card",
-  running: "border-sky-500/50 bg-sky-500/10",
-  success: "border-emerald-500/50 bg-emerald-500/10",
-  failed: "border-red-500/50 bg-red-500/10",
-  pending: "border-amber-500/50 bg-amber-500/10",
+  idle: "border-border/60 bg-card",
+  running: "border-primary/40 bg-primary/10",
+  success: "border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)]",
+  failed: "border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)]",
+  pending: "border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)]",
 }
 
 interface StageNodeData {
@@ -87,8 +87,8 @@ function StageNode({ data }: NodeProps<Node<StageNodeData>>) {
         )}
       >
         <div className="mb-2 flex items-center gap-2">
-          <div className={cn("shrink-0 rounded-md bg-gradient-to-br p-1.5", gradient)}>
-            <Icon className="h-3.5 w-3.5 text-white" />
+          <div className={cn("shrink-0 rounded-lg p-1.5", gradient)}>
+            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
           </div>
           {showTooltip ? (
             <Tooltip>
@@ -103,23 +103,23 @@ function StageNode({ data }: NodeProps<Node<StageNodeData>>) {
         </div>
         <div className="flex items-center gap-1.5">
           {stage.status === "running" ? (
-            <Loader2 className="h-3 w-3 shrink-0 text-sky-400 animate-spin" />
+            <Loader2 className="h-3 w-3 shrink-0 text-primary animate-spin" />
           ) : stage.status === "success" ? (
-            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-400" />
+            <CheckCircle2 className="h-3 w-3 shrink-0 text-[color:var(--status-success-fg)]" />
           ) : stage.status === "failed" ? (
-            <div className="h-3 w-3 shrink-0 rounded-full bg-red-500" />
+            <div className="h-3 w-3 shrink-0 rounded-full bg-[color:var(--status-failed-fg)]" />
           ) : stage.status === "pending" ? (
-            <div className="h-3 w-3 shrink-0 rounded-full bg-amber-500/50 animate-pulse" />
+            <div className="h-3 w-3 shrink-0 rounded-full bg-primary/50 animate-pulse" />
           ) : (
             <div className="h-3 w-3 shrink-0 rounded-full bg-muted-foreground/60" />
           )}
           <span
             className={cn(
               "text-xs capitalize",
-              stage.status === "success" && "text-emerald-400",
-              stage.status === "running" && "text-sky-400",
-              stage.status === "failed" && "text-red-400",
-              stage.status === "pending" && "text-amber-400",
+              stage.status === "success" && "text-[color:var(--status-success-fg)]",
+              stage.status === "running" && "text-primary",
+              stage.status === "failed" && "text-[color:var(--status-failed-fg)]",
+              stage.status === "pending" && "text-[color:var(--status-pending-fg)]",
               stage.status === "idle" && "text-muted-foreground"
             )}
           >
@@ -201,7 +201,7 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
   return (
     <TooltipProvider delayDuration={200}>
       <div
-        className="w-full overflow-hidden rounded-lg border border-border bg-muted/30"
+        className="w-full overflow-hidden inset-surface"
         style={{ height: canvasHeight }}
       >
         <ReactFlow

@@ -21,7 +21,7 @@ function TimelineItemSkeleton({ isLast }: { isLast: boolean }) {
       
       {/* Event content skeleton */}
       <div className="flex-1 min-w-0">
-        <div className="rounded-lg border border-border bg-card/80 p-3">
+        <div className="panel-surface p-3">
           {/* Header */}
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0 space-y-2">
@@ -64,7 +64,7 @@ export function StatsCardsSkeleton() {
   return (
     <div className="grid grid-cols-5 gap-4">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="bg-card/80 border border-border rounded-lg p-4">
+        <div key={index} className="bezel-shell rounded-xl border-border/60 p-4">
           <div className="flex items-center justify-between">
             <div className="space-y-2">
               <Skeleton className="h-2.5 w-20 bg-muted" />
@@ -83,7 +83,7 @@ export function JaegerSidebarSkeleton() {
   return (
     <div className="space-y-4">
       {/* Jaeger status card skeleton */}
-      <div className="bg-card/80 border border-border rounded-lg">
+      <div className="bezel-shell rounded-xl border-border/60">
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -94,12 +94,12 @@ export function JaegerSidebarSkeleton() {
           </div>
           <Skeleton className="h-3 w-40 bg-muted/70" />
           <Skeleton className="h-8 w-full rounded-md bg-muted" />
-          <Skeleton className="h-8 w-full rounded-md bg-sky-500/10" />
+          <Skeleton className="h-8 w-full rounded-md bg-primary/10" />
         </div>
       </div>
       
       {/* Recent traces skeleton */}
-      <div className="bg-card/80 border border-border rounded-lg">
+      <div className="bezel-shell rounded-xl border-border/60">
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-4 w-4 bg-muted" />
@@ -116,7 +116,7 @@ export function JaegerSidebarSkeleton() {
                 </div>
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-2.5 w-24 bg-muted/80" />
-                  <Skeleton className="h-5 w-14 rounded bg-sky-500/10" />
+                  <Skeleton className="h-5 w-14 rounded bg-primary/10" />
                 </div>
               </div>
             ))}
@@ -125,7 +125,7 @@ export function JaegerSidebarSkeleton() {
       </div>
       
       {/* Trace analytics skeleton */}
-      <div className="bg-card/80 border border-border rounded-lg">
+      <div className="bezel-shell rounded-xl border-border/60">
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-4 w-4 bg-muted" />
@@ -151,7 +151,7 @@ export function LifecyclePageSkeleton() {
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
       {/* Page header skeleton */}
-      <div className="border-b border-border bg-background/50 px-6 py-4">
+      <div className="border-b border-border/70 bg-background/60 px-4 py-4 backdrop-blur-sm sm:px-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10 rounded-lg bg-muted" />
@@ -161,7 +161,7 @@ export function LifecyclePageSkeleton() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-32 rounded-md bg-sky-500/10" />
+            <Skeleton className="h-8 w-32 rounded-md bg-primary/10" />
             <Skeleton className="h-8 w-20 rounded-md bg-muted" />
             <Skeleton className="h-8 w-20 rounded-md bg-muted" />
           </div>
@@ -169,12 +169,12 @@ export function LifecyclePageSkeleton() {
       </div>
       
       {/* Stats skeleton */}
-      <div className="border-b border-border bg-card/20 px-6 py-4">
+      <div className="page-toolbar">
         <StatsCardsSkeleton />
       </div>
       
       {/* Filters toolbar skeleton */}
-      <div className="border-b border-border bg-muted/50 px-6 py-3">
+      <div className="page-toolbar">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-8 w-64 rounded-md bg-muted" />
@@ -192,7 +192,7 @@ export function LifecyclePageSkeleton() {
           <div className="flex-1 p-6 overflow-auto">
             <AuditTimelineSkeleton count={6} />
           </div>
-          <div className="w-80 border-l border-border bg-card/20 p-4 overflow-auto">
+          <div className="w-80 border-l border-border surface-muted p-4 overflow-auto">
             <JaegerSidebarSkeleton />
           </div>
         </div>

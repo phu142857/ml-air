@@ -14,21 +14,27 @@ export function JsonPayloadPanel({ title = "Raw payload", data, className }: Jso
   const [open, setOpen] = useState(false)
 
   return (
-    <div className={cn("rounded-lg border border-border bg-background/60 overflow-hidden", className)}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-foreground/90 hover:bg-card/80"
-        aria-expanded={open}
-      >
-        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        {title}
-      </button>
-      {open && (
-        <pre className="border-t border-border p-4 text-xs font-mono text-muted-foreground overflow-auto max-h-64">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      )}
+    <div className={cn("bezel-shell overflow-hidden", className)}>
+      <div className="bezel-inner overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold tracking-tight text-foreground transition-premium hover:bg-muted/30"
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+          ) : (
+            <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+          )}
+          {title}
+        </button>
+        {open && (
+          <pre className="max-h-64 overflow-auto border-t border-border/60 p-4 font-mono text-xs leading-relaxed text-muted-foreground">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
+      </div>
     </div>
   )
 }

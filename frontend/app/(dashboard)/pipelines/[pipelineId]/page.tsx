@@ -1,7 +1,13 @@
 "use client";
 
 import { Database, GitBranch, GitCompare, History } from "lucide-react";
-import { ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
+import {
+  DetailSection,
+  PageScrollBody,
+  ResourcePageHeader,
+  ScopePinnedInline,
+  SubpageBreadcrumb,
+} from "@/components/mlops/layout";
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -11,7 +17,6 @@ import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { PipelineDAG } from "@/components/mlops/pipeline-dag";
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag";
-import { DetailSection } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { fetchPipelineVersions, fetchPipelines } from "@/lib/api";
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology";
@@ -63,7 +68,7 @@ export default function PipelineDetailPage() {
     : "Orchestration and observability — run and train from Dataset Hub";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
         segments={[
           { label: "Pipelines", href: "/pipelines" },
@@ -87,7 +92,7 @@ export default function PipelineDetailPage() {
             </Button>
             <Button
               size="sm"
-              className="h-8 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+              className="h-8 gap-2"
               disabled={!scopePinned}
               title={!scopePinned ? "Pin tenant and project to open Dataset Hub." : undefined}
               asChild={scopePinned}
@@ -107,8 +112,9 @@ export default function PipelineDetailPage() {
           </div>
         }
       />
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+      >
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -118,7 +124,7 @@ export default function PipelineDetailPage() {
             className="h-8 gap-1.5 border-border bg-background/50 text-foreground hover:bg-card"
           >
             <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>
-              <History className="h-3.5 w-3.5 text-amber-400" />
+              <History className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />
               Versions
             </Link>
           </Button>
@@ -129,21 +135,21 @@ export default function PipelineDetailPage() {
             className="h-8 gap-1.5 border-border bg-background/50 text-foreground hover:bg-card"
           >
             <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/diff`}>
-              <GitCompare className="h-3.5 w-3.5 text-amber-400" />
+              <GitCompare className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />
               Config diff
             </Link>
           </Button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-lg border border-border bg-card/40 px-4 py-3">
+          <div className="panel-surface px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest config</p>
             <p className="mt-1 text-sm font-medium text-foreground">
               {latestConfigVersion != null ? (
                 <>
                   v{latestConfigVersion.version}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-sky-400 hover:underline">
+                    <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-primary hover:underline">
                       View versions
                     </Link>
                   </span>
@@ -153,16 +159,16 @@ export default function PipelineDetailPage() {
               )}
             </p>
           </div>
-          <div className="rounded-lg border border-border bg-card/40 px-4 py-3">
+          <div className="panel-surface px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline id</p>
             <p className="mt-1 truncate font-mono text-sm text-foreground/90">{resolvedPipelineId}</p>
           </div>
-          <div className="rounded-lg border border-border bg-card/40 px-4 py-3">
+          <div className="panel-surface px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest run</p>
             <p className="mt-1 text-sm text-foreground/90">
               {latestRunId ? (
                 <Link
-                  className="font-mono text-sky-400 hover:underline"
+                  className="font-mono text-primary hover:underline"
                   href={`/runs/${encodeURIComponent(latestRunId)}`}
                 >
                   {latestRunId}
@@ -184,7 +190,7 @@ export default function PipelineDetailPage() {
               Pin a tenant and project in the header to load pipeline topology.
             </div>
           ) : topologyLoading ? (
-            <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-border bg-muted/30 text-sm text-muted-foreground">
+            <div className="flex min-h-[260px] items-center justify-center inset-surface text-sm text-muted-foreground">
               Loading topology…
             </div>
           ) : topologyQuery.isError ? (
@@ -200,15 +206,15 @@ export default function PipelineDetailPage() {
           )}
         </DetailSection>
 
-        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        <div className="inset-surface px-4 py-3 text-sm text-muted-foreground">
           Production runs start from{" "}
-          <Link href="/datasets" className="font-medium text-emerald-400 hover:underline">
+          <Link href="/datasets" className="font-medium text-[color:var(--status-success-fg)] hover:underline">
             Dataset Hub
           </Link>
           : train with a model (mapped pipeline) or run a pipeline explicitly. This page shows topology and versions;
           open a run for live execution status.
         </div>
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

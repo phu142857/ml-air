@@ -24,16 +24,19 @@ export function FilterChips({
 }: FilterChipsProps) {
   const active =
     variant === "emerald"
-      ? "bg-emerald-600/20 text-emerald-400 border-emerald-500/40"
+      ? "bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)] border-[color:var(--status-success-border)]"
       : variant === "sky"
-        ? "bg-sky-600/20 text-sky-400 border-sky-500/40"
-        : "bg-violet-600/20 text-violet-400 border-violet-500/40"
+        ? "bg-primary/10 text-primary border-primary/30"
+        : "bg-primary/10 text-primary border-primary/30"
 
   return (
     <div
       role="group"
       aria-label="Filter"
-      className={cn("inline-flex flex-wrap gap-1 rounded-md border border-border p-0.5 bg-background/60", className)}
+      className={cn(
+        "inline-flex flex-wrap gap-1 rounded-xl border border-border/60 bg-background/60 p-1 shadow-whisper",
+        className,
+      )}
     >
       {options.map((opt) => (
         <button
@@ -41,8 +44,10 @@ export function FilterChips({
           type="button"
           onClick={() => onChange(opt.id)}
           className={cn(
-            "px-3 py-1 rounded text-xs font-medium transition-colors border border-transparent",
-            value === opt.id ? active : "text-muted-foreground hover:text-foreground"
+            "rounded-lg border border-transparent px-3 py-1 text-xs font-medium transition-premium",
+            value === opt.id
+              ? active
+              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
           )}
         >
           {opt.label}

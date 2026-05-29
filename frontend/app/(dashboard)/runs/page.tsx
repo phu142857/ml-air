@@ -7,7 +7,7 @@ import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigge
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { JaegerLink } from "@/components/mlops/jaeger-link"
-import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
@@ -15,25 +15,18 @@ import type { RunItem } from "@/lib/api"
 import { useRunsListLive } from "@/hooks/use-runs-list-live"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { normalizeStatus } from "@/lib/status-style"
+import { statusChipKey, STATUS_CHIP_CLASS, type StatusChipKey } from "@/lib/status-style"
 
-const statusConfig = {
-  queued: { icon: Clock, label: "Queued", color: "text-muted-foreground", bg: "bg-muted", animate: false },
-  pending: { icon: Clock, label: "Pending", color: "text-amber-400", bg: "bg-amber-500/10", animate: false },
-  running: { icon: Loader2, label: "Running", color: "text-sky-400", bg: "bg-sky-500/10", animate: true },
-  success: { icon: CheckCircle2, label: "Success", color: "text-emerald-400", bg: "bg-emerald-500/10", animate: false },
-  failed: { icon: XCircle, label: "Failed", color: "text-red-400", bg: "bg-red-500/10", animate: false },
-  cancelled: { icon: Ban, label: "Cancelled", color: "text-muted-foreground", bg: "bg-muted", animate: false },
-}
-
-function runStatusRowKey(status: string): keyof typeof statusConfig {
-  const t = normalizeStatus(status)
-  if (t === "SUCCESS") return "success"
-  if (t === "FAILED") return "failed"
-  if (t === "RUNNING") return "running"
-  if (t === "PENDING") return "pending"
-  if (t === "QUEUED") return "queued"
-  return "cancelled"
+const statusMeta: Record<
+  StatusChipKey,
+  { icon: typeof Clock; label: string; animate: boolean }
+> = {
+  queued: { icon: Clock, label: "Queued", animate: false },
+  pending: { icon: Clock, label: "Pending", animate: false },
+  running: { icon: Loader2, label: "Running", animate: true },
+  success: { icon: CheckCircle2, label: "Success", animate: false },
+  failed: { icon: XCircle, label: "Failed", animate: false },
+  cancelled: { icon: Ban, label: "Cancelled", animate: false },
 }
 
 function runDuration(r: RunItem): string {
@@ -58,7 +51,7 @@ const runListColumns: DataTableColumn<RunItem>[] = [
   {
     id: "run_id",
     header: "Run ID",
-    cell: (run) => <span className="font-mono text-sm text-sky-400">{run.run_id}</span>,
+    cell: (run) => <span className="font-mono text-sm text-primary">{run.run_id}</span>,
   },
   {
     id: "pipeline",
@@ -69,19 +62,18 @@ const runListColumns: DataTableColumn<RunItem>[] = [
     id: "status",
     header: "Status",
     cell: (run) => {
-      const sk = runStatusRowKey(run.status)
-      const status = statusConfig[sk]
-      const StatusIcon = status.icon
+      const sk = statusChipKey(run.status)
+      const meta = statusMeta[sk]
+      const StatusIcon = meta.icon
       return (
         <div
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
-            status.bg,
-            status.color,
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+            STATUS_CHIP_CLASS[sk],
           )}
         >
-          <StatusIcon className={cn("h-3 w-3", status.animate && "animate-spin")} />
-          {status.label}
+          <StatusIcon className={cn("h-3 w-3", meta.animate && "animate-spin")} />
+          {meta.label}
         </div>
       )
     },
@@ -153,13 +145,14 @@ export default function RunsPage() {
   const rows = runsQuery.items
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <TriggerRunUrlSync
         enabled={scopePinned}
         onOpen={({ pipelineId, mode }) => openTrigger(pipelineId, mode)}
       />
 
       <ResourcePageHeader
+        className="shrink-0"
         icon={Play}
         accent="sky"
         title="Runs"
@@ -174,8 +167,9 @@ export default function RunsPage() {
         onSuccess={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
       />
 
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} /> : null}
+      <PageScrollBody
+        header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} /> : null}
+      >
         <ScopedListContent
           isLoading={runsQuery.isLoading}
           isError={runsQuery.isError}
@@ -193,7 +187,7 @@ export default function RunsPage() {
             emptyMessage="No runs."
           />
         </ScopedListContent>
-      </div>
+      </PageScrollBody>
     </div>
   )
 }

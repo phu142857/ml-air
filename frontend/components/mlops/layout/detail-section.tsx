@@ -10,6 +10,17 @@ interface DetailSectionProps {
   accentBorder?: "amber" | "emerald" | "sky" | "violet" | "none"
 }
 
+const accentBorderClass: Record<
+  NonNullable<DetailSectionProps["accentBorder"]>,
+  string
+> = {
+  none: "",
+  amber: "border-l-[3px] border-l-primary/45",
+  emerald: "border-l-[3px] border-l-primary/45",
+  sky: "border-l-[3px] border-l-primary/50",
+  violet: "border-l-[3px] border-l-primary/45",
+}
+
 export function DetailSection({
   title,
   description,
@@ -20,24 +31,32 @@ export function DetailSection({
   accentBorder = "none",
 }: DetailSectionProps) {
   return (
-    <section
-      className={cn(
-        "rounded-lg border border-border bg-card/80 overflow-hidden",
-        accentBorder === "amber" && "border-l-2 border-l-amber-500/60",
-        accentBorder === "emerald" && "border-l-2 border-l-emerald-500/60",
-        accentBorder === "sky" && "border-l-2 border-l-sky-500/60",
-        accentBorder === "violet" && "border-l-2 border-l-violet-500/60",
-        className
-      )}
-    >
-      <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-border/80">
-        <div>
-          <h2 className="text-sm font-medium text-foreground">{title}</h2>
-          {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+    <section className={cn("bezel-shell overflow-hidden", className)}>
+      <div
+        className={cn(
+          "bezel-inner overflow-hidden",
+          accentBorderClass[accentBorder],
+        )}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight text-foreground">
+              {title}
+            </h2>
+            {description ? (
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {headerActions ? (
+            <div className="flex shrink-0 items-center gap-2">
+              {headerActions}
+            </div>
+          ) : null}
         </div>
-        {headerActions && <div className="flex items-center gap-2 shrink-0">{headerActions}</div>}
+        <div className={cn("p-5", bodyClassName)}>{children}</div>
       </div>
-      <div className={cn("p-4", bodyClassName)}>{children}</div>
     </section>
   )
 }

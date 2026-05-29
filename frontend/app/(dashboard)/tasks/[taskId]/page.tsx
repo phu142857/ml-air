@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import {
   MetadataGrid,
   MlopsEmptyState,
+  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
@@ -61,7 +62,7 @@ function TaskDetailContent() {
 
   if (!isLoading && !isError && !data) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SubpageBreadcrumb
           segments={[
             { label: "Tasks", href: "/tasks" },
@@ -86,7 +87,7 @@ function TaskDetailContent() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
         segments={[
           { label: "Tasks", href: "/tasks" },
@@ -135,37 +136,41 @@ function TaskDetailContent() {
           </div>
         }
       />
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {!scopePinned ? (
-          <ScopePinnedInline message="Task resolution may span multiple workspaces." />
-        ) : null}
-        {!scopePinned && resolved?.method === "fan-out" ? (
-          <p className="text-sm text-amber-400/90">
-            Scope was resolved automatically across projects. For faster loads next time, pin{" "}
-            <span className="font-mono text-amber-200">
-              {resolved.tenant_id} / {resolved.project_id}
-            </span>{" "}
-            in the header or use a link with{" "}
-            <span className="font-mono text-amber-200/80">?tenant=&amp;project=</span>.
-          </p>
-        ) : null}
-
+      <PageScrollBody
+        header={
+          <>
+            {!scopePinned ? (
+              <ScopePinnedInline message="Task resolution may span multiple workspaces." />
+            ) : null}
+            {!scopePinned && resolved?.method === "fan-out" ? (
+              <p className="text-sm text-[color:var(--status-pending-fg)]/90">
+                Scope was resolved automatically across projects. For faster loads next time, pin{" "}
+                <span className="font-mono text-[color:var(--status-pending-fg)]">
+                  {resolved.tenant_id} / {resolved.project_id}
+                </span>{" "}
+                in the header or use a link with{" "}
+                <span className="font-mono text-[color:var(--status-pending-fg)]/80">?tenant=&amp;project=</span>.
+              </p>
+            ) : null}
+          </>
+        }
+      >
         {isLoading ? (
-          <div className="rounded-lg border border-border bg-card/80 p-4">
+          <div className="panel-surface p-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Resolving task scope…
             </div>
           </div>
         ) : isError ? (
-          <div className="rounded-lg border border-border bg-card/80 p-4">
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <div className="panel-surface p-4">
+            <div className="rounded-md border border-red-500/40 bg-[color:var(--status-failed-bg)] px-3 py-2 text-sm text-red-300">
               {formatApiClientError(error)}
             </div>
           </div>
         ) : data ? (
           <>
-            <div className="rounded-lg border border-border bg-card/80 p-4">
+            <div className="panel-surface p-4">
               <h2 className="mb-4 text-sm font-medium text-foreground/90">Summary</h2>
               <MetadataGrid
                 columns={2}
@@ -179,7 +184,7 @@ function TaskDetailContent() {
                   {
                     label: "Run",
                     value: runId ? (
-                      <Link href={`/runs/${encodeURIComponent(runId)}`} className="font-mono text-xs text-sky-400 hover:text-sky-300">
+                      <Link href={`/runs/${encodeURIComponent(runId)}`} className="font-mono text-xs text-primary hover:text-primary/80">
                         {runId}
                       </Link>
                     ) : (
@@ -212,10 +217,10 @@ function TaskDetailContent() {
                 ]}
               />
             </div>
-            <JsonPayloadPanel title="Task payload" data={payload} className="border-border bg-card/80" />
+            <JsonPayloadPanel title="Task payload" data={payload} className="border-border/60 bg-card" />
           </>
         ) : null}
-      </div>
+      </PageScrollBody>
     </div>
   )
 }

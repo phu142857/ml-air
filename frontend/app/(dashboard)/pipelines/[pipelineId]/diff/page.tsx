@@ -11,6 +11,7 @@ import { useAppContext } from "@/lib/app-context";
 import {
   DetailSection,
   MlopsEmptyState,
+  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
@@ -25,7 +26,7 @@ const sectionClass = "max-w-[1400px]";
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs text-foreground/90">
+    <pre className="max-h-64 overflow-auto inset-surface p-2 font-mono text-xs text-foreground/90">
       {value === undefined || value === null ? "—" : JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -88,7 +89,7 @@ function DiffPageInner() {
         id: "key",
         header: "Key",
         className: "w-[28%]",
-        cell: (row) => <span className="font-mono text-xs text-amber-400/90">{row.key}</span>,
+        cell: (row) => <span className="font-mono text-xs text-[color:var(--status-pending-fg)]/90">{row.key}</span>,
       },
       {
         id: "left",
@@ -105,7 +106,7 @@ function DiffPageInner() {
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
         segments={[
           { label: "Pipelines", href: "/pipelines" },
@@ -123,7 +124,7 @@ function DiffPageInner() {
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Link
               href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}
-              className="text-sky-400 hover:text-sky-300 hover:underline"
+              className="text-primary hover:text-primary/80 hover:underline"
             >
               ← Versions
             </Link>
@@ -137,8 +138,9 @@ function DiffPageInner() {
           </div>
         }
       />
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
+      >
         <DetailSection
           title="Version selector"
           accentBorder="amber"
@@ -155,7 +157,7 @@ function DiffPageInner() {
                 className="mt-1"
                 disabled={!versionPickOptions.length}
                 placeholder={listQuery.isLoading ? "Loading…" : "No versions"}
-                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1.5 text-sm text-foreground"
+                buttonClassName="inset-surface px-2 py-1.5 text-sm text-foreground"
                 aria-label="Left version for diff"
               />
             </label>
@@ -168,14 +170,14 @@ function DiffPageInner() {
                 className="mt-1"
                 disabled={!versionPickOptions.length}
                 placeholder={listQuery.isLoading ? "Loading…" : "No versions"}
-                buttonClassName="rounded-lg border border-border bg-muted/30 px-2 py-1.5 text-sm text-foreground"
+                buttonClassName="inset-surface px-2 py-1.5 text-sm text-foreground"
                 aria-label="Right version for diff"
               />
             </label>
           </div>
         </DetailSection>
         {canDiff ? (
-          <p className="text-sm text-amber-600 dark:text-amber-400/90">
+          <p className="text-sm text-[color:var(--status-pending-fg)] dark:text-[color:var(--status-pending-fg)]/90">
             {diffQuery.isLoading ? "Loading diff…" : diffQuery.isError ? "Failed to load diff" : summary}
           </p>
         ) : null}
@@ -202,7 +204,7 @@ function DiffPageInner() {
             />
           </DetailSection>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   );
 }
@@ -211,8 +213,10 @@ export default function PipelineDiffPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-0 flex-1 flex-col p-6">
-          <p className="text-sm text-muted-foreground">Loading…</p>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="scroll-region p-6">
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          </div>
         </div>
       }
     >

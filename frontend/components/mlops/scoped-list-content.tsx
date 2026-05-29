@@ -36,13 +36,17 @@ export function ScopedListContent({
       {isError && (
         <div
           role="alert"
-          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive"
+          className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
           {errorMessage}
         </div>
       )}
       {isEmpty ? (
-        <MlopsEmptyState icon={EmptyIcon} title={emptyTitle} description={emptyDescription} />
+        <MlopsEmptyState
+          icon={EmptyIcon}
+          title={emptyTitle}
+          description={emptyDescription}
+        />
       ) : (
         children
       )}

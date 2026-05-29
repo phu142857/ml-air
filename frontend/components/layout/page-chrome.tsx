@@ -1,9 +1,21 @@
 /** Simple title strip (legacy / parity with ML-Air frontend). */
-export function PageChrome({ title, subtitle }: { title: string; subtitle?: string }) {
+export function PageChrome({
+  title,
+  subtitle,
+}: {
+  title: string
+  subtitle?: string
+}) {
   return (
-    <div className="border-b border-border bg-background/50 px-6 py-4">
-      <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-      {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
+    <div className="border-b border-border/70 bg-background/60 px-4 py-5 backdrop-blur-sm sm:px-6">
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        {title}
+      </h1>
+      {subtitle ? (
+        <p className="mt-1 max-w-[65ch] text-sm leading-relaxed text-muted-foreground">
+          {subtitle}
+        </p>
+      ) : null}
     </div>
   )
 }

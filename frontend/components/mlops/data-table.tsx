@@ -36,42 +36,52 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground text-center py-8">{emptyMessage}</p>
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        {emptyMessage}
+      </p>
     )
   }
 
   return (
-    <div className={cn("rounded-lg border border-border overflow-hidden", className)}>
-      <Table>
-        <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
-          <TableRow className="border-border hover:bg-transparent">
-            {columns.map((col) => (
-              <TableHead key={col.id} className={cn("text-muted-foreground font-medium text-xs", col.className)}>
-                {col.header}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((row) => (
-            <TableRow
-              key={keyExtractor(row)}
-              className={cn(
-                "border-border hover:bg-card/80",
-                onRowClick && "cursor-pointer",
-                rowClassName?.(row),
-              )}
-              onClick={() => onRowClick?.(row)}
-            >
+    <div className={cn("bezel-shell overflow-hidden", className)}>
+      <div className="bezel-inner overflow-hidden">
+        <Table>
+          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
+            <TableRow className="border-border/60 hover:bg-transparent">
               {columns.map((col) => (
-                <TableCell key={col.id} className={col.className}>
-                  {col.cell(row)}
-                </TableCell>
+                <TableHead
+                  key={col.id}
+                  className={cn(
+                    "text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+                    col.className,
+                  )}
+                >
+                  {col.header}
+                </TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {data.map((row) => (
+              <TableRow
+                key={keyExtractor(row)}
+                className={cn(
+                  "border-border/50 transition-premium hover:bg-muted/30",
+                  onRowClick && "cursor-pointer",
+                  rowClassName?.(row),
+                )}
+                onClick={() => onRowClick?.(row)}
+              >
+                {columns.map((col) => (
+                  <TableCell key={col.id} className={col.className}>
+                    {col.cell(row)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import {
   AlertCircle,
-  ArrowRight,
+  ArrowUpRight,
   Box,
   CheckCircle2,
   Clock,
@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button"
 import {
   MlopsEmptyState,
+  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
 } from "@/components/mlops/layout"
@@ -36,6 +37,27 @@ import { normalizeStatus, statusBadgeClass } from "@/lib/status-style"
 import { cn, formatApiClientError, formatRelativeTime } from "@/lib/utils"
 
 const statIcons = [Database, GitBranch, Play, Box]
+
+const statSpans = [
+  "md:col-span-7",
+  "md:col-span-5",
+  "md:col-span-4",
+  "md:col-span-8",
+]
+
+function PanelShell({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("bezel-shell h-full", className)}>
+      <div className="bezel-inner h-full p-5 sm:p-6">{children}</div>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const { tenantId, projectId, token } = useAppContext()
@@ -78,127 +100,122 @@ export default function DashboardPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={Network}
-        accent="zinc"
+        accent="sky"
         title="Dashboard"
         subtitle={scopeSubtitle}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {isAggregate ? (
-          <ScopePinnedInline message={SCOPE_AGGREGATE_DASHBOARD} />
-        ) : null}
-
+      <PageScrollBody
+        header={
+          isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DASHBOARD} /> : null
+        }
+      >
         {isLoading ? (
           <ListTableSkeleton rows={4} />
         ) : (
-          <div className="space-y-6">
-            {/* Stats */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mx-auto flex max-w-7xl flex-col gap-8">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
               {stats.map((stat, i) => {
                 const Icon = statIcons[i] ?? Database
+                const isFeatured = i === 0
 
                 return (
                   <Link
                     key={stat.label}
                     href={stat.href}
-                    className="
-                      group
-                      rounded-2xl
-                      border
-                      border-border/80
-                      bg-card
-                      p-4
-                      shadow-sm
-                      transition-all
-                      duration-200
-                      hover:-translate-y-0.5
-                      hover:border-border
-                      hover:shadow-md
-                    "
+                    className={cn(
+                      "group transition-premium hover:-translate-y-0.5",
+                      statSpans[i] ?? "md:col-span-6",
+                    )}
                   >
-                    <div className="mb-3 flex items-center justify-between">
+                    <div className="bezel-shell h-full">
                       <div
                         className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br shadow-sm",
-                          stat.color,
+                          "bezel-inner flex h-full flex-col justify-between p-5 shadow-diffused transition-premium group-hover:shadow-diffused sm:p-6",
+                          isFeatured && "min-h-[148px]",
                         )}
                       >
-                        <Icon className="h-4 w-4 text-white" />
-                      </div>
-
-                      <ArrowRight
-                        className="
-                          h-4
-                          w-4
-                          text-muted-foreground
-                          transition-colors
-                          group-hover:text-foreground
-                        "
-                      />
-                    </div>
-
-                    <div className="mb-1 text-2xl font-semibold tracking-tight text-foreground">
-                      {stat.value}
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {stat.label}
-                    </div>
-
-                    {"ready" in stat && (
-                      <div className="mt-2 text-[10px] text-emerald-400">
-                        {stat.ready} with rows
-                      </div>
-                    )}
-
-                    {"blocked" in stat &&
-                      typeof stat.blocked === "number" &&
-                      stat.blocked > 0 && (
-                        <div className="mt-2 text-[10px] text-amber-400">
-                          {stat.blocked} blocked readiness
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+                              <Icon
+                                strokeWidth={1.75}
+                                className="h-4 w-4 text-primary"
+                              />
+                            </span>
+                            <div>
+                              <div className="text-sm font-medium text-muted-foreground">
+                                {stat.label}
+                              </div>
+                              <div
+                                className={cn(
+                                  "font-semibold tabular-nums tracking-tight text-foreground",
+                                  isFeatured
+                                    ? "text-4xl leading-none"
+                                    : "text-3xl leading-none",
+                                )}
+                              >
+                                {stat.value}
+                              </div>
+                            </div>
+                          </div>
+                          <ArrowUpRight
+                            strokeWidth={1.75}
+                            className="h-4 w-4 shrink-0 text-muted-foreground transition-premium group-hover:text-primary"
+                          />
                         </div>
-                      )}
 
-                    {"running" in stat &&
-                      typeof stat.running === "number" &&
-                      stat.running > 0 && (
-                        <div className="mt-2 text-[10px] text-sky-400">
-                          {stat.running} running
+                        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                          {"ready" in stat && (
+                            <span className="font-medium text-[color:var(--status-success-fg)]">
+                              {stat.ready} with rows
+                            </span>
+                          )}
+
+                          {"blocked" in stat &&
+                            typeof stat.blocked === "number" &&
+                            stat.blocked > 0 && (
+                              <span className="font-medium text-[color:var(--status-pending-fg)]">
+                                {stat.blocked} blocked readiness
+                              </span>
+                            )}
+
+                          {"running" in stat &&
+                            typeof stat.running === "number" &&
+                            stat.running > 0 && (
+                              <span className="font-medium text-[color:var(--status-running-fg)]">
+                                {stat.running} running
+                              </span>
+                            )}
+
+                          {"failed" in stat &&
+                            typeof stat.failed === "number" &&
+                            stat.failed > 0 && (
+                              <span className="font-medium text-[color:var(--status-failed-fg)]">
+                                {stat.failed} failed
+                              </span>
+                            )}
+
+                          {"registered" in stat && (
+                            <span className="font-medium text-primary">
+                              {stat.registered} in registry
+                            </span>
+                          )}
                         </div>
-                      )}
-
-                    {"failed" in stat &&
-                      typeof stat.failed === "number" &&
-                      stat.failed > 0 && (
-                        <div className="mt-2 text-[10px] text-red-400">
-                          {stat.failed} failed
-                        </div>
-                      )}
-
-                    {"registered" in stat && (
-                      <div className="mt-2 text-[10px] text-violet-400">
-                        {stat.registered} in registry
                       </div>
-                    )}
+                    </div>
                   </Link>
                 )
               })}
             </div>
 
-            {/* Running + Failed */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div
-                className="
-                  rounded-2xl
-                  border
-                  border-border/80
-                  bg-card
-                  p-5
-                  shadow-sm
-                "
-              >
-                <h3 className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+              <PanelShell className="xl:col-span-3">
+                <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                  <Loader2
+                    strokeWidth={1.75}
+                    className="h-4 w-4 animate-spin text-primary"
+                  />
                   Running pipelines
                 </h3>
 
@@ -210,35 +227,33 @@ export default function DashboardPage() {
                     className="border-0 bg-transparent p-0"
                   />
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="divide-y divide-border/70">
                     {runningPipelines.slice(0, 6).map((p) => (
-                      <li key={p.pipeline_id}>
+                      <li key={p.pipeline_id} className="py-3 first:pt-0">
                         <Link
                           href={`/pipelines/${encodeURIComponent(
                             p.pipeline_id,
                           )}`}
-                          className="font-mono text-sm text-sky-400 hover:underline"
+                          className="group flex items-center justify-between gap-3 font-mono text-sm text-foreground transition-premium hover:text-primary"
                         >
-                          {p.pipeline_id}
+                          <span className="truncate">{p.pipeline_id}</span>
+                          <ArrowUpRight
+                            strokeWidth={1.75}
+                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-premium group-hover:opacity-100 group-hover:text-primary"
+                          />
                         </Link>
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
+              </PanelShell>
 
-              <div
-                className="
-                  rounded-2xl
-                  border
-                  border-border/80
-                  bg-card
-                  p-5
-                  shadow-sm
-                "
-              >
-                <h3 className="mb-4 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <AlertCircle className="h-4 w-4 text-red-400" />
+              <PanelShell className="xl:col-span-2">
+                <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                  <AlertCircle
+                    strokeWidth={1.75}
+                    className="h-4 w-4 text-[color:var(--status-failed-fg)]"
+                  />
                   Failed runs
                 </h3>
 
@@ -247,23 +262,23 @@ export default function DashboardPage() {
                     icon={CheckCircle2}
                     title="All clear"
                     description="No failed runs in this scope."
-                    className="border-0 bg-transparent p-0 [&_svg]:text-emerald-400"
+                    className="border-0 bg-transparent p-0 [&_svg]:text-[color:var(--status-success-fg)]"
                   />
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="divide-y divide-border/70">
                     {failedRuns.slice(0, 5).map((r) => (
                       <li
                         key={r.run_id}
-                        className="flex items-center justify-between gap-2"
+                        className="flex items-center justify-between gap-2 py-3 first:pt-0"
                       >
                         <Link
                           href={`/runs/${encodeURIComponent(r.run_id)}`}
-                          className="truncate font-mono text-sm text-red-400 hover:underline"
+                          className="truncate font-mono text-sm text-[color:var(--status-failed-fg)] transition-premium hover:underline"
                         >
                           {r.pipeline_id || r.run_id}
                         </Link>
 
-                        <span className="shrink-0 text-[10px] text-muted-foreground/80 tabular-nums">
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
                           {formatRelativeTime(
                             r.updated_at || r.created_at,
                           )}
@@ -272,24 +287,17 @@ export default function DashboardPage() {
                     ))}
                   </ul>
                 )}
-              </div>
+              </PanelShell>
             </div>
 
-            {/* Timeline + Recent runs */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div
-                className="
-                  rounded-2xl
-                  border
-                  border-border/80
-                  bg-card
-                  p-5
-                  shadow-sm
-                "
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <History className="h-4 w-4 text-muted-foreground" />
+              <PanelShell>
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                    <History
+                      strokeWidth={1.75}
+                      className="h-4 w-4 text-muted-foreground"
+                    />
                     Recent lifecycle events
                   </h3>
 
@@ -297,25 +305,28 @@ export default function DashboardPage() {
                     variant="ghost"
                     size="sm"
                     asChild
-                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    className="h-8 rounded-lg text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Link href="/lifecycle">View all</Link>
                   </Button>
                 </div>
 
                 {!scopePinned ? (
-                  <p className="mb-3 text-xs text-muted-foreground">
+                  <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
                     Merged workspace scopes (API limits apply).
                   </p>
                 ) : null}
 
                 {auditQ.isLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading…
+                    <Loader2
+                      strokeWidth={1.75}
+                      className="h-4 w-4 animate-spin"
+                    />
+                    Loading
                   </div>
                 ) : auditQ.isError ? (
-                  <p className="text-xs text-red-300">
+                  <p className="text-sm text-[color:var(--status-failed-fg)]">
                     {formatApiClientError(auditQ.error)}
                   </p>
                 ) : (auditQ.data?.items ?? []).length === 0 ? (
@@ -330,84 +341,62 @@ export default function DashboardPage() {
                     className="border-0 bg-transparent p-0"
                   />
                 ) : (
-                  (auditQ.data?.items ?? []).map((event, i) => {
-                    const href = auditResourceHref(event)
+                  <div className="divide-y divide-border/70">
+                    {(auditQ.data?.items ?? []).map((event, i) => {
+                      const href = auditResourceHref(event)
 
-                    const inner = (
-                      <>
-                        <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />
+                      const inner = (
+                        <>
+                          <Clock
+                            strokeWidth={1.75}
+                            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                          />
 
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={cn(
-                              "truncate text-sm text-foreground/90",
-                              href && "group-hover:text-sky-300",
-                            )}
-                          >
-                            {auditEventTitle(event)}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className={cn(
+                                "truncate text-sm text-foreground",
+                                href && "group-hover:text-primary",
+                              )}
+                            >
+                              {auditEventTitle(event)}
+                            </p>
 
-                          <p className="text-[10px] text-muted-foreground/80 tabular-nums">
-                            {formatRelativeTime(event.ts)}
-                          </p>
+                            <p className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                              {formatRelativeTime(event.ts)}
+                            </p>
+                          </div>
+                        </>
+                      )
+
+                      return href ? (
+                        <Link
+                          key={`${event.ts}-${event.resource_id}-${i}`}
+                          href={href}
+                          className="group flex items-start gap-3 py-3.5 transition-premium first:pt-0 last:pb-0"
+                        >
+                          {inner}
+                        </Link>
+                      ) : (
+                        <div
+                          key={`${event.ts}-${event.resource_id}-${i}`}
+                          className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0"
+                        >
+                          {inner}
                         </div>
-                      </>
-                    )
-
-                    return href ? (
-                      <Link
-                        key={`${event.ts}-${event.resource_id}-${i}`}
-                        href={href}
-                        className="
-                          group
-                          flex
-                          items-start
-                          gap-3
-                          border-b
-                          border-border/80
-                          py-3
-                          first:pt-0
-                          last:border-0
-                          last:pb-0
-                        "
-                      >
-                        {inner}
-                      </Link>
-                    ) : (
-                      <div
-                        key={`${event.ts}-${event.resource_id}-${i}`}
-                        className="
-                          flex
-                          items-start
-                          gap-3
-                          border-b
-                          border-border/80
-                          py-3
-                          first:pt-0
-                          last:border-0
-                          last:pb-0
-                        "
-                      >
-                        {inner}
-                      </div>
-                    )
-                  })
+                      )
+                    })}
+                  </div>
                 )}
-              </div>
+              </PanelShell>
 
-              <div
-                className="
-                  rounded-2xl
-                  border
-                  border-border/80
-                  bg-card
-                  p-5
-                  shadow-sm
-                "
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Play className="h-4 w-4 text-muted-foreground" />
+              <PanelShell>
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                    <Play
+                      strokeWidth={1.75}
+                      className="h-4 w-4 text-muted-foreground"
+                    />
                     Recent runs
                   </h3>
 
@@ -415,7 +404,7 @@ export default function DashboardPage() {
                     variant="ghost"
                     size="sm"
                     asChild
-                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    className="h-8 rounded-lg text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Link href="/runs">View all</Link>
                   </Button>
@@ -429,42 +418,26 @@ export default function DashboardPage() {
                     className="border-0 bg-transparent p-0"
                   />
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {recentRuns.map((run) => (
                       <Link
                         key={run.run_id}
                         href={`/runs/${encodeURIComponent(run.run_id)}`}
-                        className="
-                          flex
-                          items-center
-                          justify-between
-                          gap-2
-                          rounded-xl
-                          border
-                          border-border/80
-                          bg-muted/30
-                          px-3
-                          py-2.5
-                          transition-all
-                          duration-200
-                          hover:border-border
-                          hover:bg-card
-                          hover:shadow-sm
-                        "
+                        className="group flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3 transition-premium hover:border-border hover:bg-card hover:shadow-whisper active:scale-[0.995]"
                       >
                         <div className="min-w-0">
                           <div className="truncate font-mono text-sm text-foreground">
                             {run.pipeline_id}
                           </div>
 
-                          <div className="truncate font-mono text-[10px] text-muted-foreground/80">
+                          <div className="truncate font-mono text-[10px] text-muted-foreground">
                             {run.run_id}
                           </div>
                         </div>
 
                         <span
                           className={cn(
-                            "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                            "shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-medium",
                             statusBadgeClass(run.status),
                           )}
                         >
@@ -474,11 +447,11 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </PanelShell>
             </div>
           </div>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   )
 }

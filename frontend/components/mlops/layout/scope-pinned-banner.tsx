@@ -16,11 +16,11 @@ interface ScopePinnedBannerProps {
 }
 
 const tone = cn(
-  "border-amber-500/35 bg-amber-500/12 text-amber-950",
-  "dark:border-amber-500/20 dark:bg-amber-500/8 dark:text-amber-100",
+  "border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
+  "dark:border-[color:var(--status-pending-border)] dark:bg-[color:var(--status-pending-bg)] dark:text-[color:var(--status-pending-fg)]",
 )
 
-const iconTone = "text-amber-700 dark:text-amber-400"
+const iconTone = "text-[color:var(--status-pending-fg)]"
 
 export function ScopePinnedBanner({
   message,
@@ -45,7 +45,7 @@ export function ScopePinnedBanner({
         <Pin className={cn("h-3.5 w-3.5 shrink-0", iconTone)} aria-hidden />
         <span>
           {text}{" "}
-          <Link href="/settings" className="underline hover:text-amber-900 dark:hover:text-amber-200">
+          <Link href="/settings" className="underline hover:text-foreground">
             Settings
           </Link>
         </span>
@@ -66,7 +66,7 @@ export function ScopePinnedBanner({
       <Pin className={cn("h-3.5 w-3.5 shrink-0", iconTone)} aria-hidden />
       <span className="min-w-0 flex-1">
         {text}{" "}
-        <Link href="/settings" className="underline hover:text-amber-900 dark:hover:text-amber-200">
+        <Link href="/settings" className="underline hover:text-foreground">
           Settings
         </Link>
       </span>

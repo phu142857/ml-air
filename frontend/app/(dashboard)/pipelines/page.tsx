@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PipelineDAG } from "@/components/mlops/pipeline-dag"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
@@ -21,19 +21,31 @@ import { isScopePinned } from "@/lib/scope"
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
 
-const statusConfig = {
-  idle: { icon: Clock, label: "Idle", color: "text-muted-foreground", bg: "bg-muted", border: "border-border", animate: false },
-  pending: { icon: Clock, label: "Pending", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", animate: false },
-  running: { icon: Loader2, label: "Running", color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30", animate: true },
-  success: { icon: CheckCircle2, label: "Success", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", animate: false },
-  failed: { icon: XCircle, label: "Failed", color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30", animate: false },
+import {
+  STATUS_CHIP_CLASS,
+  statusChipKey,
+  type StatusChipKey,
+} from "@/lib/status-style"
+
+const stageStatusMeta: Record<
+  StatusChipKey | "idle",
+  { icon: typeof Clock; label: string; animate: boolean }
+> = {
+  idle: { icon: Clock, label: "Idle", animate: false },
+  queued: { icon: Clock, label: "Queued", animate: false },
+  pending: { icon: Clock, label: "Pending", animate: false },
+  running: { icon: Loader2, label: "Running", animate: true },
+  success: { icon: CheckCircle2, label: "Success", animate: false },
+  failed: { icon: XCircle, label: "Failed", animate: false },
+  cancelled: { icon: XCircle, label: "Cancelled", animate: false },
 }
 
-function mapListStatus(raw: string): keyof typeof statusConfig {
+function mapStageStatus(raw: string): StatusChipKey | "idle" {
   const u = String(raw || "").toUpperCase()
   if (u.includes("RUN")) return "running"
   if (u.includes("FAIL")) return "failed"
-  if (u.includes("SUCCESS") || u.includes("OK") || u.includes("DONE") || u.includes("COMPLETE")) return "success"
+  if (u.includes("SUCCESS") || u.includes("OK") || u.includes("DONE") || u.includes("COMPLETE"))
+    return "success"
   if (u.includes("PEND") || u.includes("QUEUE") || u.includes("WAIT")) return "pending"
   return "idle"
 }
@@ -55,14 +67,22 @@ const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
     id: "status",
     header: "Status",
     cell: (stage) => {
-      const st = statusConfig[stage.status as keyof typeof statusConfig] || statusConfig.idle
-      const StatusIcon = st.icon
+      const sk = mapStageStatus(stage.status)
+      const meta = stageStatusMeta[sk]
+      const StatusIcon = meta.icon
+      const chipClass =
+        sk === "idle"
+          ? "border-border/60 bg-muted text-muted-foreground"
+          : STATUS_CHIP_CLASS[sk]
       return (
         <div
-          className={cn("inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs", st.bg, st.color)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+            chipClass,
+          )}
         >
-          <StatusIcon className={cn("h-3 w-3", st.animate && "animate-spin")} />
-          {st.label}
+          <StatusIcon className={cn("h-3 w-3", meta.animate && "animate-spin")} />
+          {meta.label}
         </div>
       )
     },
@@ -168,16 +188,18 @@ export default function PipelinesPage() {
   ])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
+        className="shrink-0"
         icon={GitBranch}
         accent="amber"
         title="Pipelines"
         subtitle={isAggregate ? `All projects · ${items.length} pipelines` : `${items.length} pipelines`}
       />
 
-      <div className="flex-1 space-y-6 overflow-auto p-6">
-        {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINES} /> : null}
+      <PageScrollBody
+        header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINES} /> : null}
+      >
         <ScopedListContent
           isLoading={pipelinesQuery.isLoading}
           isError={pipelinesQuery.isError}
@@ -192,9 +214,9 @@ export default function PipelinesPage() {
             <div className="space-y-3">
               <h2 className="px-1 text-sm font-medium capitalize text-muted-foreground">All pipelines</h2>
               {items.map((pipeline) => {
-                const sk = mapListStatus(pipeline.latest_status)
-                const status = statusConfig[sk]
-                const StatusIcon = status.icon
+                const sk = statusChipKey(pipeline.latest_status || "idle")
+                const meta = stageStatusMeta[sk]
+                const StatusIcon = meta.icon
                 const isSelected = selectedId === pipeline.pipeline_id
 
                 return (
@@ -203,10 +225,10 @@ export default function PipelinesPage() {
                     type="button"
                     onClick={() => setSelectedId(pipeline.pipeline_id)}
                     className={cn(
-                      "w-full rounded-lg border p-4 text-left transition-all",
+                      "w-full rounded-xl border p-4 text-left transition-premium",
                       isSelected
-                        ? "border-border bg-muted/80"
-                        : "border-border bg-card/80 hover:bg-card",
+                        ? "border-primary/30 bg-primary/5 ring-1 ring-primary/20"
+                        : "panel-surface hover:border-border",
                     )}
                   >
                     <div className="mb-2 flex items-start justify-between">
@@ -215,7 +237,7 @@ export default function PipelinesPage() {
                         <Link
                           href={`/pipelines/${encodeURIComponent(pipeline.pipeline_id)}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="truncate font-mono text-sm font-medium text-foreground hover:text-sky-400"
+                          className="truncate font-mono text-sm font-medium text-foreground hover:text-primary"
                         >
                           {pipeline.pipeline_id}
                         </Link>
@@ -228,13 +250,12 @@ export default function PipelinesPage() {
                     <div className="flex items-center justify-between">
                       <div
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs",
-                          status.bg,
-                          status.color,
+                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                          STATUS_CHIP_CLASS[sk],
                         )}
                       >
-                        <StatusIcon className={cn("h-3 w-3", status.animate && "animate-spin")} />
-                        {status.label}
+                        <StatusIcon className={cn("h-3 w-3", meta.animate && "animate-spin")} />
+                        {meta.label}
                       </div>
                       <span className="text-[10px] text-muted-foreground/80">
                         {formatRelativeTime(pipeline.updated_at)}
@@ -280,7 +301,7 @@ export default function PipelinesPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="h-8 gap-2 bg-amber-600 text-white hover:bg-amber-500 hover:text-white disabled:bg-amber-600/50 disabled:text-white/90"
+                        className="h-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                         disabled={!selectedId}
                         title={!selectedId ? "Select a pipeline to add a config version" : undefined}
                         asChild={Boolean(selectedId)}
@@ -299,7 +320,7 @@ export default function PipelinesPage() {
                       </Button>
                       <Button
                         size="sm"
-                        className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+                        className="gap-2"
                         disabled={!scopePinned}
                         asChild={scopePinned}
                       >
@@ -337,7 +358,7 @@ export default function PipelinesPage() {
             </div>
           </div>
         </ScopedListContent>
-      </div>
+      </PageScrollBody>
     </div>
   )
 }

@@ -11,7 +11,12 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { DesignTokensSlide } from "@/components/mlops/design-tokens-slide"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { DetailSection, DetailTabList, ResourcePageHeader } from "@/components/mlops/layout"
+import {
+  DetailSection,
+  DetailTabList,
+  ResourcePageHeader,
+  tabPanelScrollClassName,
+} from "@/components/mlops/layout"
 import { ListTableSkeleton } from "@/components/mlops/list-table-skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -199,7 +204,7 @@ function SettingsPageContent() {
         cell: (row) => {
           const active = row.tenant_id === tenantId && row.project_id === projectId
           return active ? (
-            <Badge variant="outline" className="text-[10px] border-sky-500/30 text-sky-400">
+            <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">
               active
             </Badge>
           ) : (
@@ -219,8 +224,9 @@ function SettingsPageContent() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
+        className="shrink-0"
         icon={Settings}
         accent="zinc"
         title="Settings"
@@ -228,7 +234,7 @@ function SettingsPageContent() {
       />
 
       {/* Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
         <DetailTabList
           accent="sky"
           tabs={[
@@ -241,16 +247,15 @@ function SettingsPageContent() {
           ]}
         />
 
-        <div className="flex-1 overflow-auto p-6">
-          <TabsContent value="runtime" className="mt-0 space-y-6">
+          <TabsContent value="runtime" className={tabPanelScrollClassName("space-y-6")}>
             <div className="max-w-2xl space-y-6">
               <DetailSection
                 title="Runtime configuration"
                 description="Configure external service URLs and environment settings."
                 accentBorder="sky"
               >
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-xs">
-                  <div className="font-medium text-sky-200">Active API scope</div>
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs">
+                  <div className="font-medium text-primary">Active API scope</div>
                   <div className="mt-1 font-mono text-foreground">
                     {tenantId} <span className="text-muted-foreground/80">/</span> {projectId}
                   </div>
@@ -321,7 +326,7 @@ function SettingsPageContent() {
                     <Button
                       type="button"
                       size="sm"
-                      className="gap-2 bg-sky-600 hover:bg-sky-500"
+                      className="gap-2 bg-primary hover:bg-primary/90"
                       onClick={() => {
                         const patch = {
                           jaegerBaseUrl: jaegerUrl.trim(),
@@ -359,7 +364,7 @@ function SettingsPageContent() {
                     <span className="font-mono text-muted-foreground">mlair-runtime-config.js</span> or{" "}
                     <span className="font-mono text-muted-foreground">GET /v1/runtime-config</span>.
                     {hasLocalOverride ? (
-                      <span className="mt-1 block text-amber-500/90">A local override is active.</span>
+                      <span className="mt-1 block text-[color:var(--status-pending-fg)]/90">A local override is active.</span>
                     ) : null}
                   </p>
                 </div>
@@ -372,11 +377,11 @@ function SettingsPageContent() {
                 bodyClassName="pt-4"
               >
                 <div className="flex items-start gap-3">
-                  <div className="rounded-md bg-amber-500/10 p-2 text-amber-400">
+                  <div className="rounded-md bg-[color:var(--status-pending-bg)] p-2 text-[color:var(--status-pending-fg)]">
                     <Globe className="h-4 w-4" />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    See <code className="rounded bg-muted px-1 text-amber-400">window.__ML_AIR_RUNTIME_CONFIG__</code> in the
+                    See <code className="rounded bg-muted px-1 text-[color:var(--status-pending-fg)]">window.__ML_AIR_RUNTIME_CONFIG__</code> in the
                     browser console for the merged runtime object.
                   </p>
                 </div>
@@ -384,7 +389,7 @@ function SettingsPageContent() {
             </div>
           </TabsContent>
 
-          <TabsContent value="api" className="mt-0 space-y-6">
+          <TabsContent value="api" className={tabPanelScrollClassName("space-y-6")}>
             <div className="max-w-2xl">
               <DetailSection
                 title="Session bearer token"
@@ -407,7 +412,7 @@ function SettingsPageContent() {
                     <Button
                       type="button"
                       size="sm"
-                      className="bg-sky-600 hover:bg-sky-500"
+                      className="bg-primary hover:bg-primary/90"
                       onClick={() => setToken(draftToken.trim())}
                     >
                       Apply token
@@ -424,13 +429,13 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/80 p-4">
+                <div className="flex items-center justify-between gap-3 panel-surface p-4">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                     <Key className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-foreground">Preview</span>
-                        <Badge variant="outline" className="border-emerald-500/30 text-[10px] text-emerald-400">
+                        <Badge variant="outline" className="border-[color:var(--status-success-border)] text-[10px] text-[color:var(--status-success-fg)]">
                           {token.trim() ? "active" : "empty"}
                         </Badge>
                       </div>
@@ -452,7 +457,7 @@ function SettingsPageContent() {
                           className="shrink-0 text-muted-foreground hover:text-foreground/90"
                           aria-label="Copy token"
                         >
-                          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copied ? <Check className="h-3.5 w-3.5 text-[color:var(--status-success-fg)]" /> : <Copy className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                     </div>
@@ -467,7 +472,7 @@ function SettingsPageContent() {
             </div>
           </TabsContent>
 
-          <TabsContent value="scope" className="mt-0 space-y-6">
+          <TabsContent value="scope" className={tabPanelScrollClassName("space-y-6")}>
             <div className="max-w-3xl">
               <DetailSection
                 title="Tenant & project access"
@@ -492,14 +497,14 @@ function SettingsPageContent() {
                 }
               >
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-border bg-card/80 p-4">
+                  <div className="panel-surface p-4">
                     <div className="mb-2 flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-foreground/90">Active tenant</span>
                     </div>
                     <p className="font-mono text-sm text-foreground">{tenantId}</p>
                   </div>
-                  <div className="rounded-lg border border-border bg-card/80 p-4">
+                  <div className="panel-surface p-4">
                     <div className="mb-2 flex items-center gap-2">
                       <FolderKanban className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-foreground/90">Active project</span>
@@ -513,7 +518,7 @@ function SettingsPageContent() {
                     Accessible scopes
                   </h4>
                   {accessibleScopes.length === 0 ? (
-                    <p className="rounded-lg border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+                    <p className="inset-surface px-3 py-4 text-sm text-muted-foreground">
                       {isBootstrapped
                         ? "No scope rows returned — token may lack cross-project visibility or bootstrap returned an empty list."
                         : "Loading bootstrap context…"}
@@ -530,7 +535,7 @@ function SettingsPageContent() {
                       }}
                       rowClassName={(row) =>
                         cn(
-                          row.tenant_id === tenantId && row.project_id === projectId && "bg-sky-500/5",
+                          row.tenant_id === tenantId && row.project_id === projectId && "bg-primary/5",
                           !scopeSwitching &&
                             !(row.tenant_id === tenantId && row.project_id === projectId) &&
                             "cursor-pointer",
@@ -549,7 +554,7 @@ function SettingsPageContent() {
             </div>
           </TabsContent>
 
-          <TabsContent value="governance" className="mt-0 space-y-6">
+          <TabsContent value="governance" className={tabPanelScrollClassName("space-y-6")}>
             <div className="max-w-2xl">
               <DetailSection
                 title="Tenant quotas"
@@ -563,7 +568,7 @@ function SettingsPageContent() {
                 ) : (
                   <div className="space-y-4 text-sm">
                     {tenantUsageQuery.data ? (
-                      <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                      <div className="inset-surface px-3 py-2 font-mono text-[11px] text-muted-foreground">
                         <div>
                           projects {tenantUsageQuery.data.usage.projects ?? "—"} / {tenantUsageQuery.data.limits.max_projects ?? "∞"}
                         </div>
@@ -641,11 +646,11 @@ function SettingsPageContent() {
             </div>
           </TabsContent>
 
-          <TabsContent value="plugins" className="mt-0 space-y-6">
+          <TabsContent value="plugins" className={tabPanelScrollClassName("space-y-6")}>
             <PluginsSettingsTab />
           </TabsContent>
 
-          <TabsContent value="design-tokens" className="mt-0">
+          <TabsContent value="design-tokens" className={tabPanelScrollClassName()}>
             <DetailSection
               title="Design tokens"
               description="Semantic palette and radii used across the Hub."
@@ -655,7 +660,6 @@ function SettingsPageContent() {
               <DesignTokensSlide />
             </DetailSection>
           </TabsContent>
-        </div>
       </Tabs>
     </div>
   )
@@ -665,8 +669,10 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-0 flex-1 flex-col p-6">
-          <ListTableSkeleton rows={8} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="scroll-region p-6">
+            <ListTableSkeleton rows={8} />
+          </div>
         </div>
       }
     >

@@ -255,14 +255,14 @@ function LifecycleContent() {
               className={cn(
                 "h-8 gap-2 text-xs transition-all",
                 isLive
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/40"
+                  ? "bg-[color:var(--status-success-bg)] border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] hover:bg-[color:var(--status-success-bg)] hover:text-[color:var(--status-success-fg)] hover:border-[color:var(--status-success-border)]"
                   : "bg-card border-border text-muted-foreground hover:text-foreground"
               )}
               onClick={toggleLive}
             >
               <span className={cn(
                 "flex h-2 w-2 rounded-full",
-                isLive ? "bg-emerald-400 animate-breathe-glow" : "bg-muted-foreground/50"
+                isLive ? "bg-primary animate-breathe-glow" : "bg-muted-foreground/50"
               )} />
               <Radio className="h-3.5 w-3.5" />
               {isLive ? "Live" : "Paused"}
@@ -271,7 +271,7 @@ function LifecycleContent() {
             {/* Jaeger Integration Dialog */}
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-2 text-xs bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 hover:border-sky-500/40">
+                <Button variant="outline" size="sm" className="h-8 gap-2 text-xs bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:text-primary/80 hover:border-primary/40">
                   <Zap className="h-3.5 w-3.5" />
                   Jaeger Integration
                 </Button>
@@ -279,8 +279,8 @@ function LifecycleContent() {
               <DialogContent className="bg-card border-border">
                 <DialogHeader>
                   <DialogTitle className="text-foreground flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20">
-                      <Zap className="h-4 w-4 text-sky-400" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
+                      <Zap className="h-4 w-4 text-primary" />
                     </div>
                     Jaeger Tracing Integration
                   </DialogTitle>
@@ -311,8 +311,8 @@ function LifecycleContent() {
                       <Badge variant="outline" className={cn(
                         "text-[10px]",
                         jaegerStatus?.connected
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                          ? "bg-[color:var(--status-success-bg)] border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]"
+                          : "bg-[color:var(--status-pending-bg)] border-[color:var(--status-pending-border)] text-[color:var(--status-pending-fg)]"
                       )}>
                         {jaegerStatus?.connected ? "Connected" : "Disconnected"}
                       </Badge>
@@ -329,7 +329,7 @@ function LifecycleContent() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Trace Coverage</span>
-                      <span className="text-sm font-medium text-sky-400">{stats.tracePercent}%</span>
+                      <span className="text-sm font-medium text-primary">{stats.tracePercent}%</span>
                     </div>
                   </div>
 
@@ -345,17 +345,17 @@ function LifecycleContent() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className={cn(
-                            "flex items-center justify-between rounded-md border border-border bg-background p-2 transition-colors hover:border-border hover:bg-card/80 group",
+                            "flex items-center justify-between rounded-md border border-border bg-background p-2 transition-colors hover:border-border hover:bg-muted/40 group",
                             trace.isNew && "animate-highlight-pulse"
                           )}
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             {trace.status === "success" ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <CheckCircle2 className="h-3.5 w-3.5 text-[color:var(--status-success-fg)] shrink-0" />
                             ) : trace.status === "failed" ? (
-                              <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                              <XCircle className="h-3.5 w-3.5 text-[color:var(--status-failed-fg)] shrink-0" />
                             ) : (
-                              <Activity className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                              <Activity className="h-3.5 w-3.5 text-primary shrink-0" />
                             )}
                             <span className="text-xs text-foreground/90 truncate">{trace.title}</span>
                           </div>
@@ -363,7 +363,7 @@ function LifecycleContent() {
                             <code className="text-[10px] font-mono text-muted-foreground/80 group-hover:text-muted-foreground">
                               {trace.id.slice(0, 8)}...
                             </code>
-                            <ExternalLink className="h-3 w-3 text-muted-foreground/80 group-hover:text-sky-400" />
+                            <ExternalLink className="h-3 w-3 text-muted-foreground/80 group-hover:text-primary" />
                           </div>
                         </a>
                       ))}
@@ -380,7 +380,7 @@ function LifecycleContent() {
                   >
                     Test Connection
                   </Button>
-                  <Button size="sm" className="bg-sky-600 hover:bg-sky-500 text-white">
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
                     Save Configuration
                   </Button>
                 </div>
@@ -434,7 +434,7 @@ function LifecycleContent() {
       />
 
       {/* Stats cards */}
-      <div className="shrink-0 border-b border-border bg-card/20 px-6 py-4">
+      <div className="shrink-0 page-toolbar">
         {isAggregate ? (
           <div className="mb-4">
             <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} />
@@ -456,71 +456,71 @@ function LifecycleContent() {
             isRefreshing && "opacity-80",
           )}
         >
-            <Card className="bg-card/80 border-border">
+            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Total Events</p>
                     <p className="mt-1 text-2xl font-semibold text-foreground">{stats.total}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10">
-                    <Activity className="h-5 w-5 text-violet-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                    <Activity className="h-5 w-5 text-primary" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/80 border-border">
+            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Successful</p>
-                    <p className="mt-1 text-2xl font-semibold text-emerald-400">{stats.successCount}</p>
+                    <p className="mt-1 text-2xl font-semibold text-[color:var(--status-success-fg)]">{stats.successCount}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)]">
+                    <CheckCircle2 className="h-5 w-5 text-[color:var(--status-success-fg)]" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/80 border-border">
+            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Failed</p>
-                    <p className="mt-1 text-2xl font-semibold text-red-400">{stats.failedCount}</p>
+                    <p className="mt-1 text-2xl font-semibold text-[color:var(--status-failed-fg)]">{stats.failedCount}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10">
-                    <XCircle className="h-5 w-5 text-red-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/20 bg-[color:var(--status-failed-bg)]">
+                    <XCircle className="h-5 w-5 text-[color:var(--status-failed-fg)]" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/80 border-border">
+            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Warnings</p>
-                    <p className="mt-1 text-2xl font-semibold text-amber-400">{stats.warningCount}</p>
+                    <p className="mt-1 text-2xl font-semibold text-[color:var(--status-pending-fg)]">{stats.warningCount}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10">
-                    <AlertTriangle className="h-5 w-5 text-amber-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)]">
+                    <AlertTriangle className="h-5 w-5 text-[color:var(--status-pending-fg)]" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/80 border-border">
+            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Trace Coverage</p>
-                    <p className="mt-1 text-2xl font-semibold text-sky-400">{stats.tracePercent}%</p>
+                    <p className="mt-1 text-2xl font-semibold text-primary">{stats.tracePercent}%</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10">
-                    <Zap className="h-5 w-5 text-sky-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
+                    <Zap className="h-5 w-5 text-primary" />
                   </div>
                 </div>
               </CardContent>
@@ -531,11 +531,11 @@ function LifecycleContent() {
           <Collapsible
             open={metricsIndexOpen}
             onOpenChange={setMetricsIndexOpen}
-            className="mt-4 rounded-lg border border-border bg-card/50"
+            className="mt-4 panel-surface"
           >
             <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-muted/40">
               <span className="flex min-w-0 items-center gap-2">
-                <BarChart3 className="h-4 w-4 shrink-0 text-violet-400" />
+                <BarChart3 className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} />
                 <span className="text-sm font-medium text-foreground">Semantic metrics index</span>
                 <Badge variant="outline" className="shrink-0 text-[10px]">
                   {semanticObservabilitySurfaces.length} surfaces
@@ -595,7 +595,7 @@ function LifecycleContent() {
                               href={href}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] text-sky-400 hover:bg-muted/50"
+                              className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] text-primary hover:bg-muted/50"
                             >
                               {label}
                               <ExternalLink className="h-2.5 w-2.5" />
@@ -617,7 +617,7 @@ function LifecycleContent() {
       </div>
 
       {/* Filters toolbar */}
-      <div className="shrink-0 space-y-3 border-b border-border bg-muted/50 px-6 py-3">
+      <div className="shrink-0 page-toolbar space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-1 items-center gap-4">
             <div className="relative max-w-xs flex-1">
@@ -664,7 +664,7 @@ function LifecycleContent() {
                 className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-border"
                 aria-hidden
               >
-                <div className="h-full w-1/3 animate-pulse bg-sky-500/70" />
+                <div className="h-full w-1/3 animate-pulse bg-primary/70" />
               </div>
             ) : null}
             {filteredEvents.length === 0 ? (
@@ -691,24 +691,24 @@ function LifecycleContent() {
 
           <div
             className={cn(
-              "min-h-0 w-80 shrink-0 self-stretch overflow-y-auto border-l border-border bg-card/20 p-4 transition-opacity duration-300",
+              "min-h-0 w-80 shrink-0 self-stretch overflow-y-auto border-l border-border surface-muted p-4 transition-opacity duration-300",
               isRefreshing && "opacity-90",
             )}
           >
               <div className="space-y-4">
                 {/* Jaeger status card */}
-                <Card className="bg-card/80 border-border">
+                <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-sky-400" />
+                        <Zap className="h-4 w-4 text-primary" />
                         Jaeger Tracing
                       </CardTitle>
                       <Badge variant="outline" className={cn(
                         "text-[10px]",
                         jaegerStatus?.connected
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                          : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                          ? "bg-[color:var(--status-success-bg)] border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]"
+                          : "bg-[color:var(--status-pending-bg)] border-[color:var(--status-pending-border)] text-[color:var(--status-pending-fg)]"
                       )}>
                         {jaegerStatus?.connected ? "Connected" : "Disconnected"}
                       </Badge>
@@ -721,7 +721,7 @@ function LifecycleContent() {
                     <div className="rounded-md border border-border bg-background p-2">
                       <code className="text-[11px] font-mono text-muted-foreground break-all">{jaegerUrl}</code>
                     </div>
-                    <Button variant="outline" size="sm" className="w-full h-8 gap-2 text-xs bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20" asChild>
+                    <Button variant="outline" size="sm" className="w-full h-8 gap-2 text-xs bg-primary/10 border-primary/30 text-primary hover:bg-primary/20" asChild>
                       <a href={jaegerUrl} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="h-3.5 w-3.5" />
                         Open Jaeger UI
@@ -731,7 +731,7 @@ function LifecycleContent() {
                 </Card>
                 
                 {/* Recent traces */}
-                <Card className="bg-card/80 border-border">
+                <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
@@ -747,21 +747,21 @@ function LifecycleContent() {
                         key={trace.id}
                         className={cn(
                           "space-y-2 rounded-md border border-border bg-background p-3 transition-all",
-                          trace.isNew && "ring-1 ring-sky-500/25 bg-sky-500/5"
+                          trace.isNew && "ring-1 ring-primary/25 bg-primary/5"
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {trace.status === "success" ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <CheckCircle2 className="h-3.5 w-3.5 text-[color:var(--status-success-fg)] shrink-0" />
                             ) : trace.status === "failed" ? (
-                              <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                              <XCircle className="h-3.5 w-3.5 text-[color:var(--status-failed-fg)] shrink-0" />
                             ) : (
-                              <Activity className="h-3.5 w-3.5 text-sky-400 shrink-0 animate-pulse" />
+                              <Activity className="h-3.5 w-3.5 text-primary shrink-0 animate-pulse" />
                             )}
                             <span className="text-xs text-foreground/90 truncate">{trace.title}</span>
                             {trace.isNew && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-sky-500/10 border-sky-500/30 text-sky-400">
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-primary/10 border-primary/30 text-primary">
                                 New
                               </Badge>
                             )}
@@ -779,7 +779,7 @@ function LifecycleContent() {
                 </Card>
                 
                 {/* Trace stats */}
-                <Card className="bg-card/80 border-border">
+                <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -793,15 +793,15 @@ function LifecycleContent() {
                     </div>
                     <div className="flex items-center justify-between py-1.5 border-b border-border">
                       <span className="text-xs text-muted-foreground">Coverage Rate</span>
-                      <span className="text-sm font-medium text-sky-400">{stats.tracePercent}%</span>
+                      <span className="text-sm font-medium text-primary">{stats.tracePercent}%</span>
                     </div>
                     <div className="flex items-center justify-between py-1.5 border-b border-border">
                       <span className="text-xs text-muted-foreground">Active Runs</span>
-                      <span className="text-sm font-medium text-amber-400">{activeRunsCount}</span>
+                      <span className="text-sm font-medium text-[color:var(--status-pending-fg)]">{activeRunsCount}</span>
                     </div>
                     <div className="flex items-center justify-between py-1.5">
                       <span className="text-xs text-muted-foreground">Failed Traces (24h)</span>
-                      <span className="text-sm font-medium text-red-400">{stats.failedCount}</span>
+                      <span className="text-sm font-medium text-[color:var(--status-failed-fg)]">{stats.failedCount}</span>
                     </div>
                   </CardContent>
                 </Card>

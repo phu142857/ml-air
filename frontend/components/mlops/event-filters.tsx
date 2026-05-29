@@ -42,7 +42,7 @@ export function EventFilters({
         <Filter className="h-4 w-4" />
         <span>Filters</span>
         {activeFilters > 0 && (
-          <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-sky-500/10 text-sky-400 border-sky-500/20">
+          <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-primary/10 text-primary border-primary/20">
             {activeFilters}
           </Badge>
         )}

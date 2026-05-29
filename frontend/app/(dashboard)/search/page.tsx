@@ -11,6 +11,7 @@ import { useAppContext } from "@/lib/app-context"
 import {
   FilterChips,
   MlopsEmptyState,
+  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
 } from "@/components/mlops/layout"
@@ -48,7 +49,7 @@ function TypeIcon({ type }: { type: SearchResultItem["type"] }) {
 
 function SearchSkeleton() {
   return (
-    <div className="divide-y divide-border/80 overflow-hidden rounded-lg border border-border bg-card/80">
+    <div className="divide-y divide-border/80 overflow-hidden panel-surface">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-3">
           <div className="h-8 w-8 rounded-md bg-muted/80" />
@@ -107,17 +108,21 @@ function SearchPageInner() {
   const showSkeleton = isSearchStale && input.trim().length > 0
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
+        className="shrink-0"
         icon={Search}
         accent="sky"
         title="Search"
         subtitle="Runs, tasks, and datasets by id or keyword"
       />
 
-      <div className="flex-1 space-y-5 overflow-auto p-6">
-        {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_SEARCH} /> : null}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <PageScrollBody
+        className="space-y-5"
+        header={
+          <>
+            {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_SEARCH} /> : null}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <FilterChips
             options={filterOptions}
             value={type}
@@ -130,7 +135,7 @@ function SearchPageInner() {
         </div>
 
         <form
-          className="rounded-lg border border-border bg-card/80 p-1 shadow-sm"
+          className="panel-surface p-1 shadow-sm"
           onSubmit={(e) => {
             e.preventDefault()
             pushSearch(input, type)
@@ -147,12 +152,14 @@ function SearchPageInner() {
             placeholder="Search by run id, task id, dataset name, or status…"
             className={cn(
               "w-full rounded-md border-0 bg-transparent px-4 py-3.5 text-base text-foreground",
-              "placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-sky-500/40",
+              "placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/40",
             )}
             autoComplete="off"
           />
         </form>
-
+          </>
+        }
+      >
         {showSkeleton ? (
           <SearchSkeleton />
         ) : !deferredQ ? (
@@ -175,7 +182,7 @@ function SearchPageInner() {
             description="Try another keyword or switch resource type. Exact ids work best for runs and tasks."
           />
         ) : (
-          <div className="divide-y divide-border/80 overflow-hidden rounded-lg border border-border bg-card/80">
+          <div className="divide-y divide-border/80 overflow-hidden panel-surface">
             {items.map((result, i) => {
               const at = result.updated_at || result.created_at
               return (
@@ -189,7 +196,7 @@ function SearchPageInner() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-mono text-sm text-sky-400 group-hover:text-sky-300">
+                    <span className="truncate font-mono text-sm text-primary group-hover:text-primary/80">
                       {resultLabel(result)}
                     </span>
                     <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/80">
@@ -216,7 +223,7 @@ function SearchPageInner() {
             })}
           </div>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   )
 }
@@ -225,8 +232,10 @@ export default function SearchPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-0 flex-1 flex-col p-6">
-          <ListTableSkeleton rows={6} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="scroll-region p-6">
+            <ListTableSkeleton rows={6} />
+          </div>
         </div>
       }
     >

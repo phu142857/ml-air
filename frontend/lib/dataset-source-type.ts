@@ -59,7 +59,7 @@ export function datasetSourceTypeBadge(sourceType: string | null | undefined): {
     case "import":
       return {
         label: `IMPORT${suffix}`,
-        className: "border-sky-500/35 bg-sky-500/10 text-sky-300"
+        className: "border-primary/35 bg-primary/10 text-primary"
       };
     case "runtime_accumulated":
       return {
@@ -69,12 +69,12 @@ export function datasetSourceTypeBadge(sourceType: string | null | undefined): {
     case "manual":
       return {
         label: `MANUAL${suffix}`,
-        className: "border-amber-500/35 bg-amber-500/10 text-amber-200"
+        className: "border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
       };
     case "generated":
       return {
         label: `GENERATED${suffix}`,
-        className: "border-violet-500/35 bg-violet-500/10 text-violet-200"
+        className: "border-primary/35 bg-primary/10 text-primary/80"
       };
     default:
       return {
