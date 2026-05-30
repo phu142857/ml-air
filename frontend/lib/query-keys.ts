@@ -19,10 +19,13 @@ export const mlairKeys = {
     tasks: (runId: string) => ["run-tasks", runId] as const,
     logs: (runId: string) => ["run-logs", runId] as const,
     tracking: (runId: string) => ["run-tracking", runId] as const,
+    usage: (runId: string) => ["run-usage", runId] as const,
     readiness: (runId: string) => ["run-readiness", runId] as const
   },
   task: {
-    detail: (taskId: string, scopeKey = "") => ["task", taskId, scopeKey] as const
+    detail: (taskId: string, scopeKey = "") => ["task", taskId, scopeKey] as const,
+    usage: (tenantId: string, projectId: string, taskId: string) =>
+      ["task-usage", tenantId, projectId, taskId] as const,
   },
   tasks: {
     /** Recent tasks fan-out from recent runs (Tasks tab). */
@@ -119,6 +122,11 @@ export const mlairKeys = {
   },
   search: (tenantId: string, projectId: string, q: string, type: string) =>
     ["search", q, type, tenantId, projectId] as const,
+  usage: {
+    project: (tenantId: string, projectId: string, days: number) =>
+      ["project-usage", tenantId, projectId, days] as const,
+    tenant: (tenantId: string, days: number) => ["tenant-usage", tenantId, days] as const,
+  },
   lifecycle: (tenantId: string, projectId: string) =>
     ["lifecycle", tenantId, projectId] as const,
   jaegerStatus: (jaegerUrl: string) => ["jaeger", "status", jaegerUrl] as const

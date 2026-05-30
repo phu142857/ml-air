@@ -83,6 +83,7 @@ from app.domains.orchestration.tracking_service import (
     log_param,
 )
 from app.domains.observability.trace_service import get_trace_id
+from app.domains.observability import usage_service
 from datetime import datetime, timezone
 from app.domains.governance.executor_promote_webhook_service import notify_model_promotion_webhook
 from app.domains.orchestration.manifest_service import upsert_task_manifest
@@ -656,6 +657,17 @@ def get_tenant_quota_usage_v1(
     return {"limits": limits, "usage": usage, "enforcement_enabled": tenant_quota_service.enforcement_enabled()}
 
 
+@router.get("/tenants/{tenant_id}/usage")
+def get_tenant_resource_usage_v1(
+    tenant_id: str,
+    days: int = Query(default=30, ge=1, le=365),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id="default_project", min_role="viewer")
+    return usage_service.get_tenant_usage_bundle(tenant_id=tenant_id, days=days)
+
+
 @router.get("/tenants")
 def list_tenants_v1(limit: int = 50, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1210,6 +1222,25 @@ def get_task_v1(
     return task
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/usage")
+def get_task_usage_v1(
+    tenant_id: str,
+    project_id: str,
+    task_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    task = get_task_by_id(tenant_id=tenant_id, project_id=project_id, task_id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task_not_found")
+    return usage_service.get_task_usage_bundle(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        task_id=task_id,
+    )
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs")
 def get_task_logs_v1(
     tenant_id: str,
@@ -1576,6 +1607,36 @@ def get_run_tracking_v1(
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
     return get_run_tracking(run_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/usage")
+def get_run_usage_v1(
+    tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return usage_service.get_run_usage_bundle(run_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/usage")
+def get_project_usage_v1(
+    tenant_id: str,
+    project_id: str,
+    days: int = Query(default=30, ge=1, le=365),
+    top_runs: int = Query(default=10, ge=1, le=50),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return usage_service.get_project_usage_bundle(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        days=days,
+        top_runs=top_runs,
+    )
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/compare")

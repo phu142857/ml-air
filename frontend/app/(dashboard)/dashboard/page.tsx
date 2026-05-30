@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import {
   AlertCircle,
   ArrowUpRight,
+  Activity,
   Box,
   CheckCircle2,
   Clock,
@@ -24,6 +25,7 @@ import {
   ScopePinnedInline,
 } from "@/components/mlops/layout"
 import { ListTableSkeleton } from "@/components/mlops/list-table-skeleton"
+import { UsageRollupPanel } from "@/components/mlops/usage-rollup-panel"
 
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 
@@ -63,6 +65,8 @@ export default function DashboardPage() {
   const { tenantId, projectId, token } = useAppContext()
 
   const scopePinned = isScopePinned(tenantId, projectId)
+  const showProjectUsage = scopePinned
+  const showTenantUsage = !scopePinned && tenantId !== "all"
 
   const {
     isLoading,
@@ -208,6 +212,27 @@ export default function DashboardPage() {
                 )
               })}
             </div>
+
+            {showProjectUsage || showTenantUsage ? (
+              <PanelShell>
+                <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                  <Activity strokeWidth={1.75} className="h-4 w-4 text-primary" />
+                  Resource attribution
+                  <span className="text-xs font-normal text-muted-foreground">· last 30 days</span>
+                </h3>
+                {showProjectUsage ? (
+                  <UsageRollupPanel
+                    mode="project"
+                    tenantId={tenantId}
+                    projectId={projectId}
+                    token={token}
+                    days={30}
+                  />
+                ) : (
+                  <UsageRollupPanel mode="tenant" tenantId={tenantId} token={token} days={30} />
+                )}
+              </PanelShell>
+            ) : null}
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
               <PanelShell className="xl:col-span-3">

@@ -12,6 +12,7 @@ import hmac
 import base64
 from functools import lru_cache
 from datetime import datetime, timezone
+from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from redis import Redis
@@ -49,36 +50,49 @@ def _redis() -> Redis:
     return Redis.from_url(url, decode_responses=True)
 
 
-def _run_plugin_subprocess(plugin_name: str, context: dict) -> dict:
+def _run_plugin_subprocess(
+    plugin_name: str,
+    context: dict,
+    monitor: Any | None = None,
+) -> dict:
     timeout_seconds = int(os.getenv("ML_AIR_PLUGIN_TIMEOUT_SECONDS", "120"))
     runner_module = os.getenv("ML_AIR_PLUGIN_RUNNER_MODULE", "mlair_runner")
     from otel_bootstrap import otel_subprocess_env
 
     child_env = {**os.environ, **otel_subprocess_env()}
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             ["python", "-m", runner_module, plugin_name],
-            input=json.dumps(context),
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_seconds,
-            check=False,
             env=child_env,
         )
+    except OSError as exc:
+        return {"ok": False, "error": f"spawn_failed: {exc}"}
+
+    if monitor is not None:
+        monitor.start(proc.pid)
+
+    try:
+        stdout, stderr = proc.communicate(input=json.dumps(context), timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
         return {"ok": False, "error": f"timeout_after_{timeout_seconds}s"}
     if proc.returncode != 0:
         return {
             "ok": False,
             "error": f"exit_code={proc.returncode}",
-            "stderr": (proc.stderr or "").strip(),
-            "stdout": (proc.stdout or "").strip(),
+            "stderr": (stderr or "").strip(),
+            "stdout": (stdout or "").strip(),
         }
     try:
-        parsed = json.loads(proc.stdout or "{}")
-        return {"ok": True, "result": parsed, "stderr": (proc.stderr or "").strip()}
+        parsed = json.loads(stdout or "{}")
+        return {"ok": True, "result": parsed, "stderr": (stderr or "").strip()}
     except json.JSONDecodeError as exc:
-        return {"ok": False, "error": f"invalid_json_output: {exc}", "stdout": (proc.stdout or "").strip()}
+        return {"ok": False, "error": f"invalid_json_output: {exc}", "stdout": (stdout or "").strip()}
 
 
 def _tracking_post(path: str, payload: dict) -> None:
@@ -410,11 +424,20 @@ def main() -> None:
             task_start = time.perf_counter()
             cpu_start = time.process_time()
             rss_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+            from sdk.resource_monitor import TaskResourceMonitor, merge_resource_usage, resource_monitor_enabled
+
+            monitor: TaskResourceMonitor | None = None
+            usage_report: dict[str, Any] | None = None
+            if resource_monitor_enabled():
+                monitor = TaskResourceMonitor(task_id=str(task.get("task_id") or ""))
+
             http_task_cfg = task.get("http_task") if task.get("task_type") == "http" else None
             plugin_name = task.get("plugin_name")
             if not http_task_cfg and not plugin_name:
+                if monitor is not None:
+                    monitor.start(os.getpid())
                 time.sleep(duration)
-            finished_at = datetime.now(timezone.utc).isoformat()
             status = "SUCCESS"
             plugin_exec = None
             http_exec = None
@@ -424,6 +447,8 @@ def main() -> None:
             if pipeline_id.startswith("always_fail"):
                 status = "FAILED"
             if http_task_cfg and isinstance(http_task_cfg, dict):
+                if monitor is not None:
+                    monitor.start(os.getpid())
                 from http_task_runner import run_http_task
 
                 http_ctx = dict(task.get("context", {}))
@@ -438,7 +463,11 @@ def main() -> None:
                 if not http_exec.get("ok"):
                     status = "FAILED"
             elif plugin_name:
-                plugin_exec = _run_plugin_subprocess(plugin_name=plugin_name, context=task.get("context", {}))
+                plugin_exec = _run_plugin_subprocess(
+                    plugin_name=plugin_name,
+                    context=task.get("context", {}),
+                    monitor=monitor,
+                )
                 if not plugin_exec.get("ok"):
                     status = "FAILED"
                 else:
@@ -452,10 +481,24 @@ def main() -> None:
                     task.get("task_id"),
                     pipeline_id,
                 )
+
+            if monitor is not None:
+                usage_report = monitor.stop()
+
+            finished_at = datetime.now(timezone.utc).isoformat()
             wall_seconds = time.perf_counter() - task_start
             cpu_seconds = max(0.0, time.process_time() - cpu_start)
             rss_end = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             rss_kb = int(max(rss_start, rss_end))
+            legacy_ru = {
+                "duration_ms": int(wall_seconds * 1000),
+                "cpu_time_seconds": cpu_seconds,
+                "memory_rss_kb": rss_kb,
+            }
+            monitored_ru = (usage_report or {}).get("resource_usage") if usage_report else None
+            resource_usage = merge_resource_usage(legacy_ru, monitored_ru)
+            usage_samples = (usage_report or {}).get("usage_samples") if usage_report else None
+            resource_monitor_meta = (usage_report or {}).get("resource_monitor") if usage_report else None
             _post_manifest(task=task, plugin_result=plugin_exec, status=status)
             TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
             TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(wall_seconds)
@@ -512,15 +555,15 @@ def main() -> None:
                 "context": task.get("context", {}),
                 "started_at": started_at,
                 "finished_at": finished_at,
-                "resource_usage": {
-                    "duration_ms": int(wall_seconds * 1000),
-                    "cpu_time_seconds": cpu_seconds,
-                    "memory_rss_kb": rss_kb,
-                },
+                "resource_usage": resource_usage,
                 "pipeline_version_id": task.get("pipeline_version_id"),
                 "config_snapshot": task.get("config_snapshot"),
                 "replay_from_task_id": task.get("replay_from_task_id"),
             }
+            if usage_samples:
+                done_payload["usage_samples"] = usage_samples
+            if resource_monitor_meta:
+                done_payload["resource_monitor"] = resource_monitor_meta
             from otel_bootstrap import inject_w3c_carrier_on_event
 
             inject_w3c_carrier_on_event(done_payload)

@@ -4,6 +4,8 @@
 
 Run pipeline tasks **outside** the built-in Redis executor: an external process (your own worker or training service) **leases** work from MLAir, executes it, then calls **complete** or **fail**. MLAir remains the source of truth for run and task status.
 
+For a comparison with **internal** mode (default Redis executor), see [Task execution mode](../concepts/task-execution-mode.md).
+
 ## When to use this
 
 - You want **async, distributed** execution without embedding business HTTP calls inside MLAir.
@@ -49,14 +51,16 @@ Create a run through the normal API (for example your control plane calling MLAi
 
 ### 5. Reference script
 
-From the repo root:
+From the repo root (requires `psutil`; sends **Resource Usage Contract v1** on complete):
 
 ```bash
 export MLAIR_API_BASE_URL=http://localhost:8080
 export MLAIR_WORKER_TOKEN=your-worker-or-maintainer-token
 export MLAIR_CAPABILITIES=app_etl_adapter,app_train_adapter
-python scripts/external_worker_example.py
+PYTHONPATH=. python scripts/external_worker_example.py
 ```
+
+See [Resource Usage Contract v1](./resource-usage-contract-v1.md).
 
 ## Environment
 

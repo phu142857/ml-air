@@ -38,7 +38,10 @@ Each guide follows:
 - [Sign-off record template](./operations/signoff-record-template.md)
 - [Runbook: Readiness v2 Cutover](./runbooks/readiness-v2-cutover.md)
 - [Run a Pipeline](./guides/run-pipeline.md)
+- [Task execution mode (internal vs external)](./concepts/task-execution-mode.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)
+- [Resource usage attribution](./guides/usage-attribution.md)
+- [Resource Usage Contract v1](./guides/resource-usage-contract-v1.md)
 - [Configure Data Readiness and Gating](./guides/configure-data-readiness-gating.md)
 - [Monitor a Run](./guides/monitor-run.md)
 - [Retry a Failed Task](./guides/retry-failed-task.md)
@@ -82,6 +85,8 @@ Each guide follows:
 ### Observability
 
 - [View Metrics](./guides/view-metrics.md)
+- [Resource usage attribution](./guides/usage-attribution.md)
+- [Resource Usage Contract v1](./guides/resource-usage-contract-v1.md)
 - [OpenTelemetry (traces, OTLP)](./guides/opentelemetry.md)
 - [Set Up Prometheus](./guides/setup-prometheus.md)
 - [Debug with Grafana](./guides/debug-with-grafana.md)
@@ -104,6 +109,7 @@ Each guide follows:
 - [Pipeline](./concepts/pipeline.md)
 - [Run](./concepts/run.md)
 - [Task](./concepts/task.md)
+- [Task execution mode (internal vs external)](./concepts/task-execution-mode.md)
 - [Lineage](./concepts/lineage.md)
 - [Plugin](./concepts/plugin.md)
 

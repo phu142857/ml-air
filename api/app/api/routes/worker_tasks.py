@@ -26,8 +26,17 @@ class LeaseTasksIn(BaseModel):
     max_tasks: int = Field(default=1, ge=1, le=50)
 
 
+class UsageSampleIn(BaseModel):
+    sampled_at: str | None = None
+    cpu_percent: float | None = None
+    memory_mb: float | None = None
+    gpu_util_percent: float | None = None
+    gpu_memory_mb: float | None = None
+
+
 class HeartbeatIn(BaseModel):
     worker_id: str = Field(min_length=1, max_length=256)
+    usage: UsageSampleIn | None = None
 
 
 class TaskArtifactIn(BaseModel):
@@ -35,16 +44,35 @@ class TaskArtifactIn(BaseModel):
     uri: str = Field(min_length=1, max_length=2048)
 
 
+class ResourceUsageIn(BaseModel):
+    duration_ms: int | None = None
+    duration_seconds: float | None = None
+    cpu_time_seconds: float | None = None
+    memory_rss_kb: int | None = None
+    gpu_seconds: float | None = None
+    gpu_memory_mb_seconds: float | None = None
+    disk_read_bytes: int | None = None
+    disk_write_bytes: int | None = None
+    cpu_percent_peak: float | None = None
+    memory_mb_peak: float | None = None
+    gpu_percent_peak: float | None = None
+    gpu_memory_mb_peak: float | None = None
+
+
 class CompleteTaskIn(BaseModel):
     worker_id: str = Field(min_length=1, max_length=256)
     metrics: dict[str, Any] = Field(default_factory=dict)
     artifact_uri: str | None = None
     artifacts: list[TaskArtifactIn] | None = None
+    resource_usage: ResourceUsageIn | None = None
+    usage_samples: list[UsageSampleIn] | None = None
 
 
 class FailTaskIn(BaseModel):
     worker_id: str = Field(min_length=1, max_length=256)
     error: str = Field(min_length=1, max_length=8000)
+    resource_usage: ResourceUsageIn | None = None
+    usage_samples: list[UsageSampleIn] | None = None
 
 
 class TaskLogLineIn(BaseModel):
@@ -83,7 +111,13 @@ def post_task_heartbeat(
     principal = authenticate_worker_lease_principal(authorization)
     if not external_execution_enabled():
         raise HTTPException(status_code=503, detail="external_execution_disabled")
-    ok = heartbeat_task(task_id=task_id, worker_id=body.worker_id, principal=principal)
+    usage = body.usage.model_dump(exclude_none=True) if body.usage else None
+    ok = heartbeat_task(
+        task_id=task_id,
+        worker_id=body.worker_id,
+        principal=principal,
+        usage_sample=usage,
+    )
     return {"ok": ok}
 
 
@@ -99,12 +133,18 @@ def post_task_complete(
         if body.artifacts
         else None
     )
+    resource_usage = body.resource_usage.model_dump(exclude_none=True) if body.resource_usage else None
+    usage_samples = (
+        [s.model_dump(exclude_none=True) for s in body.usage_samples] if body.usage_samples else None
+    )
     outcome, detail = complete_task(
         task_id=task_id,
         worker_id=body.worker_id,
         metrics=body.metrics,
         artifacts=artifacts,
         artifact_uri=body.artifact_uri,
+        resource_usage=resource_usage,
+        usage_samples=usage_samples,
         principal=principal,
     )
     if outcome == "idempotent":
@@ -137,5 +177,16 @@ def post_task_fail(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, Any]:
     principal = authenticate_worker_lease_principal(authorization)
-    fail_task(task_id=task_id, worker_id=body.worker_id, error=body.error, principal=principal)
+    resource_usage = body.resource_usage.model_dump(exclude_none=True) if body.resource_usage else None
+    usage_samples = (
+        [s.model_dump(exclude_none=True) for s in body.usage_samples] if body.usage_samples else None
+    )
+    fail_task(
+        task_id=task_id,
+        worker_id=body.worker_id,
+        error=body.error,
+        resource_usage=resource_usage,
+        usage_samples=usage_samples,
+        principal=principal,
+    )
     return {"ok": True, "task_id": task_id, "status": "FAILED"}

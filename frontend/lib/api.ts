@@ -144,6 +144,122 @@ export type RunTracking = {
   artifacts: Array<{ artifact_id: string; path: string; uri?: string | null; logged_at: string }>;
 };
 
+export type UsageSampleStats = {
+  cpu_pct_avg?: number | null;
+  cpu_pct_peak?: number | null;
+  memory_mb_avg?: number | null;
+  memory_mb_peak?: number | null;
+  gpu_util_pct_avg?: number | null;
+  gpu_util_pct_peak?: number | null;
+  gpu_memory_mb_avg?: number | null;
+  gpu_memory_mb_peak?: number | null;
+};
+
+export type UsageSummaryRecord = {
+  runtime_seconds?: number | null;
+  cpu_seconds?: number | null;
+  memory_rss_peak_kb?: number | null;
+  memory_mb_seconds?: number | null;
+  gpu_seconds?: number | null;
+  gpu_memory_mb_seconds?: number | null;
+  disk_read_bytes?: number | null;
+  disk_write_bytes?: number | null;
+  task_count?: number | null;
+} & UsageSampleStats;
+
+export type RunUsageRollupItem = {
+  run_id: string;
+  runtime_seconds?: number | null;
+  cpu_seconds?: number | null;
+  gpu_seconds?: number | null;
+  task_count?: number | null;
+  aggregated_at?: string | null;
+};
+
+export type ProjectUsageRollupItem = {
+  project_id: string;
+  run_count: number;
+  usage: UsageSummaryRecord | null;
+};
+
+export type ProjectUsageBundle = {
+  tenant_id: string;
+  project_id: string;
+  days: number | null;
+  run_count: number;
+  usage: UsageSummaryRecord | null;
+  runs: RunUsageRollupItem[];
+  enabled: boolean;
+};
+
+export type TenantUsageBundle = {
+  tenant_id: string;
+  days: number | null;
+  run_count: number;
+  usage: UsageSummaryRecord | null;
+  projects: ProjectUsageRollupItem[];
+  enabled: boolean;
+};
+
+export type RunUsageRecord = {
+  run_id: string;
+  tenant_id: string;
+  project_id: string;
+  runtime_seconds?: number | null;
+  cpu_seconds?: number | null;
+  memory_rss_peak_kb?: number | null;
+  memory_mb_seconds?: number | null;
+  gpu_seconds?: number | null;
+  gpu_memory_mb_seconds?: number | null;
+  disk_read_bytes?: number | null;
+  disk_write_bytes?: number | null;
+  task_count?: number | null;
+  aggregated_at?: string | null;
+} & UsageSampleStats;
+
+export type TaskUsageRecord = {
+  task_id: string;
+  run_id?: string | null;
+  plugin?: string | null;
+  runtime_seconds?: number | null;
+  cpu_seconds?: number | null;
+  memory_rss_peak_kb?: number | null;
+  memory_mb_seconds?: number | null;
+  gpu_seconds?: number | null;
+  gpu_memory_mb_seconds?: number | null;
+  disk_read_bytes?: number | null;
+  disk_write_bytes?: number | null;
+  sample_count?: number | null;
+} & UsageSampleStats;
+
+export type TaskLiveUsage = {
+  task_id: string;
+  runtime_seconds?: number | null;
+  cpu_percent?: number | null;
+  memory_mb?: number | null;
+  gpu_util_percent?: number | null;
+  gpu_memory_mb?: number | null;
+  cpu_pct_peak?: number | null;
+  memory_mb_peak?: number | null;
+  gpu_util_pct_peak?: number | null;
+  gpu_memory_mb_peak?: number | null;
+  sample_count?: number | null;
+};
+
+export type RunUsageBundle = {
+  run_id: string;
+  usage: RunUsageRecord | null;
+  tasks: TaskUsageRecord[];
+  live?: TaskLiveUsage[];
+  enabled: boolean;
+};
+
+export type TaskUsageBundle = {
+  task_id: string;
+  usage: TaskUsageRecord | null;
+  enabled: boolean;
+};
+
 export type PluginCompatibility = {
   compatible: boolean;
   reasons: Array<{ code: string; message: string }>;
@@ -1214,6 +1330,76 @@ export async function fetchRunTracking(tenantId: string, projectId: string, runI
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as RunTracking;
+}
+
+export async function fetchRunUsage(tenantId: string, projectId: string, runId: string, token: string) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/usage`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunUsageBundle;
+}
+
+export async function fetchTaskUsage(
+  tenantId: string,
+  projectId: string,
+  taskId: string,
+  token: string,
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskId}/usage`,
+    {
+      headers: authHeaders(token),
+      cache: "no-store",
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as TaskUsageBundle;
+}
+
+export async function fetchProjectUsage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { days?: number; topRuns?: number },
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const params = new URLSearchParams();
+  if (opts?.days != null) params.set("days", String(opts.days));
+  if (opts?.topRuns != null) params.set("top_runs", String(opts.topRuns));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/usage${qs}`,
+    {
+      headers: authHeaders(token),
+      cache: "no-store",
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ProjectUsageBundle;
+}
+
+export async function fetchTenantUsage(
+  tenantId: string,
+  token: string,
+  opts?: { days?: number },
+) {
+  const params = new URLSearchParams();
+  if (opts?.days != null) params.set("days", String(opts.days));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/usage${qs}`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as TenantUsageBundle;
 }
 
 export async function compareRunMetrics(tenantId: string, projectId: string, runIds: string[], token: string) {

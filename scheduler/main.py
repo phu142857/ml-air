@@ -523,7 +523,9 @@ def _cancel_tasks_for_run(run_id: str, *, only_pending_like: bool = True) -> int
             cur.execute(
                 f"""
                 UPDATE tasks
-                SET status = 'CANCELLED', updated_at = NOW()
+                SET status = 'CANCELLED',
+                    finished_at = COALESCE(finished_at, NOW()),
+                    updated_at = NOW()
                 WHERE {where}
                 """,
                 (run_id,),
@@ -609,6 +611,13 @@ def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | 
                 (next_status, run_id),
             )
             updated = cur.fetchone()
+    if updated and next_status in ("SUCCESS", "FAILED", "CANCELLED"):
+        try:
+            from sdk.usage_cost import rollup_run_usage
+
+            rollup_run_usage(run_id)
+        except Exception:
+            logger.exception("run_usage_rollup_failed run_id=%s", run_id)
     if updated and redis_client is not None:
         realtime_publish.publish_run_updated(
             redis_client,
@@ -671,6 +680,15 @@ def _upsert_or_transition_task(
                     plugin = COALESCE(EXCLUDED.plugin, tasks.plugin),
                     leased_by = NULL,
                     lease_expires_at = NULL,
+                    started_at = CASE
+                        WHEN EXCLUDED.status = 'RUNNING' THEN COALESCE(tasks.started_at, NOW())
+                        ELSE tasks.started_at
+                    END,
+                    finished_at = CASE
+                        WHEN EXCLUDED.status IN ('SUCCESS', 'FAILED', 'CANCELLED')
+                            THEN COALESCE(tasks.finished_at, NOW())
+                        ELSE tasks.finished_at
+                    END,
                     updated_at = NOW()
                 """,
                 (task_id, run_id, next_status, attempt, plugin),
@@ -1537,6 +1555,16 @@ def main() -> None:
                     float((done_event.get("resource_usage") or {}).get("cpu_time_seconds")) if (done_event.get("resource_usage") or {}).get("cpu_time_seconds") is not None else None,
                     int((done_event.get("resource_usage") or {}).get("memory_rss_kb")) if (done_event.get("resource_usage") or {}).get("memory_rss_kb") is not None else None,
                 )
+                try:
+                    from sdk.usage_cost import ingest_task_usage_from_done_event
+
+                    ingest_task_usage_from_done_event(done_event)
+                except Exception:
+                    logger.exception(
+                        "task_usage_ingest_failed run_id=%s task_id=%s",
+                        done_event.get("run_id"),
+                        done_event.get("task_id"),
+                    )
                 if done_event["status"] == "SUCCESS":
                     cur_status = _get_run_status(done_event["run_id"])
                     if cur_status and str(cur_status).upper() == "CANCELLED":

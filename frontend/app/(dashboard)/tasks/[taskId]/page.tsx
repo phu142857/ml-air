@@ -6,11 +6,12 @@ import { useQuery } from "@tanstack/react-query"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ListTodo, Loader2 } from "lucide-react"
-import { fetchTaskResolved, normalizeProjectId } from "@/lib/api"
+import { fetchTaskResolved, fetchTaskUsage, normalizeProjectId } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { Button } from "@/components/ui/button"
 import {
+  DetailSection,
   MetadataGrid,
   MlopsEmptyState,
   PageScrollBody,
@@ -18,6 +19,7 @@ import {
   ScopePinnedInline,
   SubpageBreadcrumb,
 } from "@/components/mlops/layout"
+import { TaskUsageSummary } from "@/components/mlops/task-usage-summary"
 import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
@@ -59,6 +61,29 @@ function TaskDetailContent() {
   const scopePinned = isScopePinned(tenantId, projectId)
   const runId = data?.run_id ?? hint.runId
   const payload = taskPayloadRecord(data)
+
+  const usageScope = useMemo(() => {
+    if (resolved?.tenant_id && resolved?.project_id) {
+      return { tenantId: resolved.tenant_id, projectId: resolved.project_id }
+    }
+    if (data?.tenant_id && data?.project_id) {
+      return { tenantId: data.tenant_id, projectId: data.project_id }
+    }
+    if (isScopePinned(tenantId, projectId)) {
+      return { tenantId, projectId }
+    }
+    return null
+  }, [resolved, data, tenantId, projectId])
+
+  const usageQuery = useQuery({
+    queryKey: usageScope
+      ? mlairKeys.task.usage(usageScope.tenantId, usageScope.projectId, taskId)
+      : ["task-usage", "pending", taskId],
+    queryFn: () => fetchTaskUsage(usageScope!.tenantId, usageScope!.projectId, taskId, token),
+    enabled: Boolean(taskId?.trim() && token?.trim() && usageScope && data),
+    refetchOnMount: "always",
+    ...poll,
+  })
 
   if (!isLoading && !isError && !data) {
     return (
@@ -217,6 +242,35 @@ function TaskDetailContent() {
                 ]}
               />
             </div>
+            <DetailSection
+              title="Resource usage"
+              description="CPU, memory, GPU, and disk attributed to this task (ML Resource Traceability)."
+              accentBorder="violet"
+              headerActions={
+                runId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
+                    asChild
+                  >
+                    <Link href={`/runs/${encodeURIComponent(runId)}`}>Run resources</Link>
+                  </Button>
+                ) : null
+              }
+            >
+              {usageQuery.isError ? (
+                <p className="text-sm text-muted-foreground">{formatApiClientError(usageQuery.error)}</p>
+              ) : (
+                <TaskUsageSummary
+                  usage={usageQuery.data?.usage}
+                  enabled={usageQuery.data?.enabled ?? true}
+                  runId={usageQuery.data?.usage?.run_id ?? runId}
+                  loading={usageQuery.isLoading}
+                />
+              )}
+            </DetailSection>
             <JsonPayloadPanel title="Task payload" data={payload} className="border-border/60 bg-card" />
           </>
         ) : null}

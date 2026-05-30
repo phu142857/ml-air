@@ -26,6 +26,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { JaegerLink } from "@/components/mlops/jaeger-link"
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
+import { RunTasksUsageTable } from "@/components/mlops/run-tasks-usage-table"
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import {
@@ -52,13 +53,13 @@ import {
   normalizeStatus,
   type StatusChipKey,
 } from "@/lib/status-style"
-import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { useAppContext } from "@/lib/app-context"
 import {
   fetchRun,
   fetchRunTasks,
   fetchRunLogs,
   fetchRunTracking,
+  fetchRunUsage,
   fetchRunReadiness,
   fetchAuditTimeline,
   cancelRun,
@@ -66,6 +67,8 @@ import {
   type LogItem,
   type RunItem,
   type TaskItem,
+  type TaskUsageRecord,
+  type TaskLiveUsage,
   type RunReadiness,
   type ReadinessItem,
 } from "@/lib/api"
@@ -82,10 +85,13 @@ import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
 
+const RUN_USAGE_LIVE_REFRESH_MS = 1000
+const ACTIVE_RUN_REFETCH_MS = 4000
+
 const RUN_TABS = [
   { id: "overview", label: "Overview" },
   { id: "graph", label: "Execution graph", icon: <Network className="h-3.5 w-3.5" /> },
-  { id: "tasks", label: "Tasks", icon: <ListTodo className="h-3.5 w-3.5" /> },
+  { id: "tasks", label: "Tasks & resources", icon: <ListTodo className="h-3.5 w-3.5" /> },
   { id: "logs", label: "Logs", icon: <Terminal className="h-3.5 w-3.5" /> },
   { id: "metrics", label: "Metrics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
   { id: "artifacts", label: "Artifacts", icon: <FileBox className="h-3.5 w-3.5" /> },
@@ -187,16 +193,6 @@ function pickTraceId(run: RunItem): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null
 }
 
-function taskStatusForBadge(status: string) {
-  const t = normalizeStatus(status)
-  if (t === "SUCCESS") return "success" as const
-  if (t === "FAILED") return "failed" as const
-  if (t === "RUNNING") return "running" as const
-  if (t === "CANCELLED") return "cancelled" as const
-  if (t === "QUEUED" || t === "PENDING") return "pending" as const
-  return "pending" as const
-}
-
 interface GateResultRow {
   id: string
   gate: string
@@ -276,7 +272,12 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   const activeRunRefetchMs = (status: string | undefined) => {
     const st = normalizeStatus(String(status ?? storeRun?.status ?? ""))
-    return st === "RUNNING" || st === "PENDING" || st === "QUEUED" ? 4000 : false
+    return st === "RUNNING" || st === "PENDING" || st === "QUEUED" ? ACTIVE_RUN_REFETCH_MS : false
+  }
+
+  const usageLiveRefetchMs = (status: string | undefined) => {
+    const st = normalizeStatus(String(status ?? storeRun?.status ?? ""))
+    return st === "RUNNING" || st === "PENDING" || st === "QUEUED" ? RUN_USAGE_LIVE_REFRESH_MS : false
   }
 
   const runQuery = useQuery({
@@ -316,6 +317,16 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     enabled: enabled && Boolean(runQuery.data),
     refetchOnMount: "always",
     refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
+    retry: false,
+  })
+
+  const usageQuery = useQuery({
+    queryKey: mlairKeys.run.usage(runId),
+    queryFn: () => fetchRunUsage(tenantId, projectId, runId, token),
+    enabled: enabled && Boolean(runQuery.data),
+    refetchOnMount: "always",
+    refetchInterval: () => usageLiveRefetchMs(runQuery.data?.status) || poll.refetchInterval,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -429,50 +440,21 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     [],
   )
 
-  const taskColumns: DataTableColumn<TaskItem>[] = useMemo(
-    () => [
-      {
-        id: "id",
-        header: "Task",
-        cell: (row) => (
-          <Link
-            className="font-mono text-xs text-primary hover:text-primary/80"
-            href={buildTaskDetailHref(row.task_id, {
-              tenant_id: run?.tenant_id ?? tenantId,
-              project_id: run?.project_id ?? projectId,
-              run_id: runId,
-            })}
-          >
-            {row.task_id}
-          </Link>
-        ),
-      },
-      {
-        id: "status",
-        header: "Status",
-        cell: (row) => (
-          <StatusBadge status={taskStatusForBadge(row.status)} label={row.status} size="sm" />
-        ),
-      },
-      {
-        id: "attempt",
-        header: "Attempt",
-        cell: (row) => (
-          <span className="text-xs text-muted-foreground tabular-nums">{row.attempt ?? "—"}</span>
-        ),
-      },
-      {
-        id: "updated",
-        header: "Updated",
-        cell: (row) => (
-          <span className="text-xs text-muted-foreground">
-            {row.updated_at ? formatDateTimeCompact(row.updated_at) : "—"}
-          </span>
-        ),
-      },
-    ],
-    [run, runId, tenantId, projectId],
-  )
+  const usageByTaskId = useMemo(() => {
+    const map = new Map<string, TaskUsageRecord>()
+    for (const row of usageQuery.data?.tasks ?? []) {
+      map.set(row.task_id, row)
+    }
+    return map
+  }, [usageQuery.data?.tasks])
+
+  const liveByTaskId = useMemo(() => {
+    const map = new Map<string, TaskLiveUsage>()
+    for (const row of usageQuery.data?.live ?? []) {
+      map.set(row.task_id, row)
+    }
+    return map
+  }, [usageQuery.data?.live])
 
   const runOverviewMetadataItems = useMemo(() => {
     if (!run) return []
@@ -717,15 +699,19 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="tasks" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.tasks}>
-            <DetailSection title="Tasks" description="Units of work recorded for this run.">
+            <DetailSection title="Tasks & resources">
               {tasksQuery.isError ? (
                 <p className="text-sm text-red-300">{formatApiClientError(tasksQuery.error)}</p>
               ) : (
-                <DataTable
-                  columns={taskColumns}
-                  data={tasks}
-                  keyExtractor={(r) => r.task_id}
-                  emptyMessage="No tasks returned for this run."
+                <RunTasksUsageTable
+                  tasks={tasks}
+                  usageByTaskId={usageByTaskId}
+                  liveByTaskId={liveByTaskId}
+                  tenantId={run?.tenant_id ?? tenantId}
+                  projectId={run?.project_id ?? projectId}
+                  runId={runId}
+                  usageEnabled={usageQuery.data?.enabled ?? true}
+                  usageLoading={usageQuery.isLoading}
                 />
               )}
             </DetailSection>

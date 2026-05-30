@@ -381,7 +381,9 @@ def cancel_run_and_tasks(run_id: str) -> bool:
             cur.execute(
                 """
                 UPDATE tasks
-                SET status = 'CANCELLED', updated_at = NOW()
+                SET status = 'CANCELLED',
+                    finished_at = COALESCE(finished_at, NOW()),
+                    updated_at = NOW()
                 WHERE run_id = %s
                   AND status NOT IN ('SUCCESS', 'FAILED', 'CANCELLED')
                 """,

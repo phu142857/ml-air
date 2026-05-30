@@ -227,7 +227,13 @@ def lease_tasks(
     return out
 
 
-def heartbeat_task(*, task_id: str, worker_id: str, principal: Principal | None) -> bool:
+def heartbeat_task(
+    *,
+    task_id: str,
+    worker_id: str,
+    principal: Principal | None,
+    usage_sample: dict[str, Any] | None = None,
+) -> bool:
     if not external_execution_enabled():
         return False
     wid = (worker_id or "").strip()
@@ -248,7 +254,15 @@ def heartbeat_task(*, task_id: str, worker_id: str, principal: Principal | None)
     with connect(database_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
-            return cur.rowcount > 0
+            ok = cur.rowcount > 0
+    if ok and isinstance(usage_sample, dict) and usage_sample:
+        try:
+            from sdk.usage_cost import record_usage_sample
+
+            record_usage_sample(task_id=task_id, sample=usage_sample)
+        except Exception:
+            pass
+    return ok
 
 
 def _load_task_run_row(task_id: str) -> dict[str, Any] | None:
@@ -397,6 +411,8 @@ def complete_task(
     metrics: dict[str, Any] | None,
     artifacts: list[dict[str, Any]] | None,
     artifact_uri: str | None,
+    resource_usage: dict[str, Any] | None = None,
+    usage_samples: list[dict[str, Any]] | None = None,
     principal: Principal | None,
 ) -> tuple[str, dict[str, Any]]:
     """Returns (outcome, detail) where outcome is ok|idempotent|conflict."""
@@ -457,6 +473,20 @@ def complete_task(
     if isinstance(sa, datetime):
         duration_ms = max(0, int((datetime.now(timezone.utc) - sa).total_seconds() * 1000))
 
+    ru: dict[str, Any] = {
+        "duration_ms": duration_ms,
+        "cpu_time_seconds": None,
+        "memory_rss_kb": None,
+        "gpu_seconds": None,
+        "gpu_memory_mb_seconds": None,
+        "disk_read_bytes": None,
+        "disk_write_bytes": None,
+    }
+    if isinstance(resource_usage, dict):
+        for key in ru:
+            if resource_usage.get(key) is not None:
+                ru[key] = resource_usage.get(key)
+
     with connect(database_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -467,6 +497,16 @@ def complete_task(
                 """,
                 (duration_ms, task_id),
             )
+            if ru.get("cpu_time_seconds") is not None or ru.get("memory_rss_kb") is not None:
+                cur.execute(
+                    """
+                    UPDATE tasks
+                    SET cpu_time_seconds = COALESCE(%s, cpu_time_seconds),
+                        memory_rss_kb = COALESCE(%s, memory_rss_kb)
+                    WHERE task_id = %s
+                    """,
+                    (ru.get("cpu_time_seconds"), ru.get("memory_rss_kb"), task_id),
+                )
 
     _persist_run_plugin_tracking(
         run_id=str(row["run_id"]),
@@ -495,11 +535,13 @@ def complete_task(
         "context": ctx,
         "started_at": started_iso,
         "finished_at": finished_at,
-        "resource_usage": {"duration_ms": duration_ms, "cpu_time_seconds": None, "memory_rss_kb": None},
+        "resource_usage": ru,
         "pipeline_version_id": row.get("pipeline_version_id"),
         "config_snapshot": row.get("config_snapshot"),
         "replay_from_task_id": row.get("replay_from_task_id"),
     }
+    if usage_samples:
+        done_payload["usage_samples"] = usage_samples
     publish_task_finished(done_payload)
     task_updated_at: datetime | None = None
     with connect(database_url(), autocommit=True) as conn:
@@ -531,7 +573,15 @@ def complete_task(
     return "ok", {"task_id": task_id, "status": "SUCCESS"}
 
 
-def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal | None) -> None:
+def fail_task(
+    *,
+    task_id: str,
+    worker_id: str,
+    error: str,
+    resource_usage: dict[str, Any] | None = None,
+    usage_samples: list[dict[str, Any]] | None = None,
+    principal: Principal | None,
+) -> None:
     from fastapi import HTTPException
 
     if not external_execution_enabled():
@@ -550,6 +600,25 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
     finished_at = datetime.now(timezone.utc).isoformat()
     started_iso = row["started_at"].isoformat() if row.get("started_at") else finished_at
     err = (error or "task_failed").strip()[:8000]
+
+    duration_ms = 0
+    sa = row.get("started_at")
+    if isinstance(sa, datetime):
+        duration_ms = max(0, int((datetime.now(timezone.utc) - sa).total_seconds() * 1000))
+
+    ru: dict[str, Any] = {
+        "duration_ms": duration_ms or None,
+        "cpu_time_seconds": None,
+        "memory_rss_kb": None,
+        "gpu_seconds": None,
+        "gpu_memory_mb_seconds": None,
+        "disk_read_bytes": None,
+        "disk_write_bytes": None,
+    }
+    if isinstance(resource_usage, dict):
+        for key in ru:
+            if resource_usage.get(key) is not None:
+                ru[key] = resource_usage.get(key)
 
     plugin_exec = {"ok": False, "error": err}
 
@@ -597,11 +666,13 @@ def fail_task(*, task_id: str, worker_id: str, error: str, principal: Principal 
         "context": ctx,
         "started_at": started_iso,
         "finished_at": finished_at,
-        "resource_usage": {"duration_ms": None, "cpu_time_seconds": None, "memory_rss_kb": None},
+        "resource_usage": ru,
         "pipeline_version_id": row.get("pipeline_version_id"),
         "config_snapshot": row.get("config_snapshot"),
         "replay_from_task_id": row.get("replay_from_task_id"),
     }
+    if usage_samples:
+        done_payload["usage_samples"] = usage_samples
     publish_task_finished(done_payload)
     task_updated_at_fail: datetime | None = None
     with connect(database_url(), autocommit=True) as conn:
