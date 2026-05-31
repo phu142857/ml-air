@@ -194,6 +194,10 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
     stat_placeholders = ", ".join(f"%({k})s" for k in _SAMPLE_STAT_KEYS)
     stat_updates = ", ".join(f"{k} = EXCLUDED.{k}" for k in _SAMPLE_STAT_KEYS)
 
+    memory_rss_peak_kb = agg["memory_rss_peak_kb"] or None
+    if stats.get("memory_mb_peak") is not None:
+        memory_rss_peak_kb = int(float(stats["memory_mb_peak"]) * 1024)
+
     params: dict[str, Any] = {
         "task_id": task_id,
         "run_id": run_id,
@@ -201,7 +205,7 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
         "project_id": project_id,
         "runtime_seconds": runtime_seconds or None,
         "cpu_seconds": cpu_seconds if cpu_seconds > 0 else None,
-        "memory_rss_peak_kb": agg["memory_rss_peak_kb"] or None,
+        "memory_rss_peak_kb": memory_rss_peak_kb,
         "memory_mb_seconds": agg["memory_mb_seconds"] or None,
         "gpu_seconds": gpu_seconds if gpu_seconds > 0 else None,
         "gpu_memory_mb_seconds": gpu_mem_mb_seconds if gpu_mem_mb_seconds > 0 else None,
@@ -499,6 +503,11 @@ def _task_runtime_seconds_from_row(
     return None
 
 
+_TERMINAL_TASK_STATUSES = frozenset(
+    {"SUCCESS", "SUCCEEDED", "FAILED", "FAILURE", "CANCELLED", "CANCELED"}
+)
+
+
 def get_task_latest_metrics(task_id: str) -> dict[str, Any] | None:
     """Latest CPU/RAM/GPU snapshot for run UI (live while RUNNING, last sample when done)."""
     if not usage_tracking_enabled():
@@ -536,22 +545,20 @@ def get_task_latest_metrics(task_id: str) -> dict[str, Any] | None:
                 (tid,),
             )
             count_row = cur.fetchone()
-            samples = [latest_row] if latest_row else []
             sample_count_from_db = int(count_row[0]) if count_row and count_row[0] is not None else 0
-            usage_row = None
-            if not samples:
-                cur.execute(
-                    """
-                    SELECT cpu_pct_peak, memory_mb_peak, gpu_util_pct_peak, gpu_memory_mb_peak,
-                           runtime_seconds, sample_count
-                    FROM task_usage
-                    WHERE task_id = %s
-                    LIMIT 1
-                    """,
-                    (tid,),
-                )
-                usage_row = cur.fetchone()
+            cur.execute(
+                """
+                SELECT cpu_pct_peak, memory_mb_peak, gpu_util_pct_peak, gpu_memory_mb_peak,
+                       runtime_seconds, sample_count
+                FROM task_usage
+                WHERE task_id = %s
+                LIMIT 1
+                """,
+                (tid,),
+            )
+            usage_row = cur.fetchone()
 
+    samples = [latest_row] if latest_row else []
     runtime_seconds = _task_runtime_seconds_from_row(
         status=status,
         started_at=started_at,
@@ -564,8 +571,20 @@ def get_task_latest_metrics(task_id: str) -> dict[str, Any] | None:
     latest_cpu = latest_mem = latest_gpu = latest_gpu_mem = None
     sample_count = 0
     cpu_pct_peak = memory_mb_peak = gpu_util_pct_peak = gpu_memory_mb_peak = None
+    terminal = status in _TERMINAL_TASK_STATUSES
 
-    if samples:
+    if terminal and usage_row:
+        cpu_pct_peak = float(usage_row[0]) if usage_row[0] is not None else None
+        memory_mb_peak = float(usage_row[1]) if usage_row[1] is not None else None
+        gpu_util_pct_peak = float(usage_row[2]) if usage_row[2] is not None else None
+        gpu_memory_mb_peak = float(usage_row[3]) if usage_row[3] is not None else None
+        sample_count = int(usage_row[5] or sample_count_from_db)
+        cpu_pct_peak = normalize_cpu_tree_percent(cpu_pct_peak)
+        latest_cpu = cpu_pct_peak
+        latest_mem = memory_mb_peak
+        latest_gpu = gpu_util_pct_peak
+        latest_gpu_mem = gpu_memory_mb_peak
+    elif samples:
         sample_count = sample_count_from_db or len(samples)
         last = samples[-1]
         latest_cpu = normalize_cpu_tree_percent(float(last[1]) if last[1] is not None else None)
@@ -577,8 +596,7 @@ def get_task_latest_metrics(task_id: str) -> dict[str, Any] | None:
             runtime_seconds=runtime_seconds or 0.0,
             fallback_memory_mb=None,
         )
-        cpu_pct_peak = agg.get("cpu_pct_peak")
-        cpu_pct_peak = normalize_cpu_tree_percent(cpu_pct_peak)
+        cpu_pct_peak = normalize_cpu_tree_percent(agg.get("cpu_pct_peak"))
         memory_mb_peak = agg.get("memory_mb_peak")
         gpu_util_pct_peak = agg.get("gpu_util_pct_peak")
         gpu_memory_mb_peak = agg.get("gpu_memory_mb_peak")
@@ -589,7 +607,7 @@ def get_task_latest_metrics(task_id: str) -> dict[str, Any] | None:
         gpu_memory_mb_peak = float(usage_row[3]) if usage_row[3] is not None else None
         sample_count = int(usage_row[5] or 0)
         cpu_pct_peak = normalize_cpu_tree_percent(cpu_pct_peak)
-        latest_cpu = normalize_cpu_tree_percent(cpu_pct_peak)
+        latest_cpu = cpu_pct_peak
         latest_mem = memory_mb_peak
         latest_gpu = gpu_util_pct_peak
         latest_gpu_mem = gpu_memory_mb_peak

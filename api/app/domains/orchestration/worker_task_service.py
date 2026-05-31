@@ -48,6 +48,25 @@ def external_execution_enabled() -> bool:
     return _task_execution_mode() == "external"
 
 
+def _resource_usage_for_done_event(*, duration_ms: int, resource_usage: dict[str, Any] | None) -> dict[str, Any]:
+    """Forward worker ``resource_usage`` (legacy + contract v1 peaks) into ``task_finished``."""
+    ru: dict[str, Any] = {}
+    if duration_ms > 0:
+        ru["duration_ms"] = duration_ms
+    if isinstance(resource_usage, dict):
+        for key, val in resource_usage.items():
+            if val is not None:
+                ru[key] = val
+    if duration_ms > 0 and ru.get("duration_ms") is None:
+        ru["duration_ms"] = duration_ms
+    if ru.get("memory_rss_kb") is None and ru.get("memory_mb_peak") is not None:
+        try:
+            ru["memory_rss_kb"] = int(float(ru["memory_mb_peak"]) * 1024)
+        except (TypeError, ValueError):
+            pass
+    return {k: v for k, v in ru.items() if v is not None}
+
+
 def _principal_sql_filters(principal: Principal | None) -> tuple[str, list[Any]]:
     """Returns SQL fragment AND ... and params for tenant/project scope (None principal = global worker token)."""
     if principal is None:
@@ -473,19 +492,7 @@ def complete_task(
     if isinstance(sa, datetime):
         duration_ms = max(0, int((datetime.now(timezone.utc) - sa).total_seconds() * 1000))
 
-    ru: dict[str, Any] = {
-        "duration_ms": duration_ms,
-        "cpu_time_seconds": None,
-        "memory_rss_kb": None,
-        "gpu_seconds": None,
-        "gpu_memory_mb_seconds": None,
-        "disk_read_bytes": None,
-        "disk_write_bytes": None,
-    }
-    if isinstance(resource_usage, dict):
-        for key in ru:
-            if resource_usage.get(key) is not None:
-                ru[key] = resource_usage.get(key)
+    ru = _resource_usage_for_done_event(duration_ms=duration_ms, resource_usage=resource_usage)
 
     with connect(database_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -606,19 +613,7 @@ def fail_task(
     if isinstance(sa, datetime):
         duration_ms = max(0, int((datetime.now(timezone.utc) - sa).total_seconds() * 1000))
 
-    ru: dict[str, Any] = {
-        "duration_ms": duration_ms or None,
-        "cpu_time_seconds": None,
-        "memory_rss_kb": None,
-        "gpu_seconds": None,
-        "gpu_memory_mb_seconds": None,
-        "disk_read_bytes": None,
-        "disk_write_bytes": None,
-    }
-    if isinstance(resource_usage, dict):
-        for key in ru:
-            if resource_usage.get(key) is not None:
-                ru[key] = resource_usage.get(key)
+    ru = _resource_usage_for_done_event(duration_ms=duration_ms, resource_usage=resource_usage)
 
     plugin_exec = {"ok": False, "error": err}
 

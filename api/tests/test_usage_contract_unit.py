@@ -9,9 +9,10 @@ from sdk.usage_contract import (
     contract_heartbeat_from_sample,
     contract_summary_from_report,
     extract_contract_peaks,
+    merge_peak_stats,
     normalize_contract_resource_usage,
 )
-from sdk.usage_cost_math import normalize_cpu_tree_percent
+from sdk.usage_cost_math import aggregate_samples, normalize_cpu_tree_percent
 
 
 class TestUsageContract(unittest.TestCase):
@@ -73,6 +74,17 @@ class TestUsageContract(unittest.TestCase):
         self.assertEqual(out["duration_ms"], 1000)
         self.assertEqual(out["cpu_percent_peak"], 50.0)
         self.assertEqual(out["memory_mb_peak"], 512.0)
+
+    def test_contract_peaks_override_bad_sample_aggregate(self) -> None:
+        """Regression: worker peak must win over heartbeat outlier MAX(memory_mb)."""
+        bad_samples = [
+            (None, 50.0, 23987.87, None, None),
+            (None, 50.0, 514.14, None, None),
+        ]
+        agg = aggregate_samples(bad_samples, runtime_seconds=100.0, fallback_memory_mb=None)
+        stats = {"cpu_pct_peak": agg.get("cpu_pct_peak"), "memory_mb_peak": agg.get("memory_mb_peak")}
+        merged = merge_peak_stats(stats, extract_contract_peaks({"memory_mb_peak": 693.61}))
+        self.assertEqual(merged["memory_mb_peak"], 693.61)
 
     def test_contract_heartbeat_from_sample(self) -> None:
         hb = contract_heartbeat_from_sample(

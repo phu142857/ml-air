@@ -16,6 +16,24 @@ from app.domains.orchestration import worker_task_service as wts
 
 
 class TestWorkerTaskTracking(unittest.TestCase):
+    def test_resource_usage_for_done_event_forwards_contract_peaks(self) -> None:
+        ru = wts._resource_usage_for_done_event(
+            duration_ms=120_000,
+            resource_usage={
+                "memory_mb_peak": 693.61,
+                "cpu_percent_peak": 92.0,
+                "gpu_percent_peak": 88.0,
+                "gpu_memory_mb_peak": 7420.0,
+                "cpu_time_seconds": 3600.0,
+                "disk_read_bytes": 100,
+            },
+        )
+        self.assertEqual(ru["duration_ms"], 120_000)
+        self.assertEqual(ru["memory_mb_peak"], 693.61)
+        self.assertEqual(ru["cpu_percent_peak"], 92.0)
+        self.assertEqual(ru["gpu_percent_peak"], 88.0)
+        self.assertEqual(ru["memory_rss_kb"], int(693.61 * 1024))
+
     def test_normalize_complete_artifacts_uri_fallback(self) -> None:
         out = wts._normalize_complete_artifacts(None, "s3://bucket/model.pt")
         self.assertEqual(out, [{"path": "model", "uri": "s3://bucket/model.pt"}])
