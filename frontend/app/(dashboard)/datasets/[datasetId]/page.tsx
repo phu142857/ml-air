@@ -778,9 +778,20 @@ export default function DatasetHubPage() {
     const ok = (await versionEditorRef.current?.save()) ?? false;
     setVersionEditorSaving(false);
     if (ok) {
-      await queryClient.invalidateQueries({
-        queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: mlairKeys.datasets.readiness(tenantId, projectId, datasetId, 0),
+        }),
+      ]);
       setVersionEditorDirty(false);
     } else {
       setVersionEditorMsg("Save failed — check edits above.");

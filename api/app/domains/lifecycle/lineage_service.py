@@ -2235,6 +2235,45 @@ def preview_dataset_version_content(
     return out
 
 
+def _sync_dataset_aggregate_after_version_write(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    *,
+    record_count: int,
+    checksum: str,
+) -> None:
+    """Keep ``datasets.current_size`` aligned with head version after in-place version edits."""
+    latest = get_latest_materialized_dataset_version(tenant_id, project_id, dataset_id)
+    if not latest or str(latest.get("version_id") or "") != str(version_id):
+        return
+    ds = get_dataset(tenant_id, project_id, dataset_id)
+    if not ds:
+        return
+    _upsert_dataset(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        name=str(ds.get("name") or dataset_id),
+        checksum=checksum,
+        current_size=max(0, int(record_count)),
+    )
+    buf = get_dataset_buffer(tenant_id, project_id, dataset_id)
+    if buf and str(buf.get("last_materialized_version_id") or "").strip() == str(version_id):
+        _upsert_dataset_buffer(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            source_type=str(buf.get("source_type") or "runtime_feedback"),
+            current_size=max(0, int(record_count)),
+            target_threshold=int(buf.get("target_threshold") or 1000),
+            accumulation_strategy=str(buf.get("accumulation_strategy") or DEFAULT_ACCUMULATION_STRATEGY),
+            window_status=str(buf.get("window_status") or "active"),
+            last_materialized_version_id=version_id,
+            last_materialized_at=buf.get("last_materialized_at"),
+        )
+
+
 def _write_dataset_version_encoded(
     tenant_id: str,
     project_id: str,
@@ -2261,6 +2300,14 @@ def _write_dataset_version_encoded(
                 """,
                 (checksum, record_count, version_id),
             )
+    _sync_dataset_aggregate_after_version_write(
+        tenant_id,
+        project_id,
+        dataset_id,
+        version_id,
+        record_count=record_count,
+        checksum=checksum,
+    )
     _notify_dataset_updated(tenant_id, project_id, dataset_id, action="version_content_updated")
     updated = get_dataset_version(tenant_id, project_id, version_id)
     return {
