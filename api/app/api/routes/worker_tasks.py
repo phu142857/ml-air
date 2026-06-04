@@ -66,6 +66,7 @@ class CompleteTaskIn(BaseModel):
     artifacts: list[TaskArtifactIn] | None = None
     resource_usage: ResourceUsageIn | None = None
     usage_samples: list[UsageSampleIn] | None = None
+    lineage: dict[str, Any] | None = None
 
 
 class FailTaskIn(BaseModel):
@@ -145,6 +146,7 @@ def post_task_complete(
         artifact_uri=body.artifact_uri,
         resource_usage=resource_usage,
         usage_samples=usage_samples,
+        lineage=body.lineage if isinstance(body.lineage, dict) else None,
         principal=principal,
     )
     if outcome == "idempotent":

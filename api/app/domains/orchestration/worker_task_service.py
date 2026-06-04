@@ -423,6 +423,38 @@ def _authorize_task_row(principal: Principal | None, row: dict[str, Any]) -> Non
             raise HTTPException(status_code=403, detail="project_forbidden")
 
 
+def _lineage_block_for_complete(lineage: dict[str, Any] | None) -> dict[str, Any]:
+    return lineage if isinstance(lineage, dict) else {}
+
+
+def _should_ingest_lineage_on_complete(lineage_block: dict[str, Any]) -> bool:
+    ins = lineage_block.get("inputs")
+    outs = lineage_block.get("outputs")
+    return bool(ins or outs)
+
+
+def _ingest_lineage_on_complete(row: dict[str, Any], task_id: str, lineage_block: dict[str, Any]) -> None:
+    from app.domains.lifecycle import lineage_service
+
+    try:
+        lineage_service.ingest_lineage_from_task(
+            str(row["tenant_id"]),
+            str(row["project_id"]),
+            str(row["run_id"]),
+            task_id,
+            lineage_block,
+        )
+    except Exception as exc:  # noqa: BLE001
+        append_task_run_log(
+            str(row["run_id"]),
+            task_id=task_id,
+            level="WARNING",
+            message=f"lineage_ingest_on_complete_failed: {exc}",
+            plugin=str(row.get("plugin") or row.get("plugin_name") or "") or None,
+            worker_id=str(row.get("leased_by") or "") or None,
+        )
+
+
 def complete_task(
     *,
     task_id: str,
@@ -432,6 +464,7 @@ def complete_task(
     artifact_uri: str | None,
     resource_usage: dict[str, Any] | None = None,
     usage_samples: list[dict[str, Any]] | None = None,
+    lineage: dict[str, Any] | None = None,
     principal: Principal | None,
 ) -> tuple[str, dict[str, Any]]:
     """Returns (outcome, detail) where outcome is ok|idempotent|conflict."""
@@ -458,10 +491,16 @@ def complete_task(
 
     metrics = metrics if isinstance(metrics, dict) else {}
     artifact_list = _normalize_complete_artifacts(artifacts, artifact_uri)
+    lineage_block = _lineage_block_for_complete(lineage)
 
     plugin_exec = {
         "ok": True,
-        "result": {"params": {}, "metrics": metrics, "artifacts": artifact_list, "lineage": {}},
+        "result": {
+            "params": {},
+            "metrics": metrics,
+            "artifacts": artifact_list,
+            "lineage": lineage_block,
+        },
     }
     plugin_name = str(row.get("plugin") or row.get("plugin_name") or "plugin")
 
@@ -486,6 +525,9 @@ def complete_task(
                 if st and str(st[0]).upper() == "SUCCESS":
                     return "idempotent", {"task_id": task_id, "status": "SUCCESS"}
                 raise HTTPException(status_code=409, detail="task_lease_conflict")
+
+    if _should_ingest_lineage_on_complete(lineage_block):
+        _ingest_lineage_on_complete(row, task_id, lineage_block)
 
     duration_ms = 0
     sa = row.get("started_at")

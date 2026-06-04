@@ -3775,6 +3775,12 @@ components:
         artifact_uri:
           type: string
           nullable: true
+        lineage:
+          type: object
+          nullable: true
+          description: >
+            Optional plugin lineage block (`inputs` / `outputs` slots with dataset `name` and version label `vN`).
+            Persisted in `plugin_exec.result.lineage` and ingested into `lineage_edges` after SUCCESS (fail-soft).
 
     WorkerCompleteResponse:
       type: object

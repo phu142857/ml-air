@@ -9,6 +9,8 @@
 
 - Plugins may return `lineage: { "inputs": [...], "outputs": [...] }` with `name`, `version`, `uri` per slot.
 - The executor calls `POST /v1/tenants/{tenant}/projects/{project}/lineage/ingest` after a successful plugin run (maintainer token).
+- **External workers** (`ML_AIR_TASK_EXECUTION_MODE=external`): the same lineage block can be sent on `POST /v1/tasks/{task_id}/complete` as `lineage`. MLAir stores it in `plugin_exec.result.lineage` and calls `ingest_lineage_from_task` after the task reaches `SUCCESS` (fail-soft: ingest errors log `lineage_ingest_on_complete_failed` and do not fail the task). Workers may still call `POST .../lineage/ingest` separately (idempotent edges); use separate ingest calls when you must avoid cross-product edges (server links every input × every output in one ingest).
+- Slot fields: `name` is the **dataset name** (`datasets.name`), not a UUID; `version` is the **version label** (`dataset_versions.version`, e.g. `v3`), not `version_id`.
 - Plugin loader validates lineage slot names in `PluginMeta.lineage` strictly (`inputs`/`outputs` only, unique slot names, naming pattern).
 - Query neighborhood: `GET .../lineage?dataset_version_id=...&depth=2&direction=both`
 - Per run: `GET .../lineage/runs/{run_id}`
