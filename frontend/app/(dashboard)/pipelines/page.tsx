@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { GitBranch, Plus, Database, Clock, CheckCircle2, XCircle, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +12,8 @@ import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline 
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
-import { fetchPipelines } from "@/lib/api"
+import { fetchPipelineVersions, fetchPipelines } from "@/lib/api"
+import { pickLatestPipelineVersion } from "@/lib/pipeline-config"
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology"
 import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
@@ -126,6 +127,24 @@ export default function PipelinesPage() {
 
   const items = pipelinesQuery.data?.items ?? []
 
+  const versionQueries = useQueries({
+    queries: items.map((p) => ({
+      queryKey: mlairKeys.pipelines.versions(tenantId, projectId, p.pipeline_id),
+      queryFn: () => fetchPipelineVersions(tenantId, projectId, p.pipeline_id, token),
+      enabled: scopePinned && Boolean(token?.trim()),
+      staleTime: 60_000,
+    })),
+  })
+
+  const latestConfigVersionByPipeline = useMemo(() => {
+    const map = new Map<string, number>()
+    items.forEach((p, i) => {
+      const latest = pickLatestPipelineVersion(versionQueries[i]?.data?.items ?? [])
+      if (latest) map.set(p.pipeline_id, latest.version)
+    })
+    return map
+  }, [items, versionQueries])
+
   useEffect(() => {
     if (!items.length) {
       setSelectedId(null)
@@ -213,11 +232,12 @@ export default function PipelinesPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-3">
               <h2 className="px-1 text-sm font-medium capitalize text-muted-foreground">All pipelines</h2>
-              {items.map((pipeline) => {
+              {items.map((pipeline, index) => {
                 const sk = statusChipKey(pipeline.latest_status || "idle")
                 const meta = stageStatusMeta[sk]
                 const StatusIcon = meta.icon
                 const isSelected = selectedId === pipeline.pipeline_id
+                const configVer = latestConfigVersionByPipeline.get(pipeline.pipeline_id)
 
                 return (
                   <button
@@ -241,6 +261,17 @@ export default function PipelinesPage() {
                         >
                           {pipeline.pipeline_id}
                         </Link>
+                        {configVer != null ? (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-amber-500/30 font-mono text-[10px] text-[color:var(--status-pending-fg)]"
+                            title="Latest published config version (used for new runs)"
+                          >
+                            v{configVer}
+                          </Badge>
+                        ) : versionQueries[index]?.isLoading ? (
+                          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+                        ) : null}
                       </div>
                       <Badge variant="outline" className="shrink-0 border-border font-mono text-[10px] text-muted-foreground">
                         {pipeline.total_runs} runs
@@ -280,10 +311,15 @@ export default function PipelinesPage() {
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-semibold text-foreground">
                         {selected?.pipeline_id || displayPipeline.id}
+                        {selectedId && latestConfigVersionByPipeline.get(selectedId) != null ? (
+                          <span className="ml-2 font-mono text-sm font-normal text-[color:var(--status-pending-fg)]">
+                            · config v{latestConfigVersionByPipeline.get(selectedId)}
+                          </span>
+                        ) : null}
                       </h2>
                       <div className="mt-1 flex flex-wrap items-center gap-3">
                         <Badge variant="outline" className="border-border font-mono text-xs text-muted-foreground">
-                          latest status: {selected?.latest_status || "—"}
+                          latest run status: {selected?.latest_status || "—"}
                         </Badge>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Calendar className="h-3 w-3" />

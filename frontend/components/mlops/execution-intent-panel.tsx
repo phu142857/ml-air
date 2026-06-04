@@ -19,10 +19,15 @@ import {
   type DatasetVersionItem,
 } from "@/lib/api";
 import { PolicyReadinessBlockDialog } from "@/components/mlops/policy-readiness-block-dialog";
-import { assessMlairPolicyReadiness, type MlairPolicyReadinessBlock } from "@/lib/mlair-policy-readiness";
+import {
+  assessMlairPolicyReadiness,
+  assessPipelineInputsReadiness,
+  type TrainGateBlock,
+} from "@/lib/mlair-policy-readiness";
 import { executeTrainingIntent } from "@/lib/training-intent";
 import { describeTrainError } from "@/lib/describe-train-error";
 import { mlairKeys } from "@/lib/query-keys";
+import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { cn } from "@/lib/utils";
 
 export type ExecutionIntentMode = "model_dataset" | "pipeline_compat";
@@ -72,7 +77,7 @@ export function ExecutionIntentPanel({
   const [requiredSize, setRequiredSize] = useState("1000");
   const [msg, setMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [readinessBlock, setReadinessBlock] = useState<MlairPolicyReadinessBlock | null>(null);
+  const [readinessBlock, setReadinessBlock] = useState<TrainGateBlock | null>(null);
   const [readinessDialogOpen, setReadinessDialogOpen] = useState(false);
 
   const modelsQuery = useQuery({
@@ -142,8 +147,9 @@ export function ExecutionIntentPanel({
     if (!effectiveTrainPipeline) return { ok: false, reason: "Select a model with a mapped pipeline" };
     const items = trainPipelineVersionsQuery.data?.items || [];
     if (!items.length) return { ok: false, reason: "Mapped pipeline has no active version" };
-    const latest = items[0];
-    const cfg = (latest?.config || {}) as Record<string, unknown>;
+    const latest = pickLatestPipelineVersion(items);
+    if (!latest) return { ok: false, reason: "Mapped pipeline has no active version" };
+    const cfg = (latest.config || {}) as Record<string, unknown>;
     const tasks = cfg.tasks;
     if (!Array.isArray(tasks) || tasks.length === 0) {
       return { ok: false, reason: "Pipeline tasks are not configured" };
@@ -186,6 +192,13 @@ export function ExecutionIntentPanel({
     !runPipelineVersionsQuery.isLoading &&
     !submitting;
 
+  const pipelineGateContext = useMemo(() => {
+    if (readinessBlock?.kind !== "not_ready") return null;
+    const pipelineId = mode === "model_dataset" ? effectiveTrainPipeline : selectedPipelineId;
+    if (!pipelineId?.trim()) return null;
+    return { pipelineId, tenantId, projectId, token };
+  }, [readinessBlock, mode, effectiveTrainPipeline, selectedPipelineId, tenantId, projectId, token]);
+
   const onSubmit = async () => {
     setMsg("");
     setReadinessBlock(null);
@@ -202,6 +215,23 @@ export function ExecutionIntentPanel({
     });
     if (!assessment.ok) {
       setReadinessBlock(assessment.block);
+      setReadinessDialogOpen(true);
+      return;
+    }
+
+    const pipelineId =
+      mode === "model_dataset" ? effectiveTrainPipeline : selectedPipelineId;
+    const pipelineAssessment = await assessPipelineInputsReadiness({
+      tenantId,
+      projectId,
+      pipelineId,
+      token,
+      datasetVersionId: selectedVersionId,
+      trainingMode,
+      policyId: assessment.policyId,
+    });
+    if (!pipelineAssessment.ok) {
+      setReadinessBlock(pipelineAssessment.block);
       setReadinessDialogOpen(true);
       return;
     }
@@ -363,7 +393,7 @@ export function ExecutionIntentPanel({
             <span>
               Active config:{" "}
               <span className="font-mono text-foreground">
-                v{runPipelineVersionsQuery.data?.items?.[0]?.version ?? "—"}
+                v{pickLatestPipelineVersion(runPipelineVersionsQuery.data?.items ?? [])?.version ?? "—"}
               </span>
             </span>
           ) : (
@@ -393,6 +423,7 @@ export function ExecutionIntentPanel({
         block={readinessBlock}
         datasetId={datasetId}
         intentLabel={mode === "model_dataset" ? "Train with model" : "Run with pipeline"}
+        pipelineGateContext={pipelineGateContext}
       />
 
       <Button

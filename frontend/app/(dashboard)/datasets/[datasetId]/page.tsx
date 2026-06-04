@@ -754,11 +754,17 @@ export default function DatasetHubPage() {
     }
   };
   useEffect(() => {
-    const firstPolicy = policiesQuery.data?.items?.[0];
-    if (!firstPolicy) return;
-    setSelectedPolicyId((prev) => prev || firstPolicy.policy_id);
-    setPolicyRequiredSizeDraft(String(firstPolicy.required_size || 1000));
-  }, [policiesQuery.data]);
+    const items = policiesQuery.data?.items ?? [];
+    if (!items.length) return;
+    setSelectedPolicyId((prev) => {
+      const stillValid = Boolean(prev && items.some((p) => p.policy_id === prev));
+      if (stillValid) return prev;
+      const nextId = String(items[0]?.policy_id || "");
+      const picked = items.find((p) => p.policy_id === nextId);
+      if (picked) setPolicyRequiredSizeDraft(String(picked.required_size ?? 1000));
+      return nextId;
+    });
+  }, [policiesQuery.data, datasetId]);
   const canEditVersionMetadata = useMemo(() => {
     const role = accessibleScopes.find((s) => s.tenant_id === tenantId && s.project_id === projectId)?.role;
     const r = String(role || "").toLowerCase();

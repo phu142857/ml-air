@@ -9,7 +9,7 @@ import {
   SubpageBreadcrumb,
 } from "@/components/mlops/layout";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -18,7 +18,10 @@ import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { PipelineDAG } from "@/components/mlops/pipeline-dag";
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag";
 import { Button } from "@/components/ui/button";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { PipelineConfigEditorDialog } from "@/components/mlops/pipeline-config-editor-dialog";
 import { fetchPipelineVersions, fetchPipelines } from "@/lib/api";
+import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology";
 import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
@@ -54,11 +57,39 @@ export default function PipelineDetailPage() {
     [pipelinesList, pipelineId],
   );
 
-  const latestConfigVersion = useMemo(() => {
-    const items = versionsData?.items ?? [];
-    if (!items.length) return null;
-    return items.reduce((a, b) => (a.version >= b.version ? a : b));
-  }, [versionsData]);
+  const versionItems = versionsData?.items ?? [];
+  const latestConfigVersion = useMemo(
+    () => pickLatestPipelineVersion(versionItems),
+    [versionItems],
+  );
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!versionItems.length) {
+      setSelectedVersionId("");
+      return;
+    }
+    const preferred =
+      selectedVersionId && versionItems.some((v) => v.version_id === selectedVersionId)
+        ? selectedVersionId
+        : latestConfigVersion?.version_id;
+    if (preferred && preferred !== selectedVersionId) setSelectedVersionId(preferred);
+  }, [versionItems, latestConfigVersion?.version_id, selectedVersionId]);
+
+  const selectedConfigVersion = useMemo(
+    () => versionItems.find((v) => v.version_id === selectedVersionId) ?? latestConfigVersion,
+    [versionItems, selectedVersionId, latestConfigVersion],
+  );
+
+  const versionOptions = useMemo(
+    () =>
+      versionItems.map((v) => ({
+        value: v.version_id,
+        label: `v${v.version}${v.version_id === latestConfigVersion?.version_id ? " (latest)" : ""}`,
+      })),
+    [versionItems, latestConfigVersion?.version_id],
+  );
 
   const resolvedPipelineId = topology?.pipeline_id ?? pipelineId;
   const latestRunId = pipelineRow?.latest_run_id?.trim() || "";
@@ -79,7 +110,11 @@ export default function PipelineDetailPage() {
         icon={GitBranch}
         accent="amber"
         title={`Pipeline · ${pipelineId}`}
-        subtitle={headerSubtitle}
+        subtitle={
+          selectedConfigVersion
+            ? `${headerSubtitle} · config v${selectedConfigVersion.version}`
+            : headerSubtitle
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -117,6 +152,28 @@ export default function PipelineDetailPage() {
       >
 
         <div className="flex flex-wrap items-center gap-2">
+          {versionOptions.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Config version</span>
+              <SelectDropdown
+                value={selectedVersionId}
+                onChange={setSelectedVersionId}
+                options={versionOptions}
+                buttonClassName="inset-surface min-w-[10rem] px-2 py-1.5 font-mono text-xs text-foreground"
+                aria-label="Pipeline config version"
+              />
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 border-border bg-background/50 text-foreground hover:bg-card"
+            disabled={!selectedVersionId}
+            onClick={() => setConfigModalOpen(true)}
+          >
+            View config
+          </Button>
           <Button
             asChild
             size="sm"
@@ -141,24 +198,7 @@ export default function PipelineDetailPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="panel-surface px-4 py-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest config</p>
-            <p className="mt-1 text-sm font-medium text-foreground">
-              {latestConfigVersion != null ? (
-                <>
-                  v{latestConfigVersion.version}
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`} className="text-primary hover:underline">
-                      View versions
-                    </Link>
-                  </span>
-                </>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </p>
-          </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="panel-surface px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline id</p>
             <p className="mt-1 truncate font-mono text-sm text-foreground/90">{resolvedPipelineId}</p>
@@ -215,6 +255,16 @@ export default function PipelineDetailPage() {
           open a run for live execution status.
         </div>
       </PageScrollBody>
+
+      <PipelineConfigEditorDialog
+        open={configModalOpen}
+        onOpenChange={setConfigModalOpen}
+        tenantId={tenantId}
+        projectId={projectId}
+        pipelineId={pipelineId}
+        token={token}
+        versionId={selectedVersionId}
+      />
     </div>
   );
 }

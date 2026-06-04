@@ -1,4 +1,8 @@
-import { fetchDatasetReadiness, type DatasetTrainingPolicy } from "@/lib/api";
+import {
+  evaluatePipelineInputs,
+  fetchDatasetReadiness,
+  type DatasetTrainingPolicy,
+} from "@/lib/api";
 
 export type MlairPolicyReadinessSnapshot = Awaited<ReturnType<typeof fetchDatasetReadiness>>;
 
@@ -94,4 +98,58 @@ export async function assessMlairPolicyReadiness(args: {
 
 export function failingCriteriaFromSnapshot(snapshot: MlairPolicyReadinessSnapshot) {
   return (snapshot.eligibility_criteria || []).filter((c) => String(c.status || "").toLowerCase() === "fail");
+}
+
+export type PipelineInputsBlock =
+  | { kind: "no_pipeline"; message: string }
+  | { kind: "not_ready"; result: Awaited<ReturnType<typeof evaluatePipelineInputs>> }
+  | { kind: "check_failed"; message: string };
+
+export type TrainGateBlock = MlairPolicyReadinessBlock | PipelineInputsBlock;
+
+export async function assessPipelineInputsReadiness(args: {
+  tenantId: string;
+  projectId: string;
+  pipelineId: string;
+  token: string;
+  datasetVersionId: string | undefined;
+  trainingMode: string;
+  policyId?: string;
+}): Promise<{ ok: true } | { ok: false; block: PipelineInputsBlock }> {
+  const pipelineId = String(args.pipelineId || "").trim();
+  if (!pipelineId) {
+    return {
+      ok: false,
+      block: { kind: "no_pipeline", message: "No pipeline resolved for this train/run intent." },
+    };
+  }
+  const versionId = String(args.datasetVersionId || "").trim();
+  if (!versionId) {
+    return {
+      ok: false,
+      block: {
+        kind: "check_failed",
+        message: "Select a dataset version to evaluate pipeline input requirements.",
+      },
+    };
+  }
+  try {
+    const result = await evaluatePipelineInputs(args.tenantId, args.projectId, pipelineId, args.token, {
+      training_mode: args.trainingMode,
+      dataset_version_id: versionId,
+      override_config: {
+        dataset_version_id: versionId,
+        ...(args.policyId ? { policy_id: args.policyId } : {}),
+      },
+    });
+    if (!result.ready && !result.pipeline_input_ready) {
+      return { ok: false, block: { kind: "not_ready", result } };
+    }
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      block: { kind: "check_failed", message: String((err as Error)?.message || err || "Pipeline input check failed") },
+    };
+  }
 }

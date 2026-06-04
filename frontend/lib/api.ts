@@ -1143,6 +1143,44 @@ export async function fetchPipelineVersions(
   return data as { items: PipelineVersionItem[] };
 }
 
+export async function evaluatePipelineInputs(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string,
+  payload: {
+    training_mode: string;
+    override_config?: Record<string, unknown>;
+    dataset_version_id?: string;
+  }
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${normalizeProjectId(projectId)}/pipelines/${encodeURIComponent(pipelineId)}/evaluate-inputs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload)
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    pipeline_id: string;
+    pipeline_version_id?: string;
+    ready: boolean;
+    pipeline_input_ready: boolean;
+    details: Array<{
+      dataset: string;
+      actual_size: number;
+      required_size: number;
+      status: string;
+      dataset_version_id?: string;
+    }>;
+    blocking_datasets: Array<Record<string, unknown>>;
+    reasons: Array<{ message?: string; code?: string }>;
+  };
+}
+
 export async function checkPipelineReadiness(
   tenantId: string,
   projectId: string,

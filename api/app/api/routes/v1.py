@@ -320,6 +320,48 @@ def _blocked(detail_reason: str, details: str, *, status_code: int = 422) -> HTT
     )
 
 
+def _enforce_pipeline_inputs_readiness(
+    *,
+    tenant_id: str,
+    project_id: str,
+    pipeline_config: dict,
+    override_config: dict | None = None,
+    plugin_context: dict | None = None,
+    training_mode: str = "full",
+) -> None:
+    """Block when pipeline ``inputs[].required_size`` is not satisfied (distinct from training policy readiness)."""
+    result = readiness_service.evaluate_pipeline_inputs_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_config=pipeline_config,
+        override_config=override_config or {},
+        plugin_context=plugin_context or {},
+        training_mode=training_mode,
+    )
+    if result.get("ready"):
+        return
+    blocking = result.get("blocking_datasets") or []
+    first = blocking[0] if blocking else {}
+    ds_name = str(first.get("dataset") or "input")
+    req = int(first.get("required_size") or 0)
+    act = int(first.get("actual_size") or 0)
+    vid = str(first.get("dataset_version_id") or "").strip()
+    detail = f"pipeline_input_required_size_not_met: dataset={ds_name} required={req} actual={act}"
+    if vid:
+        detail += f" version_id={vid}"
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "status": "BLOCKED",
+            "reason": "PIPELINE_INPUT_REQUIRED_SIZE_NOT_MET",
+            "details": detail,
+            "pipeline_input_ready": False,
+            "blocking_datasets": blocking,
+            "reasons": result.get("reasons") or [],
+        },
+    )
+
+
 def _enforce_mlair_training_policy_readiness(
     *,
     tenant_id: str,
@@ -889,7 +931,15 @@ def trigger_run_by_model_dataset_v1(
 
     override_cfg = dict(payload.override_config or {})
     override_cfg.setdefault("dataset_version_id", str(dv.get("version_id") or ""))
-    override_cfg.setdefault("inputs", [{"dataset": str(ds.get("name") or payload.dataset_id), "required_size": 1}])
+
+    _enforce_pipeline_inputs_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_config=pipeline_cfg,
+        override_config=override_cfg,
+        plugin_context=plugin_ctx,
+        training_mode=payload.training_mode,
+    )
 
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
@@ -938,7 +988,7 @@ def trigger_run_by_model_dataset_v1(
         append_run_log(
             run_id=run["run_id"],
             level="WARN",
-            message="run blocked by data readiness gate",
+            message="run blocked by pipeline input required_size gate",
             payload={"blocking_datasets": check.get("blocking_datasets", [])},
         )
         return {
@@ -1032,6 +1082,42 @@ def get_run_execution_graph_v1(
     if not graph:
         raise HTTPException(status_code=404, detail="run_not_found")
     return graph
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/evaluate-inputs")
+def evaluate_pipeline_inputs_v1(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    payload: CheckReadinessIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Non-mutating pipeline ``inputs[]`` gate check (uses latest pipeline version config)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    pipeline_cfg: dict = {}
+    latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, pipeline_id)
+    if latest_pv:
+        pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+        if pv_row and isinstance(pv_row.get("config"), dict):
+            pipeline_cfg = pv_row.get("config") or {}
+    merged_ov, merged_ctx = _merge_pinned_dataset_version_for_run(
+        tenant_id,
+        project_id,
+        override_config=payload.override_config,
+        plugin_context={},
+        dataset_version_id=payload.dataset_version_id,
+    )
+    _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
+    result = readiness_service.evaluate_pipeline_inputs_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_config=pipeline_cfg,
+        override_config=merged_ov,
+        plugin_context=merged_ctx,
+        training_mode=payload.training_mode,
+    )
+    return {"pipeline_id": pipeline_id, "pipeline_version_id": latest_pv, **result}
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness")
@@ -1147,6 +1233,14 @@ def run_pipeline_with_gating_v1(
             policy_id=policy_id,
             model_id=mid,
         )
+    _enforce_pipeline_inputs_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_config=pipeline_cfg,
+        override_config=merged_ov,
+        plugin_context=merged_ctx,
+        training_mode=payload.training_mode,
+    )
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
         tenant_id=tenant_id,
@@ -1171,7 +1265,7 @@ def run_pipeline_with_gating_v1(
         append_run_log(
             run_id=run["run_id"],
             level="WARN",
-            message="run blocked by data readiness gate",
+            message="run blocked by pipeline input required_size gate",
             payload={"blocking_datasets": check.get("blocking_datasets", [])},
         )
         return {

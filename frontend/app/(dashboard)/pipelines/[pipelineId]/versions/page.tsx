@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { GitBranch } from "lucide-react";
-import { createPipelineVersionApi, listPipelineVersionsApi } from "@/lib/api";
+import { listPipelineVersionsApi } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
@@ -23,6 +23,8 @@ import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import type { PipelineVersionItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { PipelineConfigEditorDialog } from "@/components/mlops/pipeline-config-editor-dialog";
+import { parsePipelineInputs } from "@/lib/pipeline-config";
 
 const defaultConfigJson = `{
   "steps": ["fetch", "train", "evaluate"],
@@ -35,31 +37,15 @@ export default function PipelineVersionsPage() {
   const pipelineId = decodeURIComponent(params.pipelineId);
   const { tenantId, projectId, token } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
-  const qc = useQueryClient();
   const [jsonText, setJsonText] = useState(defaultConfigJson);
-  const [err, setErr] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
+  const [createEditorOpen, setCreateEditorOpen] = useState(false);
 
   const listQuery = useQuery({
     queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId),
     queryFn: () => listPipelineVersionsApi(tenantId, projectId, pipelineId, token),
-    enabled: Boolean(token)
-  });
-
-  const createMut = useMutation({
-    mutationFn: async () => {
-      let config: Record<string, unknown>;
-      try {
-        config = JSON.parse(jsonText) as Record<string, unknown>;
-      } catch {
-        throw new Error("Invalid JSON");
-      }
-      return createPipelineVersionApi(tenantId, projectId, pipelineId, token, config);
-    },
-    onSuccess: () => {
-      setErr(null);
-      void qc.invalidateQueries({ queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId) });
-    },
-    onError: (e: Error) => setErr(e.message)
+    enabled: Boolean(token),
   });
 
   const items = listQuery.data?.items ?? [];
@@ -70,10 +56,10 @@ export default function PipelineVersionsPage() {
       { value: "", label: "—" },
       ...items.map((v) => ({
         value: v.version_id,
-        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`
-      }))
+        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`,
+      })),
     ],
-    [items]
+    [items],
   );
 
   const versionColumns: DataTableColumn<PipelineVersionItem>[] = useMemo(
@@ -98,12 +84,34 @@ export default function PipelineVersionsPage() {
         ),
       },
       {
+        id: "inputs",
+        header: "inputs[]",
+        cell: (row) => {
+          const inputs = parsePipelineInputs(row.config as Record<string, unknown>);
+          if (!inputs.length) return <span className="text-xs text-muted-foreground">—</span>;
+          return (
+            <span className="font-mono text-[10px] text-foreground/90">
+              {inputs.map((i) => `${i.dataset}≥${i.required_size}`).join(", ")}
+            </span>
+          );
+        },
+      },
+      {
         id: "config",
-        header: "Config (preview)",
+        header: "Config",
         cell: (row) => (
-          <pre className="max-h-32 max-w-xl overflow-auto rounded border border-border bg-muted/30 p-2 font-mono text-xs text-foreground/90">
-            {JSON.stringify(row.config, null, 2)}
-          </pre>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 border-border text-xs"
+            onClick={() => {
+              setPreviewVersionId(row.version_id);
+              setPreviewOpen(true);
+            }}
+          >
+            Open
+          </Button>
         ),
       },
     ],
@@ -155,71 +163,93 @@ export default function PipelineVersionsPage() {
       >
         <div className="grid gap-4 lg:grid-cols-2">
           <DetailSection title="Create version" accentBorder="amber">
-              <p className="mb-2 text-xs text-muted-foreground">
-                POST creates the next monotonic version; previous rows are not modified.
-              </p>
-              <textarea
-                className="mb-2 h-40 w-full inset-surface p-2 font-mono text-xs text-foreground"
-                value={jsonText}
-                onChange={(e) => setJsonText(e.target.value)}
-              />
-              {err ? <p className="mb-2 text-xs text-[color:var(--status-failed-fg)]">{err}</p> : null}
+            <p className="mb-2 text-xs text-muted-foreground">
+              POST creates the next monotonic version; previous rows are not modified. Use the full-screen editor to
+              review <code className="font-mono">inputs[]</code> and task config before publishing.
+            </p>
+            <textarea
+              className="mb-2 h-28 w-full inset-surface p-2 font-mono text-xs text-foreground"
+              value={jsonText}
+              onChange={(e) => setJsonText(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                disabled={createMut.isPending}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => createMut.mutate()}
+                onClick={() => setCreateEditorOpen(true)}
               >
-                {createMut.isPending ? "Creating…" : "Create new version"}
+                Open full editor
               </Button>
+            </div>
           </DetailSection>
           <DetailSection title="Compare" accentBorder="amber">
-              <div className="flex flex-col gap-3 text-sm">
-                <label className="text-muted-foreground">
-                  Version A
-                  <SelectDropdown
-                    value={left}
-                    onChange={setLeft}
-                    options={versionPickOptions}
-                    className="mt-1"
-                    buttonClassName="inset-surface px-2 py-1 text-sm text-foreground"
-                    aria-label="Version A for diff"
-                  />
-                </label>
-                <label className="text-muted-foreground">
-                  Version B
-                  <SelectDropdown
-                    value={right}
-                    onChange={setRight}
-                    options={versionPickOptions}
-                    className="mt-1"
-                    buttonClassName="inset-surface px-2 py-1 text-sm text-foreground"
-                    aria-label="Version B for diff"
-                  />
-                </label>
-              </div>
+            <div className="flex flex-col gap-3 text-sm">
+              <label className="text-muted-foreground">
+                Version A
+                <SelectDropdown
+                  value={left}
+                  onChange={setLeft}
+                  options={versionPickOptions}
+                  className="mt-1"
+                  buttonClassName="inset-surface px-2 py-1 text-sm text-foreground"
+                  aria-label="Version A for diff"
+                />
+              </label>
+              <label className="text-muted-foreground">
+                Version B
+                <SelectDropdown
+                  value={right}
+                  onChange={setRight}
+                  options={versionPickOptions}
+                  className="mt-1"
+                  buttonClassName="inset-surface px-2 py-1 text-sm text-foreground"
+                  aria-label="Version B for diff"
+                />
+              </label>
+            </div>
           </DetailSection>
         </div>
 
         <DetailSection title="All versions" accentBorder="amber">
-            {listQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : items.length === 0 ? (
-              <MlopsEmptyState
-                icon={GitBranch}
-                title="No versions yet"
-                description="Create a new immutable config snapshot using the form on the left."
-              />
-            ) : (
-              <DataTable
-                columns={versionColumns}
-                data={items}
-                keyExtractor={(row) => row.version_id}
-                emptyMessage="No versions yet."
-              />
-            )}
+          {listQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : items.length === 0 ? (
+            <MlopsEmptyState
+              icon={GitBranch}
+              title="No versions yet"
+              description="Publish the first config snapshot using the create editor."
+            />
+          ) : (
+            <DataTable
+              columns={versionColumns}
+              data={items}
+              keyExtractor={(row) => row.version_id}
+              emptyMessage="No versions yet."
+            />
+          )}
         </DetailSection>
       </PageScrollBody>
+
+      <PipelineConfigEditorDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        tenantId={tenantId}
+        projectId={projectId}
+        pipelineId={pipelineId}
+        token={token}
+        versionId={previewVersionId}
+      />
+
+      <PipelineConfigEditorDialog
+        open={createEditorOpen}
+        onOpenChange={setCreateEditorOpen}
+        tenantId={tenantId}
+        projectId={projectId}
+        pipelineId={pipelineId}
+        token={token}
+        allowCreateVersion
+        seedJson={jsonText}
+      />
     </div>
   );
 }

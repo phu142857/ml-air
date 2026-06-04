@@ -62,11 +62,11 @@ def _parse_inputs(payload: Any) -> list[dict[str, Any]]:
 
 
 def effective_declared_readiness_inputs(override_config: Any, snapshot_config: Any) -> list[dict[str, Any]]:
-    """Same precedence as ``check_run_readiness``: use ``override_config.inputs`` when non-empty, else snapshot ``inputs``."""
-    o = _parse_inputs(override_config)
-    if o:
-        return o
-    return _parse_inputs(snapshot_config)
+    """Pipeline version ``inputs`` are authoritative when present; else ``override_config.inputs``."""
+    snapshot_inputs = _parse_inputs(snapshot_config)
+    if snapshot_inputs:
+        return snapshot_inputs
+    return _parse_inputs(override_config)
 
 
 def _to_required_size(raw: Any, fallback: int) -> int:
@@ -138,18 +138,21 @@ def _upsert_run_dataset_lineage(
             )
 
 
-def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]:
-    run = load_run_for_readiness(run_id)
-    if not run or run.get("tenant_id") != tenant_id or run.get("project_id") != project_id:
-        raise ValueError("run_not_found")
-
-    mode = str(run.get("training_mode") or "full").strip().lower()
+def evaluate_pipeline_inputs_readiness(
+    *,
+    tenant_id: str,
+    project_id: str,
+    pipeline_config: dict[str, Any] | None,
+    override_config: dict[str, Any] | None = None,
+    plugin_context: dict[str, Any] | None = None,
+    training_mode: str = "full",
+) -> dict[str, Any]:
+    """Evaluate pipeline ``config.inputs[]`` against dataset sizes (execution gate, not training policy)."""
+    mode = str(training_mode or "full").strip().lower()
     mode_min_rows = TRAINING_MODE_MIN_ROWS.get(mode, TRAINING_MODE_MIN_ROWS["full"])
-    override_cfg = run.get("override_config") or {}
-    snapshot_cfg = run.get("config_snapshot") or {}
-    pctx = run.get("plugin_context") or {}
-    if not isinstance(pctx, dict):
-        pctx = {}
+    override_cfg = override_config if isinstance(override_config, dict) else {}
+    snapshot_cfg = pipeline_config if isinstance(pipeline_config, dict) else {}
+    pctx = plugin_context if isinstance(plugin_context, dict) else {}
     pinned_vid = str(override_cfg.get("dataset_version_id") or pctx.get("dataset_version_id") or "").strip() or None
     pinned_dataset_id: str | None = None
     pinned_record_count: int | None = None
@@ -162,11 +165,13 @@ def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[st
             except Exception:
                 pinned_record_count = 0
 
-    declared_inputs = _parse_inputs(override_cfg) or _parse_inputs(snapshot_cfg)
+    declared_inputs = effective_declared_readiness_inputs(override_cfg, snapshot_cfg)
     details: list[dict[str, Any]] = []
     blocking: list[dict[str, Any]] = []
     for item in declared_inputs:
         name = str(item.get("dataset") or "").strip()
+        if not name:
+            continue
         required_size = _to_required_size(item.get("required_size"), mode_min_rows)
         dataset_id, actual_size = _dataset_actual_size(tenant_id, project_id, name)
         if pinned_dataset_id and dataset_id and dataset_id == pinned_dataset_id and pinned_record_count is not None:
@@ -184,29 +189,74 @@ def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[st
         if pinned_vid and pinned_dataset_id and dataset_id and dataset_id == pinned_dataset_id:
             row["dataset_version_id"] = pinned_vid
         details.append(row)
-        _upsert_run_dataset_lineage(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            run_id=run_id,
-            dataset_id=dataset_id,
-            dataset_name=name,
-            role="input",
-            actual_size=actual_size,
-            required_size=required_size,
-        )
         if status != "READY":
             blocking.append(row)
 
     ready = len(blocking) == 0
+    reasons: list[dict[str, Any]] = []
+    for row in blocking:
+        reasons.append(
+            {
+                "code": "pipeline_input_required_size_not_met",
+                "message": (
+                    f"{row['dataset']}: {row['actual_size']}/{row['required_size']} rows"
+                    + (
+                        f" (version_id={row['dataset_version_id']})"
+                        if row.get("dataset_version_id")
+                        else ""
+                    )
+                ),
+                "dataset": row["dataset"],
+                "actual_size": row["actual_size"],
+                "required_size": row["required_size"],
+                "dataset_version_id": row.get("dataset_version_id"),
+            }
+        )
     return {
-        "run_id": run_id,
         "tenant_id": tenant_id,
         "project_id": project_id,
         "training_mode": mode,
         "ready": ready,
+        "pipeline_input_ready": ready,
         "details": details,
         "blocking_datasets": blocking,
+        "reasons": reasons,
         "override_applied": bool(override_cfg),
+    }
+
+
+def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[str, Any]:
+    run = load_run_for_readiness(run_id)
+    if not run or run.get("tenant_id") != tenant_id or run.get("project_id") != project_id:
+        raise ValueError("run_not_found")
+
+    override_cfg = run.get("override_config") or {}
+    snapshot_cfg = run.get("config_snapshot") or {}
+    pctx = run.get("plugin_context") or {}
+    result = evaluate_pipeline_inputs_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_config=snapshot_cfg,
+        override_config=override_cfg,
+        plugin_context=pctx if isinstance(pctx, dict) else {},
+        training_mode=str(run.get("training_mode") or "full"),
+    )
+    for row in result.get("details") or []:
+        if not isinstance(row, dict):
+            continue
+        _upsert_run_dataset_lineage(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            run_id=run_id,
+            dataset_id=row.get("dataset_id"),
+            dataset_name=str(row.get("dataset") or ""),
+            role="input",
+            actual_size=int(row.get("actual_size") or 0),
+            required_size=int(row.get("required_size") or 0),
+        )
+    return {
+        "run_id": run_id,
+        **result,
     }
 
 
