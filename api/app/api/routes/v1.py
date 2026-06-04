@@ -126,6 +126,10 @@ class TriggerRunByModelIn(BaseModel):
     model_id: str = Field(min_length=1)
     dataset_id: str = Field(min_length=1)
     dataset_version_id: str | None = None
+    policy_id: str | None = Field(
+        default=None,
+        description="Training policy for MLAir readiness gate; defaults to model-bound or first policy on dataset.",
+    )
     pipeline_id_override: str | None = Field(
         default=None,
         description="Advanced: force a pipeline_id while still using model_id for registry and base weights.",
@@ -314,6 +318,57 @@ def _blocked(detail_reason: str, details: str, *, status_code: int = 422) -> HTT
         status_code=status_code,
         detail={"status": "BLOCKED", "reason": detail_reason, "details": details},
     )
+
+
+def _enforce_mlair_training_policy_readiness(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str,
+    policy_id: str | None = None,
+    model_id: str | None = None,
+) -> None:
+    """Block train/run when dataset version fails MLAir training-policy readiness (not pipeline inputs gate)."""
+    try:
+        readiness_service.require_dataset_training_eligibility(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
+            policy_id=policy_id,
+            model_id=model_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "dataset_training_policy_required":
+            raise _blocked(
+                "TRAINING_POLICY_REQUIRED",
+                "Create at least one training policy on the dataset (Dataset Hub → Readiness) before training.",
+            ) from exc
+        if code == "dataset_training_policy_not_found":
+            raise _blocked("TRAINING_POLICY_NOT_FOUND", "The selected training policy was not found for this dataset.") from exc
+        if code == "dataset_version_id_required":
+            raise _blocked(
+                "DATASET_VERSION_REQUIRED",
+                "Select a materialized dataset version before training.",
+            ) from exc
+        if code in {"dataset_not_found", "dataset_version_not_found"}:
+            raise HTTPException(status_code=404, detail=code) from exc
+        raise HTTPException(status_code=422, detail=code) from exc
+    except readiness_service.ReadinessEligibilityBlocked as exc:
+        ev = exc.evaluation
+        failing = [c for c in (ev.get("eligibility_criteria") or []) if str(c.get("status") or "").lower() == "fail"]
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "BLOCKED",
+                "reason": "MLAIR_READINESS_NOT_ELIGIBLE",
+                "details": "Dataset version does not satisfy the active MLAir training policy.",
+                "readiness": ev,
+                "failing_criteria": failing,
+            },
+        ) from exc
 
 
 def _enforce_tenant_quota(tenant_id: str, resource: str, *, project_id: str | None = None) -> None:
@@ -785,6 +840,18 @@ def trigger_run_by_model_dataset_v1(
         if not dv:
             raise HTTPException(status_code=422, detail="dataset_has_no_versions")
 
+    policy_id = str(payload.policy_id or "").strip() or None
+    if not policy_id and isinstance(payload.override_config, dict):
+        policy_id = str(payload.override_config.get("policy_id") or "").strip() or None
+    _enforce_mlair_training_policy_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=payload.dataset_id,
+        dataset_version_id=str(dv.get("version_id") or ""),
+        policy_id=policy_id,
+        model_id=payload.model_id,
+    )
+
     rp = resolve_model_pipeline(tenant_id=tenant_id, project_id=project_id, model_id=payload.model_id)
     override_pid = str(payload.pipeline_id_override or "").strip() or None
     if override_pid:
@@ -1064,6 +1131,22 @@ def run_pipeline_with_gating_v1(
     _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_ov)
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
+    pinned_vid = str(merged_ov.get("dataset_version_id") or merged_ctx.get("dataset_version_id") or "").strip()
+    if pinned_vid:
+        dv_row = lineage_service.get_dataset_version(tenant_id, project_id, pinned_vid)
+        if not dv_row:
+            raise HTTPException(status_code=404, detail="dataset_version_not_found")
+        dsid = str(dv_row.get("dataset_id") or "").strip()
+        policy_id = str(merged_ov.get("policy_id") or "").strip() or None
+        mid = str((merged_ctx or {}).get("mlair_model_id") or (merged_ctx or {}).get("model_id") or "").strip() or None
+        _enforce_mlair_training_policy_readiness(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dsid,
+            dataset_version_id=pinned_vid,
+            policy_id=policy_id,
+            model_id=mid,
+        )
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
         tenant_id=tenant_id,

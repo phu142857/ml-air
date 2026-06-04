@@ -2212,6 +2212,7 @@ export async function triggerRunFromModelDataset(
     model_id: string;
     dataset_id: string;
     dataset_version_id?: string;
+    policy_id?: string;
     pipeline_id_override?: string;
     idempotency_key?: string | null;
     priority?: string;

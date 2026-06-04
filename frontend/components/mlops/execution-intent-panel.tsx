@@ -15,8 +15,11 @@ import {
   fetchPipelineVersions,
   fetchPipelines,
   normalizeProjectId,
+  type DatasetTrainingPolicy,
   type DatasetVersionItem,
 } from "@/lib/api";
+import { PolicyReadinessBlockDialog } from "@/components/mlops/policy-readiness-block-dialog";
+import { assessMlairPolicyReadiness, type MlairPolicyReadinessBlock } from "@/lib/mlair-policy-readiness";
 import { executeTrainingIntent } from "@/lib/training-intent";
 import { describeTrainError } from "@/lib/describe-train-error";
 import { mlairKeys } from "@/lib/query-keys";
@@ -32,6 +35,9 @@ type Props = {
   scopePinned: boolean;
   versions: DatasetVersionItem[];
   versionsLoading?: boolean;
+  /** Active training policy from Dataset Hub Readiness tab. */
+  policyId?: string;
+  trainingPolicies?: DatasetTrainingPolicy[];
   className?: string;
 };
 
@@ -53,6 +59,8 @@ export function ExecutionIntentPanel({
   scopePinned,
   versions,
   versionsLoading,
+  policyId,
+  trainingPolicies = [],
   className,
 }: Props) {
   const router = useRouter();
@@ -64,6 +72,8 @@ export function ExecutionIntentPanel({
   const [requiredSize, setRequiredSize] = useState("1000");
   const [msg, setMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [readinessBlock, setReadinessBlock] = useState<MlairPolicyReadinessBlock | null>(null);
+  const [readinessDialogOpen, setReadinessDialogOpen] = useState(false);
 
   const modelsQuery = useQuery({
     queryKey: mlairKeys.models.list(tenantId, projectId),
@@ -155,37 +165,62 @@ export function ExecutionIntentPanel({
 
   const selectedVersion = versions.find((v) => v.version_id === selectedVersionId);
   const versionFailed = selectedVersion && String(selectedVersion.status || "").toUpperCase() === "FAILED";
+  const hasTrainingPolicy = trainingPolicies.length > 0;
 
   const canTrain =
     scopePinned &&
     selectedModelId &&
     selectedVersionId &&
+    hasTrainingPolicy &&
     !versionFailed &&
     pluginPrecheck.ok &&
     !trainPipelineVersionsQuery.isLoading &&
     !submitting;
 
   const canRunPipeline =
-    scopePinned && selectedPipelineId && pipelineRunnable.ok && !runPipelineVersionsQuery.isLoading && !submitting;
+    scopePinned &&
+    selectedPipelineId &&
+    selectedVersionId &&
+    hasTrainingPolicy &&
+    pipelineRunnable.ok &&
+    !runPipelineVersionsQuery.isLoading &&
+    !submitting;
 
   const onSubmit = async () => {
     setMsg("");
+    setReadinessBlock(null);
+    const assessment = await assessMlairPolicyReadiness({
+      tenantId,
+      projectId,
+      datasetId,
+      token,
+      datasetVersionId: selectedVersionId,
+      policies: trainingPolicies,
+      policyId,
+      modelId: mode === "model_dataset" ? selectedModelId : undefined,
+      requiredSize: Number.parseInt(requiredSize, 10) || 1000,
+    });
+    if (!assessment.ok) {
+      setReadinessBlock(assessment.block);
+      setReadinessDialogOpen(true);
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const policyPayload = { policy_id: assessment.policyId };
       if (mode === "model_dataset") {
         const res = await executeTrainingIntent(tenantId, projectId, token, {
           kind: "model_dataset",
           modelId: selectedModelId,
           datasetId,
           datasetVersionId: selectedVersionId,
+          policyId: assessment.policyId,
           idempotencyKey: `hub-train-${Date.now()}`,
           trainingMode,
+          overrideConfig: policyPayload,
           context: buildRunContext(projectId, selectedModelId),
         });
-        if (res.blocked_by_gate) {
-          setMsg("Run was blocked by readiness gate. Check Readiness tab for audit history.");
-          return;
-        }
         if (res.run_id) router.push(`/runs/${encodeURIComponent(res.run_id)}`);
         return;
       }
@@ -193,16 +228,13 @@ export function ExecutionIntentPanel({
         kind: "pipeline_compat",
         pipelineId: selectedPipelineId,
         datasetId,
-        datasetVersionId: selectedVersionId || undefined,
+        datasetVersionId: selectedVersionId,
         trainingMode,
         useLatestPipelineVersion: true,
         idempotencyKey: `hub-pipeline-run-${Date.now()}`,
+        overrideConfig: policyPayload,
         context: buildRunContext(projectId),
       });
-      if (res.blocked_by_gate) {
-        setMsg("Run was blocked by readiness gate.");
-        return;
-      }
       if (res.run_id) router.push(`/runs/${encodeURIComponent(res.run_id)}`);
     } catch (err) {
       setMsg(describeTrainError(err));
@@ -293,7 +325,7 @@ export function ExecutionIntentPanel({
           </label>
         )}
         <label className="text-xs text-muted-foreground">
-          Dataset version {mode === "pipeline_compat" ? "(optional)" : ""}
+          Dataset version
           <SelectDropdown
             value={selectedVersionId}
             onChange={setSelectedVersionId}
@@ -347,7 +379,21 @@ export function ExecutionIntentPanel({
         onRequiredSizeChange={setRequiredSize}
       />
 
+      {!hasTrainingPolicy ? (
+        <p className="text-xs text-[color:var(--status-pending-fg)]">
+          Create a training policy on the Readiness tab before Run / Train.
+        </p>
+      ) : null}
+
       {msg ? <p className="text-xs text-[color:var(--status-pending-fg)]">{msg}</p> : null}
+
+      <PolicyReadinessBlockDialog
+        open={readinessDialogOpen}
+        onOpenChange={setReadinessDialogOpen}
+        block={readinessBlock}
+        datasetId={datasetId}
+        intentLabel={mode === "model_dataset" ? "Train with model" : "Run with pipeline"}
+      />
 
       <Button
         type="button"
@@ -360,12 +406,18 @@ export function ExecutionIntentPanel({
         disabled={mode === "model_dataset" ? !canTrain : !canRunPipeline}
         title={
           mode === "model_dataset"
-            ? pluginPrecheck.ok
-              ? "Train model"
-              : pluginPrecheck.reason
-            : pipelineRunnable.ok
-              ? "Run pipeline"
-              : pipelineRunnable.reason
+            ? !hasTrainingPolicy
+              ? "Create a training policy on the Readiness tab"
+              : pluginPrecheck.ok
+                ? "Train model"
+                : pluginPrecheck.reason
+            : !hasTrainingPolicy
+              ? "Create a training policy on the Readiness tab"
+              : !selectedVersionId
+                ? "Select a dataset version"
+                : pipelineRunnable.ok
+                  ? "Run pipeline"
+                  : pipelineRunnable.reason
         }
         onClick={() => void onSubmit()}
       >

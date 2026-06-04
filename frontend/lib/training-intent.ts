@@ -9,6 +9,7 @@ export type TrainingIntentFromModelDataset = {
   modelId: string;
   datasetId: string;
   datasetVersionId?: string;
+  policyId?: string;
   pipelineIdOverride?: string;
   trainingMode: string;
   idempotencyKey?: string | null;
@@ -53,6 +54,7 @@ export async function executeTrainingIntent(
       model_id: intent.modelId,
       dataset_id: intent.datasetId,
       dataset_version_id: intent.datasetVersionId,
+      policy_id: intent.policyId,
       pipeline_id_override: intent.pipelineIdOverride,
       idempotency_key: intent.idempotencyKey,
       priority: intent.priority ?? "normal",

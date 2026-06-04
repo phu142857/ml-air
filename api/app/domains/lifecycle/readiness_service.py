@@ -25,6 +25,14 @@ TRAINING_MODE_MIN_ROWS = {
 }
 
 
+class ReadinessEligibilityBlocked(ValueError):
+    """MLair training policy readiness failed (lifecycle gate, not pipeline execution gate)."""
+
+    def __init__(self, evaluation: dict[str, Any]) -> None:
+        self.evaluation = evaluation
+        super().__init__("mlair_readiness_not_eligible")
+
+
 def _allow_legacy_readiness_fallback() -> bool:
     # Phase 6 default: strict version-centric readiness; rollback by setting env to 1/true.
     return str(os.getenv("ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK", "0")).strip().lower() not in {"0", "false", "no", "off"}
@@ -486,6 +494,64 @@ def _model_exists(tenant_id: str, project_id: str, model_id: str) -> bool:
                 (tenant_id, project_id, model_id),
             )
             return bool(cur.fetchone())
+
+
+def resolve_training_policy_id(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    policy_id: str | None = None,
+    model_id: str | None = None,
+) -> str:
+    policies = list_dataset_training_policies(
+        tenant_id=tenant_id, project_id=project_id, dataset_id=dataset_id, limit=200, offset=0
+    )
+    if not policies:
+        raise ValueError("dataset_training_policy_required")
+    pid = str(policy_id or "").strip()
+    if pid:
+        if not any(str(p.get("policy_id") or "") == pid for p in policies):
+            raise ValueError("dataset_training_policy_not_found")
+        return pid
+    mid = str(model_id or "").strip()
+    if mid:
+        for row in policies:
+            if str(row.get("model_id") or "").strip() == mid:
+                return str(row["policy_id"])
+    return str(policies[0]["policy_id"])
+
+
+def require_dataset_training_eligibility(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    dataset_version_id: str,
+    policy_id: str | None = None,
+    model_id: str | None = None,
+) -> dict[str, Any]:
+    """Enforce MLAir training-policy readiness before run creation (Hub train / gated trigger)."""
+    vid = str(dataset_version_id or "").strip()
+    if not vid:
+        raise ValueError("dataset_version_id_required")
+    resolved_policy_id = resolve_training_policy_id(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        policy_id=policy_id,
+        model_id=model_id,
+    )
+    result = evaluate_dataset_readiness(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        policy_id=resolved_policy_id,
+        dataset_version_id=vid,
+    )
+    if not bool(result.get("ready")):
+        raise ReadinessEligibilityBlocked(result)
+    return result
 
 
 def evaluate_dataset_readiness(

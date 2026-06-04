@@ -5,8 +5,18 @@ export function describeTrainError(err: unknown): string {
     const parsed = JSON.parse(fallback) as Record<string, unknown>;
     const detail = parsed.detail;
     if (typeof detail === "object" && detail !== null && !Array.isArray(detail)) {
-      const reason = String((detail as Record<string, unknown>).reason || "blocked");
-      const details = String((detail as Record<string, unknown>).details || "");
+      const d = detail as Record<string, unknown>;
+      const reason = String(d.reason || "blocked");
+      const details = String(d.details || "");
+      if (reason === "MLAIR_READINESS_NOT_ELIGIBLE") {
+        const readiness = d.readiness as { eligibility_criteria?: Array<{ label?: string; code?: string; status?: string }> } | undefined;
+        const failing = (readiness?.eligibility_criteria || []).filter((c) => String(c.status).toLowerCase() === "fail");
+        if (failing.length) {
+          const labels = failing.map((c) => c.label || c.code).filter(Boolean).join(", ");
+          return `Training blocked (MLair policy): ${labels}`;
+        }
+        return details || "Training blocked: dataset version does not meet MLAir training policy.";
+      }
       return details ? `Train blocked (${reason}): ${details}` : `Train blocked (${reason})`;
     }
     if (typeof detail === "string" && detail.trim()) return `Train failed: ${detail}`;

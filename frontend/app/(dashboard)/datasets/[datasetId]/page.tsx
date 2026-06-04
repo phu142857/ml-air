@@ -1847,6 +1847,8 @@ export default function DatasetHubPage() {
             scopePinned={scopePinned}
             versions={versionsQuery.data?.items || []}
             versionsLoading={versionsQuery.isLoading}
+            policyId={selectedPolicyId || undefined}
+            trainingPolicies={policiesQuery.data?.items || []}
           />
         </DetailSection>
       ) : null}
