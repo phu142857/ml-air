@@ -100,6 +100,16 @@ scripts/**/*.pyc
 # Local-only roadmap overlay (optional; keep committed ROADMAP.md canonical)
 ROADMAP.local.md
 
-# Cursor IDE (if present under repo root)
+# Cursor IDE (local project settings; not product source)
 .cursor/
+.mcp.json
+
+# Cursor agent / skills (local tooling; reinstall via skills CLI)
+.agents/
+skills/
+skills-lock.json
+
+# CodeGraph index (local; regenerate with `codegraph init`)
+.codegraph/
+
 ROADMAP.md
