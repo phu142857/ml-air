@@ -42,10 +42,16 @@ This hook should be best-effort (startup does not fail if sync fails).
 
 ## Success Checklist
 
-- Pipeline run is created successfully.
+- A run is created from **Dataset Hub → Run / Train** (preferred) or from `make smoke-quickstart` / CLI smoke.
 - At least one task reaches `SUCCESS`.
 - Plugin execution logs are visible from CLI and UI.
-- Lineage edges are visible in the lineage view.
+- Lineage edges are visible under **Lifecycle → Lineage** in the Hub.
+
+## Operator vs maintainer Hub nav
+
+- **All roles:** Lifecycle (Datasets, Lifecycle, Models, Lineage), Overview, Settings.
+- **Maintainer / admin** (scoped token): **Execution (maintainer)** — Pipelines, Runs, Tasks.
+- **Viewer** token: Execution hidden; pin tenant/project and use Dataset Hub for train/run.
 
 ## Done
 

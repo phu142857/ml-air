@@ -1522,8 +1522,7 @@ def _hub_default_route() -> str:
 @router.get("/runtime-config")
 def runtime_config_v1(request: Request) -> dict:
     features = {
-        "realtime_enabled": os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower()
-        not in {"0", "false", "no", "off"},
+        "realtime_enabled": True,
         "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
         "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
         "strict_dataset_version_all_post_runs": _strict_dataset_version_all_post_runs(),

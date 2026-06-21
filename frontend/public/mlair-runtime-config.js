@@ -9,10 +9,12 @@
 window.__ML_AIR_RUNTIME_CONFIG__ = {
   environment: "dev",
   api_base_url: "",
-  realtime_base_url: "",
+  realtime_base_url: "ws://localhost:8001",
   default_tenant_hint: "default",
   default_project_hint: "default_project",
   hub_default_route: "datasets",
-  features: {}
+  features: {
+    realtime_enabled: true
+  }
 };
 

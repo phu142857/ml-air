@@ -36,8 +36,6 @@ def resolve_runtime_realtime_base_url(
     explicit = os.getenv("ML_AIR_RUNTIME_REALTIME_BASE_URL", "").strip()
     if explicit:
         return explicit.rstrip("/")
-    if os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-        return None
     default = os.getenv("ML_AIR_RUNTIME_REALTIME_DEFAULT_URL", "").strip()
     if default:
         return default.rstrip("/")

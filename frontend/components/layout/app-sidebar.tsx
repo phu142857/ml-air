@@ -27,6 +27,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
+import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
 
 type NavItem = {
   title: string
@@ -38,6 +39,7 @@ const lifecycleNav: NavItem[] = [
   { title: "Datasets", href: "/datasets", icon: Database },
   { title: "Lifecycle", href: "/lifecycle", icon: History },
   { title: "Models", href: "/models", icon: Box },
+  { title: "Lineage", href: "/lineage", icon: Network },
 ]
 
 const platformNav: NavItem[] = [
@@ -49,7 +51,6 @@ const executionNav: NavItem[] = [
   { title: "Pipelines", href: "/pipelines", icon: GitBranch },
   { title: "Runs", href: "/runs", icon: Play },
   { title: "Tasks", href: "/tasks", icon: ListTodo },
-  { title: "Lineage", href: "/lineage", icon: Network },
 ]
 
 const settingsNav: NavItem[] = [
@@ -102,6 +103,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 }
 
 export function AppSidebar() {
+  const showExecutionNav = useCanSeeExecutionNav()
   return (
     <Sidebar className="border-r border-sidebar-border/80 bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border/70 px-4 py-4">
@@ -127,7 +129,9 @@ export function AppSidebar() {
       <SidebarContent className="gap-1 py-3">
         <NavGroup label="Lifecycle" items={lifecycleNav} />
         <NavGroup label="Overview" items={platformNav} />
-        <NavGroup label="Execution" items={executionNav} />
+        {showExecutionNav ? (
+          <NavGroup label="Execution (maintainer)" items={executionNav} />
+        ) : null}
         <NavGroup label="Admin" items={settingsNav} />
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/70 p-4">

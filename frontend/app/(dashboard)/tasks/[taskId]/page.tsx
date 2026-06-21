@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ListTodo, Loader2 } from "lucide-react"
-import { fetchTaskResolved, fetchTaskUsage, normalizeProjectId } from "@/lib/api"
+import { fetchTaskResolved, fetchTaskUsage, normalizeProjectId, type ResolvedTask } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
+import { useExecutionStore } from "@/lib/execution-store"
 import { Button } from "@/components/ui/button"
 import {
   DetailSection,
@@ -25,7 +26,9 @@ import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
-import { statusToMlopsBadge } from "@/lib/status-style"
+import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
+
+const ACTIVE_TASK_REFETCH_MS = 4000
 
 function taskPayloadRecord(data: unknown): Record<string, unknown> {
   if (!data || typeof data !== "object" || Array.isArray(data)) return {}
@@ -44,6 +47,12 @@ function TaskDetailContent() {
 
   const poll = useRealtimeQueryPolling()
 
+  const runIdHint = hint.runId
+  const storeTask = useExecutionStore((s) => {
+    if (!runIdHint) return undefined
+    return s.tasksByRun[runIdHint]?.[taskId]
+  })
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: mlairKeys.task.detail(taskId, scopeKey),
     queryFn: () =>
@@ -54,12 +63,35 @@ function TaskDetailContent() {
       }),
     enabled: Boolean(taskId?.trim() && token?.trim()),
     refetchOnMount: "always",
-    ...poll,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status ?? storeTask?.status
+      if (isActiveExecutionStatus(status)) return ACTIVE_TASK_REFETCH_MS
+      return poll.refetchInterval
+    },
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
   const resolved = data?.resolved_scope
   const scopePinned = isScopePinned(tenantId, projectId)
   const runId = data?.run_id ?? hint.runId
+
+  const storeTaskForRun = useExecutionStore((s) => {
+    if (!runId) return undefined
+    return s.tasksByRun[runId]?.[taskId]
+  })
+
+  const task = useMemo((): ResolvedTask | undefined => {
+    if (!data) return undefined
+    const live = storeTaskForRun ?? storeTask
+    if (!live) return data
+    return {
+      ...data,
+      ...live,
+      status: live.status ?? data.status,
+      updated_at: live.updated_at ?? data.updated_at,
+      attempt: live.attempt ?? data.attempt,
+    }
+  }, [data, storeTask, storeTaskForRun])
   const payload = taskPayloadRecord(data)
 
   const usageScope = useMemo(() => {
@@ -80,12 +112,16 @@ function TaskDetailContent() {
       ? mlairKeys.task.usage(usageScope.tenantId, usageScope.projectId, taskId)
       : ["task-usage", "pending", taskId],
     queryFn: () => fetchTaskUsage(usageScope!.tenantId, usageScope!.projectId, taskId, token),
-    enabled: Boolean(taskId?.trim() && token?.trim() && usageScope && data),
+    enabled: Boolean(taskId?.trim() && token?.trim() && usageScope && task),
     refetchOnMount: "always",
-    ...poll,
+    refetchInterval: () => {
+      if (isActiveExecutionStatus(task?.status)) return ACTIVE_TASK_REFETCH_MS
+      return poll.refetchInterval
+    },
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
-  if (!isLoading && !isError && !data) {
+  if (!isLoading && !isError && !task) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SubpageBreadcrumb
@@ -193,19 +229,19 @@ function TaskDetailContent() {
               {formatApiClientError(error)}
             </div>
           </div>
-        ) : data ? (
+        ) : task ? (
           <>
             <div className="panel-surface p-4">
               <h2 className="mb-4 text-sm font-medium text-foreground/90">Summary</h2>
               <MetadataGrid
                 columns={2}
                 items={[
-                  { label: "Task ID", value: data.task_id, mono: true },
+                  { label: "Task ID", value: task.task_id, mono: true },
                   {
                     label: "Status",
-                    value: <StatusBadge status={statusToMlopsBadge(data.status)} label={data.status} size="sm" />,
+                    value: <StatusBadge status={statusToMlopsBadge(task.status)} label={task.status} size="sm" />,
                   },
-                  { label: "Attempt", value: String(data.attempt ?? "—") },
+                  { label: "Attempt", value: String(task.attempt ?? "—") },
                   {
                     label: "Run",
                     value: runId ? (
@@ -219,12 +255,12 @@ function TaskDetailContent() {
                   },
                   {
                     label: "Created",
-                    value: data.created_at ? formatDateTimeCompact(data.created_at) : "—",
+                    value: task.created_at ? formatDateTimeCompact(task.created_at) : "—",
                     mono: true,
                   },
                   {
                     label: "Updated",
-                    value: data.updated_at ? formatDateTimeCompact(data.updated_at) : "—",
+                    value: task.updated_at ? formatDateTimeCompact(task.updated_at) : "—",
                     mono: true,
                   },
                   ...(scopePinned &&

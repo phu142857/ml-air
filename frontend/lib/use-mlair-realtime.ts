@@ -172,13 +172,14 @@ function keysForEvent(
     return [[...mlairKeys.run.tracking(r)]];
   }
   if (t === "task.updated") {
-    const r = runId || rid;
+    const taskId = rid;
+    const r = runId;
     const keys: unknown[][] = [
       [...mlairKeys.runs.list(tenantId, projectId)],
       [...mlairKeys.tasks.recentPrefix(tenantId, projectId)],
     ];
-    if (rid) {
-      keys.push(["task", rid]);
+    if (taskId) {
+      keys.push(["task", taskId]);
     }
     if (r) {
       keys.push(
@@ -416,6 +417,124 @@ function envelopePayload(ev: Envelope): Envelope["payload"] & { updated_at: numb
   return p as Envelope["payload"] & { updated_at: number };
 }
 
+function patchRunStatusCaches(
+  queryClient: QueryClient,
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  status: string,
+  updatedAtUnix: number,
+  allowCreateInList: boolean,
+  pipelineId?: string,
+) {
+  const uaMs = updatedAtUnix * 1000;
+  const iso = isoFromUnix(updatedAtUnix);
+
+  queryClient.setQueryData<RunItem | undefined>(mlairKeys.run.detail(runId), (old) => {
+    if (!old) return old;
+    if (updatedAtMs(old.updated_at) > uaMs) return old;
+    return { ...old, status, updated_at: iso };
+  });
+
+  queryClient.setQueryData<{ items: RunItem[] } | undefined>(
+    mlairKeys.runs.list(tenantId, projectId),
+    (old) => {
+      const items = [...(old?.items ?? [])];
+      const idx = items.findIndex((row) => row.run_id === runId);
+      if (idx >= 0) {
+        const row = items[idx]!;
+        if (updatedAtMs(row.updated_at) <= uaMs) {
+          items[idx] = { ...row, status, updated_at: iso };
+        }
+      } else if (allowCreateInList) {
+        items.unshift({
+          run_id: runId,
+          tenant_id: tenantId,
+          project_id: projectId,
+          pipeline_id: pipelineId ?? "",
+          status,
+          updated_at: iso,
+          created_at: iso,
+        });
+      }
+      return { items };
+    },
+  );
+
+  if (pipelineId) {
+    queryClient.setQueryData<{ items: PipelineItem[] } | undefined>(
+      mlairKeys.pipelines.list(tenantId, projectId),
+      (old) => {
+        if (!old?.items) return old;
+        let changed = false;
+        const items = old.items.map((row) => {
+          if (row.pipeline_id !== pipelineId) return row;
+          if (row.latest_run_id && row.latest_run_id !== runId && updatedAtMs(row.updated_at) > uaMs) {
+            return row;
+          }
+          changed = true;
+          return {
+            ...row,
+            latest_run_id: runId,
+            latest_status: status,
+            updated_at: iso,
+          };
+        });
+        return changed ? { ...old, items } : old;
+      },
+    );
+  }
+}
+
+function patchTaskStatusCaches(
+  queryClient: QueryClient,
+  taskId: string,
+  runId: string,
+  status: string,
+  updatedAtUnix: number,
+  tenantId: string,
+  projectId: string,
+) {
+  const uaMs = updatedAtUnix * 1000;
+  const iso = isoFromUnix(updatedAtUnix);
+
+  queryClient.setQueriesData<
+    { task_id?: string; status?: string; updated_at?: string } | undefined
+  >({ queryKey: ["task", taskId] }, (old) => {
+    if (!old || old.task_id !== taskId) return old;
+    if (updatedAtMs(old.updated_at) > uaMs) return old;
+    return { ...old, status, updated_at: iso };
+  });
+
+  queryClient.setQueryData<{ items: TaskItem[] } | undefined>(mlairKeys.run.tasks(runId), (old) => {
+    if (!old?.items) return old;
+    let changed = false;
+    const items = old.items.map((task) => {
+      if (task.task_id !== taskId) return task;
+      if (updatedAtMs(task.updated_at) > uaMs) return task;
+      changed = true;
+      return { ...task, status, updated_at: iso };
+    });
+    return changed ? { ...old, items } : old;
+  });
+
+  type RecentTaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string };
+  queryClient.setQueriesData<RecentTaskRow[]>(
+    { queryKey: mlairKeys.tasks.recentPrefix(tenantId, projectId) },
+    (old) => {
+      if (!Array.isArray(old)) return old;
+      let changed = false;
+      const next = old.map((row) => {
+        if (row.task_id !== taskId || row.run_id !== runId) return row;
+        if (updatedAtMs(row.updated_at) > uaMs) return row;
+        changed = true;
+        return { ...row, status, updated_at: iso };
+      });
+      return changed ? next : old;
+    },
+  );
+}
+
 /** v1.5: merge hot fields into cached run/task queries when payload is sufficient (startUpForRTS §10). */
 function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectId: string, ev: Envelope) {
   const p = envelopePayload(ev);
@@ -425,90 +544,46 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
   const runFromPayload = typeof p.run_id === "string" ? p.run_id : undefined;
 
   if ((typ === "run.updated" || typ === "run.created") && rid && typeof p.status === "string") {
-    const status = p.status;
-    const iso = isoFromUnix(p.updated_at);
-    queryClient.setQueryData<RunItem | undefined>(mlairKeys.run.detail(rid), (old) => {
-      if (!old) return old;
-      if (updatedAtMs(old.updated_at) > uaMs) return old;
-      return { ...old, status, updated_at: iso };
-    });
-    queryClient.setQueryData<{ items: RunItem[] } | undefined>(mlairKeys.runs.list(tenantId, projectId), (old) => {
-      const items = [...(old?.items ?? [])];
-      const idx = items.findIndex((row) => row.run_id === rid);
-      if (idx >= 0) {
-        const row = items[idx]!;
-        if (updatedAtMs(row.updated_at) <= uaMs) {
-          items[idx] = { ...row, status, updated_at: iso };
-        }
-      } else if (typ === "run.created") {
-        const pipelineId = String(p.pipeline_id || "").trim();
-        items.unshift({
-          run_id: rid,
-          tenant_id: tenantId,
-          project_id: projectId,
-          pipeline_id: pipelineId,
-          status,
-          updated_at: iso,
-          created_at: iso,
-        });
-      }
-      return { items };
-    });
-    const pipelineId = String(p.pipeline_id || "").trim();
-    if (pipelineId) {
-      queryClient.setQueryData<{ items: PipelineItem[] } | undefined>(
-        mlairKeys.pipelines.list(tenantId, projectId),
-        (old) => {
-          if (!old?.items) return old;
-          let changed = false;
-          const items = old.items.map((row) => {
-            if (row.pipeline_id !== pipelineId) return row;
-            if (row.latest_run_id && row.latest_run_id !== rid && updatedAtMs(row.updated_at) > uaMs) {
-              return row;
-            }
-            changed = true;
-            return {
-              ...row,
-              latest_run_id: rid,
-              latest_status: status,
-              updated_at: iso,
-            };
-          });
-          return changed ? { ...old, items } : old;
-        },
-      );
-    }
+    patchRunStatusCaches(
+      queryClient,
+      tenantId,
+      projectId,
+      rid,
+      p.status,
+      p.updated_at,
+      typ === "run.created",
+      String(p.pipeline_id || "").trim() || undefined,
+    );
+  }
+
+  if (typ === "training.completed" && rid && typeof p.status === "string") {
+    patchRunStatusCaches(
+      queryClient,
+      tenantId,
+      projectId,
+      rid,
+      p.status,
+      p.updated_at,
+      false,
+      String(p.pipeline_id || "").trim() || undefined,
+    );
+  }
+
+  if (typ === "training.triggered" && rid && typeof p.status === "string") {
+    patchRunStatusCaches(
+      queryClient,
+      tenantId,
+      projectId,
+      rid,
+      p.status,
+      p.updated_at,
+      true,
+      String(p.pipeline_id || "").trim() || undefined,
+    );
   }
 
   if (typ === "task.updated" && runFromPayload && rid && typeof p.status === "string") {
-    const status = p.status;
-    const iso = isoFromUnix(p.updated_at);
-    queryClient.setQueryData<{ items: TaskItem[] } | undefined>(mlairKeys.run.tasks(runFromPayload), (old) => {
-      if (!old?.items) return old;
-      let changed = false;
-      const items = old.items.map((task) => {
-        if (task.task_id !== rid) return task;
-        if (updatedAtMs(task.updated_at) > uaMs) return task;
-        changed = true;
-        return { ...task, status, updated_at: iso };
-      });
-      return changed ? { ...old, items } : old;
-    });
-    type RecentTaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string };
-    queryClient.setQueriesData<RecentTaskRow[]>(
-      { queryKey: mlairKeys.tasks.recentPrefix(tenantId, projectId) },
-      (old) => {
-        if (!Array.isArray(old)) return old;
-        let changed = false;
-        const next = old.map((row) => {
-          if (row.task_id !== rid || row.run_id !== runFromPayload) return row;
-          if (updatedAtMs(row.updated_at) > uaMs) return row;
-          changed = true;
-          return { ...row, status, updated_at: iso };
-        });
-        return changed ? next : old;
-      },
-    );
+    patchTaskStatusCaches(queryClient, rid, runFromPayload, p.status, p.updated_at, tenantId, projectId);
   }
 
   if (typ === "model.promoted") {
@@ -687,9 +762,8 @@ export function useMlairRealtime() {
 
     const connect = () => {
       if (shouldHaltRef.current) return;
-      const rtEnabled = getRuntimeConfig()?.features?.realtime_enabled !== false;
       const base = getRealtimeWsBase();
-      if (!rtEnabled || !isRealtimeConfigured() || !base) {
+      if (!isRealtimeConfigured() || !base) {
         setMlairRealtimeUiStatus({ kind: "polling" });
         return;
       }

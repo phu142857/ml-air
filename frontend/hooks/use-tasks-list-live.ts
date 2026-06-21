@@ -2,16 +2,29 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useShallow } from "zustand/react/shallow";
 
 import { fetchRunTasks, type TaskItem } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
 import { useExecutionStore } from "@/lib/execution-store";
+import { mergeTaskListRow } from "@/lib/execution-live-merge";
 import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { useRunsListLive } from "@/hooks/use-runs-list-live";
 import { isScopePinned } from "@/lib/scope";
+import { isActiveExecutionStatus } from "@/lib/status-style";
 
 export type TaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string };
+
+const ACTIVE_TASK_REFETCH_MS = 4000;
+
+function listHasActiveTask(items: TaskRow[], tasksByRun: Record<string, Record<string, TaskItem>>): boolean {
+  if (items.some((row) => isActiveExecutionStatus(row.status))) return true;
+  for (const taskMap of Object.values(tasksByRun)) {
+    if (Object.values(taskMap).some((t) => isActiveExecutionStatus(t.status))) return true;
+  }
+  return false;
+}
 
 /** Tasks tab: recent runs + task fan-out with WS patch, invalidation, and execution-store overlay. */
 export function useTasksListLive(enabled = true) {
@@ -19,6 +32,15 @@ export function useTasksListLive(enabled = true) {
   const scopePinned = isScopePinned(tenantId, projectId);
   const poll = useRealtimeQueryPolling();
   const tasksByRun = useExecutionStore((s) => s.tasksByRun);
+  const taskLiveRevisions = useExecutionStore(
+    useShallow((s) =>
+      Object.entries(s.tasksByRun).flatMap(([runId, taskMap]) =>
+        Object.values(taskMap).map(
+          (t) => `${runId}\0${t.task_id}\0${t.status ?? ""}\0${t.updated_at ?? ""}`,
+        ),
+      ),
+    ),
+  );
 
   const runsQuery = useRunsListLive(enabled);
 
@@ -59,7 +81,13 @@ export function useTasksListLive(enabled = true) {
     },
     enabled: enabled && Boolean(token?.trim()) && recentRuns.length > 0,
     refetchOnMount: "always",
-    ...poll,
+    refetchInterval: (q) => {
+      const items = q.state.data ?? [];
+      const liveTasks = useExecutionStore.getState().tasksByRun;
+      if (listHasActiveTask(items, liveTasks)) return ACTIVE_TASK_REFETCH_MS;
+      return poll.refetchInterval;
+    },
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
 
   const items = useMemo(() => {
@@ -74,19 +102,15 @@ export function useTasksListLive(enabled = true) {
       const tid = run.tenant_id || tenantId;
       const pid = run.project_id || projectId;
       for (const live of Object.values(liveMap)) {
-        if (!live?.task_id) continue;
+        if (!live?.task_id || !live.status) continue;
         const key = `${tid}:${pid}:${live.task_id}`;
         const prev = byKey.get(key);
         if (prev) {
           byKey.set(key, {
-            ...prev,
-            ...live,
+            ...mergeTaskListRow(prev, live),
             run_id: run.run_id,
             tenant_id: tid,
             project_id: pid,
-            status: live.status ?? prev.status,
-            updated_at: live.updated_at ?? prev.updated_at,
-            attempt: live.attempt ?? prev.attempt,
           });
         }
       }
@@ -94,7 +118,7 @@ export function useTasksListLive(enabled = true) {
     return [...byKey.values()].sort((a, b) =>
       String(b.updated_at || "").localeCompare(String(a.updated_at || "")),
     );
-  }, [recentTasksQuery.data, tasksByRun, recentRuns, tenantId, projectId]);
+  }, [recentTasksQuery.data, tasksByRun, taskLiveRevisions, recentRuns, tenantId, projectId]);
 
   return {
     ...recentTasksQuery,

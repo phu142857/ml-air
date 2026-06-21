@@ -42,6 +42,7 @@ import { useJaegerUiUrl } from "@/lib/use-jaeger-ui-url"
 import { formatRelativeTime } from "@/lib/utils"
 import { normalizeStatus } from "@/lib/status-style"
 import { normalizeSearchHref } from "@/lib/search-href"
+import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
 
 interface CommandPaletteProps {
   open: boolean
@@ -52,6 +53,7 @@ const lifecycleNavigation = [
   { name: "Datasets", href: "/datasets", icon: Database, shortcut: "S" },
   { name: "Lifecycle", href: "/lifecycle", icon: History, shortcut: "L" },
   { name: "Models", href: "/models", icon: Box, shortcut: "M" },
+  { name: "Lineage", href: "/lineage", icon: Network, shortcut: "G" },
 ]
 
 const platformNavigation = [
@@ -63,7 +65,9 @@ const executionNavigation = [
   { name: "Pipelines", href: "/pipelines", icon: GitBranch, shortcut: "P" },
   { name: "Runs", href: "/runs", icon: Play, shortcut: "R" },
   { name: "Tasks", href: "/tasks", icon: ListTodo, shortcut: "T" },
-  { name: "Lineage", href: "/lineage", icon: Network, shortcut: "G" },
+]
+
+const adminNavigation = [
   { name: "Settings", href: "/settings", icon: Settings, shortcut: "," },
 ]
 
@@ -105,6 +109,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter()
   const jaegerUiUrl = useJaegerUiUrl()
   const { tenantId, projectId, token } = useAppContext()
+  const showExecutionNav = useCanSeeExecutionNav()
   const scopePinned = tenantId !== "all" && projectId !== "all"
   const [query, setQuery] = useState("")
   const trimmedQuery = query.trim()
@@ -350,8 +355,28 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               ))}
             </CommandGroup>
 
-            <CommandGroup heading="Execution">
-              {executionNavigation.map((item) => (
+            {showExecutionNav ? (
+              <CommandGroup heading="Execution (maintainer)">
+                {executionNavigation.map((item) => (
+                  <CommandItem
+                    key={item.href}
+                    onSelect={() => handleSelect(item.href)}
+                    className="flex items-center gap-3"
+                  >
+                    <item.icon className="h-4 w-4 text-muted-foreground" />
+                    <span>{item.name}</span>
+                    <CommandShortcut className="ml-auto">
+                      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                        {item.shortcut}
+                      </kbd>
+                    </CommandShortcut>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
+
+            <CommandGroup heading="Admin">
+              {adminNavigation.map((item) => (
                 <CommandItem
                   key={item.href}
                   onSelect={() => handleSelect(item.href)}
@@ -388,35 +413,39 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               ))}
             </CommandGroup>
 
-            <CommandSeparator />
+            {showExecutionNav ? (
+              <>
+                <CommandSeparator />
 
-            <CommandGroup heading="Recent Runs">
-              {recentRunsQuery.isLoading ? (
-                <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading…
-                </div>
-              ) : null}
-              {recentRuns.map((run) => (
-                <CommandItem
-                  key={run.run_id}
-                  onSelect={() => handleRunSelect(run.run_id)}
-                  className="flex items-center gap-3"
-                >
-                  {statusIcons[runStatusKey(run.status)]}
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-mono">{run.pipeline_id}</span>
-                    <span className="text-xs text-muted-foreground">{run.run_id}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground/80">
-                    {formatRelativeTime(run.updated_at || run.created_at)}
-                  </span>
-                </CommandItem>
-              ))}
-              {!recentRunsQuery.isLoading && recentRuns.length === 0 ? (
-                <div className="px-2 py-2 text-xs text-muted-foreground">No runs in this scope.</div>
-              ) : null}
-            </CommandGroup>
+                <CommandGroup heading="Recent Runs">
+                  {recentRunsQuery.isLoading ? (
+                    <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading…
+                    </div>
+                  ) : null}
+                  {recentRuns.map((run) => (
+                    <CommandItem
+                      key={run.run_id}
+                      onSelect={() => handleRunSelect(run.run_id)}
+                      className="flex items-center gap-3"
+                    >
+                      {statusIcons[runStatusKey(run.status)]}
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="text-sm font-mono">{run.pipeline_id}</span>
+                        <span className="text-xs text-muted-foreground">{run.run_id}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground/80">
+                        {formatRelativeTime(run.updated_at || run.created_at)}
+                      </span>
+                    </CommandItem>
+                  ))}
+                  {!recentRunsQuery.isLoading && recentRuns.length === 0 ? (
+                    <div className="px-2 py-2 text-xs text-muted-foreground">No runs in this scope.</div>
+                  ) : null}
+                </CommandGroup>
+              </>
+            ) : null}
 
             <CommandSeparator />
 

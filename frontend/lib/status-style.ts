@@ -68,6 +68,12 @@ export function normalizeStatus(raw: string | null | undefined): StatusTone {
   return ALIASES[key] || "PENDING";
 }
 
+/** Run/task still in-flight — use faster React Query polling while active. */
+export function isActiveExecutionStatus(raw: string | null | undefined): boolean {
+  const s = normalizeStatus(raw);
+  return s === "RUNNING" || s === "PENDING" || s === "QUEUED";
+}
+
 export function statusChipKey(raw: string | null | undefined): StatusChipKey {
   const s = normalizeStatus(raw);
   if (s === "SUCCESS") return "success";

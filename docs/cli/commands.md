@@ -2,13 +2,13 @@
 
 ## Goal
 
-Use CLI commands to start MLAir, run a pipeline, and inspect run logs.
+Start the stack, smoke-trigger a run, and read logs — **automation path**. Operator workflows should use **Dataset Hub → Run / Train** first.
 
 ## Steps
 
 1. Start local services.
-2. Trigger pipeline run.
-3. Inspect run and task logs.
+2. (Optional) Trigger a demo run from a pipeline file.
+3. Inspect run logs.
 
 ## Command
 
@@ -18,10 +18,13 @@ python ./mlair run examples/pipeline.demo.yaml
 python ./mlair logs <run_id> --limit 100
 ```
 
+Supported subcommands today: `dev up`, `run`, `logs` (see `python ./mlair --help`).
+
 ## Result
 
-You can operate the core pipeline workflow entirely from CLI.
+CLI covers bootstrap and headless smoke; lifecycle gates and dataset pinning still apply on the API.
 
 ## Done
 
-See task-focused command pages: [dev](./dev.md), [run](./run.md), [logs](./logs.md).
+Operator path: [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).  
+Command pages: [dev](./dev.md), [run](./run.md), [logs](./logs.md).

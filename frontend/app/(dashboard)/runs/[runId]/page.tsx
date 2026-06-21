@@ -43,6 +43,7 @@ import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
 import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
+import { mergeRunListRow } from "@/lib/execution-live-merge"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
 import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
@@ -358,7 +359,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     const base = runQuery.data
     if (!base) return storeRun
     if (!storeRun) return base
-    return { ...base, ...storeRun, status: storeRun.status ?? base.status }
+    return mergeRunListRow(base, storeRun)
   }, [runQuery.data, storeRun])
 
   const sk = run ? statusChipKey(run.status) : "pending"

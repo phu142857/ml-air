@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import types
 import unittest
@@ -76,6 +77,10 @@ class TestRealtimeEvents(unittest.TestCase):
 
     def test_realtime_enabled_default(self) -> None:
         self.assertTrue(realtime_enabled())
+
+    def test_realtime_enabled_ignores_disable_env(self) -> None:
+        with patch.dict(os.environ, {"MLAIR_REALTIME_ENABLED": "false"}, clear=False):
+            self.assertTrue(realtime_enabled())
 
     def test_build_event_training_policy_updated(self) -> None:
         ev = build_event(

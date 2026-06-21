@@ -6,9 +6,19 @@
 | --- | --- |
 | `/` | Redirects via **`hub_default_route`** from runtime-config (default **`datasets`**; set `ML_AIR_HUB_DEFAULT_ROUTE=lifecycle` for maintainers) |
 | Sidebar logo | Links to **`/datasets`** |
-| Sidebar order | **Lifecycle** (Datasets, Lifecycle, Models) → Overview → Execution → Admin |
+| Sidebar order | **Lifecycle** (Datasets, Lifecycle, Models, Lineage) → Overview → **Execution (maintainer)** → Admin |
+| Execution nav | Shown only for **maintainer** / **admin** when tenant+project are pinned; hidden for **viewer** and aggregate scope — see [`frontend/lib/hub-nav-access.ts`](../../frontend/lib/hub-nav-access.ts) |
 
-Pipelines and runs remain available under **Execution** — they are observability/substrate, not the primary operator path.
+Pipelines and runs remain under **Execution (maintainer)** — observability/substrate; production runs start from **Dataset Hub → Run / Train**.
+
+## Wave 6 — operator vs maintainer
+
+| Role (scoped) | Hub nav |
+| --- | --- |
+| viewer | Lifecycle + Overview + Settings only |
+| maintainer, admin | + Execution (Pipelines, Runs, Tasks) |
+
+Test: set token to `viewer-token` in Settings, pin scope — Execution group disappears. Use `maintainer-token` to debug pipelines/runs.
 
 ## Blocked readiness (Dashboard)
 

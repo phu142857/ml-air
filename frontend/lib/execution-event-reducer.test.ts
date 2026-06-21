@@ -82,4 +82,29 @@ describe("reduceExecutionEnvelope", () => {
 
     expect(next).toBe(state);
   });
+
+  it("updates run status for training.completed", () => {
+    const state = {
+      runs: {
+        "run-1": {
+          run_id: "run-1",
+          tenant_id: "t",
+          project_id: "p",
+          pipeline_id: "pipe-1",
+          status: "RUNNING",
+          updated_at: "2020-01-01T00:00:00.000Z",
+        },
+      },
+      tasksByRun: {},
+      executionGraphs: {},
+    };
+
+    const next = reduceExecutionEnvelope(state, {
+      type: "training.completed",
+      resource_id: "run-1",
+      payload: { status: "SUCCESS", updated_at: 1_700_000_000, pipeline_id: "pipe-1" },
+    });
+
+    expect(next.runs["run-1"]?.status).toBe("SUCCESS");
+  });
 });

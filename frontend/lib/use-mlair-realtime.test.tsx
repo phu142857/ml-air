@@ -69,12 +69,18 @@ describe("useMlairRealtime", () => {
     vi.stubEnv("NEXT_PUBLIC_MLAIR_REALTIME_WS", "ws://localhost:8001/ws");
     FakeWebSocket.instances = [];
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    window.__ML_AIR_RUNTIME_CONFIG__ = {
+      realtime_base_url: "ws://localhost:8001",
+      features: { realtime_enabled: true },
+    };
+    window.dispatchEvent(new Event("mlair-runtime-config-updated"));
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
     globalThis.WebSocket = originalWebSocket;
+    delete window.__ML_AIR_RUNTIME_CONFIG__;
   });
 
   it("invalidates pipeline dag when run.updated includes pipeline_id", () => {

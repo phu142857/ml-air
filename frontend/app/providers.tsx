@@ -43,7 +43,7 @@ export function AppProviders({ children }: PropsWithChildren) {
           features: {
             ...(prev.features || {}),
             ...(rc.features || {}),
-            realtime_enabled: rc.features?.realtime_enabled !== false,
+            realtime_enabled: true,
           },
         });
       } catch {

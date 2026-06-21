@@ -36,8 +36,8 @@ _LIFECYCLE_TRAINING_COMPLETED_SCHEDULER = (
 
 
 def _enabled() -> bool:
-    raw = os.getenv("MLAIR_REALTIME_ENABLED", "true").strip().lower()
-    return raw not in {"0", "false", "no", "off"}
+    """Realtime publish is always on; MLAIR_REALTIME_ENABLED is ignored if set."""
+    return True
 
 
 def _dt_to_unix(dt: datetime | None) -> float:

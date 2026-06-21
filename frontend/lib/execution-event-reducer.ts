@@ -56,7 +56,51 @@ export function reduceExecutionEnvelope(
     if (prevRun && updatedAtMs(prevRun.updated_at) > uaMs) {
       return state;
     }
-    runs = { ...runs, [rid]: { ...(prevRun ?? ({} as RunItem)), run_id: rid, status, updated_at: iso } };
+    runs = {
+      ...runs,
+      [rid]: {
+        ...(prevRun ?? ({} as RunItem)),
+        run_id: rid,
+        status,
+        updated_at: iso,
+        pipeline_id: String(p.pipeline_id || prevRun?.pipeline_id || "").trim() || prevRun?.pipeline_id,
+        tenant_id: prevRun?.tenant_id,
+        project_id: prevRun?.project_id,
+      },
+    };
+
+    const graph = executionGraphs[rid];
+    if (graph) {
+      executionGraphs = {
+        ...executionGraphs,
+        [rid]: { ...graph, run_status: status },
+      };
+    }
+  }
+
+  if (
+    (typ === "training.completed" || typ === "training.triggered") &&
+    rid &&
+    typeof p.status === "string"
+  ) {
+    const status = p.status;
+    const iso = isoFromUnix(updatedAt);
+    const prevRun = runs[rid];
+    if (prevRun && updatedAtMs(prevRun.updated_at) > uaMs) {
+      return state;
+    }
+    runs = {
+      ...runs,
+      [rid]: {
+        ...(prevRun ?? ({} as RunItem)),
+        run_id: rid,
+        status,
+        updated_at: iso,
+        pipeline_id: String(p.pipeline_id || prevRun?.pipeline_id || "").trim() || prevRun?.pipeline_id,
+        tenant_id: prevRun?.tenant_id,
+        project_id: prevRun?.project_id,
+      },
+    };
 
     const graph = executionGraphs[rid];
     if (graph) {

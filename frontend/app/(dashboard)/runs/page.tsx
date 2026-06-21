@@ -156,7 +156,11 @@ export default function RunsPage() {
         icon={Play}
         accent="sky"
         title="Runs"
-        subtitle={isAggregate ? `All projects · ${rows.length} runs` : `${rows.length} runs`}
+        subtitle={
+          isAggregate
+            ? `Run history · ${rows.length} runs · new runs from Dataset Hub`
+            : `${rows.length} runs · observability (start from Dataset Hub → Run / Train)`
+        }
       />
 
       <TriggerRunDialog
@@ -177,7 +181,7 @@ export default function RunsPage() {
           isEmpty={rows.length === 0}
           emptyIcon={Play}
           emptyTitle="No runs in this scope"
-          emptyDescription="Start a run from Pipelines or pick a workspace in the header."
+          emptyDescription="Start a run from Dataset Hub (Run / Train) or pick a workspace in the header."
         >
           <MlopsDataTable
             columns={runListColumns}

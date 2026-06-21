@@ -3,6 +3,7 @@
 import { create } from "zustand";
 
 import type { ExecutionProjection, RunItem, TaskItem } from "./api";
+import { updatedAtMs } from "./execution-live-merge";
 import { reduceExecutionEnvelope, type ExecutionEnvelope } from "./execution-event-reducer";
 import type { PipelineTopology, RunExecutionGraph } from "./execution-graph-types";
 
@@ -15,6 +16,7 @@ export type ExecutionStoreState = {
 
   setScope: (scopeKey: string) => void;
   hydrateRunSnapshot: (run: RunItem, tasks: TaskItem[]) => void;
+  hydrateRunsFromList: (items: RunItem[]) => void;
   hydrateExecutionGraph: (graph: RunExecutionGraph) => void;
   hydrateTopology: (topology: PipelineTopology) => void;
   hydrateFromProjection: (projection: ExecutionProjection) => void;
@@ -50,6 +52,21 @@ export const useExecutionStore = create<ExecutionStoreState>((set) => ({
         runs: { ...s.runs, [run.run_id]: run },
         tasksByRun: { ...s.tasksByRun, [run.run_id]: taskMap },
       };
+    }),
+
+  hydrateRunsFromList: (items) =>
+    set((s) => {
+      const runs = { ...s.runs };
+      for (const row of items) {
+        if (!row.run_id || !row.status) continue;
+        const prev = runs[row.run_id];
+        const rowMs = updatedAtMs(row.updated_at || row.created_at);
+        const prevMs = updatedAtMs(prev?.updated_at || prev?.created_at);
+        if (!prev || rowMs >= prevMs) {
+          runs[row.run_id] = prev ? { ...prev, ...row } : row;
+        }
+      }
+      return { ...s, runs };
     }),
 
   hydrateExecutionGraph: (graph) =>
