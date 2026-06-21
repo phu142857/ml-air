@@ -1,6 +1,8 @@
 # MLAir Documentation
 
-MLAir documentation follows a task-oriented, production-first approach inspired by MLflow and Apache Airflow.
+**MLAir is a lifecycle operating system for ML** — dataset version → readiness → gated run → model governance. Docs are task-oriented and production-first (action, runnable commands, minimal theory upfront).
+
+**Positioning:** [One-pager](./MLAIR-one-pager.md) · [Paper abstract framing](./positioning/paper-abstract-framing.md) · [Case studies (MLAir path vs baseline)](./guides/case-study-mlair-only-path.md)
 
 ## Documentation Philosophy
 
@@ -20,6 +22,7 @@ Each guide follows:
 
 ## Getting Started
 
+- [MLAir one-pager (stakeholders)](./MLAIR-one-pager.md)
 - [Installation](./getting-started/installation.md)
 - [Quickstart](./getting-started/quickstart.md)
 - [Run Your First Pipeline](./getting-started/run-first-pipeline.md)
@@ -34,9 +37,12 @@ Each guide follows:
 - [Runbook: Execution realtime ops (Wave 0)](./runbooks/execution-realtime-ops.md)
 - [Runbook: Production WSS ingress](./runbooks/production-wss-ingress.md)
 - [Runbook: Wave 1 production maturity](./runbooks/wave1-production-maturity.md)
+- [Runbook: Staging → production sign-off (Lifecycle OS)](./runbooks/staging-prod-signoff.md)
 - [Sign-off: Wave 0 / 1 / Phase 9](./runbooks/signoff-wave0-wave1-phase9.md)
 - [Sign-off record template](./operations/signoff-record-template.md)
-- [Runbook: Readiness v2 Cutover](./runbooks/readiness-v2-cutover.md)
+- [Runbook: Legacy compatibility sunset](./runbooks/legacy-compat-sunset.md)
+- [Runbook: Production strict lifecycle (staging/prod env)](./runbooks/production-strict-lifecycle.md)
+- [Case study: MLAir-only path vs comparison baseline](./guides/case-study-mlair-only-path.md)
 - [Run a Pipeline](./guides/run-pipeline.md)
 - [Task execution mode (internal vs external)](./concepts/task-execution-mode.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)

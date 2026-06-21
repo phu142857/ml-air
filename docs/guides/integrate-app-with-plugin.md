@@ -14,10 +14,11 @@ Connect an existing app workflow to MLAir through a plugin adapter.
 ## Command
 
 ```bash
-# Verify plugin is loaded
-python ./mlair plugins list
+# Verify plugin is registered (API — not a CLI subcommand)
+curl -sS http://localhost:8080/v1/plugins \
+  -H "Authorization: Bearer maintainer-token"
 
-# Trigger run that uses the plugin name from task config
+# Headless smoke: trigger run that references plugin name in pipeline YAML
 python ./mlair run examples/pipeline.custom-plugin.yaml
 ```
 

@@ -1,8 +1,35 @@
 # MLAir
 
-**MLAir** is a **lifecycle-first** ML control plane: **dataset version → readiness → training eligibility → run → model governance**, with **pipelines as the execution substrate** (DAG tasks, retries, replay), not the primary mental model.
+**MLAir is a lifecycle operating system for ML** — a **governance-centric control plane** that anchors training on **immutable dataset versions**, **policy-backed readiness**, **gated runs**, and **model promotion**. **Pipelines are the execution substrate** (DAG, retries, replay), not the product story.
 
-Multi-tenant API for **immutable dataset versions**, **readiness & execution gates**, **model registry**, **pipeline runs** (versioned snapshots), **lineage**, and **observability**—API-first, with a Next.js operator UI.
+> Not a “mini Airflow + MLflow.” Orchestration and tracking exist **inside** one **`run_id`**, version pin, and audit trail — see [case studies](docs/guides/case-study-mlair-only-path.md).
+
+Multi-tenant API + Next.js Hub for datasets, readiness, runs, registry, lineage, and observability. **Start here:** [one-pager](docs/MLAIR-one-pager.md) · [Hub lifecycle-first UX](docs/guides/hub-lifecycle-first.md)
+
+---
+
+## Lifecycle chain (30-second mental model)
+
+```mermaid
+flowchart LR
+  DV["Dataset version vN<br/>(immutable pin)"]
+  RD["Dataset readiness<br/>(policy evaluation)"]
+  EL["Training eligibility<br/>(readiness + governance)"]
+  EG["Execution gate<br/>(pipeline / runtime)"]
+  RUN["Run + tasks<br/>(one run_id)"]
+  MD["Model version<br/>(promote / stages)"]
+
+  DV --> RD --> EL --> EG --> RUN --> MD
+
+  subgraph substrate["Execution substrate (not the headline)"]
+    PIPE["Pipeline DAG · scheduler · executor"]
+  end
+
+  EG -.-> PIPE
+  RUN -.-> PIPE
+```
+
+**Operator path:** Dataset Hub → **Run / Train** (pinned `dataset_version_id`) → Hub **Runs** / lineage / usage on the same `run_id`. **Maintainer path:** Execution nav for pipeline/run observability only.
 
 ---
 
@@ -64,11 +91,18 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 - Helm chart `charts/ml-air/`
 - CI: build, env sync guard, manifest key rotation guard, **Prometheus alert rule lint** (`make test-prometheus-rules` — `promtool` or Docker), smokes, Helm lint (`make test-all` is the local mirror)
 
-### In progress / incremental (not a blocker to run the stack)
+### Operator experience (Hub-first — shipped)
 
-- **Hub-first lifecycle UX** — Dataset Hub **Run / Train** is the primary operator path; **Execution (maintainer)** nav is role-gated (viewer tokens hide Pipelines/Runs/Tasks). Pipeline/run pages are observability-first copy. Operator sign-off: [`docs/runbooks/signoff-wave0-wave1-phase9.md`](docs/runbooks/signoff-wave0-wave1-phase9.md) (**operator** ticks per env).
-- **Durable readiness evaluations** (persisted rows + Hub history list + “why blocked” reasons column; Readiness v2 *default evaluation path* without legacy aggregate fallback is still incremental work.)
-- **Serving-slot HTTP** on `/v1/models/{id}/serving`: implemented in data model / draft OpenAPI but **handlers commented in `v1.py`** until re-enabled; UI flag `ENABLE_SERVING_SLOTS_UI` stays off by default.
+- **Dataset Hub** (`/datasets`) is the default entry; **Run / Train** with pinned **Head snapshot (vN)** / `dataset_version_id`
+- **Lifecycle nav:** Datasets, Lifecycle dashboard, Models, Lineage — all roles
+- **Execution (maintainer):** Pipelines, Runs, Tasks — observability copy; hidden for viewer tokens ([hub-nav-access](frontend/lib/hub-nav-access.ts))
+- Realtime Hub sync (WS + polling fallback): [`docs/runbooks/staging-prod-signoff.md`](docs/runbooks/staging-prod-signoff.md)
+- Sign-off automation: `make signoff-local` (wave0 + strict lifecycle + wave1 + scheduler HA)
+
+### Incremental (non-blocking)
+
+- **Durable readiness evaluations** — persisted history + “why blocked” UX refinements
+- **Serving-slot HTTP** on `/v1/models/{id}/serving`: data model exists; HTTP handlers commented until re-enabled (`ENABLE_SERVING_SLOTS_UI` off)
 
 ### Release hygiene (maintainers)
 
@@ -181,11 +215,16 @@ sequenceDiagram
 
 
 
-**Terminology (UI / docs):**
+**Terminology (Phase 0 glossary — same names in Hub, API, docs):**
 
-- **Dataset readiness** — lifecycle / data readiness at the dataset (and policy) level.
-- **Execution gate** — pipeline-side checks and advanced ops (see pipeline **Execution Gate (Advanced)** in UI; narrative: `docs/api/readiness-and-gating.md`).
-- **Training eligibility** — combination of readiness, policy, and governance; surfaced in Hub-oriented flows where implemented.
+| Term | Meaning |
+| --- | --- |
+| **Dataset readiness** | Version-scoped evaluation against policy (size, freshness, rules) — [`readiness-and-gating.md`](docs/api/readiness-and-gating.md) |
+| **Training eligibility** | Readiness **plus** governance and model/dataset policy — gate before train |
+| **Execution gate** | Pipeline/runtime checks at run start (`check-readiness`, declared inputs, strict pin) |
+| **Materialization** | Buffer → immutable **dataset version** (`vN`) |
+
+Do not alias these to “gate” generically in UI copy. Full contract: [`docs/api/readiness-and-gating.md`](docs/api/readiness-and-gating.md).
 
 **Design choices (production-minded):**
 
@@ -261,6 +300,8 @@ Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI
 
 
 See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, and advanced JWT/JWKS settings.
+
+**Staging / production (Lifecycle OS):** use documented strict env — [`docs/runbooks/production-strict-lifecycle.md`](docs/runbooks/production-strict-lifecycle.md), [`deploy/env/staging-strict.env.example`](deploy/env/staging-strict.env.example), sunset milestones in [`docs/runbooks/legacy-compat-sunset.md`](docs/runbooks/legacy-compat-sunset.md). Case studies (Vet-AI, YOLO) run **only through MLAir API/Hub**; E2 Airflow+MLflow is comparison baseline — [`docs/guides/case-study-mlair-only-path.md`](docs/guides/case-study-mlair-only-path.md).
 
 ---
 

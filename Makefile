@@ -70,8 +70,12 @@ wave1: test-prometheus-rules chaos-wave1
 validate-scheduler-ha:
 	bash scripts/validate_scheduler_ha.sh
 
+.PHONY: verify-strict-lifecycle
+verify-strict-lifecycle:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) python scripts/verify_strict_lifecycle.py
+
 .PHONY: signoff-local
-signoff-local: wave0 wave1 validate-scheduler-ha
+signoff-local: wave0 verify-strict-lifecycle wave1 validate-scheduler-ha
 
 .PHONY: verify-wave5
 verify-wave5:

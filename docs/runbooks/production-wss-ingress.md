@@ -18,10 +18,9 @@ Set on **API** (runtime-config inject) and optionally frontend static bootstrap:
 
 ```bash
 ML_AIR_RUNTIME_REALTIME_BASE_URL=wss://mlair.example.com/realtime
-MLAIR_REALTIME_ENABLED=true
 ```
 
-Hub builds WebSocket path as: `{realtime_base_url}/ws?tenant_id=…&project_id=…&token=…`
+Realtime publish is **always on** in current API/scheduler builds (no disable lever). Hub builds WebSocket path as: `{realtime_base_url}/ws?tenant_id=…&project_id=…&token=…`
 
 ## Nginx (example)
 

@@ -2,7 +2,7 @@
 
 Copy sections into your change ticket. **Code in repo is shipped** for Wave 0/1 automation; items marked **operator** must be executed and ticked in **your** environment (staging → production).
 
-References: [execution-realtime-ops](./execution-realtime-ops.md) · [wave1-production-maturity](./wave1-production-maturity.md) · [legacy-compat-sunset](./legacy-compat-sunset.md) · [ROADMAP Phase 9](../../ROADMAP.md#phase-9--research--paper-grade-formalization)
+References: [execution-realtime-ops](./execution-realtime-ops.md) · [wave1-production-maturity](./wave1-production-maturity.md) · [legacy-compat-sunset](./legacy-compat-sunset.md) · [production-strict-lifecycle](./production-strict-lifecycle.md) · [case-study-mlair-only-path](../guides/case-study-mlair-only-path.md) · [ROADMAP Phase 9](../../ROADMAP.md#phase-9--research--paper-grade-formalization)
 
 ---
 
@@ -24,7 +24,7 @@ Optional env: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_
 
 - [ ] **operator** `GET /v1/runtime-config` → `features.realtime_enabled` ≠ `false`
 - [ ] **operator** `realtime_base_url` correct for browser (dev: `ws://localhost:8001`; prod: **`wss://…`** on your hostname)
-- [ ] **operator** `MLAIR_REALTIME_ENABLED=true` on API + scheduler (unless intentionally push-off)
+- [ ] **operator** Realtime always on in current builds; set `ML_AIR_RUNTIME_REALTIME_BASE_URL=wss://…` ([production-wss-ingress](./production-wss-ingress.md))
 - [ ] **operator** Production ingress: fill [`production-wss-ingress.md`](./production-wss-ingress.md) table + set `ML_AIR_RUNTIME_REALTIME_BASE_URL=wss://…`
 - [ ] **operator** Hub token matches API auth (`ML_AIR_AUTH_TOKENS_JSON` / JWT)
 
@@ -38,9 +38,11 @@ Optional env: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_
 
 ### Wave 0b — Version-centric readiness (recommended same ticket)
 
-From [legacy-compat-sunset](./legacy-compat-sunset.md) pre-sunset:
+From [legacy-compat-sunset](./legacy-compat-sunset.md) pre-sunset / **M1 staging strict**:
 
+- [ ] **operator** Staging uses [`deploy/env/staging-strict.env.example`](../../deploy/env/staging-strict.env.example) (or equivalent) — see [production-strict-lifecycle](./production-strict-lifecycle.md)
 - [ ] **operator** `features.readiness_allow_legacy_fallback` is `false` in target env
+- [ ] **operator** `features.strict_dataset_version_required` and `strict_dataset_version_all_post_runs` are `true` in staging/prod (unless ticketed pipeline exceptions)
 - [ ] **operator** Train / Run / automation send `dataset_version_id` where required
 - [ ] **operator** No unexplained sustained `422 DATASET_VERSION_REQUIRED` in API logs
 
@@ -142,14 +144,19 @@ Use this when closing a **research milestone**, not a deploy:
 
 ## One-page combined gate (staging → prod)
 
+**Primary runbook:** [Staging → production sign-off](./staging-prod-signoff.md) — ticket template in [signoff-record-template](../operations/signoff-record-template.md).
+
 Execute in order:
 
-1. `make wave0` + Hub manual checklist (Wave 0)
+1. `make wave0` + `make verify-strict-lifecycle` + Hub manual checklist (Wave 0)
 2. Legacy / version-centric pre-sunset items if cutting over readiness (Wave 0b)
 3. `make wave1` on same stack
-4. `scheduler=2` on staging + observe 24–48h
+4. `make validate-scheduler-ha` on staging + observe 24–48h
 5. Apply Alertmanager tenant routes in cluster
 6. Repeat Wave 0 manual checklist on **production** with **WSS**
-7. Record ticket IDs; flip ROADMAP Phase 11/12 operator checkboxes in release notes (dates stay org-specific)
+7. Fill **one change ticket per env** (date, operator, link this doc)
+8. Record ticket IDs; flip ROADMAP Phase 17/19 operator checkboxes in release notes
+
+Or locally: `make signoff-local` (wave0 + strict verify + wave1 + scheduler HA).
 
 Phase 9: acknowledge MVP docs above; schedule formal work separately.

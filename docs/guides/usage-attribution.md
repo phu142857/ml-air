@@ -2,6 +2,8 @@
 
 MLair records **resource consumption** per task and roll up per run: CPU time, memory, GPU time, and disk I/O bytes. There is **no monetary cost estimation** in the platform.
 
+**Lifecycle OS sign-off:** usage attribution is **optional** for production gate — operators sign off on Wave 0/1 + WSS; dollar chargeback / billing-tag export is **future work** ([staging-prod sign-off](../runbooks/staging-prod-signoff.md#optional-cost-attribution-does-not-block-sign-off)).
+
 **Contract:** field names, scales (CPU 0–100 on the worker host), and complete/heartbeat payloads are defined in [Resource Usage Contract v1](./resource-usage-contract-v1.md).
 
 For **who runs tasks** (internal executor vs external worker), see [Task execution mode](../concepts/task-execution-mode.md). Usage collection depends on that mode.

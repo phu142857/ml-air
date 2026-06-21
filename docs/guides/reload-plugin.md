@@ -14,7 +14,9 @@ Reload plugin registry after plugin updates.
 
 ```bash
 make rebuild
-python ./mlair plugins list
+curl -sS http://localhost:8080/v1/plugins \
+  -H "Authorization: Bearer maintainer-token"
+# optional: POST /v1/plugins/reload (maintainer) after registry changes
 ```
 
 ## Result
