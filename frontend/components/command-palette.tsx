@@ -34,7 +34,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { Badge } from "@/components/ui/badge"
-import { fetchRuns, searchApi, fetchAuditTimeline, type SearchResultItem } from "@/lib/api"
+import { fetchRuns, fetchRunsPage, searchApi, searchApiPage, fetchAuditTimelinePage, type SearchResultItem } from "@/lib/api"
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
@@ -121,14 +121,26 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const recentRunsQuery = useQuery({
     queryKey: mlairKeys.runs.list(tenantId, projectId),
-    queryFn: () => fetchRuns(tenantId, projectId, token),
+    queryFn: async () => {
+      if (scopePinned) {
+        const page = await fetchRunsPage(tenantId, projectId, token, { limit: 20 });
+        return { items: page.items };
+      }
+      return fetchRuns(tenantId, projectId, token);
+    },
     enabled: open && Boolean(token?.trim()),
     staleTime: 30_000,
   })
 
   const searchQuery = useQuery({
     queryKey: mlairKeys.search(tenantId, projectId, trimmedQuery, "all"),
-    queryFn: () => searchApi(tenantId, projectId, token, trimmedQuery, "all"),
+    queryFn: async () => {
+      if (scopePinned) {
+        const page = await searchApiPage(tenantId, projectId, token, trimmedQuery, "all", { limit: 20 });
+        return { q: page.q, items: page.items, aggregate: false as const };
+      }
+      return searchApi(tenantId, projectId, token, trimmedQuery, "all");
+    },
     enabled: searchEnabled,
     staleTime: 10_000,
   })
@@ -137,10 +149,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const auditForTraceQuery = useQuery({
     queryKey: [...mlairKeys.audit.timeline(tenantId, projectId, {}), "trace", trimmedQuery] as const,
     queryFn: async () => {
-      const { items } = await fetchAuditTimeline(tenantId, projectId, token, { limit: 50 })
-      const events = mapAuditTimelineItems(items)
-      const q = trimmedQuery.toLowerCase()
-      return events.filter((e) => e.traceId?.toLowerCase().includes(q))
+      const page = await fetchAuditTimelinePage(tenantId, projectId, token, { limit: 100 });
+      const events = mapAuditTimelineItems(page.items);
+      const q = trimmedQuery.toLowerCase();
+      return events.filter((e) => e.traceId?.toLowerCase().includes(q));
     },
     enabled: open && scopePinned && Boolean(token?.trim()) && traceMode,
   })

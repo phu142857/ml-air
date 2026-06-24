@@ -6,6 +6,13 @@ from uuid import uuid4
 from psycopg.types.json import Json
 
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    keyset_where_desc_int,
+    resolve_page_params,
+    sql_limit_offset,
+)
 
 
 def create_pipeline_version(
@@ -68,25 +75,63 @@ def get_pipeline_version(version_id: str) -> dict | None:
     return _row_v(row)
 
 
-def list_pipeline_versions(
-    tenant_id: str, project_id: str, pipeline_id: str, limit: int = 100, offset: int = 0
-) -> list[dict]:
-    lim = max(1, min(limit, 200))
-    off = max(0, offset)
+def list_pipeline_versions_page(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=100, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc_int(params, col="version", cursor_key="version")
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
                 SELECT version_id, tenant_id, project_id, pipeline_id, version, config, created_at
                 FROM pipeline_versions
-                WHERE tenant_id = %s AND project_id = %s AND pipeline_id = %s
+                WHERE tenant_id = %s AND project_id = %s AND pipeline_id = %s{keyset_sql}
                 ORDER BY version DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, pipeline_id, lim, off),
-            )
+                    (tenant_id, project_id, pipeline_id, *keyset_args, params.limit + 1, params.offset),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT version_id, tenant_id, project_id, pipeline_id, version, config, created_at
+                FROM pipeline_versions
+                WHERE tenant_id = %s AND project_id = %s AND pipeline_id = %s{keyset_sql}
+                ORDER BY version DESC
+                {lim_sql}
+                """,
+                    (tenant_id, project_id, pipeline_id, *keyset_args, *lim_params),
+                )
             rows = cur.fetchall()
-    return [_row_v(r) for r in rows]
+    items = [_row_v(r) for r in rows]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"version": int(r["version"])},
+    )
+
+
+def list_pipeline_versions(
+    tenant_id: str,
+    project_id: str,
+    pipeline_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_pipeline_versions_page(
+        tenant_id, project_id, pipeline_id, limit=limit, offset=offset, cursor=cursor
+    ).items
 
 
 def get_latest_version_id(tenant_id: str, project_id: str, pipeline_id: str) -> str | None:

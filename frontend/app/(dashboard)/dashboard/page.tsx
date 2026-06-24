@@ -29,7 +29,7 @@ import { UsageRollupPanel } from "@/components/mlops/usage-rollup-panel"
 
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 
-import { fetchAuditTimeline } from "@/lib/api"
+import { fetchAuditTimeline, fetchAuditTimelinePage } from "@/lib/api"
 import { useAppContext } from "@/lib/app-context"
 import { auditEventTitle, auditResourceHref } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
@@ -79,10 +79,13 @@ export default function DashboardPage() {
 
   const auditQ = useQuery({
     queryKey: mlairKeys.audit.timeline(tenantId, projectId, {}),
-    queryFn: () =>
-      fetchAuditTimeline(tenantId, projectId, token, {
-        limit: 12,
-      }),
+    queryFn: async () => {
+      if (scopePinned) {
+        const page = await fetchAuditTimelinePage(tenantId, projectId, token, { limit: 12 });
+        return { items: page.items };
+      }
+      return fetchAuditTimeline(tenantId, projectId, token, { limit: 12 });
+    },
     enabled: Boolean(token?.trim()),
   })
 

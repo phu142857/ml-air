@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Box, FolderUp, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,11 +21,12 @@ import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/compone
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
-import { createModel, fetchModels, type ModelItem } from "@/lib/api"
+import { createModel, type ModelItem } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_MODELS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { useToast } from "@/hooks/use-toast"
+import { useModelsList } from "@/hooks/use-models-list"
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog"
 
 const modelColumns: DataTableColumn<ModelItem>[] = [
@@ -80,11 +81,8 @@ export default function ModelsPage() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
 
-  const modelsQuery = useQuery({
-    queryKey: mlairKeys.models.list(tenantId, projectId),
-    queryFn: () => fetchModels(tenantId, projectId, token),
-    enabled: Boolean(token?.trim()),
-  })
+  const modelsQuery = useModelsList(Boolean(token?.trim()))
+  const showLoadMore = scopePinned && modelsQuery.hasNextPage
 
   const registerMutation = useMutation({
     mutationFn: () =>
@@ -105,7 +103,7 @@ export default function ModelsPage() {
     },
   })
 
-  const items = modelsQuery.data?.items ?? []
+  const items = modelsQuery.items
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -214,6 +212,19 @@ export default function ModelsPage() {
             onRowClick={(m) => router.push(`/models/${encodeURIComponent(m.model_id)}`)}
             emptyMessage="No models."
           />
+          {showLoadMore ? (
+            <div className="flex justify-center border-t border-border/60 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={modelsQuery.isFetchingNextPage}
+                onClick={() => void modelsQuery.fetchNextPage?.()}
+              >
+                {modelsQuery.isFetchingNextPage ? "Loading…" : "Load more models"}
+              </Button>
+            </div>
+          ) : null}
         </ScopedListContent>
       </PageScrollBody>
     </div>

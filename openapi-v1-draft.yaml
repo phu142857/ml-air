@@ -125,6 +125,15 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - $ref: "#/components/parameters/ListOffset"
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: OK
@@ -260,6 +269,7 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: Run list page
@@ -361,6 +371,7 @@ paths:
             minimum: 1
             maximum: 2000
             default: 200
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: Log page
@@ -653,6 +664,7 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: Search hits
@@ -699,6 +711,7 @@ paths:
           schema:
             type: integer
             default: 0
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: OK
@@ -724,6 +737,7 @@ paths:
           schema:
             type: integer
             default: 0
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: OK
@@ -974,6 +988,7 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: "#/components/parameters/ListCursor"
         - name: source
           in: query
           schema: { type: string }
@@ -1003,6 +1018,7 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: "#/components/parameters/ListCursor"
         - name: source
           in: query
           schema: { type: string }
@@ -1032,6 +1048,7 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: "#/components/parameters/ListCursor"
         - name: resource_type
           in: query
           schema: { type: string }
@@ -1088,6 +1105,7 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: "#/components/parameters/ListCursor"
         - name: resource_type
           in: query
           schema: { type: string }
@@ -1439,6 +1457,7 @@ paths:
           schema:
             type: integer
             default: 0
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: OK
@@ -1625,6 +1644,7 @@ paths:
           schema:
             type: integer
             default: 0
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: OK
@@ -2071,6 +2091,20 @@ paths:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/TaskId"
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2000
+            default: 200
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: OK
@@ -2082,6 +2116,15 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - $ref: "#/components/parameters/ListOffset"
+        - $ref: "#/components/parameters/ListCursor"
       responses:
         "200":
           description: Paginated list
@@ -2413,6 +2456,24 @@ components:
       schema:
         type: string
 
+    ListCursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+      description: |
+        Opaque token from a prior response `next_cursor` (keyset pagination).
+        Do not combine with `offset > 0` — returns 422.
+
+    ListOffset:
+      in: query
+      name: offset
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Legacy offset pagination; deprecated when using `cursor`.
+
     DatasetVersionId:
       in: path
       name: version_id
@@ -2618,6 +2679,15 @@ components:
     ModelList:
       type: object
       properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
         items:
           type: array
           items:
@@ -2949,6 +3019,12 @@ components:
           type: integer
         offset:
           type: integer
+          description: Present when the client used legacy `offset` pagination.
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
         items:
           type: array
           items:
@@ -2985,8 +3061,14 @@ components:
           type: string
         offset:
           type: integer
+          description: Present when the client used legacy `offset` pagination.
         limit:
           type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
         items:
           type: array
           items:
@@ -3165,6 +3247,15 @@ components:
     DatasetList:
       type: object
       properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
         items:
           type: array
           items:
@@ -3218,6 +3309,15 @@ components:
     DatasetReadinessEvaluationList:
       type: object
       properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
         items:
           type: array
           items:
@@ -3590,6 +3690,15 @@ components:
     DatasetRunsList:
       type: object
       properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
         items:
           type: array
           items:

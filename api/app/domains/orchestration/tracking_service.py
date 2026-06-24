@@ -3,6 +3,13 @@ from __future__ import annotations
 from uuid import uuid4
 
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    keyset_where_desc,
+    resolve_page_params,
+    sql_limit_offset,
+)
 
 
 def create_experiment(tenant_id: str, project_id: str, name: str, description: str | None = None) -> dict:
@@ -29,23 +36,49 @@ def create_experiment(tenant_id: str, project_id: str, name: str, description: s
     }
 
 
-def list_experiments(tenant_id: str, project_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
-    safe_limit = max(1, min(limit, 200))
-    safe_offset = max(0, offset)
+def list_experiments_page(
+    tenant_id: str,
+    project_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=100, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="created_at",
+        tie_col="experiment_id",
+        cursor_primary_key="created_at",
+        cursor_tie_key="experiment_id",
+    )
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
                 SELECT experiment_id, tenant_id, project_id, name, description, created_at, updated_at
                 FROM experiments
-                WHERE tenant_id = %s AND project_id = %s
-                ORDER BY created_at DESC
+                WHERE tenant_id = %s AND project_id = %s{keyset_sql}
+                ORDER BY created_at DESC, experiment_id DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, safe_limit, safe_offset),
-            )
+                    (tenant_id, project_id, *keyset_args, params.limit + 1, params.offset),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT experiment_id, tenant_id, project_id, name, description, created_at, updated_at
+                FROM experiments
+                WHERE tenant_id = %s AND project_id = %s{keyset_sql}
+                ORDER BY created_at DESC, experiment_id DESC
+                {lim_sql}
+                """,
+                    (tenant_id, project_id, *keyset_args, *lim_params),
+                )
             rows = cur.fetchall()
-    return [
+    items = [
         {
             "experiment_id": row[0],
             "tenant_id": row[1],
@@ -57,6 +90,22 @@ def list_experiments(tenant_id: str, project_id: str, limit: int = 100, offset: 
         }
         for row in rows
     ]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"created_at": r["created_at"], "experiment_id": r["experiment_id"]},
+    )
+
+
+def list_experiments(
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_experiments_page(tenant_id, project_id, limit=limit, offset=offset, cursor=cursor).items
 
 
 def log_param(run_id: str, key: str, value: str) -> dict:

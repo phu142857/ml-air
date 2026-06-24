@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Database, Download, Eye, GitBranch, Loader2, Plus, Tags, Trash2, X } from "lucide-react";
+import { ChevronRight, Database, Download, Eye, GitBranch, Loader2, Play, Plus, Tags, Trash2, X } from "lucide-react";
 import {
   DetailSection,
   DetailTabBar,
@@ -40,10 +40,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { useDatasetReadinessEvaluations } from "@/hooks/use-dataset-readiness-evaluations";
+import { useDatasetRuns } from "@/hooks/use-dataset-runs";
 import {
   fetchDataset,
   fetchDatasetBuffer,
-  fetchDatasetReadinessEvaluations,
   fetchDatasetReadiness,
   postDatasetReadinessEvaluate,
   createDatasetTrainingPolicy,
@@ -63,17 +64,19 @@ import {
   patchDatasetVersionMetadata,
   fetchRuntimeConfig,
   upsertDatasetTrainingPolicy,
-  type DatasetVersionItem
+  type DatasetVersionItem,
+  type RunItem,
 } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
+import { StatusBadge } from "@/components/mlops/status-badge";
 import { datasetSourceTypeBadge, datasetVersionSourceBadge } from "@/lib/dataset-source-type";
-import { datasetStatusBadgeClass, normalizeDatasetStatus } from "@/lib/status-style";
+import { datasetStatusBadgeClass, normalizeDatasetStatus, statusToMlopsBadge } from "@/lib/status-style";
 import { describeTrainError } from "@/lib/describe-train-error";
 import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
-import { cn, formatDateTimeCompact } from "@/lib/utils";
+import { cn, formatApiClientError, formatDateTimeCompact, formatRelativeTime } from "@/lib/utils";
 
 const DATASET_TABS = [
   { id: "overview", label: "Overview" },
@@ -154,9 +157,8 @@ const READINESS_EVAL_SOURCE_FILTER_OPTIONS = [
   { value: "auto_policy", label: "source: auto_policy" }
 ];
 
-const READINESS_EVALUATIONS_PAGE_SIZE = 20;
 
-type ReadinessEvaluationRow = Awaited<ReturnType<typeof fetchDatasetReadinessEvaluations>>["items"][number];
+type ReadinessEvaluationRow = import("@/lib/api").DatasetReadinessEvaluationItem;
 
 export default function DatasetHubPage() {
   const params = useParams<{ datasetId: string }>();
@@ -180,7 +182,6 @@ export default function DatasetHubPage() {
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
   const [policyRequiredSizeDraft, setPolicyRequiredSizeDraft] = useState("1000");
   const [newPolicyTriggerMode, setNewPolicyTriggerMode] = useState("manual");
-  const [evaluationCurrentPage, setEvaluationCurrentPage] = useState(1);
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
   /** When false, `POST .../runs/trigger` can omit `dataset_version_id` server-side (compat); Hub still pins per-row Train. */
   const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
@@ -314,7 +315,6 @@ export default function DatasetHubPage() {
 
   useEffect(() => {
     setSelectedVersionId("");
-    setEvaluationCurrentPage(1);
   }, [datasetId]);
 
   useEffect(() => {
@@ -452,14 +452,20 @@ export default function DatasetHubPage() {
     },
     onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
   });
-  const readinessEvaluationsQuery = useQuery({
-    queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
-    queryFn: () =>
-      fetchDatasetReadinessEvaluations(tenantId, projectId, datasetId, token, 200, 0),
-    enabled: Boolean(datasetId && token && dataset),
-    refetchOnMount: "always",
-    ...poll,
-  });
+  const readinessEvaluationFilters = useMemo(
+    () => ({
+      status: evaluationStatusFilter,
+      policyId: evaluationPolicyFilter,
+      source: evaluationSourceFilter,
+    }),
+    [evaluationStatusFilter, evaluationPolicyFilter, evaluationSourceFilter]
+  );
+  const readinessEvaluationsQuery = useDatasetReadinessEvaluations(
+    datasetId,
+    Boolean(datasetId && token && dataset),
+    readinessEvaluationFilters
+  );
+  const datasetRunsQuery = useDatasetRuns(datasetId, Boolean(datasetId && token && dataset));
   const [evaluatePersistMsg, setEvaluatePersistMsg] = useState<string | null>(null);
   const evaluatePersistMutation = useMutation({
     mutationFn: async () => {
@@ -611,28 +617,40 @@ export default function DatasetHubPage() {
     return { strat, cur, tgt, rowsToThreshold, lastVid, lastAt, lastVersionLabel };
   }, [bufferQuery.data, versionsQuery.data?.items]);
 
-  const allEvaluationItems = readinessEvaluationsQuery.data?.items ?? [];
-  const filteredEvaluations = useMemo(() => {
-    return allEvaluationItems.filter((row) => {
-      const statusOk =
-        evaluationStatusFilter === "all" ||
-        String(row.status || "").toLowerCase() === evaluationStatusFilter.toLowerCase();
-      const policyOk =
-        evaluationPolicyFilter === "all" || String(row.policy_id || "") === evaluationPolicyFilter;
-      const sourceVal = String((row as { source?: string }).source || "manual").toLowerCase();
-      const sourceOk =
-        evaluationSourceFilter === "all" || sourceVal === evaluationSourceFilter.toLowerCase();
-      return statusOk && policyOk && sourceOk;
-    });
-  }, [allEvaluationItems, evaluationStatusFilter, evaluationPolicyFilter, evaluationSourceFilter]);
-  const evaluationTotalPages = Math.max(1, Math.ceil(filteredEvaluations.length / READINESS_EVALUATIONS_PAGE_SIZE));
-  const paginatedEvaluations = useMemo(
-    () =>
-      filteredEvaluations.slice(
-        (evaluationCurrentPage - 1) * READINESS_EVALUATIONS_PAGE_SIZE,
-        evaluationCurrentPage * READINESS_EVALUATIONS_PAGE_SIZE
-      ),
-    [filteredEvaluations, evaluationCurrentPage]
+  const evaluationItems = readinessEvaluationsQuery.items;
+
+  const datasetRunColumns: DataTableColumn<RunItem>[] = useMemo(
+    () => [
+      {
+        id: "run_id",
+        header: "Run",
+        cell: (run) => (
+          <span className="font-mono text-sm text-primary">{run.run_id}</span>
+        ),
+      },
+      {
+        id: "pipeline",
+        header: "Pipeline",
+        cell: (run) => (
+          <span className="font-mono text-xs text-muted-foreground">{run.pipeline_id || "—"}</span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        cell: (run) => (
+          <StatusBadge status={statusToMlopsBadge(run.status)} label={run.status} size="sm" />
+        ),
+      },
+      {
+        id: "updated",
+        header: "Updated",
+        cell: (run) => (
+          <span className="text-xs text-muted-foreground">{formatRelativeTime(run.updated_at)}</span>
+        ),
+      },
+    ],
+    []
   );
 
   const evaluationColumns: DataTableColumn<ReadinessEvaluationRow>[] = useMemo(
@@ -704,9 +722,6 @@ export default function DatasetHubPage() {
     [],
   );
 
-  useEffect(() => {
-    setEvaluationCurrentPage((p) => Math.min(p, evaluationTotalPages));
-  }, [evaluationTotalPages]);
   const policyPresets = [
     { id: "small", label: "Small incremental training", requiredSize: 100 },
     { id: "daily", label: "Daily retrain", requiredSize: 1000 },
@@ -1260,6 +1275,53 @@ export default function DatasetHubPage() {
                   </div>
                 </div>
               ) : null}
+            </DetailSection>
+
+            <DetailSection
+              title="Runs using this dataset"
+              accentBorder="sky"
+              className="lg:col-span-2"
+              description="Training and pipeline runs that declared this dataset as input."
+            >
+              {!scopePinned ? (
+                <p className="text-sm text-muted-foreground">
+                  Pin a tenant and project in the header to list runs for this dataset.
+                </p>
+              ) : datasetRunsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading runs…</p>
+              ) : datasetRunsQuery.isError ? (
+                <p className="text-sm text-destructive">{formatApiClientError(datasetRunsQuery.error)}</p>
+              ) : datasetRunsQuery.items.length === 0 ? (
+                <MlopsEmptyState
+                  icon={Play}
+                  title="No runs yet"
+                  description="Runs that consume this dataset appear here after you trigger training or pipelines."
+                />
+              ) : (
+                <>
+                  <MlopsDataTable
+                    columns={datasetRunColumns}
+                    data={datasetRunsQuery.items}
+                    keyExtractor={(run) => run.run_id}
+                    onRowClick={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
+                    emptyMessage="No runs."
+                    className="text-sm"
+                  />
+                  {datasetRunsQuery.hasNextPage ? (
+                    <div className="flex justify-center border-t border-border/60 py-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={datasetRunsQuery.isFetchingNextPage}
+                        onClick={() => void datasetRunsQuery.fetchNextPage()}
+                      >
+                        {datasetRunsQuery.isFetchingNextPage ? "Loading…" : "Load more runs"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </DetailSection>
 
             {!scopePinned ? (
@@ -1887,23 +1949,20 @@ export default function DatasetHubPage() {
               value={evaluationStatusFilter}
               onChange={(id) => {
                 setEvaluationStatusFilter(id);
-                setEvaluationCurrentPage(1);
               }}
             />
           }
         >
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">
-              Showing {(evaluationCurrentPage - 1) * READINESS_EVALUATIONS_PAGE_SIZE + 1}-
-              {Math.min(evaluationCurrentPage * READINESS_EVALUATIONS_PAGE_SIZE, filteredEvaluations.length)} of{" "}
-              {filteredEvaluations.length} evaluations
+              {evaluationItems.length} evaluation{evaluationItems.length === 1 ? "" : "s"}
+              {readinessEvaluationsQuery.hasNextPage ? " loaded" : ""}
             </span>
             <div className="flex items-center gap-2">
               <SelectDropdown
                 value={evaluationSourceFilter}
                 onChange={(v) => {
                   setEvaluationSourceFilter(v);
-                  setEvaluationCurrentPage(1);
                 }}
                 options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
                 buttonClassName="panel-surface px-2 py-1 text-xs"
@@ -1914,58 +1973,45 @@ export default function DatasetHubPage() {
                 value={evaluationPolicyFilter}
                 onChange={(v) => {
                   setEvaluationPolicyFilter(v);
-                  setEvaluationCurrentPage(1);
                 }}
                 options={evaluationPolicyFilterOptions}
                 buttonClassName="panel-surface px-2 py-1 text-xs"
                 className="min-w-[10rem]"
                 aria-label="Filter evaluations by policy"
               />
-              <Button
-                variant="secondary"
-                onClick={() => setEvaluationCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={evaluationCurrentPage === 1 || readinessEvaluationsQuery.isLoading}
-              >
-                {"<<"}
-              </Button>
-              <span className="px-3 text-sm text-foreground">
-                Page {evaluationCurrentPage} / {evaluationTotalPages}
-              </span>
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setEvaluationCurrentPage((prev) => Math.min(evaluationTotalPages, prev + 1))
-                }
-                disabled={evaluationCurrentPage === evaluationTotalPages || readinessEvaluationsQuery.isLoading}
-              >
-                {">>"}
-              </Button>
             </div>
           </div>
           {readinessEvaluationsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : paginatedEvaluations.length === 0 ? (
+          ) : evaluationItems.length === 0 ? (
             <MlopsEmptyState
               icon={Database}
-              title={
-                allEvaluationItems.length === 0
-                  ? "No readiness evaluations yet"
-                  : "No evaluations match filters"
-              }
-              description={
-                allEvaluationItems.length === 0
-                  ? "Run evaluate from the Readiness tab controls above."
-                  : "Try a different status, source, or policy filter."
-              }
+              title="No readiness evaluations yet"
+              description="Run evaluate from the Readiness tab controls above, or relax filters."
             />
           ) : (
-            <MlopsDataTable
-              columns={evaluationColumns}
-              data={paginatedEvaluations}
-              keyExtractor={(row) => row.evaluation_id}
-              emptyMessage="No evaluations on this page."
-              className="text-sm"
-            />
+            <>
+              <MlopsDataTable
+                columns={evaluationColumns}
+                data={evaluationItems}
+                keyExtractor={(row) => row.evaluation_id}
+                emptyMessage="No evaluations."
+                className="text-sm"
+              />
+              {readinessEvaluationsQuery.hasNextPage ? (
+                <div className="flex justify-center border-t border-border/60 py-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={readinessEvaluationsQuery.isFetchingNextPage}
+                    onClick={() => void readinessEvaluationsQuery.fetchNextPage()}
+                  >
+                    {readinessEvaluationsQuery.isFetchingNextPage ? "Loading…" : "Load more evaluations"}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </DetailSection>
       ) : null}

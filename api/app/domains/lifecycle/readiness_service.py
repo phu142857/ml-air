@@ -8,6 +8,13 @@ from typing import Any
 from uuid import uuid4
 
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    keyset_where_desc,
+    resolve_page_params,
+    sql_limit_offset,
+)
 import app.domains.lifecycle.lineage_service as lineage_service
 from app.domains.lifecycle.canonical_codes import attach_canonical_to_reason_row, canonical_readiness_code
 from app.domains.lifecycle.evaluation_semantics import (
@@ -868,19 +875,27 @@ def summarize_dataset_training_eligibility(
     }
 
 
-def list_dataset_readiness_evaluations(
+def list_dataset_readiness_evaluations_page(
     *,
     tenant_id: str,
     project_id: str,
     dataset_id: str,
     limit: int = 20,
     offset: int = 0,
+    cursor: str | None = None,
     status: str | None = None,
     policy_id: str | None = None,
     source: str | None = None,
-) -> list[dict[str, Any]]:
-    lim = max(1, min(int(limit), 200))
-    off = max(0, int(offset))
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=20, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="evaluated_at",
+        tie_col="evaluation_id",
+        cursor_primary_key="evaluated_at",
+        cursor_tie_key="evaluation_id",
+    )
     st_f = str(status or "").strip().lower() or None
     pid_f = str(policy_id or "").strip() or None
     src_f = str(source or "").strip().lower() or None
@@ -897,8 +912,9 @@ def list_dataset_readiness_evaluations(
         extra_params.append(src_f)
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                f"""
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
                 SELECT
                     evaluation_id,
                     dataset_version_id,
@@ -913,14 +929,45 @@ def list_dataset_readiness_evaluations(
                 WHERE tenant_id = %s
                   AND project_id = %s
                   AND dataset_id = %s
-                  {where_extra}
-                ORDER BY evaluated_at DESC
+                  {where_extra}{keyset_sql}
+                ORDER BY evaluated_at DESC, evaluation_id DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, dataset_id, *extra_params, lim, off),
-            )
+                    (
+                        tenant_id,
+                        project_id,
+                        dataset_id,
+                        *extra_params,
+                        *keyset_args,
+                        params.limit + 1,
+                        params.offset,
+                    ),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT
+                    evaluation_id,
+                    dataset_version_id,
+                    policy_id,
+                    required_size,
+                    current_size,
+                    status,
+                    source,
+                    evaluated_at,
+                    reasons
+                FROM dataset_readiness_evaluations
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND dataset_id = %s
+                  {where_extra}{keyset_sql}
+                ORDER BY evaluated_at DESC, evaluation_id DESC
+                {lim_sql}
+                """,
+                    (tenant_id, project_id, dataset_id, *extra_params, *keyset_args, *lim_params),
+                )
             rows = cur.fetchall()
-    return [
+    items = [
         {
             "evaluation_id": r[0],
             "dataset_version_id": r[1],
@@ -934,6 +981,37 @@ def list_dataset_readiness_evaluations(
         }
         for r in rows
     ]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"evaluated_at": r["evaluated_at"], "evaluation_id": r["evaluation_id"]},
+    )
+
+
+def list_dataset_readiness_evaluations(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 20,
+    offset: int = 0,
+    cursor: str | None = None,
+    status: str | None = None,
+    policy_id: str | None = None,
+    source: str | None = None,
+) -> list[dict[str, Any]]:
+    return list_dataset_readiness_evaluations_page(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        status=status,
+        policy_id=policy_id,
+        source=source,
+    ).items
 
 
 def get_or_create_dataset_training_policy(
@@ -1037,32 +1115,54 @@ def get_dataset_training_policy_by_id(
     }
 
 
-def list_dataset_training_policies(
+def list_dataset_training_policies_page(
     *,
     tenant_id: str,
     project_id: str,
     dataset_id: str,
     limit: int = 50,
     offset: int = 0,
-) -> list[dict[str, Any]]:
-    lim = max(1, min(int(limit), 200))
-    off = max(0, int(offset))
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=50, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="created_at",
+        tie_col="policy_id",
+        cursor_primary_key="created_at",
+        cursor_tie_key="policy_id",
+    )
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
+                SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id, created_at
                 FROM dataset_training_policies
                 WHERE tenant_id = %s
                   AND project_id = %s
-                  AND dataset_id = %s
-                ORDER BY created_at DESC
+                  AND dataset_id = %s{keyset_sql}
+                ORDER BY created_at DESC, policy_id DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, dataset_id, lim, off),
-            )
+                    (tenant_id, project_id, dataset_id, *keyset_args, params.limit + 1, params.offset),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT policy_id, required_size, freshness_hours, trigger_mode, validation_rules, model_id, created_at
+                FROM dataset_training_policies
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND dataset_id = %s{keyset_sql}
+                ORDER BY created_at DESC, policy_id DESC
+                {lim_sql}
+                """,
+                    (tenant_id, project_id, dataset_id, *keyset_args, *lim_params),
+                )
             rows = cur.fetchall()
-    return [
+    items = [
         {
             "policy_id": r[0],
             "required_size": int(r[1] or 1000),
@@ -1070,9 +1170,35 @@ def list_dataset_training_policies(
             "trigger_mode": str(r[3] or "manual"),
             "validation_rules": r[4] or [],
             "model_id": r[5],
+            "created_at": r[6].isoformat(),
         }
         for r in rows
     ]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"created_at": r["created_at"], "policy_id": r["policy_id"]},
+    )
+
+
+def list_dataset_training_policies(
+    *,
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict[str, Any]]:
+    return list_dataset_training_policies_page(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    ).items
 
 
 def upsert_dataset_training_policy(

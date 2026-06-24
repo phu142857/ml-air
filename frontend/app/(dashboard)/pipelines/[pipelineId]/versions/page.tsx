@@ -1,12 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { GitBranch } from "lucide-react";
-import { listPipelineVersionsApi } from "@/lib/api";
-import { mlairKeys } from "@/lib/query-keys";
+import { usePipelineVersionsList } from "@/hooks/use-pipeline-versions-list";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
 import {
@@ -42,13 +40,8 @@ export default function PipelineVersionsPage() {
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
   const [createEditorOpen, setCreateEditorOpen] = useState(false);
 
-  const listQuery = useQuery({
-    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId),
-    queryFn: () => listPipelineVersionsApi(tenantId, projectId, pipelineId, token),
-    enabled: Boolean(token),
-  });
-
-  const items = listQuery.data?.items ?? [];
+  const listQuery = usePipelineVersionsList(pipelineId, Boolean(token));
+  const items = listQuery.items;
   const [left, setLeft] = useState("");
   const [right, setRight] = useState("");
   const versionPickOptions = useMemo(
@@ -220,12 +213,27 @@ export default function PipelineVersionsPage() {
               description="Publish the first config snapshot using the create editor."
             />
           ) : (
-            <DataTable
-              columns={versionColumns}
-              data={items}
-              keyExtractor={(row) => row.version_id}
-              emptyMessage="No versions yet."
-            />
+            <>
+              <DataTable
+                columns={versionColumns}
+                data={items}
+                keyExtractor={(row) => row.version_id}
+                emptyMessage="No versions yet."
+              />
+              {listQuery.hasNextPage ? (
+                <div className="flex justify-center border-t border-border/60 py-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={listQuery.isFetchingNextPage}
+                    onClick={() => void listQuery.fetchNextPage()}
+                  >
+                    {listQuery.isFetchingNextPage ? "Loading…" : "Load more versions"}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </DetailSection>
       </PageScrollBody>

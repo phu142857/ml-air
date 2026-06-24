@@ -14,6 +14,13 @@ import threading
 import time
 from typing import Any
 
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    keyset_where_desc,
+    resolve_page_params,
+)
+
 logger = logging.getLogger("mlair.api.event_outbox")
 
 
@@ -91,18 +98,18 @@ def _publish_envelope_to_redis(event: dict[str, Any]) -> bool:
     return publish_semantic_envelope_to_redis(event)
 
 
-def list_outbox_for_project(
+def list_outbox_for_project_page(
     tenant_id: str,
     project_id: str,
     *,
     limit: int = 50,
     offset: int = 0,
+    cursor: str | None = None,
     event_type: str | None = None,
     delivered: str | None = None,
-) -> list[dict[str, Any]]:
+) -> PageResult:
     """Return recent durable-outbox rows for a tenant/project (newest first)."""
-    lim = max(1, min(int(limit), 200))
-    off = max(0, int(offset))
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=50, max_limit=200)
     et = (event_type or "").strip() or None
     if et and len(et) > 256:
         et = et[:256]
@@ -111,35 +118,48 @@ def list_outbox_for_project(
         dv = None
 
     clauses = ["tenant_id = %s", "project_id = %s"]
-    params: list[Any] = [tenant_id, project_id]
+    sql_params: list[Any] = [tenant_id, project_id]
     if et:
         clauses.append("event_type = %s")
-        params.append(et)
+        sql_params.append(et)
     if dv == "yes":
         clauses.append("redis_delivered_at IS NOT NULL")
     elif dv == "no":
         clauses.append("redis_delivered_at IS NULL")
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="created_at",
+        tie_col="outbox_id",
+        cursor_primary_key="created_at",
+        cursor_tie_key="outbox_id",
+    )
+    if params.mode == "offset":
+        tail = "ORDER BY created_at DESC, outbox_id DESC LIMIT %s OFFSET %s"
+        sql_params.extend(keyset_args)
+        sql_params.extend([params.limit + 1, params.offset])
+    else:
+        tail = f"ORDER BY created_at DESC, outbox_id DESC LIMIT %s"
+        sql_params.extend(keyset_args)
+        sql_params.append(params.limit + 1)
 
     from psycopg import connect
 
     sql = f"""
         SELECT outbox_id, event_type, envelope, created_at, redis_delivered_at
         FROM semantic_event_outbox
-        WHERE {" AND ".join(clauses)}
-        ORDER BY created_at DESC
-        LIMIT %s OFFSET %s
+        WHERE {" AND ".join(clauses)}{keyset_sql}
+        {tail}
     """
-    params.extend([lim, off])
     try:
         with connect(_database_url(), autocommit=True) as conn:
             with conn.cursor() as cur:
-                cur.execute(sql, params)
+                cur.execute(sql, sql_params)
                 rows = cur.fetchall()
     except Exception as exc:  # noqa: BLE001
         logger.warning("event_outbox_list_failed tenant=%s project=%s err=%s", tenant_id, project_id, exc)
-        return []
+        return PageResult(items=[], next_cursor=None, has_more=False, limit=params.limit)
 
-    out: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     for oid, ev_type, env, created_at, redis_at in rows:
         if isinstance(env, str):
             try:
@@ -148,16 +168,55 @@ def list_outbox_for_project(
                 env = {}
         if not isinstance(env, dict):
             env = {}
-        out.append(
+        created_iso = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+        items.append(
             {
                 "outbox_id": str(oid),
                 "event_type": str(ev_type),
                 "envelope": env,
                 "created_at": created_at,
                 "redis_delivered_at": redis_at,
+                "_cursor_created_at": created_iso,
             }
         )
-    return out
+    page = finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"created_at": r["_cursor_created_at"], "outbox_id": r["outbox_id"]},
+    )
+    clean_items = []
+    for item in page.items:
+        clean = {k: v for k, v in item.items() if not k.startswith("_cursor")}
+        clean_items.append(clean)
+    return PageResult(
+        items=clean_items,
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+def list_outbox_for_project(
+    tenant_id: str,
+    project_id: str,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+    event_type: str | None = None,
+    delivered: str | None = None,
+) -> list[dict[str, Any]]:
+    return list_outbox_for_project_page(
+        tenant_id,
+        project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        event_type=event_type,
+        delivered=delivered,
+    ).items
 
 
 def replay_outbox_by_ids(

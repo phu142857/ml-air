@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react"
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
-import { fetchAuditTimeline, fetchRuns } from "@/lib/api"
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
+import { fetchAuditTimeline, fetchAuditTimelinePage, fetchRuns } from "@/lib/api"
 import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
 import { jaegerTraceDeepLink } from "@/lib/jaeger-trace-url"
 import { mlairKeys } from "@/lib/query-keys"
@@ -70,21 +70,47 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   const prevIdsRef = useRef<Set<string>>(new Set())
   const hasSeededRef = useRef(false)
 
-  const lifecycleQuery = useQuery({
+  const AUDIT_PAGE_SIZE = 100
+
+  const infiniteLifecycleQuery = useInfiniteQuery({
+    queryKey: mlairKeys.audit.timelineInfinite(tenantId, projectId),
+    queryFn: async ({ pageParam }) => {
+      const page = await fetchAuditTimelinePage(tenantId, projectId, token, {
+        limit: AUDIT_PAGE_SIZE,
+        cursor: (pageParam as string | null) ?? undefined,
+      })
+      return {
+        events: mapAuditTimelineItems(page.items),
+        traceparent: page.traceparent,
+        has_more: page.has_more,
+        next_cursor: page.next_cursor,
+      }
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) =>
+      last.has_more && last.next_cursor ? last.next_cursor : undefined,
+    enabled: enabled && scopePinned,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+    refetchInterval: isLive && enabled && scopePinned ? livePollMs : false,
+    retry: 2,
+  })
+
+  const aggregateLifecycleQuery = useQuery({
     queryKey: mlairKeys.audit.timeline(tenantId, projectId),
     queryFn: async () => {
       const { items, traceparent } = await fetchAuditTimeline(tenantId, projectId, token, {
-        limit: 100,
+        limit: AUDIT_PAGE_SIZE,
       })
       return {
         events: mapAuditTimelineItems(items),
         traceparent,
       }
     },
-    enabled,
+    enabled: enabled && !scopePinned,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
-    refetchInterval: isLive && enabled ? livePollMs : false,
+    refetchInterval: isLive && enabled && !scopePinned ? livePollMs : false,
     retry: 2,
   })
 
@@ -106,17 +132,36 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     retry: 0,
   })
 
-  const events: AuditEvent[] = Array.isArray(lifecycleQuery.data?.events)
-    ? lifecycleQuery.data.events
-    : []
+  const events: AuditEvent[] = useMemo(() => {
+    if (scopePinned) {
+      return infiniteLifecycleQuery.data?.pages.flatMap((p) => p.events) ?? []
+    }
+    return Array.isArray(aggregateLifecycleQuery.data?.events)
+      ? aggregateLifecycleQuery.data.events
+      : []
+  }, [scopePinned, infiniteLifecycleQuery.data?.pages, aggregateLifecycleQuery.data?.events])
+
+  const traceparent = scopePinned
+    ? (infiniteLifecycleQuery.data?.pages[0]?.traceparent ?? null)
+    : (aggregateLifecycleQuery.data?.traceparent ?? null)
 
   const auditFetchJaegerUrl = useMemo(
-    () => jaegerTraceDeepLink(jaegerUrl, lifecycleQuery.data?.traceparent ?? null),
-    [jaegerUrl, lifecycleQuery.data?.traceparent],
+    () => jaegerTraceDeepLink(jaegerUrl, traceparent),
+    [jaegerUrl, traceparent],
   )
 
+  const isLoading =
+    scopePinned
+      ? infiniteLifecycleQuery.isLoading && events.length === 0
+      : aggregateLifecycleQuery.isLoading && events.length === 0
+
+  const isRefreshing =
+    scopePinned
+      ? infiniteLifecycleQuery.isFetching && events.length > 0
+      : aggregateLifecycleQuery.isFetching && events.length > 0
+
   useEffect(() => {
-    const data = lifecycleQuery.data?.events
+    const data = events
     if (!Array.isArray(data) || data.length === 0) return
     const ids = new Set(data.map((e) => e.id))
     if (!hasSeededRef.current) {
@@ -147,30 +192,41 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
       })
     }, 2500)
     return () => clearTimeout(t)
-  }, [lifecycleQuery.data?.events, isLive, toast])
+  }, [events, isLive, toast])
 
   const errorType: ErrorType = useMemo(() => {
-    if (!lifecycleQuery.error) return null
-    const status = parseApiErrorStatus(lifecycleQuery.error)
+    const err = scopePinned ? infiniteLifecycleQuery.error : aggregateLifecycleQuery.error
+    if (!err) return null
+    const status = parseApiErrorStatus(err)
     if (status === 404) return "not-found"
-    const msg = String((lifecycleQuery.error as Error)?.message || "")
+    const msg = String((err as Error)?.message || "")
     if (msg.includes("404") || msg.toLowerCase().includes("not found")) return "not-found"
     return "api-down"
-  }, [lifecycleQuery.error])
+  }, [scopePinned, infiniteLifecycleQuery.error, aggregateLifecycleQuery.error])
 
   const fetchState: FetchState = useMemo(
     () => ({
-      status: lifecycleQuery.isLoading
+      status: isLoading
         ? "loading"
-        : lifecycleQuery.isError
+        : (scopePinned ? infiniteLifecycleQuery.isError : aggregateLifecycleQuery.isError)
           ? "error"
-          : lifecycleQuery.isSuccess
+          : (scopePinned ? infiniteLifecycleQuery.isSuccess : aggregateLifecycleQuery.isSuccess)
             ? "success"
             : "idle",
       errorType,
-      error: (lifecycleQuery.error as Error) ?? null,
+      error: ((scopePinned ? infiniteLifecycleQuery.error : aggregateLifecycleQuery.error) as Error) ?? null,
     }),
-    [lifecycleQuery.isLoading, lifecycleQuery.isError, lifecycleQuery.isSuccess, errorType, lifecycleQuery.error],
+    [
+      isLoading,
+      scopePinned,
+      infiniteLifecycleQuery.isError,
+      infiniteLifecycleQuery.isSuccess,
+      infiniteLifecycleQuery.error,
+      aggregateLifecycleQuery.isError,
+      aggregateLifecycleQuery.isSuccess,
+      aggregateLifecycleQuery.error,
+      errorType,
+    ],
   )
 
   const stats: LifecycleStats = useMemo(() => {
@@ -209,7 +265,7 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   }, [runsQuery.data])
 
   const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: mlairKeys.audit.timeline(tenantId, projectId), exact: false })
+    queryClient.invalidateQueries({ queryKey: ["audit-timeline", tenantId, projectId] })
     queryClient.invalidateQueries({ queryKey: mlairKeys.runs.list(tenantId, projectId), exact: false })
     if (jaegerUrl.trim()) {
       queryClient.invalidateQueries({ queryKey: mlairKeys.jaegerStatus(jaegerUrl) })
@@ -241,8 +297,8 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     recentTraces,
     activeRunsCount,
     fetchState,
-    isLoading: lifecycleQuery.isLoading && events.length === 0,
-    isRefreshing: lifecycleQuery.isFetching && events.length > 0,
+    isLoading,
+    isRefreshing,
     isLive,
     newEventIds,
     jaegerUrl,
@@ -251,5 +307,9 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     refreshJaeger,
     toggleLive,
     auditFetchJaegerUrl,
+    fetchNextPage: scopePinned ? infiniteLifecycleQuery.fetchNextPage : undefined,
+    hasNextPage: scopePinned ? infiniteLifecycleQuery.hasNextPage : false,
+    isFetchingNextPage: scopePinned ? infiniteLifecycleQuery.isFetchingNextPage : false,
+    loadedEventCount: events.length,
   }
 }

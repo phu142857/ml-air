@@ -5,12 +5,13 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { ListTodo, Loader2 } from "lucide-react"
-import { fetchTaskResolved, fetchTaskUsage, normalizeProjectId, type ResolvedTask } from "@/lib/api"
+import { ListTodo, Loader2, Terminal } from "lucide-react"
+import { fetchTaskResolved, fetchTaskUsage, normalizeProjectId, type LogItem, type ResolvedTask } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useExecutionStore } from "@/lib/execution-store"
 import { Button } from "@/components/ui/button"
+import { useTaskLogsInfinite } from "@/hooks/use-task-logs-infinite"
 import {
   DetailSection,
   MetadataGrid,
@@ -24,11 +25,32 @@ import { TaskUsageSummary } from "@/components/mlops/task-usage-summary"
 import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
-import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
+import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
 import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
 
 const ACTIVE_TASK_REFETCH_MS = 4000
+
+function TaskLogLine({ log }: { log: LogItem }) {
+  return (
+    <div className="flex gap-3">
+      <span className="w-[84px] shrink-0 tabular-nums text-muted-foreground/80">
+        {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
+      </span>
+      <span
+        className={cn(
+          "w-14 shrink-0",
+          String(log.level).toUpperCase() === "INFO" && "text-primary",
+          String(log.level).toUpperCase() === "WARN" && "text-[color:var(--status-pending-fg)]",
+          String(log.level).toUpperCase() === "ERROR" && "text-[color:var(--status-failed-fg)]",
+        )}
+      >
+        [{log.level}]
+      </span>
+      <span className="min-w-0 break-words text-foreground/90">{log.message}</span>
+    </div>
+  )
+}
 
 function taskPayloadRecord(data: unknown): Record<string, unknown> {
   if (!data || typeof data !== "object" || Array.isArray(data)) return {}
@@ -120,6 +142,17 @@ function TaskDetailContent() {
     },
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
+
+  const logsScope = usageScope
+  const logsRefetchMs = isActiveExecutionStatus(task?.status) ? ACTIVE_TASK_REFETCH_MS : poll.refetchInterval
+  const logsQuery = useTaskLogsInfinite(
+    logsScope?.tenantId ?? "",
+    logsScope?.projectId ?? "",
+    taskId,
+    token,
+    Boolean(logsScope && task),
+    typeof logsRefetchMs === "number" ? logsRefetchMs : false
+  )
 
   if (!isLoading && !isError && !task) {
     return (
@@ -305,6 +338,53 @@ function TaskDetailContent() {
                   runId={usageQuery.data?.usage?.run_id ?? runId}
                   loading={usageQuery.isLoading}
                 />
+              )}
+            </DetailSection>
+            <DetailSection
+              title="Task logs"
+              description="Worker log lines for this task (cursor-paginated)."
+              accentBorder="violet"
+            >
+              {!logsScope ? (
+                <p className="text-sm text-muted-foreground">
+                  Resolve task scope to load logs (pin tenant/project or open from a run).
+                </p>
+              ) : logsQuery.isError ? (
+                <p className="text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>
+              ) : (
+                <div className="max-h-[min(420px,50vh)] space-y-1 overflow-auto rounded-md border border-border/60 bg-muted/30 p-4 font-mono text-xs leading-relaxed">
+                  {logsQuery.isLoading && logsQuery.items.length === 0 ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading logs…
+                    </div>
+                  ) : logsQuery.items.length === 0 ? (
+                    <p className="text-muted-foreground">No log lines yet.</p>
+                  ) : (
+                    <>
+                      {logsQuery.items.map((log, index) => (
+                        <TaskLogLine key={`${log.ts}-${index}`} log={log} />
+                      ))}
+                      {logsQuery.hasNextPage ? (
+                        <div className="flex justify-center py-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 border-border bg-background/80 text-xs"
+                            disabled={logsQuery.isFetchingNextPage}
+                            onClick={() => void logsQuery.fetchNextPage()}
+                          >
+                            {logsQuery.isFetchingNextPage ? "Loading…" : "Load more logs"}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  {logsQuery.isFetching && logsQuery.items.length > 0 ? (
+                    <p className="pt-2 text-[10px] text-muted-foreground">Refreshing…</p>
+                  ) : null}
+                </div>
               )}
             </DetailSection>
             <JsonPayloadPanel title="Task payload" data={payload} className="border-border/60 bg-card" />

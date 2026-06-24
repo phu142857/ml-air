@@ -137,15 +137,11 @@ export const DatasetVersionScrollEditor = forwardRef<
     queryKey: mlairKeys.datasets.versionPreview(tenantId, projectId, versionId),
     queryFn: ({ pageParam }) =>
       previewDatasetVersion(tenantId, projectId, versionId, token, {
-        offset: pageParam as number,
+        cursor: (pageParam as string | null) ?? undefined,
         limit: DATASET_VERSION_PAGE_SIZE,
       }),
-    initialPageParam: 0,
-    getNextPageParam: (last) => {
-      if (!last.has_more) return undefined;
-      const loaded = last.format === "jsonl" ? (last.lines?.length ?? 0) : (last.rows?.length ?? 0);
-      return last.offset + loaded;
-    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.has_more && last.next_cursor ? last.next_cursor : undefined),
     enabled: Boolean(versionId && token),
     refetchOnMount: "always",
   });

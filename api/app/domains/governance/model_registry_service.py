@@ -14,6 +14,13 @@ from app.domains.governance.promotion_policy import (
     transition_kind,
 )
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    keyset_where_desc,
+    resolve_page_params,
+    sql_limit_offset,
+)
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
 
@@ -214,13 +221,37 @@ def create_model(tenant_id: str, project_id: str, name: str, description: str | 
     }
 
 
-def list_models(tenant_id: str, project_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
-    safe_limit = max(1, min(limit, 200))
-    safe_offset = max(0, offset)
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+def _model_row_to_item(row: tuple) -> dict:
+    return {
+        "model_id": row[0],
+        "tenant_id": row[1],
+        "project_id": row[2],
+        "name": row[3],
+        "description": row[4],
+        "created_at": row[5].isoformat(),
+        "updated_at": row[6].isoformat(),
+        "production_version": int(row[7]) if row[7] is not None else None,
+    }
+
+
+def list_models_page(
+    tenant_id: str,
+    project_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=100, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="m.created_at",
+        tie_col="m.model_id",
+        cursor_primary_key="created_at",
+        cursor_tie_key="model_id",
+    )
+    base_sql = f"""
                 SELECT
                     m.model_id,
                     m.tenant_id,
@@ -237,26 +268,36 @@ def list_models(tenant_id: str, project_id: str, limit: int = 100, offset: int =
                         LIMIT 1
                     ) AS production_version
                 FROM models m
-                WHERE m.tenant_id = %s AND m.project_id = %s
-                ORDER BY m.created_at DESC
-                LIMIT %s OFFSET %s
-                """,
-                (tenant_id, project_id, safe_limit, safe_offset),
-            )
+                WHERE m.tenant_id = %s AND m.project_id = %s{keyset_sql}
+                ORDER BY m.created_at DESC, m.model_id DESC
+                """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            if params.mode == "offset":
+                cur.execute(
+                    base_sql + " LIMIT %s OFFSET %s",
+                    (tenant_id, project_id, *keyset_args, params.limit + 1, params.offset),
+                )
+            else:
+                cur.execute(base_sql + f" {lim_sql}", (tenant_id, project_id, *keyset_args, *lim_params))
             rows = cur.fetchall()
-    return [
-        {
-            "model_id": row[0],
-            "tenant_id": row[1],
-            "project_id": row[2],
-            "name": row[3],
-            "description": row[4],
-            "created_at": row[5].isoformat(),
-            "updated_at": row[6].isoformat(),
-            "production_version": int(row[7]) if row[7] is not None else None,
-        }
-        for row in rows
-    ]
+    items = [_model_row_to_item(row) for row in rows]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"created_at": r["created_at"], "model_id": r["model_id"]},
+    )
+
+
+def list_models(
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_models_page(tenant_id, project_id, limit=limit, offset=offset, cursor=cursor).items
 
 
 def get_model(tenant_id: str, project_id: str, model_id: str) -> dict | None:

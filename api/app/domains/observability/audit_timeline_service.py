@@ -4,14 +4,21 @@ import json
 from typing import Any
 
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    parse_cursor_datetime,
+    resolve_page_params,
+)
 
 
-def list_audit_timeline(
+def list_audit_timeline_page(
     *,
     tenant_id: str,
     project_id: str,
     limit: int = 50,
     offset: int = 0,
+    cursor: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
     kind: str | None = None,
@@ -20,33 +27,39 @@ def list_audit_timeline(
     dataset_version_id: str | None = None,
     readiness_status: str | None = None,
     limit_ceiling: int = 200,
-) -> list[dict[str, Any]]:
-    """
-    Unified audit-ish timeline view (read-only aggregation).
-
-    Notes:
-    - This is *not* a full event-sourcing log; it surfaces key persisted tables that
-      already exist (readiness evals, model approval/slots) plus run/task snapshots.
-    - Ordering is by `ts` DESC.
-    """
-    safe_limit = max(1, min(max(1, min(10_000, int(limit_ceiling))), int(limit or 50)))
-    safe_offset = max(0, int(offset or 0))
+) -> PageResult:
+    params = resolve_page_params(
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        default_limit=50,
+        max_limit=max(1, min(10_000, int(limit_ceiling))),
+    )
     rt = (resource_type or "").strip().lower() or None
     rid = (resource_id or "").strip() or None
     k = (kind or "").strip() or None
     src = (source or "").strip().lower() or None
-
-    # Optional filter: only apply if both type+id are provided.
     where_rt = rt if (rt and rid) else None
     where_rid = rid if (rt and rid) else None
     where_kind = k
-    # Source applies only to events that have a source column (readiness evals today).
     where_source = src
     pol = (policy_id or "").strip() or None
     dvid = (dataset_version_id or "").strip() or None
     rstat = (readiness_status or "").strip().lower() or None
 
-    sql = """
+    cursor_sql = ""
+    cursor_ts = None
+    cursor_kind = None
+    cursor_rid = None
+    if params.mode == "cursor" and params.cursor:
+        cursor_ts = parse_cursor_datetime(params.cursor.get("ts"))
+        cursor_kind = str(params.cursor.get("kind") or "")
+        cursor_rid = str(params.cursor.get("resource_id") or "")
+        cursor_sql = " AND (ts, kind, resource_id) < (%(cursor_ts)s, %(cursor_kind)s, %(cursor_rid)s)"
+
+    limit_sql = "LIMIT %(limit)s OFFSET %(offset)s" if params.mode == "offset" else "LIMIT %(limit)s"
+
+    sql = f"""
     WITH timeline AS (
       -- Dataset readiness persisted evaluations (explicit audit rows)
       SELECT
@@ -228,34 +241,49 @@ def list_audit_timeline(
               kind = 'dataset.readiness.evaluated'
               AND LOWER(COALESCE(payload->>'status', '')) = (%(where_readiness_status)s)::text
             )
-          )
-    ORDER BY ts DESC
-    LIMIT %(limit)s OFFSET %(offset)s
+          ){cursor_sql}
+    ORDER BY ts DESC, kind DESC, resource_id DESC
+    {limit_sql}
     """
+
+    query_params: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "limit": params.limit + 1,
+        "offset": params.offset if params.mode == "offset" else 0,
+        "where_rt": where_rt,
+        "where_rid": where_rid,
+        "where_kind": where_kind,
+        "where_source": where_source,
+        "where_policy_id": pol,
+        "where_dataset_version_id": dvid,
+        "where_readiness_status": rstat,
+        "cursor_ts": cursor_ts,
+        "cursor_kind": cursor_kind,
+        "cursor_rid": cursor_rid,
+    }
 
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                {
-                    "tenant_id": tenant_id,
-                    "project_id": project_id,
-                    "limit": safe_limit,
-                    "offset": safe_offset,
-                    "where_rt": where_rt,
-                    "where_rid": where_rid,
-                    "where_kind": where_kind,
-                    "where_source": where_source,
-                    "where_policy_id": pol,
-                    "where_dataset_version_id": dvid,
-                    "where_readiness_status": rstat,
-                },
-            )
+            cur.execute(sql, query_params)
             rows = cur.fetchall()
 
+    items = _rows_to_timeline_items(rows)
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {
+            "ts": r["ts"],
+            "kind": r["kind"],
+            "resource_id": r["resource_id"],
+        },
+    )
+
+
+def _rows_to_timeline_items(rows: list[tuple]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for ts, kind, rtype, rid2, src_row, payload in rows:
-        # payload is already a dict-like (psycopg json) or string; normalize.
         if isinstance(payload, str):
             try:
                 payload_val: Any = json.loads(payload)
@@ -274,4 +302,37 @@ def list_audit_timeline(
             }
         )
     return out
+
+
+def list_audit_timeline(
+    *,
+    tenant_id: str,
+    project_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    kind: str | None = None,
+    source: str | None = None,
+    policy_id: str | None = None,
+    dataset_version_id: str | None = None,
+    readiness_status: str | None = None,
+    limit_ceiling: int = 200,
+) -> list[dict[str, Any]]:
+    return list_audit_timeline_page(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        kind=kind,
+        source=source,
+        policy_id=policy_id,
+        dataset_version_id=dataset_version_id,
+        readiness_status=readiness_status,
+        limit_ceiling=limit_ceiling,
+    ).items
 

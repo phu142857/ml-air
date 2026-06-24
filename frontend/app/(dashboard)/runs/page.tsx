@@ -11,6 +11,7 @@ import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/compone
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
+import { Button } from "@/components/ui/button"
 import type { RunItem } from "@/lib/api"
 import { useRunsListLive } from "@/hooks/use-runs-list-live"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
@@ -143,6 +144,7 @@ export default function RunsPage() {
 
   const runsQuery = useRunsListLive(Boolean(token?.trim()))
   const rows = runsQuery.items
+  const showLoadMore = runsQuery.scopePinned && runsQuery.hasNextPage
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -190,6 +192,19 @@ export default function RunsPage() {
             onRowClick={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
             emptyMessage="No runs."
           />
+          {showLoadMore ? (
+            <div className="flex justify-center border-t border-border/60 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={runsQuery.isFetchingNextPage}
+                onClick={() => void runsQuery.fetchNextPage?.()}
+              >
+                {runsQuery.isFetchingNextPage ? "Loading…" : "Load more runs"}
+              </Button>
+            </div>
+          ) : null}
         </ScopedListContent>
       </PageScrollBody>
     </div>

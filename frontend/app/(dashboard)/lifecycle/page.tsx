@@ -101,6 +101,9 @@ function LifecycleContent() {
     toggleLive,
     scopePinned,
     auditFetchJaegerUrl,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useLifecycle({ jaegerUrl })
 
   const handleExport = useCallback(async () => {
@@ -685,6 +688,19 @@ function LifecycleContent() {
                 )}
               >
                 <AuditTimeline events={filteredEvents} newEventIds={newEventIds} />
+                {scopePinned && hasNextPage ? (
+                  <div className="mt-6 flex justify-center border-t border-border/60 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isFetchingNextPage}
+                      onClick={() => void fetchNextPage?.()}
+                    >
+                      {isFetchingNextPage ? "Loading…" : "Load more events"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

@@ -703,6 +703,34 @@ async function resolveScopePairs(tenantId: string, projectId: string, token: str
   return pairs;
 }
 
+export async function fetchRunsPage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts: { limit?: number; cursor?: string | null } = {}
+): Promise<CursorPage<RunItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const sp = new URLSearchParams({ limit: String(opts.limit ?? 50) });
+  if (opts.cursor) {
+    sp.set("cursor", opts.cursor);
+  }
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs?${sp.toString()}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return {
+    items: (data.items ?? []) as RunItem[],
+    limit: Number(data.limit) || 50,
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
 export async function fetchRuns(tenantId: string, projectId: string, token: string) {
   const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {
@@ -726,6 +754,10 @@ export async function fetchRuns(tenantId: string, projectId: string, token: stri
     const merged = responses.flatMap((x) => x.items || []);
     merged.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
     return { items: merged };
+  }
+  if (tenantIds.length === 1 && tenantId !== "all") {
+    const page = await fetchRunsPage(tenantId, projectId, token, { limit: 50 });
+    return { items: page.items };
   }
   const scopedProjectId = normalizeProjectId(projectId);
   const responses = await Promise.all(
@@ -756,12 +788,12 @@ async function fetchAuditTimelineForScope(
   tenantId: string,
   projectId: string,
   token: string,
-  opts?: { limit?: number; filters?: AuditTimelineFilters }
-): Promise<{ items: AuditTimelineItem[]; traceparent: string | null }> {
+  opts?: { limit?: number; filters?: AuditTimelineFilters; cursor?: string | null }
+): Promise<{ items: AuditTimelineItem[]; traceparent: string | null; has_more?: boolean; next_cursor?: string | null }> {
   const scopedProjectId = normalizeProjectId(projectId);
   const lim = Math.min(200, Math.max(1, opts?.limit ?? 25));
   const filters = opts?.filters ?? {};
-  const qs = buildAuditTimelineSearchParams(filters, lim);
+  const qs = buildAuditTimelineSearchParams(filters, lim, { cursor: opts?.cursor });
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/audit/timeline?${qs}`,
     {
@@ -771,10 +803,35 @@ async function fetchAuditTimelineForScope(
   );
   const traceparent = res.headers.get("traceparent");
   if (!res.ok) return { items: [], traceparent };
-  const data = (await res.json()) as { items?: unknown };
+  const data = (await res.json()) as {
+    items?: unknown;
+    has_more?: boolean;
+    next_cursor?: string | null;
+  };
   const rawItems = data.items;
   const items = Array.isArray(rawItems) ? (rawItems as AuditTimelineItem[]) : [];
-  return { items, traceparent };
+  return {
+    items,
+    traceparent,
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
+export async function fetchAuditTimelinePage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; filters?: AuditTimelineFilters; cursor?: string | null }
+): Promise<CursorPage<AuditTimelineItem> & { traceparent: string | null }> {
+  const page = await fetchAuditTimelineForScope(tenantId, projectId, token, opts);
+  return {
+    items: page.items,
+    limit: opts?.limit ?? 25,
+    has_more: Boolean(page.has_more),
+    next_cursor: page.next_cursor ?? null,
+    traceparent: page.traceparent,
+  };
 }
 
 /** Unified audit-ish timeline (readiness evals, model events, run/task snapshots). */
@@ -1007,15 +1064,71 @@ export async function fetchRunTasks(tenantId: string, projectId: string, runId: 
   return data as { items: TaskItem[] };
 }
 
-export async function fetchRunLogs(tenantId: string, projectId: string, runId: string, token: string) {
+export async function fetchRunLogsPage(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<LogItem>> {
   const scopedProjectId = normalizeProjectId(projectId);
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/logs`, {
-    headers: authHeaders(token),
-    cache: "no-store"
-  });
+  const limit = opts?.limit ?? 200;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/logs?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: LogItem[] };
+  const items = ((data.items ?? []) as Array<LogItem & { index?: number }>).map(({ index: _index, ...log }) => log);
+  return {
+    items,
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
+export async function fetchRunLogs(tenantId: string, projectId: string, runId: string, token: string) {
+  const page = await fetchRunLogsPage(tenantId, projectId, runId, token, { limit: 200 });
+  return { items: page.items };
+}
+
+export async function fetchTaskLogsPage(
+  tenantId: string,
+  projectId: string,
+  taskId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<LogItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const limit = opts?.limit ?? 200;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${encodeURIComponent(taskId)}/logs?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  const items = ((data.items ?? []) as Array<LogItem & { index?: number }>).map(({ index: _index, ...log }) => log);
+  return {
+    items,
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
+export async function fetchTaskLogs(
+  tenantId: string,
+  projectId: string,
+  taskId: string,
+  token: string
+) {
+  const page = await fetchTaskLogsPage(tenantId, projectId, taskId, token, { limit: 200 });
+  return { items: page.items };
 }
 
 export async function replayDlq(tenantId: string, projectId: string, runId: string, token: string) {
@@ -1038,6 +1151,30 @@ export async function cancelRun(tenantId: string, projectId: string, runId: stri
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as RunItem;
+}
+
+export async function fetchPipelinesPage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<PipelineItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const limit = opts?.limit ?? 100;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/pipelines?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return {
+    items: (data.items ?? []) as PipelineItem[],
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
 }
 
 export async function fetchPipelines(tenantId: string, projectId: string, token: string) {
@@ -1063,6 +1200,10 @@ export async function fetchPipelines(tenantId: string, projectId: string, token:
     const merged = responses.flatMap((x) => x.items || []);
     merged.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
     return { items: merged };
+  }
+  if (tenantIds.length === 1 && tenantId !== "all") {
+    const page = await fetchPipelinesPage(tenantId, projectId, token, { limit: 100 });
+    return { items: page.items };
   }
   const scopedProjectId = normalizeProjectId(projectId);
   const responses = await Promise.all(
@@ -1125,22 +1266,38 @@ export async function fetchRunExecutionGraph(
   return data as import("./execution-graph-types").RunExecutionGraph;
 }
 
+export async function fetchPipelineVersionsPage(
+  tenantId: string,
+  projectId: string,
+  pipelineId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<PipelineVersionItem>> {
+  const limit = opts?.limit ?? 20;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${normalizeProjectId(projectId)}/pipelines/${encodeURIComponent(pipelineId)}/versions?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return {
+    items: (data.items ?? []) as PipelineVersionItem[],
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
 export async function fetchPipelineVersions(
   tenantId: string,
   projectId: string,
   pipelineId: string,
   token: string
 ) {
-  const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${normalizeProjectId(projectId)}/pipelines/${encodeURIComponent(pipelineId)}/versions?limit=20`,
-    {
-      headers: authHeaders(token),
-      cache: "no-store"
-    }
-  );
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: PipelineVersionItem[] };
+  const page = await fetchPipelineVersionsPage(tenantId, projectId, pipelineId, token, { limit: 20 });
+  return { items: page.items };
 }
 
 export async function evaluatePipelineInputs(
@@ -1504,6 +1661,30 @@ export async function togglePlugin(pluginName: string, enabled: boolean, token: 
   return data as { plugin: string; enabled: boolean };
 }
 
+export async function fetchModelsPage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<ModelItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const limit = opts?.limit ?? 100;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return {
+    items: (data.items ?? []) as ModelItem[],
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
 export async function fetchModels(tenantId: string, projectId: string, token: string) {
   const tenantIds = await resolveTenantIds(tenantId, token);
   if (projectId === "all") {
@@ -1527,6 +1708,10 @@ export async function fetchModels(tenantId: string, projectId: string, token: st
     const merged = responses.flatMap((x) => x.items || []);
     merged.sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
     return { items: merged };
+  }
+  if (tenantIds.length === 1 && tenantId !== "all") {
+    const page = await fetchModelsPage(tenantId, projectId, token, { limit: 100 });
+    return { items: page.items };
   }
   const scopedProjectId = normalizeProjectId(projectId);
   const responses = await Promise.all(
@@ -1621,14 +1806,44 @@ export async function postDatasetReadinessEvaluate(
   };
 }
 
-export async function fetchDatasets(tenantId: string, projectId: string, token: string) {
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets`, {
-    headers: authHeaders(token),
-    cache: "no-store"
-  });
+export async function fetchDatasetsPage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts: { limit?: number; cursor?: string | null } = {}
+): Promise<CursorPage<DatasetItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const sp = new URLSearchParams({ limit: String(opts.limit ?? 100) });
+  if (opts.cursor) {
+    sp.set("cursor", opts.cursor);
+  }
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/datasets?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: DatasetItem[] };
+  return {
+    items: (data.items ?? []) as DatasetItem[],
+    limit: Number(data.limit) || 100,
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
+export async function fetchDatasets(tenantId: string, projectId: string, token: string) {
+  if (tenantId === "all" || projectId === "all") {
+    const pairs = await resolveScopePairs(tenantId, projectId, token);
+    const batch = pairs.slice(0, 12);
+    const responses = await Promise.all(
+      batch.map((p) => fetchDatasetsPage(p.tenant_id, p.project_id, token, { limit: 100 }))
+    );
+    const merged = responses.flatMap((x) => x.items);
+    merged.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    return { items: merged };
+  }
+  const page = await fetchDatasetsPage(tenantId, projectId, token, { limit: 100 });
+  return { items: page.items };
 }
 
 export async function fetchDatasetVersions(tenantId: string, projectId: string, datasetId: string, token: string) {
@@ -1913,6 +2128,57 @@ export async function createDatasetTrainingPolicy(
   return data as DatasetTrainingPolicy;
 }
 
+export type DatasetReadinessEvaluationItem = {
+  evaluation_id: string;
+  dataset_version_id?: string | null;
+  policy_id?: string | null;
+  required_size: number;
+  current_size: number;
+  status: "eligible" | "blocked" | string;
+  source?: string;
+  evaluated_at: string;
+  reasons?: Array<string | Record<string, unknown>>;
+};
+
+export async function fetchDatasetReadinessEvaluationsPage(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  opts?: {
+    limit?: number;
+    cursor?: string | null;
+    status?: string;
+    policyId?: string;
+    source?: string;
+  }
+): Promise<CursorPage<DatasetReadinessEvaluationItem>> {
+  const safeLimit = Math.max(1, Math.floor(opts?.limit ?? 20));
+  const q = new URLSearchParams();
+  q.set("limit", String(safeLimit));
+  if (opts?.cursor) {
+    q.set("cursor", opts.cursor);
+  }
+  const st = String(opts?.status || "").trim().toLowerCase();
+  if (st && st !== "all") q.set("status", st);
+  const pid = String(opts?.policyId || "").trim();
+  if (pid && pid !== "all") q.set("policy_id", pid);
+  const src = String(opts?.source || "").trim().toLowerCase();
+  if (src && src !== "all") q.set("source", src);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?${q.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return {
+    items: (data.items ?? []) as DatasetReadinessEvaluationItem[],
+    limit: Number(data.limit ?? safeLimit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
 export async function fetchDatasetReadinessEvaluations(
   tenantId: string,
   projectId: string,
@@ -1920,41 +2186,37 @@ export async function fetchDatasetReadinessEvaluations(
   token: string,
   limit = 20,
   offset = 0,
+  cursor?: string | null,
   opts?: { status?: string; policyId?: string; source?: string }
 ) {
-  const safeLimit = Math.max(1, Math.floor(limit));
-  const safeOffset = Math.max(0, Math.floor(offset));
-  const q = new URLSearchParams();
-  q.set("limit", String(safeLimit));
-  q.set("offset", String(safeOffset));
-  const st = String(opts?.status || "").trim().toLowerCase();
-  if (st && st !== "all") q.set("status", st);
-  const pid = String(opts?.policyId || "").trim();
-  if (pid) q.set("policy_id", pid);
-  const src = String(opts?.source || "").trim().toLowerCase();
-  if (src && src !== "all") q.set("source", src);
-  const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?${q.toString()}`,
-    {
-      headers: authHeaders(token),
-      cache: "no-store"
-    }
-  );
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as {
-    items: Array<{
-      evaluation_id: string;
-      dataset_version_id?: string | null;
-      policy_id?: string | null;
-      required_size: number;
-      current_size: number;
-      status: "eligible" | "blocked" | string;
-      source?: string;
-      evaluated_at: string;
-      reasons?: Array<string | Record<string, unknown>>;
-    }>;
-  };
+  if (!cursor && offset > 0) {
+    const safeLimit = Math.max(1, Math.floor(limit));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const q = new URLSearchParams();
+    q.set("limit", String(safeLimit));
+    q.set("offset", String(safeOffset));
+    const st = String(opts?.status || "").trim().toLowerCase();
+    if (st && st !== "all") q.set("status", st);
+    const pid = String(opts?.policyId || "").trim();
+    if (pid && pid !== "all") q.set("policy_id", pid);
+    const src = String(opts?.source || "").trim().toLowerCase();
+    if (src && src !== "all") q.set("source", src);
+    const res = await fetch(
+      `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/readiness/evaluations?${q.toString()}`,
+      { headers: authHeaders(token), cache: "no-store" }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    return data as { items: DatasetReadinessEvaluationItem[] };
+  }
+  const page = await fetchDatasetReadinessEvaluationsPage(tenantId, projectId, datasetId, token, {
+    limit,
+    cursor,
+    status: opts?.status,
+    policyId: opts?.policyId,
+    source: opts?.source,
+  });
+  return { items: page.items };
 }
 
 /** Roadmap alias for `fetchDatasetReadinessEvaluations` (`/readiness/history`). */
@@ -1965,13 +2227,18 @@ export async function fetchDatasetReadinessHistory(
   token: string,
   limit = 20,
   offset = 0,
+  cursor?: string | null,
   opts?: { status?: string; policyId?: string }
 ) {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
   const q = new URLSearchParams();
   q.set("limit", String(safeLimit));
-  q.set("offset", String(safeOffset));
+  if (cursor) {
+    q.set("cursor", cursor);
+  } else {
+    q.set("offset", String(safeOffset));
+  }
   const st = String(opts?.status || "").trim().toLowerCase();
   if (st && st !== "all") q.set("status", st);
   const pid = String(opts?.policyId || "").trim();
@@ -2100,9 +2367,18 @@ export type DatasetVersionPreviewPage = {
   limit: number;
   total_count: number;
   has_more: boolean;
+  next_cursor?: string | null;
   columns?: string[];
   rows?: Array<{ row_index: number; values: Record<string, string> }>;
   lines?: Array<{ line_index: number; line: string }>;
+};
+
+export type CursorPage<T> = {
+  items: T[];
+  limit: number;
+  has_more: boolean;
+  next_cursor: string | null;
+  offset?: number;
 };
 
 export async function previewDatasetVersion(
@@ -2110,12 +2386,16 @@ export async function previewDatasetVersion(
   projectId: string,
   versionId: string,
   token: string,
-  opts: { offset?: number; limit?: number } = {}
+  opts: { offset?: number; limit?: number; cursor?: string | null } = {}
 ): Promise<DatasetVersionPreviewPage> {
   const sp = new URLSearchParams({
-    offset: String(opts.offset ?? 0),
     limit: String(opts.limit ?? DATASET_VERSION_PAGE_SIZE),
   });
+  if (opts.cursor) {
+    sp.set("cursor", opts.cursor);
+  } else {
+    sp.set("offset", String(opts.offset ?? 0));
+  }
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/dataset-versions/${encodeURIComponent(versionId)}/preview?${sp}`,
     { headers: authHeaders(token), cache: "no-store" }
@@ -2691,17 +2971,48 @@ async function searchApiForScope(
   token: string,
   q: string,
   type: "all" | "run" | "task" | "dataset" = "all",
-  limit = 20
+  opts?: { limit?: number; cursor?: string | null }
 ) {
   const scopedProjectId = normalizeProjectId(projectId);
+  const limit = opts?.limit ?? 20;
   const sp = new URLSearchParams({ q, type, limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/search?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { q: string; items: SearchResultItem[] };
+  return data as {
+    q: string;
+    items: SearchResultItem[];
+    limit?: number;
+    has_more?: boolean;
+    next_cursor?: string | null;
+  };
+}
+
+export async function searchApiPage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  q: string,
+  type: "all" | "run" | "task" | "dataset" = "all",
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<SearchResultItem> & { q: string }> {
+  const trimmed = (q || "").trim();
+  const limit = opts?.limit ?? 20;
+  if (!trimmed) {
+    return { q: trimmed, items: [], limit, has_more: false, next_cursor: null };
+  }
+  const data = await searchApiForScope(tenantId, projectId, token, trimmed, type, opts);
+  return {
+    q: data.q,
+    items: data.items ?? [],
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
 }
 
 export async function searchApi(
@@ -2722,7 +3033,9 @@ export async function searchApi(
     const chunks = await Promise.all(
       batch.map(async (p) => {
         try {
-          const r = await searchApiForScope(p.tenant_id, p.project_id, token, trimmed, type, perScope);
+          const r = await searchApiForScope(p.tenant_id, p.project_id, token, trimmed, type, {
+            limit: perScope,
+          });
           return (r.items || []).map((it) => ({
             ...it,
             scope_tenant_id: p.tenant_id,
@@ -2836,21 +3149,40 @@ export async function patchDatasetVersionMetadata(
   return data as DatasetVersionItem;
 }
 
-export async function fetchDatasetRuns(
+export async function fetchDatasetRunsPage(
   tenantId: string,
   projectId: string,
   datasetId: string,
   token: string,
-  limit: number = 20
-) {
-  const sp = new URLSearchParams({ limit: String(limit), offset: "0" });
+  opts?: { limit?: number; cursor?: string | null }
+): Promise<CursorPage<RunItem>> {
+  const limit = opts?.limit ?? 20;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/runs?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: RunItem[] };
+  return {
+    items: (data.items ?? []) as RunItem[],
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
+export async function fetchDatasetRuns(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  token: string,
+  limit: number = 20,
+  cursor?: string | null
+) {
+  const page = await fetchDatasetRunsPage(tenantId, projectId, datasetId, token, { limit, cursor });
+  return { items: page.items };
 }
 
 export async function listPipelineVersionsApi(
@@ -2859,13 +3191,7 @@ export async function listPipelineVersionsApi(
   pipelineId: string,
   token: string
 ) {
-  const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${encodeURIComponent(pipelineId)}/versions`,
-    { headers: authHeaders(token), cache: "no-store" }
-  );
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: PipelineVersionItem[] };
+  return fetchPipelineVersions(tenantId, projectId, pipelineId, token);
 }
 
 export async function createPipelineVersionApi(

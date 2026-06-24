@@ -21,6 +21,7 @@ from app.domains.governance.model_registry_service import (
     list_model_serving_slots,
     list_model_versions,
     list_models,
+    list_models_page,
     preview_next_model_artifact_uri,
     evaluate_promotion_eligibility,
     promote_model_version,
@@ -41,7 +42,8 @@ from app.domains.platform.runtime_url_service import (
     resolve_runtime_api_base_url,
     resolve_runtime_realtime_base_url,
 )
-from app.domains.orchestration.log_service import append_run_log, read_run_logs, read_task_logs
+from app.api.list_pagination import guarded_page, page_response
+from app.domains.orchestration.log_service import append_run_log, read_run_logs, read_run_logs_page, read_task_logs, read_task_logs_page
 from app.domains.orchestration.run_service import cancel_run_and_tasks
 from app.domains.governance.project_service import list_projects, list_tenants, register_project
 from app.domains.shared.queue_service import replay_dlq_for_run
@@ -68,7 +70,9 @@ from app.domains.orchestration.run_service import (
     get_run,
     get_run_execution_graph,
     list_pipelines,
+    list_pipelines_page,
     list_runs,
+    list_runs_page,
     mark_run_running,
     set_run_status,
 )
@@ -78,10 +82,12 @@ from app.domains.orchestration.tracking_service import (
     create_experiment,
     get_run_tracking,
     list_experiments,
+    list_experiments_page,
     log_artifact,
     log_metric,
     log_param,
 )
+from app.domains.shared.pagination import InvalidCursorError
 from app.domains.observability.trace_service import get_trace_id
 from app.domains.observability import usage_service
 from datetime import datetime, timezone
@@ -1013,17 +1019,24 @@ def list_runs_v1(
     project_id: str,
     limit: int = 50,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {
-        "tenant_id": tenant_id,
-        "project_id": project_id,
-        "limit": limit,
-        "offset": offset,
-        "items": list_runs(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset),
-    }
+    page = guarded_page(
+        list_runs_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(
+        page,
+        extra={"tenant_id": tenant_id, "project_id": project_id},
+        include_offset=offset > 0 and not cursor,
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/pipelines")
@@ -1032,17 +1045,24 @@ def list_pipelines_v1(
     project_id: str,
     limit: int = 100,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {
-        "tenant_id": tenant_id,
-        "project_id": project_id,
-        "limit": limit,
-        "offset": offset,
-        "items": list_pipelines(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset),
-    }
+    page = guarded_page(
+        list_pipelines_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(
+        page,
+        extra={"tenant_id": tenant_id, "project_id": project_id},
+        include_offset=offset > 0 and not cursor,
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/dag")
@@ -1425,6 +1445,7 @@ def get_task_logs_v1(
     task_id: str,
     offset: int = 0,
     limit: int = 200,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1432,12 +1453,12 @@ def get_task_logs_v1(
     task = get_task_by_id(tenant_id=tenant_id, project_id=project_id, task_id=task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task_not_found")
-    return {
-        "task_id": task_id,
-        "run_id": task["run_id"],
-        "offset": offset,
-        "items": read_task_logs(task_id=task_id, offset=offset, limit=limit),
-    }
+    page = guarded_page(read_task_logs_page, task_id=task_id, offset=offset, limit=limit, cursor=cursor)
+    return page_response(
+        page,
+        extra={"task_id": task_id, "run_id": task["run_id"]},
+        include_offset=offset > 0 and not cursor,
+    )
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/dlq/replay")
@@ -1464,6 +1485,7 @@ def get_run_logs_v1(
     run_id: str,
     offset: int = 0,
     limit: int = 200,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1471,7 +1493,8 @@ def get_run_logs_v1(
     run = get_run(run_id)
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
-    return {"run_id": run_id, "offset": offset, "items": read_run_logs(run_id=run_id, offset=offset, limit=limit)}
+    page = guarded_page(read_run_logs_page, run_id=run_id, offset=offset, limit=limit, cursor=cursor)
+    return page_response(page, extra={"run_id": run_id}, include_offset=offset > 0 and not cursor)
 
 
 @router.websocket("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/logs/ws")
@@ -1706,11 +1729,24 @@ def create_experiment_v1(
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/experiments")
 def list_experiments_v1(
-    tenant_id: str, project_id: str, limit: int = 100, offset: int = 0, authorization: str | None = Header(default=None)
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {"items": list_experiments(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset)}
+    page = guarded_page(
+        list_experiments_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/params")
@@ -1838,6 +1874,7 @@ def search_v1(
     item_type: str = Query("all", alias="type"),
     limit: int = 20,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1845,18 +1882,40 @@ def search_v1(
     if not search_service.check_search_rate(tenant_id):
         raise HTTPException(status_code=429, detail="search_rate_limited")
     tf = item_type if item_type in ("run", "task", "dataset", "all") else "all"
-    return search_service.search(
-        tenant_id=tenant_id, project_id=project_id, q=q, type_filter=tf, limit=limit, offset=offset
-    )
+    try:
+        return search_service.search(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            q=q,
+            type_filter=tf,
+            limit=limit,
+            offset=offset,
+            cursor=cursor,
+        )
+    except InvalidCursorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets")
 def list_datasets_v1(
-    tenant_id: str, project_id: str, limit: int = 100, offset: int = 0, authorization: str | None = Header(default=None)
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {"items": lineage_service.list_datasets(tenant_id, project_id, limit, offset)}
+    page = guarded_page(
+        lineage_service.list_datasets_page,
+        tenant_id,
+        project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/upload-preview")
@@ -2202,21 +2261,23 @@ def list_dataset_training_policies_v1(
     dataset_id: str,
     limit: int = 50,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
-    return {
-        "items": readiness_service.list_dataset_training_policies(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            dataset_id=dataset_id,
-            limit=limit,
-            offset=offset,
-        )
-    }
+    page = guarded_page(
+        readiness_service.list_dataset_training_policies_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.put("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/training-policies")
@@ -2306,6 +2367,7 @@ def list_dataset_readiness_evaluations_v1(
     dataset_id: str,
     limit: int = 20,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     status: str | None = Query(default=None, description="Filter by evaluation status (e.g. eligible, blocked)."),
     policy_id: str | None = Query(default=None, description="Filter rows for a single training policy."),
     source: str | None = Query(default=None, description="Filter rows for a single evaluation source label."),
@@ -2315,18 +2377,19 @@ def list_dataset_readiness_evaluations_v1(
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
-    return {
-        "items": readiness_service.list_dataset_readiness_evaluations(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            dataset_id=dataset_id,
-            limit=limit,
-            offset=offset,
-            status=status,
-            policy_id=policy_id,
-            source=source,
-        )
-    }
+    page = guarded_page(
+        readiness_service.list_dataset_readiness_evaluations_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        dataset_id=dataset_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        status=status,
+        policy_id=policy_id,
+        source=source,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/history")
@@ -2336,6 +2399,7 @@ def list_dataset_readiness_history_v1(
     dataset_id: str,
     limit: int = 20,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     status: str | None = Query(default=None, description="Filter by evaluation status (e.g. eligible, blocked)."),
     policy_id: str | None = Query(default=None, description="Filter rows for a single training policy."),
     source: str | None = Query(default=None, description="Filter rows for a single evaluation source label."),
@@ -2348,6 +2412,7 @@ def list_dataset_readiness_history_v1(
         dataset_id=dataset_id,
         limit=limit,
         offset=offset,
+        cursor=cursor,
         status=status,
         policy_id=policy_id,
         source=source,
@@ -2361,6 +2426,7 @@ def list_audit_timeline_v1(
     project_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    cursor: str | None = Query(default=None),
     resource_type: str | None = Query(default=None, description="Optional: filter by resource type (dataset, model, run, task)."),
     resource_id: str | None = Query(default=None, description="Optional: filter by resource id (requires resource_type)."),
     kind: str | None = Query(default=None, description="Optional: filter by timeline kind (exact match)."),
@@ -2378,21 +2444,22 @@ def list_audit_timeline_v1(
     """
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {
-        "items": audit_timeline_service.list_audit_timeline(
-            tenant_id=tenant_id,
-            project_id=project_id,
-            limit=limit,
-            offset=offset,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            kind=kind,
-            source=source,
-            policy_id=policy_id,
-            dataset_version_id=dataset_version_id,
-            readiness_status=readiness_status,
-        )
-    }
+    page = guarded_page(
+        audit_timeline_service.list_audit_timeline_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        kind=kind,
+        source=source,
+        policy_id=policy_id,
+        dataset_version_id=dataset_version_id,
+        readiness_status=readiness_status,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/audit/timeline/export")
@@ -2406,6 +2473,7 @@ def export_audit_timeline_v1(
     ),
     limit: int = Query(default=1000, ge=1, le=5000, description="Max rows to export (capped at 5000)."),
     offset: int = Query(default=0, ge=0),
+    cursor: str | None = Query(default=None),
     resource_type: str | None = Query(default=None, description="Optional: filter by resource type (requires resource_id)."),
     resource_id: str | None = Query(default=None, description="Optional: filter by resource id (requires resource_type)."),
     kind: str | None = Query(default=None, description="Optional: filter by timeline kind (exact match)."),
@@ -2421,11 +2489,13 @@ def export_audit_timeline_v1(
         raise HTTPException(status_code=422, detail="unsupported_export_format")
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    items = audit_timeline_service.list_audit_timeline(
+    page = guarded_page(
+        audit_timeline_service.list_audit_timeline_page,
         tenant_id=tenant_id,
         project_id=project_id,
         limit=limit,
         offset=offset,
+        cursor=cursor,
         resource_type=resource_type,
         resource_id=resource_id,
         kind=kind,
@@ -2435,6 +2505,7 @@ def export_audit_timeline_v1(
         readiness_status=readiness_status,
         limit_ceiling=5000,
     )
+    items = page.items
     fn_tenant = re.sub(r"[^a-zA-Z0-9_.-]+", "_", tenant_id)[:80]
     fn_project = re.sub(r"[^a-zA-Z0-9_.-]+", "_", project_id)[:80]
     if fm == "jsonl":
@@ -2545,6 +2616,7 @@ def list_semantic_event_outbox_v1(
     project_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    cursor: str | None = Query(default=None),
     event_type: str | None = Query(default=None, description="Optional filter by semantic ``type`` string."),
     delivered: str | None = Query(
         default=None,
@@ -2560,15 +2632,17 @@ def list_semantic_event_outbox_v1(
     dv = (delivered or "").strip().lower() or None
     if dv in ("", "any"):
         dv = None
-    items = event_outbox_service.list_outbox_for_project(
+    page = guarded_page(
+        event_outbox_service.list_outbox_for_project_page,
         tenant_id,
         project_id,
         limit=limit,
         offset=offset,
+        cursor=cursor,
         event_type=event_type,
         delivered=dv,
     )
-    return {"items": items}
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/semantic-events/outbox/replay")
@@ -3048,13 +3122,23 @@ def list_dataset_runs_v1(
     dataset_id: str,
     limit: int = 50,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
-    return {"items": lineage_service.list_dataset_runs(tenant_id, project_id, dataset_id, limit, offset)}
+    page = guarded_page(
+        lineage_service.list_dataset_runs_page,
+        tenant_id,
+        project_id,
+        dataset_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}")
@@ -3148,16 +3232,19 @@ def preview_dataset_version_v1(
     version_id: str,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     try:
         return lineage_service.preview_dataset_version_content(
-            tenant_id, project_id, version_id, offset=offset, limit=limit
+            tenant_id, project_id, version_id, offset=offset, limit=limit, cursor=cursor
         )
     except FileNotFoundError as exc:
         raise _dataset_version_file_http_error(exc) from exc
+    except InvalidCursorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.put("/tenants/{tenant_id}/projects/{project_id}/dataset-versions/{version_id}/content")
@@ -3268,15 +3355,21 @@ def list_pipeline_versions_v1(
     pipeline_id: str,
     limit: int = 100,
     offset: int = 0,
+    cursor: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {
-        "items": pipeline_version_service.list_pipeline_versions(
-            tenant_id, project_id, pipeline_id, limit=limit, offset=offset
-        )
-    }
+    page = guarded_page(
+        pipeline_version_service.list_pipeline_versions_page,
+        tenant_id,
+        project_id,
+        pipeline_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/pipeline-versions/{version_id}")
@@ -3372,11 +3465,24 @@ def create_model_v1(
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models")
 def list_models_v1(
-    tenant_id: str, project_id: str, limit: int = 100, offset: int = 0, authorization: str | None = Header(default=None)
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
-    return {"items": list_models(tenant_id=tenant_id, project_id=project_id, limit=limit, offset=offset)}
+    page = guarded_page(
+        list_models_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}")

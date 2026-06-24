@@ -2,10 +2,11 @@
 
 import { Suspense, useDeferredValue, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { ChevronRight, Database, ListTodo, Loader2, Play, Search } from "lucide-react"
-import { searchApi, type SearchResultItem } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import { searchApi, searchApiPage, type SearchResultItem } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import {
@@ -81,13 +82,30 @@ function SearchPageInner() {
     setInput(q)
   }, [q])
 
-  const searchQuery = useQuery({
-    queryKey: mlairKeys.search(tenantId, projectId, deferredQ, type),
-    queryFn: () => searchApi(tenantId, projectId, token, deferredQ, type),
-    enabled: Boolean(deferredQ && token?.trim()),
+  const searchInfinite = useInfiniteQuery({
+    queryKey: mlairKeys.searchInfinite(tenantId, projectId, deferredQ, type),
+    queryFn: ({ pageParam }) =>
+      searchApiPage(tenantId, projectId, token, deferredQ, type, {
+        limit: 20,
+        cursor: (pageParam as string | null) ?? undefined,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) =>
+      last.has_more && last.next_cursor ? last.next_cursor : undefined,
+    enabled: !isAggregate && Boolean(deferredQ && token?.trim()),
   })
 
-  const items = searchQuery.data?.items ?? []
+  const searchAggregate = useQuery({
+    queryKey: mlairKeys.search(tenantId, projectId, deferredQ, type),
+    queryFn: () => searchApi(tenantId, projectId, token, deferredQ, type),
+    enabled: isAggregate && Boolean(deferredQ && token?.trim()),
+  })
+
+  const searchQuery = isAggregate ? searchAggregate : searchInfinite
+  const items: SearchResultItem[] = isAggregate
+    ? (searchAggregate.data?.items ?? [])
+    : (searchInfinite.data?.pages.flatMap((p) => p.items) ?? [])
+  const showLoadMore = !isAggregate && searchInfinite.hasNextPage
 
   const pushSearch = (nextQ: string, nextType: SearchType) => {
     const trimmed = nextQ.trim()
@@ -221,6 +239,19 @@ function SearchPageInner() {
               </Link>
               )
             })}
+            {showLoadMore ? (
+              <div className="flex justify-center border-t border-border/60 py-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={searchInfinite.isFetchingNextPage}
+                  onClick={() => void searchInfinite.fetchNextPage()}
+                >
+                  {searchInfinite.isFetchingNextPage ? "Loading…" : "Load more results"}
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </PageScrollBody>

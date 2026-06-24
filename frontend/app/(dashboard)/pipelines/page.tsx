@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { useQueries, useQuery } from "@tanstack/react-query"
+import { useQueries } from "@tanstack/react-query"
 import { GitBranch, Plus, Database, Clock, CheckCircle2, XCircle, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,11 +12,11 @@ import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline 
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
-import { fetchPipelineVersions, fetchPipelines } from "@/lib/api"
+import { fetchPipelineVersions } from "@/lib/api"
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config"
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology"
+import { usePipelinesList } from "@/hooks/use-pipelines-list"
 import { mlairKeys } from "@/lib/query-keys"
-import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag"
@@ -116,16 +116,10 @@ export default function PipelinesPage() {
   const isAggregate = !scopePinned
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const poll = useRealtimeQueryPolling()
-  const pipelinesQuery = useQuery({
-    queryKey: mlairKeys.pipelines.list(tenantId, projectId),
-    queryFn: () => fetchPipelines(tenantId, projectId, token),
-    enabled: Boolean(token?.trim()),
-    refetchOnMount: "always",
-    ...poll,
-  })
+  const pipelinesQuery = usePipelinesList(Boolean(token?.trim()))
+  const showLoadMore = scopePinned && pipelinesQuery.hasNextPage
 
-  const items = pipelinesQuery.data?.items ?? []
+  const items = pipelinesQuery.items
 
   const versionQueries = useQueries({
     queries: items.map((p) => ({
@@ -312,6 +306,19 @@ export default function PipelinesPage() {
                   </button>
                 )
               })}
+              {showLoadMore ? (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pipelinesQuery.isFetchingNextPage}
+                    onClick={() => void pipelinesQuery.fetchNextPage?.()}
+                  >
+                    {pipelinesQuery.isFetchingNextPage ? "Loading…" : "Load more pipelines"}
+                  </Button>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-6 lg:col-span-2">

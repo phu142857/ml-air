@@ -55,14 +55,14 @@ import {
   type StatusChipKey,
 } from "@/lib/status-style"
 import { useAppContext } from "@/lib/app-context"
+import { useAuditTimelineInfinite } from "@/hooks/use-audit-timeline-infinite"
+import { useRunLogsInfinite } from "@/hooks/use-run-logs-infinite"
 import {
   fetchRun,
   fetchRunTasks,
-  fetchRunLogs,
   fetchRunTracking,
   fetchRunUsage,
   fetchRunReadiness,
-  fetchAuditTimeline,
   cancelRun,
   normalizeProjectId,
   type LogItem,
@@ -80,7 +80,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useTabLoading } from "@/hooks/use-tab-loading"
@@ -259,6 +258,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.detail(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.tasks(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.logs(runId) })
+      await queryClient.invalidateQueries({ queryKey: mlairKeys.run.logsInfinite(runId) })
+      await queryClient.invalidateQueries({ queryKey: ["audit-timeline", tenantId, projectId], exact: false })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.tracking(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.readiness(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.executionGraph(tenantId, projectId, runId) })
@@ -301,14 +302,15 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   useRunExecutionGraph(tenantId, projectId, runId, token, enabled)
 
-  const logsQuery = useQuery({
-    queryKey: mlairKeys.run.logs(runId),
-    queryFn: () => fetchRunLogs(tenantId, projectId, runId, token),
-    enabled: enabled && Boolean(runQuery.data),
-    refetchOnMount: "always",
-    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
-    refetchOnWindowFocus: poll.refetchOnWindowFocus,
-  })
+  const logsRefetchMs = activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval
+  const logsQuery = useRunLogsInfinite(
+    tenantId,
+    projectId,
+    runId,
+    token,
+    enabled && Boolean(runQuery.data),
+    typeof logsRefetchMs === "number" ? logsRefetchMs : false
+  )
 
   const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
 
@@ -339,15 +341,15 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     retry: false,
   })
 
-  const timelineQuery = useQuery({
-    queryKey: [...mlairKeys.run.detail(runId), "audit-timeline"] as const,
-    queryFn: () =>
-      fetchAuditTimeline(tenantId, projectId, token, {
-        limit: 50,
-        filters: { resourceType: "run", resourceId: runId },
-      }),
-    enabled: enabled && Boolean(runQuery.data),
-  })
+  const runAuditFilters = useMemo(
+    () => ({ resourceType: "run", resourceId: runId }),
+    [runId]
+  )
+  const timelineQuery = useAuditTimelineInfinite(
+    runAuditFilters,
+    enabled && Boolean(runQuery.data)
+  )
+  const timelineEvents = timelineQuery.events
 
   useEffect(() => {
     if (runQuery.data && tasksQuery.data?.items) {
@@ -376,24 +378,20 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     for (const t of tasks) {
       if (t.task_id) ids.add(t.task_id)
     }
-    for (const log of logsQuery.data?.items ?? []) {
+    for (const log of logsQuery.items) {
       const tid = log.payload?.task_id
       if (typeof tid === "string" && tid) ids.add(tid)
     }
     return Array.from(ids).sort()
-  }, [tasks, logsQuery.data?.items])
+  }, [tasks, logsQuery.items])
 
   const displayedLogs = useMemo(() => {
-    const items = logsQuery.data?.items ?? []
+    const items = logsQuery.items
     if (logTaskFilter === "all") return items
     return items.filter((log) => log.payload?.task_id === logTaskFilter)
-  }, [logsQuery.data?.items, logTaskFilter])
+  }, [logsQuery.items, logTaskFilter])
 
   const gateResults = useMemo(() => readinessToGateRows(readinessQuery.data), [readinessQuery.data])
-  const timelineEvents = useMemo(
-    () => mapAuditTimelineItems(timelineQuery.data?.items ?? []),
-    [timelineQuery.data],
-  )
   const metricsSeries = useMemo(
     () => buildMetricsChartSeries(trackingQuery.data?.metrics ?? []),
     [trackingQuery.data],
@@ -767,9 +765,25 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                     {logTaskFilter === "all" ? "No log lines yet." : "No log lines for this task."}
                   </p>
                 ) : (
-                  displayedLogs.map((log, index) => (
-                    <LogLineRow key={`${log.ts}-${log.payload?.task_id ?? ""}-${index}`} log={log} />
-                  ))
+                  <>
+                    {displayedLogs.map((log, index) => (
+                      <LogLineRow key={`${log.ts}-${log.payload?.task_id ?? ""}-${index}`} log={log} />
+                    ))}
+                    {logsQuery.hasNextPage ? (
+                      <div className="flex justify-center py-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 border-border bg-background/80 text-xs"
+                          disabled={logsQuery.isFetchingNextPage}
+                          onClick={() => void logsQuery.fetchNextPage()}
+                        >
+                          {logsQuery.isFetchingNextPage ? "Loading…" : "Load more logs"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             </DetailSection>
@@ -897,7 +911,22 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   description="No audit events matched this run id."
                 />
               ) : (
-                <AuditTimeline events={timelineEvents} />
+                <>
+                  <AuditTimeline events={timelineEvents} />
+                  {timelineQuery.hasNextPage ? (
+                    <div className="flex justify-center border-t border-border/60 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={timelineQuery.isFetchingNextPage}
+                        onClick={() => void timelineQuery.fetchNextPage?.()}
+                      >
+                        {timelineQuery.isFetchingNextPage ? "Loading…" : "Load more events"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
               )}
             </DetailSection>
           </RunTabPanel>

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Database, Plus, Search, Grid, List, CheckCircle2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,13 +22,12 @@ import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatRowCount, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
 import {
-  fetchDatasets,
   previewDatasetUpload,
   uploadDatasetCsv,
   type DatasetItem,
 } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
-import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
+import { useDatasetsList } from "@/hooks/use-datasets-list"
 import { SCOPE_AGGREGATE_DATASETS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { useToast } from "@/hooks/use-toast"
@@ -93,16 +92,10 @@ export default function DatasetsPage() {
   const [file, setFile] = useState<File | null>(null)
   const [previewRows, setPreviewRows] = useState<number | null>(null)
 
-  const poll = useRealtimeQueryPolling()
-  const datasetsQuery = useQuery({
-    queryKey: mlairKeys.datasets.list(tenantId, projectId),
-    queryFn: () => fetchDatasets(tenantId, projectId, token),
-    enabled: Boolean(token?.trim()),
-    refetchOnMount: "always",
-    ...poll,
-  })
+  const datasetsQuery = useDatasetsList(Boolean(token?.trim()))
 
-  const items = datasetsQuery.data?.items ?? []
+  const items = datasetsQuery.items
+  const showLoadMore = datasetsQuery.scopePinned && datasetsQuery.hasNextPage
 
   const uploadMutation = useMutation({
     mutationFn: () => {
@@ -353,6 +346,19 @@ export default function DatasetsPage() {
             ))}
           </div>
         )}
+        {showLoadMore ? (
+          <div className="flex justify-center border-t border-border/60 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={datasetsQuery.isFetchingNextPage}
+              onClick={() => void datasetsQuery.fetchNextPage?.()}
+            >
+              {datasetsQuery.isFetchingNextPage ? "Loading…" : "Load more datasets"}
+            </Button>
+          </div>
+        ) : null}
         </ScopedListContent>
       </PageScrollBody>
     </div>

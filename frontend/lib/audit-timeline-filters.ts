@@ -17,9 +17,16 @@ export function auditTimelineFilterKey(filters: AuditTimelineFilters): string {
   return entries.length === 0 ? "" : JSON.stringify(Object.fromEntries(entries));
 }
 
-export function buildAuditTimelineSearchParams(filters: AuditTimelineFilters, limit: number): string {
+export function buildAuditTimelineSearchParams(
+  filters: AuditTimelineFilters,
+  limit: number,
+  opts?: { cursor?: string | null }
+): string {
   const p = new URLSearchParams();
   p.set("limit", String(limit));
+  if (opts?.cursor) {
+    p.set("cursor", opts.cursor);
+  }
   const rt = filters.resourceType?.trim();
   const rid = filters.resourceId?.trim();
   if (rt && rid) {

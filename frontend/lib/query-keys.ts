@@ -10,7 +10,9 @@ export const mlairKeys = {
     all: () => ["plugins"] as const
   },
   runs: {
-    list: (tenantId: string, projectId: string) => ["runs", tenantId, projectId] as const
+    list: (tenantId: string, projectId: string) => ["runs", tenantId, projectId] as const,
+    listInfinite: (tenantId: string, projectId: string) =>
+      ["runs", tenantId, projectId, "infinite"] as const,
   },
   run: {
     detail: (runId: string) => ["run", runId] as const,
@@ -18,6 +20,7 @@ export const mlairKeys = {
       ["run-execution-graph", tenantId, projectId, runId] as const,
     tasks: (runId: string) => ["run-tasks", runId] as const,
     logs: (runId: string) => ["run-logs", runId] as const,
+    logsInfinite: (runId: string) => ["run-logs", runId, "infinite"] as const,
     tracking: (runId: string) => ["run-tracking", runId] as const,
     usage: (runId: string) => ["run-usage", runId] as const,
     readiness: (runId: string) => ["run-readiness", runId] as const
@@ -26,6 +29,8 @@ export const mlairKeys = {
     detail: (taskId: string, scopeKey = "") => ["task", taskId, scopeKey] as const,
     usage: (tenantId: string, projectId: string, taskId: string) =>
       ["task-usage", tenantId, projectId, taskId] as const,
+    logsInfinite: (tenantId: string, projectId: string, taskId: string) =>
+      ["task-logs", tenantId, projectId, taskId, "infinite"] as const,
   },
   tasks: {
     /** Recent tasks fan-out from recent runs (Tasks tab). */
@@ -35,12 +40,30 @@ export const mlairKeys = {
   },
   datasets: {
     list: (tenantId: string, projectId: string) => ["datasets", tenantId, projectId] as const,
+    listInfinite: (tenantId: string, projectId: string) =>
+      ["datasets", tenantId, projectId, "infinite"] as const,
     detail: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset", tenantId, projectId, datasetId] as const,
     buffer: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-buffer", tenantId, projectId, datasetId] as const,
     readinessEvaluations: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-readiness-evaluations", tenantId, projectId, datasetId] as const,
+    readinessEvaluationsInfinite: (
+      tenantId: string,
+      projectId: string,
+      datasetId: string,
+      filters: { status?: string; policyId?: string; source?: string } = {}
+    ) =>
+      [
+        "dataset-readiness-evaluations",
+        tenantId,
+        projectId,
+        datasetId,
+        "infinite",
+        filters.status ?? "all",
+        filters.policyId ?? "all",
+        filters.source ?? "all",
+      ] as const,
     /** GET .../eligibility (per-policy rows); invalidate with `exact: false` for all version-scoped fetches. */
     trainingEligibility: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-training-eligibility", tenantId, projectId, datasetId] as const,
@@ -66,8 +89,12 @@ export const mlairKeys = {
   },
   datasetRuns: (tenantId: string, projectId: string, datasetId: string) =>
     ["dataset-runs", datasetId, tenantId, projectId] as const,
+  datasetRunsInfinite: (tenantId: string, projectId: string, datasetId: string) =>
+    ["dataset-runs", datasetId, tenantId, projectId, "infinite"] as const,
   models: {
     list: (tenantId: string, projectId: string) => ["models", tenantId, projectId] as const,
+    listInfinite: (tenantId: string, projectId: string) =>
+      ["models-infinite", tenantId, projectId] as const,
     versions: (tenantId: string, projectId: string, modelId: string) =>
       ["model-versions", tenantId, projectId, modelId] as const,
     /** Single key for GET resolved-pipeline everywhere (replaces *-ui suffix). */
@@ -101,12 +128,16 @@ export const mlairKeys = {
   },
   pipelines: {
     list: (tenantId: string, projectId: string) => ["pipelines", tenantId, projectId] as const,
+    listInfinite: (tenantId: string, projectId: string) =>
+      ["pipelines-infinite", tenantId, projectId] as const,
     topology: (tenantId: string, projectId: string, pipelineId: string) =>
       ["pipeline-topology", tenantId, projectId, pipelineId] as const,
     dag: (tenantId: string, projectId: string, pipelineId: string) =>
       ["pipeline-dag", tenantId, projectId, pipelineId] as const,
     versions: (tenantId: string, projectId: string, pipelineId: string) =>
       ["pipeline-versions", tenantId, projectId, pipelineId] as const,
+    versionsInfinite: (tenantId: string, projectId: string, pipelineId: string) =>
+      ["pipeline-versions", tenantId, projectId, pipelineId, "infinite"] as const,
     diff: (tenantId: string, projectId: string, leftId: string, rightId: string) =>
       ["pipeline-diff", leftId, rightId, tenantId, projectId] as const
   },
@@ -118,10 +149,26 @@ export const mlairKeys = {
   },
   audit: {
     timeline: (tenantId: string, projectId: string, filters: AuditTimelineFilters = {}) =>
-      ["audit-timeline", tenantId, projectId, auditTimelineFilterKey(filters)] as const
+      ["audit-timeline", tenantId, projectId, auditTimelineFilterKey(filters)] as const,
+    timelineInfinite: (tenantId: string, projectId: string) =>
+      ["audit-timeline", tenantId, projectId, "infinite"] as const,
+    timelineFilteredInfinite: (
+      tenantId: string,
+      projectId: string,
+      filters: AuditTimelineFilters = {}
+    ) =>
+      [
+        "audit-timeline",
+        tenantId,
+        projectId,
+        "infinite",
+        auditTimelineFilterKey(filters),
+      ] as const,
   },
   search: (tenantId: string, projectId: string, q: string, type: string) =>
     ["search", q, type, tenantId, projectId] as const,
+  searchInfinite: (tenantId: string, projectId: string, q: string, type: string) =>
+    ["search-infinite", q, type, tenantId, projectId] as const,
   usage: {
     project: (tenantId: string, projectId: string, days: number) =>
       ["project-usage", tenantId, projectId, days] as const,

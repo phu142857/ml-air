@@ -15,6 +15,15 @@ from uuid import uuid4
 
 from app.dataset_source_type import canonical_dataset_source_type
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    encode_cursor,
+    finalize_page,
+    keyset_where_asc,
+    keyset_where_desc,
+    resolve_page_params,
+    sql_limit_offset,
+)
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
 try:
@@ -1807,24 +1816,51 @@ def ingest_lineage_from_task(
     return {"ingested": True, "edges": edges}
 
 
-def list_datasets(tenant_id: str, project_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
-    lim = max(1, min(limit, 200))
-    off = max(0, offset)
+def list_datasets_page(
+    tenant_id: str,
+    project_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=100, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_asc(
+        params,
+        primary_col="name",
+        tie_col="dataset_id",
+        cursor_primary_key="name",
+        cursor_tie_key="dataset_id",
+    )
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
                 SELECT dataset_id, name, created_at
                      , source_uri, current_size, checksum, updated_at
                 FROM datasets
-                WHERE tenant_id = %s AND project_id = %s
-                ORDER BY name ASC
+                WHERE tenant_id = %s AND project_id = %s{keyset_sql}
+                ORDER BY name ASC, dataset_id ASC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, lim, off),
-            )
+                    (tenant_id, project_id, *keyset_args, params.limit + 1, params.offset),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT dataset_id, name, created_at
+                     , source_uri, current_size, checksum, updated_at
+                FROM datasets
+                WHERE tenant_id = %s AND project_id = %s{keyset_sql}
+                ORDER BY name ASC, dataset_id ASC
+                {lim_sql}
+                """,
+                    (tenant_id, project_id, *keyset_args, *lim_params),
+                )
             rows = cur.fetchall()
-    return [
+    items = [
         {
             "dataset_id": r[0],
             "name": r[1],
@@ -1836,6 +1872,22 @@ def list_datasets(tenant_id: str, project_id: str, limit: int = 100, offset: int
         }
         for r in rows
     ]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"name": r["name"], "dataset_id": r["dataset_id"]},
+    )
+
+
+def list_datasets(
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_datasets_page(tenant_id, project_id, limit=limit, offset=offset, cursor=cursor).items
 
 
 def get_dataset(tenant_id: str, project_id: str, dataset_id: str) -> dict | None:
@@ -2186,11 +2238,30 @@ def preview_dataset_version_content(
     *,
     offset: int = 0,
     limit: int = DEFAULT_DATASET_VERSION_PAGE_SIZE,
+    cursor: str | None = None,
 ) -> dict[str, Any]:
+    params = resolve_page_params(
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        default_limit=DEFAULT_DATASET_VERSION_PAGE_SIZE,
+        max_limit=MAX_DATASET_VERSION_PAGE_SIZE,
+    )
+    if params.mode == "cursor" and params.cursor:
+        cur = params.cursor
+        if "line_index" in cur:
+            off = max(0, int(cur.get("line_index") or 0)) + 1
+        elif "row_index" in cur:
+            off = max(0, int(cur.get("row_index") or 0)) + 1
+        else:
+            off = 0
+    elif params.mode == "offset":
+        off = params.offset
+    else:
+        off = 0
+    lim = params.limit
     data, filename, row = _read_dataset_version_file_bytes(tenant_id, project_id, version_id)
     fmt = _detect_version_content_format(filename, data)
-    off = max(0, int(offset))
-    lim = max(1, min(int(limit), MAX_DATASET_VERSION_PAGE_SIZE))
     editable = len(data) <= MAX_DATASET_VERSION_EDITOR_BYTES
     text = data.decode("utf-8", errors="replace")
     out: dict[str, Any] = {
@@ -2214,6 +2285,10 @@ def preview_dataset_version_content(
         out["total_count"] = total
         out["has_more"] = off + len(page) < total
         out["lines"] = page
+        if out["has_more"] and page:
+            out["next_cursor"] = encode_cursor({"line_index": page[-1]["line_index"]})
+        else:
+            out["next_cursor"] = None
     else:
         reader = csv.DictReader(io.StringIO(text))
         fieldnames = list(reader.fieldnames or [])
@@ -2232,6 +2307,10 @@ def preview_dataset_version_content(
         out["rows"] = page_rows
         out["total_count"] = total
         out["has_more"] = off + len(page_rows) < total
+        if out["has_more"] and page_rows:
+            out["next_cursor"] = encode_cursor({"row_index": page_rows[-1]["row_index"]})
+        else:
+            out["next_cursor"] = None
     return out
 
 
@@ -2623,13 +2702,29 @@ def delete_dataset_by_name(tenant_id: str, project_id: str, dataset_name: str) -
     return ok, dataset_id if ok else dataset_id
 
 
-def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
-    lim = max(1, min(limit, 200))
-    off = max(0, offset)
+def list_dataset_runs_page(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=50, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="r.updated_at",
+        tie_col="r.run_id",
+        cursor_primary_key="updated_at",
+        cursor_tie_key="run_id",
+    )
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
                 SELECT DISTINCT r.run_id, r.pipeline_id, r.status, r.created_at, r.updated_at
                 FROM lineage_edges e
                 JOIN runs r ON r.run_id = e.run_id
@@ -2639,14 +2734,51 @@ def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: i
                   AND e.project_id = %s
                   AND r.tenant_id = %s
                   AND r.project_id = %s
-                  AND (dvi.dataset_id = %s OR dvo.dataset_id = %s)
-                ORDER BY r.updated_at DESC
+                  AND (dvi.dataset_id = %s OR dvo.dataset_id = %s){keyset_sql}
+                ORDER BY r.updated_at DESC, r.run_id DESC
                 LIMIT %s OFFSET %s
                 """,
-                (tenant_id, project_id, tenant_id, project_id, dataset_id, dataset_id, lim, off),
-            )
+                    (
+                        tenant_id,
+                        project_id,
+                        tenant_id,
+                        project_id,
+                        dataset_id,
+                        dataset_id,
+                        *keyset_args,
+                        params.limit + 1,
+                        params.offset,
+                    ),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT DISTINCT r.run_id, r.pipeline_id, r.status, r.created_at, r.updated_at
+                FROM lineage_edges e
+                JOIN runs r ON r.run_id = e.run_id
+                LEFT JOIN dataset_versions dvi ON dvi.version_id = e.input_dataset_version_id
+                LEFT JOIN dataset_versions dvo ON dvo.version_id = e.output_dataset_version_id
+                WHERE e.tenant_id = %s
+                  AND e.project_id = %s
+                  AND r.tenant_id = %s
+                  AND r.project_id = %s
+                  AND (dvi.dataset_id = %s OR dvo.dataset_id = %s){keyset_sql}
+                ORDER BY r.updated_at DESC, r.run_id DESC
+                {lim_sql}
+                """,
+                    (
+                        tenant_id,
+                        project_id,
+                        tenant_id,
+                        project_id,
+                        dataset_id,
+                        dataset_id,
+                        *keyset_args,
+                        *lim_params,
+                    ),
+                )
             rows = cur.fetchall()
-    return [
+    items = [
         {
             "run_id": r[0],
             "pipeline_id": r[1],
@@ -2656,6 +2788,25 @@ def list_dataset_runs(tenant_id: str, project_id: str, dataset_id: str, limit: i
         }
         for r in rows
     ]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"updated_at": r["updated_at"], "run_id": r["run_id"]},
+    )
+
+
+def list_dataset_runs(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_dataset_runs_page(
+        tenant_id, project_id, dataset_id, limit=limit, offset=offset, cursor=cursor
+    ).items
 
 
 def get_lineage_for_run(tenant_id: str, project_id: str, run_id: str) -> dict:

@@ -9,6 +9,14 @@ from psycopg.types.json import Json
 
 import app.domains.orchestration.pipeline_version_service as pvs
 from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import (
+    PageResult,
+    finalize_page,
+    paginate_in_memory_desc,
+    parse_cursor_datetime,
+    resolve_page_params,
+    sql_limit_offset,
+)
 from app.domains.orchestration.log_service import append_run_log
 from app.domains.shared.queue_service import publish_run_event
 import app.domains.lifecycle.realtime_events as rt
@@ -392,29 +400,79 @@ def cancel_run_and_tasks(run_id: str) -> bool:
     return ok
 
 
-def list_runs(tenant_id: str, project_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
-    safe_limit = max(1, min(limit, 200))
-    safe_offset = max(0, offset)
+def list_runs_page(
+    tenant_id: str,
+    project_id: str,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=50, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    where = "tenant_id = %s AND project_id = %s"
+    args: list[Any] = [tenant_id, project_id]
+    if params.mode == "cursor" and params.cursor:
+        cur = params.cursor
+        ts = parse_cursor_datetime(cur.get("created_at"))
+        run_id = str(cur.get("run_id") or "")
+        where += " AND (created_at < %s OR (created_at = %s AND run_id < %s))"
+        args.extend([ts, ts, run_id])
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT {_select_run_columns()}
-                FROM runs
-                WHERE tenant_id = %s AND project_id = %s
-                ORDER BY created_at DESC
-                LIMIT %s OFFSET %s
-                """,
-                (tenant_id, project_id, safe_limit, safe_offset),
-            )
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
+                    SELECT {_select_run_columns()}
+                    FROM runs
+                    WHERE {where}
+                    ORDER BY created_at DESC, run_id DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (*args, params.limit + 1, params.offset),
+                )
+            else:
+                cur.execute(
+                    f"""
+                    SELECT {_select_run_columns()}
+                    FROM runs
+                    WHERE {where}
+                    ORDER BY created_at DESC, run_id DESC
+                    {lim_sql}
+                    """,
+                    (*args, *lim_params),
+                )
             rows = cur.fetchall()
-    return [_row_to_run(row) for row in rows]
+    items = [_row_to_run(row) for row in rows]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"created_at": r["created_at"], "run_id": r["run_id"]},
+    )
 
 
-def list_pipelines(tenant_id: str, project_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
-    """List pipelines: from runs (latest per pipeline_id) plus any pipeline_id that only exists in pipeline_versions."""
-    safe_limit = max(1, min(limit, 200))
-    safe_offset = max(0, offset)
+def list_runs(
+    tenant_id: str,
+    project_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_runs_page(
+        tenant_id, project_id, limit=limit, offset=offset, cursor=cursor
+    ).items
+
+
+def list_pipelines_page(
+    tenant_id: str,
+    project_id: str,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=100, max_limit=200)
     merged: dict[str, dict[str, Any]] = {}
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -470,7 +528,25 @@ def list_pipelines(tenant_id: str, project_id: str, limit: int = 100, offset: in
                 }
 
     ordered = sorted(merged.values(), key=lambda x: str(x.get("updated_at") or ""), reverse=True)
-    return ordered[safe_offset : safe_offset + safe_limit]
+    return paginate_in_memory_desc(
+        ordered,
+        params,
+        sort_key=lambda x: (str(x.get("updated_at") or ""), str(x.get("pipeline_id") or "")),
+        cursor_from_item=lambda x: {"updated_at": x["updated_at"], "pipeline_id": x["pipeline_id"]},
+        cursor_to_key=lambda c: (str(c.get("updated_at") or ""), str(c.get("pipeline_id") or "")),
+    )
+
+
+def list_pipelines(
+    tenant_id: str,
+    project_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> list[dict]:
+    return list_pipelines_page(
+        tenant_id, project_id, limit=limit, offset=offset, cursor=cursor
+    ).items
 
 
 def _dag_from_pipeline_config(
