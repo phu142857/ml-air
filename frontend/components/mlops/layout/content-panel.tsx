@@ -1,3 +1,4 @@
+import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 
 interface ContentPanelProps {
@@ -14,16 +15,15 @@ export function ContentPanel({
   padding = true,
 }: ContentPanelProps) {
   return (
-    <div className={cn("bezel-shell", className)}>
+    <Panel className={className}>
       <div
         className={cn(
-          "bezel-inner",
           padding && "p-5 sm:p-6",
           innerClassName,
         )}
       >
         {children}
       </div>
-    </div>
+    </Panel>
   )
 }

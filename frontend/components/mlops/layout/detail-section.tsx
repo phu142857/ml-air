@@ -1,3 +1,4 @@
+import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 
 interface DetailSectionProps {
@@ -31,10 +32,10 @@ export function DetailSection({
   accentBorder = "none",
 }: DetailSectionProps) {
   return (
-    <section className={cn("bezel-shell overflow-hidden", className)}>
+    <Panel className={cn("overflow-hidden", className)}>
       <div
         className={cn(
-          "bezel-inner overflow-hidden",
+          "overflow-hidden",
           accentBorderClass[accentBorder],
         )}
       >
@@ -57,6 +58,6 @@ export function DetailSection({
         </div>
         <div className={cn("p-5", bodyClassName)}>{children}</div>
       </div>
-    </section>
+    </Panel>
   )
 }

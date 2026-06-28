@@ -106,13 +106,6 @@ export default function TasksPage() {
         icon={ListTodo}
         accent="violet"
         title="Tasks"
-        subtitle={
-          isAggregate
-            ? "Fan-out across workspaces — pin scope to filter"
-            : isFetching
-              ? "Live updates from runs and task events"
-              : "Attempts, payloads, and worker metadata"
-        }
       />
 
       <PageScrollBody
@@ -120,10 +113,6 @@ export default function TasksPage() {
           <>
             {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_TASKS} /> : null}
             <div className="max-w-xl shrink-0 panel-surface p-4">
-              <div className="mb-3">
-                <h3 className="text-sm font-medium text-foreground">Open by task id</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">Jump straight to a task detail URL.</p>
-              </div>
               <form
                 className="flex flex-wrap items-center gap-2"
                 onSubmit={(e) => {

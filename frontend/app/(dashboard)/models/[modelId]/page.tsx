@@ -465,7 +465,6 @@ export default function ModelDetailPage() {
         icon={Box}
         accent="violet"
         title={`Model · ${model?.name ?? modelId}`}
-        subtitle="Governance, versions, and trigger policy"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -617,7 +616,7 @@ export default function ModelDetailPage() {
         )}
 
         {tab === "runs" && (
-      <DetailSection title="Recent runs" description="Latest pipeline executions for this model." accentBorder="violet">
+      <DetailSection title="Recent runs" accentBorder="violet">
         {!(recentRunsQuery.data || []).length ? (
           <MlopsEmptyState icon={Play} title="No recent runs" description="No runs linked from model versions yet." />
         ) : (
@@ -686,7 +685,6 @@ export default function ModelDetailPage() {
         {tab === "versions" && (
       <DetailSection
         title="Versions"
-        description="Registry versions with stage filters and lifecycle actions."
         accentBorder="violet"
         headerActions={
           <div className="flex flex-wrap items-center gap-2">

@@ -207,28 +207,9 @@ export default function PipelinesPage() {
         icon={GitBranch}
         accent="amber"
         title="Pipelines"
-        subtitle={
-          isAggregate
-            ? `Observability only · ${items.length} pipelines · run and train from Dataset Hub`
-            : `${items.length} pipelines · topology and run history (execution starts on Dataset Hub)`
-        }
       />
 
       <PageScrollBody
-        header={
-          isAggregate ? (
-            <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINES} />
-          ) : (
-            <div className="inset-surface px-4 py-3 text-sm text-muted-foreground">
-              Pipelines are the <span className="font-medium text-foreground">execution substrate</span>, not the
-              primary operator entry. Start work from{" "}
-              <Link href="/datasets" className="font-medium text-primary hover:underline">
-                Dataset Hub → Run / Train
-              </Link>
-              ; use this page to inspect DAG topology, config versions, and past runs.
-            </div>
-          )
-        }
       >
         <ScopedListContent
           isLoading={pipelinesQuery.isLoading}

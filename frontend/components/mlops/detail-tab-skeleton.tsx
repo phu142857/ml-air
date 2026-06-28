@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { Panel } from "@/components/ui/panel"
 
 interface DetailTabSkeletonProps {
   variant?: "grid" | "table" | "terminal" | "chart"
@@ -6,9 +7,9 @@ interface DetailTabSkeletonProps {
 
 function BezelSkeleton({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bezel-shell overflow-hidden">
-      <div className="bezel-inner overflow-hidden">{children}</div>
-    </div>
+    <Panel>
+      <div className="overflow-hidden">{children}</div>
+    </Panel>
   )
 }
 

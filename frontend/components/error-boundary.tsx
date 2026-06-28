@@ -107,10 +107,10 @@ export function ErrorDisplay({
       "flex flex-col items-center justify-center min-h-[400px] p-8",
       className
     )}>
-      <div className="bezel-shell rounded-2xl p-1">
+      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
         <div
           className={cn(
-            "bezel-inner flex h-20 w-20 items-center justify-center border",
+            "flex h-20 w-20 items-center justify-center rounded-lg border",
             config.iconBgColor,
             config.borderColor,
           )}
@@ -200,7 +200,7 @@ export function ErrorDisplay({
       
       {/* Helpful links for API down */}
       {errorType === "api-down" && (
-        <div className="mt-8 w-full max-w-md rounded-xl bezel-shell border-border/60 p-4">
+        <div className="mt-8 w-full max-w-md rounded-xl border border-border/60 bg-muted/40 p-4">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Troubleshooting
           </h3>

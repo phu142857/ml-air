@@ -26,6 +26,7 @@ import {
 } from "@/lib/mlair-policy-readiness";
 import { executeTrainingIntent } from "@/lib/training-intent";
 import { describeTrainError } from "@/lib/describe-train-error";
+import { feedbackMessageClass, STATUS_CHIP_TEXT } from "@/lib/status-style";
 import { mlairKeys } from "@/lib/query-keys";
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { cn } from "@/lib/utils";
@@ -316,18 +317,6 @@ export function ExecutionIntentPanel({
         </Button>
       </div>
 
-      {mode === "model_dataset" ? (
-        <p className="text-xs text-muted-foreground">
-          Starts a training run using the model&apos;s mapped pipeline. Pipeline is resolved automatically — you cannot
-          pick a different pipeline here.
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Runs the selected pipeline explicitly. Use for ETL, maintenance DAGs, and operational workflows — not model
-          training.
-        </p>
-      )}
-
       <div className="grid gap-3 md:grid-cols-2">
         {mode === "model_dataset" ? (
           <label className="text-xs text-muted-foreground">
@@ -380,7 +369,7 @@ export function ExecutionIntentPanel({
             </span>
           ) : null}
           {!pluginPrecheck.ok && effectiveTrainPipeline ? (
-            <p className="mt-1 text-[color:var(--status-pending-fg)]">{pluginPrecheck.reason}</p>
+            <p className={cn("mt-1", STATUS_CHIP_TEXT.failed)}>{pluginPrecheck.reason}</p>
           ) : null}
         </div>
       ) : (
@@ -397,7 +386,7 @@ export function ExecutionIntentPanel({
               </span>
             </span>
           ) : (
-            <span className="text-[color:var(--status-pending-fg)]">{pipelineRunnable.reason}</span>
+            <span className={STATUS_CHIP_TEXT.failed}>{pipelineRunnable.reason}</span>
           )}
         </div>
       )}
@@ -410,12 +399,12 @@ export function ExecutionIntentPanel({
       />
 
       {!hasTrainingPolicy ? (
-        <p className="text-xs text-[color:var(--status-pending-fg)]">
+        <p className={feedbackMessageClass("warning")}>
           Create a training policy on the Readiness tab before Run / Train.
         </p>
       ) : null}
 
-      {msg ? <p className="text-xs text-[color:var(--status-pending-fg)]">{msg}</p> : null}
+      {msg ? <p className={feedbackMessageClass("failed")}>{msg}</p> : null}
 
       <PolicyReadinessBlockDialog
         open={readinessDialogOpen}

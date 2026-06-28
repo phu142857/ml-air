@@ -459,7 +459,7 @@ function LifecycleContent() {
             isRefreshing && "opacity-80",
           )}
         >
-            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+            <Card className="panel-surface">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -473,7 +473,7 @@ function LifecycleContent() {
               </CardContent>
             </Card>
 
-            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+            <Card className="panel-surface">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -487,7 +487,7 @@ function LifecycleContent() {
               </CardContent>
             </Card>
 
-            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+            <Card className="panel-surface">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -501,7 +501,7 @@ function LifecycleContent() {
               </CardContent>
             </Card>
 
-            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+            <Card className="panel-surface">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -515,7 +515,7 @@ function LifecycleContent() {
               </CardContent>
             </Card>
 
-            <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+            <Card className="panel-surface">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -713,7 +713,7 @@ function LifecycleContent() {
           >
               <div className="space-y-4">
                 {/* Jaeger status card */}
-                <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+                <Card className="panel-surface">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -747,7 +747,7 @@ function LifecycleContent() {
                 </Card>
                 
                 {/* Recent traces */}
-                <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+                <Card className="panel-surface">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
@@ -795,7 +795,7 @@ function LifecycleContent() {
                 </Card>
                 
                 {/* Trace stats */}
-                <Card className="bezel-shell border-border/60 bg-transparent shadow-none">
+                <Card className="panel-surface">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />

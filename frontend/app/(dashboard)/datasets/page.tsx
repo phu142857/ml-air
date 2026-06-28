@@ -300,19 +300,19 @@ export default function DatasetsPage() {
               <Link
                 key={d.dataset_id}
                 href={`/datasets/${encodeURIComponent(d.dataset_id)}`}
-                className="group transition-premium hover:-translate-y-0.5"
+                className="group min-w-0 transition-premium hover:-translate-y-0.5"
               >
-                <div className="bezel-shell h-full">
-                  <div className="bezel-inner flex h-full flex-col p-5">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+                <div className="h-full min-w-0 overflow-hidden rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+                  <div className="flex h-full min-w-0 flex-col rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6">
+                    <div className="mb-4 flex min-w-0 items-start gap-2">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
                           <Database
                             strokeWidth={1.75}
                             className="h-4 w-4 text-primary"
                           />
                         </span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
                             {d.name}
                           </h3>
@@ -321,10 +321,10 @@ export default function DatasetsPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 rounded-full border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] px-2 py-1 text-[10px] font-medium text-[color:var(--status-success-fg)]">
+                      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] px-2 py-1 text-[10px] font-medium text-[color:var(--status-success-fg)]">
                         <CheckCircle2 className="h-3 w-3" strokeWidth={1.75} />
                         listed
-                      </div>
+                      </span>
                     </div>
                     <div className="mt-auto space-y-2 text-xs">
                       <div className="flex justify-between text-muted-foreground">

@@ -79,6 +79,9 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
   const statusMap: Record<string, "success" | "failed" | "running" | "pending"> = {
     success: "success",
     failed: "failed",
+    blocked: "failed",
+    eligible: "success",
+    ready: "success",
     running: "running",
     pending: "pending",
   }

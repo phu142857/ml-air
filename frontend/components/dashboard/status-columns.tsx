@@ -1,5 +1,7 @@
 "use client";
 
+import { Panel } from "@/components/ui/panel";
+
 type Props = {
   success: number;
   failed: number;
@@ -9,8 +11,8 @@ type Props = {
 export function StatusColumns({ success, failed, pending }: Props) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
-      <div className="bezel-shell sm:col-span-5">
-        <div className="bezel-inner p-5">
+      <Panel className="sm:col-span-5">
+        <div>
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Success
           </div>
@@ -18,10 +20,10 @@ export function StatusColumns({ success, failed, pending }: Props) {
             {success}
           </div>
         </div>
-      </div>
+      </Panel>
 
-      <div className="bezel-shell sm:col-span-3">
-        <div className="bezel-inner p-5">
+      <Panel className="sm:col-span-3">
+        <div>
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Failed
           </div>
@@ -29,10 +31,10 @@ export function StatusColumns({ success, failed, pending }: Props) {
             {failed}
           </div>
         </div>
-      </div>
+      </Panel>
 
-      <div className="bezel-shell sm:col-span-4">
-        <div className="bezel-inner p-5">
+      <Panel className="sm:col-span-4">
+        <div>
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Pending
           </div>
@@ -40,7 +42,7 @@ export function StatusColumns({ success, failed, pending }: Props) {
             {pending}
           </div>
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }

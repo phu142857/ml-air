@@ -313,7 +313,6 @@ function TaskDetailContent() {
             </div>
             <DetailSection
               title="Resource usage"
-              description="CPU, memory, GPU, and disk attributed to this task (ML Resource Traceability)."
               accentBorder="violet"
               headerActions={
                 runId ? (
@@ -335,14 +334,12 @@ function TaskDetailContent() {
                 <TaskUsageSummary
                   usage={usageQuery.data?.usage}
                   enabled={usageQuery.data?.enabled ?? true}
-                  runId={usageQuery.data?.usage?.run_id ?? runId}
                   loading={usageQuery.isLoading}
                 />
               )}
             </DetailSection>
             <DetailSection
               title="Task logs"
-              description="Worker log lines for this task (cursor-paginated)."
               accentBorder="violet"
             >
               {!logsScope ? (

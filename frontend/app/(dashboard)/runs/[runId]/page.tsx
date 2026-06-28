@@ -657,7 +657,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               <>
                 <DetailSection
                   title="Run metadata"
-                  description="Identifiers, timing, and execution context."
                   accentBorder="sky"
                 >
                   <MetadataGrid columns={2} items={runOverviewMetadataItems} />
@@ -681,7 +680,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.graph}>
             <DetailSection
               title="Execution graph"
-              description="Runtime DAG for this run only — node status reflects tasks in this execution."
               accentBorder="sky"
             >
               <RunExecutionGraph
@@ -721,7 +719,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.logs}>
             <DetailSection
               title="Runner logs"
-              description="Run log stream (orchestration + worker). Filter by task when payload includes task_id."
               bodyClassName="p-0"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/80 px-4 py-2">
@@ -859,7 +856,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="artifacts" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.artifacts}>
-            <DetailSection title="Artifacts" description="Output blobs produced by the runner.">
+            <DetailSection title="Artifacts">
               {trackingQuery.isError ? (
                 <p className="text-sm text-muted-foreground">{formatApiClientError(trackingQuery.error)}</p>
               ) : (trackingQuery.data?.artifacts ?? []).length === 0 ? (
@@ -900,7 +897,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.timeline}>
             <DetailSection
               title="Audit timeline"
-              description="Semantic events for this run from the audit API."
             >
               {timelineQuery.isError ? (
                 <p className="text-sm text-red-300">{formatApiClientError(timelineQuery.error)}</p>

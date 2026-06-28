@@ -26,6 +26,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
 
@@ -106,10 +107,10 @@ export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
   return (
     <Sidebar className="border-r border-sidebar-border/80 bg-sidebar">
-      <SidebarHeader className="border-b border-sidebar-border/70 px-4 py-4">
+      <SidebarHeader className="border-b border-sidebar-border/70 px-3 py-4">
         <Link href="/datasets" className="group flex items-center gap-3">
-          <div className="bezel-shell rounded-2xl p-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[calc(var(--radius)+2px)] bg-primary shadow-whisper">
+          <div className="rounded-xl bg-muted/40 p-1 ring-1 ring-border/60">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary shadow-whisper">
               <Network
                 strokeWidth={1.75}
                 className="h-4 w-4 text-primary-foreground"
@@ -134,9 +135,9 @@ export function AppSidebar() {
         ) : null}
         <NavGroup label="Admin" items={settingsNav} />
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/70 p-4">
-        <div className="bezel-shell rounded-xl p-1">
-          <div className="bezel-inner flex items-center gap-2.5 px-3 py-2.5">
+      <SidebarFooter className="border-t border-sidebar-border/70 p-3">
+        <div className="rounded-xl bg-muted/40 p-1 ring-1 ring-border/60">
+          <div className="flex items-center gap-2.5 rounded-lg bg-card px-3 py-2.5">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--status-success-fg)]" />

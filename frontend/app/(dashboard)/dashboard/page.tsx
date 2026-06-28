@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import {
   AlertCircle,
-  ArrowUpRight,
   Activity,
   Box,
   CheckCircle2,
@@ -15,9 +14,12 @@ import {
   Loader2,
   Network,
   Play,
+  TrendingUp,
+  Zap,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Panel } from "@/components/ui/panel"
 import {
   MlopsEmptyState,
   PageScrollBody,
@@ -35,7 +37,7 @@ import { auditEventTitle, auditResourceHref } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_DASHBOARD } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { normalizeStatus, statusBadgeClass } from "@/lib/status-style"
+import { normalizeStatus, STATUS_CHIP_CLASS, statusBadgeClass } from "@/lib/status-style"
 import { cn, formatApiClientError, formatRelativeTime } from "@/lib/utils"
 
 const statIcons = [Database, GitBranch, Play, Box]
@@ -46,20 +48,6 @@ const statSpans = [
   "md:col-span-4",
   "md:col-span-8",
 ]
-
-function PanelShell({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className={cn("bezel-shell h-full", className)}>
-      <div className="bezel-inner h-full p-5 sm:p-6">{children}</div>
-    </div>
-  )
-}
 
 export default function DashboardPage() {
   const { tenantId, projectId, token } = useAppContext()
@@ -135,62 +123,65 @@ export default function DashboardPage() {
                       statSpans[i] ?? "md:col-span-6",
                     )}
                   >
-                    <div className="bezel-shell h-full">
-                      <div
-                        className={cn(
-                          "bezel-inner flex h-full flex-col justify-between p-5 shadow-diffused transition-premium group-hover:shadow-diffused sm:p-6",
-                          isFeatured && "min-h-[148px]",
-                        )}
-                      >
+                    <Panel interactive className={cn("h-full", isFeatured && "min-h-[148px]")}>
+                      <div className="flex h-full flex-col justify-between">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 ring-1 ring-primary/20 transition-premium group-hover:from-primary/30 group-hover:to-primary/15 group-hover:ring-primary/30">
                               <Icon
                                 strokeWidth={1.75}
                                 className="h-4 w-4 text-primary"
                               />
                             </span>
                             <div>
-                              <div className="text-sm font-medium text-muted-foreground">
+                              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-premium group-hover:text-foreground/70">
                                 {stat.label}
                               </div>
                               <div
                                 className={cn(
-                                  "font-semibold tabular-nums tracking-tight text-foreground",
+                                  "font-bold tabular-nums tracking-tight text-foreground",
                                   isFeatured
-                                    ? "text-4xl leading-none"
-                                    : "text-3xl leading-none",
+                                    ? "text-4xl leading-tight"
+                                    : "text-3xl leading-tight",
                                 )}
                               >
-                                {stat.value}
+                                {stat.value.toLocaleString()}
                               </div>
                             </div>
                           </div>
-                          <ArrowUpRight
+                          <TrendingUp
                             strokeWidth={1.75}
-                            className="h-4 w-4 shrink-0 text-muted-foreground transition-premium group-hover:text-primary"
+                            className="h-4 w-4 shrink-0 text-[color:var(--status-success-fg)] opacity-0 transition-premium group-hover:opacity-100"
                           />
                         </div>
 
-                        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                        <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2 text-xs">
                           {"ready" in stat && (
-                            <span className="font-medium text-[color:var(--status-success-fg)]">
-                              {stat.ready} with rows
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--status-success-bg)] px-2.5 py-1 font-medium text-[color:var(--status-success-fg)] ring-1 ring-[color:var(--status-success-border)]">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {stat.ready} ready
                             </span>
                           )}
 
                           {"blocked" in stat &&
                             typeof stat.blocked === "number" &&
                             stat.blocked > 0 && (
-                              <span className="font-medium text-[color:var(--status-pending-fg)]">
-                                {stat.blocked} blocked readiness
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-medium",
+                                  STATUS_CHIP_CLASS.failed,
+                                )}
+                              >
+                                <AlertCircle className="h-3 w-3" />
+                                {stat.blocked} blocked
                               </span>
                             )}
 
                           {"running" in stat &&
                             typeof stat.running === "number" &&
                             stat.running > 0 && (
-                              <span className="font-medium text-[color:var(--status-running-fg)]">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--status-running-bg)] px-2.5 py-1 font-medium text-[color:var(--status-running-fg)] ring-1 ring-[color:var(--status-running-border)]">
+                                <Loader2 className="h-3 w-3 animate-spin" />
                                 {stat.running} running
                               </span>
                             )}
@@ -198,30 +189,31 @@ export default function DashboardPage() {
                           {"failed" in stat &&
                             typeof stat.failed === "number" &&
                             stat.failed > 0 && (
-                              <span className="font-medium text-[color:var(--status-failed-fg)]">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--status-failed-bg)] px-2.5 py-1 font-medium text-[color:var(--status-failed-fg)] ring-1 ring-[color:var(--status-failed-border)]">
+                                <AlertCircle className="h-3 w-3" />
                                 {stat.failed} failed
                               </span>
                             )}
 
                           {"registered" in stat && (
-                            <span className="font-medium text-primary">
-                              {stat.registered} in registry
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary ring-1 ring-primary/20">
+                              <Zap className="h-3 w-3" />
+                              {stat.registered} registered
                             </span>
                           )}
                         </div>
                       </div>
-                    </div>
+                    </Panel>
                   </Link>
                 )
               })}
             </div>
 
             {showProjectUsage || showTenantUsage ? (
-              <PanelShell>
+              <Panel>
                 <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
                   <Activity strokeWidth={1.75} className="h-4 w-4 text-primary" />
-                  Resource attribution
-                  <span className="text-xs font-normal text-muted-foreground">· last 30 days</span>
+                  Resource usage
                 </h3>
                 {showProjectUsage ? (
                   <UsageRollupPanel
@@ -234,17 +226,17 @@ export default function DashboardPage() {
                 ) : (
                   <UsageRollupPanel mode="tenant" tenantId={tenantId} token={token} days={30} />
                 )}
-              </PanelShell>
+              </Panel>
             ) : null}
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-              <PanelShell className="xl:col-span-3">
+              <Panel className="xl:col-span-3">
                 <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
                   <Loader2
                     strokeWidth={1.75}
                     className="h-4 w-4 animate-spin text-primary"
                   />
-                  Running pipelines
+                  Active pipelines
                 </h3>
 
                 {runningPipelines.length === 0 ? (
@@ -255,28 +247,33 @@ export default function DashboardPage() {
                     className="border-0 bg-transparent p-0"
                   />
                 ) : (
-                  <ul className="divide-y divide-border/70">
+                  <ul className="space-y-2">
                     {runningPipelines.slice(0, 6).map((p) => (
-                      <li key={p.pipeline_id} className="py-3 first:pt-0">
+                      <li key={p.pipeline_id} className="group rounded-lg border border-border/50 bg-muted/20 p-3 transition-premium hover:border-primary/30 hover:bg-primary/5">
                         <Link
                           href={`/pipelines/${encodeURIComponent(
                             p.pipeline_id,
                           )}`}
-                          className="group flex items-center justify-between gap-3 font-mono text-sm text-foreground transition-premium hover:text-primary"
+                          className="flex items-center justify-between gap-3 transition-premium"
                         >
-                          <span className="truncate">{p.pipeline_id}</span>
-                          <ArrowUpRight
-                            strokeWidth={1.75}
-                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-premium group-hover:opacity-100 group-hover:text-primary"
-                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-foreground transition-premium group-hover:text-primary">{p.pipeline_id}</div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground">Pipeline running</div>
+                          </div>
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[color:var(--status-running-bg)]">
+                            <Loader2
+                              strokeWidth={2}
+                              className="h-3 w-3 animate-spin text-[color:var(--status-running-fg)]"
+                            />
+                          </div>
                         </Link>
                       </li>
                     ))}
                   </ul>
                 )}
-              </PanelShell>
+              </Panel>
 
-              <PanelShell className="xl:col-span-2">
+              <Panel className="xl:col-span-2">
                 <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
                   <AlertCircle
                     strokeWidth={1.75}
@@ -293,40 +290,44 @@ export default function DashboardPage() {
                     className="border-0 bg-transparent p-0 [&_svg]:text-[color:var(--status-success-fg)]"
                   />
                 ) : (
-                  <ul className="divide-y divide-border/70">
+                  <ul className="space-y-2">
                     {failedRuns.slice(0, 5).map((r) => (
                       <li
                         key={r.run_id}
-                        className="flex items-center justify-between gap-2 py-3 first:pt-0"
+                        className="group rounded-lg border border-[color:var(--status-failed-border)]/50 bg-[color:var(--status-failed-bg)]/30 p-3 transition-premium hover:border-[color:var(--status-failed-border)] hover:bg-[color:var(--status-failed-bg)]/50"
                       >
                         <Link
                           href={`/runs/${encodeURIComponent(r.run_id)}`}
-                          className="truncate font-mono text-sm text-[color:var(--status-failed-fg)] transition-premium hover:underline"
+                          className="flex items-center justify-between gap-2 transition-premium"
                         >
-                          {r.pipeline_id || r.run_id}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-[color:var(--status-failed-fg)] group-hover:underline">
+                              {r.pipeline_id || r.run_id}
+                            </div>
+                            <div className="mt-0.5 text-[10px] text-muted-foreground">
+                              {formatRelativeTime(r.updated_at || r.created_at)}
+                            </div>
+                          </div>
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[color:var(--status-failed-fg)]/10">
+                            <AlertCircle strokeWidth={2} className="h-3 w-3 text-[color:var(--status-failed-fg)]" />
+                          </div>
                         </Link>
-
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-                          {formatRelativeTime(
-                            r.updated_at || r.created_at,
-                          )}
-                        </span>
                       </li>
                     ))}
                   </ul>
                 )}
-              </PanelShell>
+              </Panel>
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <PanelShell>
-                <div className="mb-5 flex items-center justify-between gap-3">
+              <Panel>
+                <div className="flex items-center justify-between gap-3">
                   <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
                     <History
                       strokeWidth={1.75}
                       className="h-4 w-4 text-muted-foreground"
                     />
-                    Recent lifecycle events
+                    Lifecycle events
                   </h3>
 
                   <Button
@@ -340,85 +341,83 @@ export default function DashboardPage() {
                 </div>
 
                 {!scopePinned ? (
-                  <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                     Merged workspace scopes (API limits apply).
                   </p>
                 ) : null}
 
-                {auditQ.isLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2
-                      strokeWidth={1.75}
-                      className="h-4 w-4 animate-spin"
+                <div className="mt-5">
+                  {auditQ.isLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2
+                        strokeWidth={1.75}
+                        className="h-4 w-4 animate-spin"
+                      />
+                      Loading
+                    </div>
+                  ) : auditQ.isError ? (
+                    <p className="text-sm text-[color:var(--status-failed-fg)]">
+                      {formatApiClientError(auditQ.error)}
+                    </p>
+                  ) : (auditQ.data?.items ?? []).length === 0 ? (
+                    <MlopsEmptyState
+                      icon={History}
+                      title="No events yet"
+                      description={
+                        scopePinned
+                          ? "Lifecycle audit events will appear here."
+                          : "No audit events in sampled scopes."
+                      }
+                      className="border-0 bg-transparent p-0"
                     />
-                    Loading
-                  </div>
-                ) : auditQ.isError ? (
-                  <p className="text-sm text-[color:var(--status-failed-fg)]">
-                    {formatApiClientError(auditQ.error)}
-                  </p>
-                ) : (auditQ.data?.items ?? []).length === 0 ? (
-                  <MlopsEmptyState
-                    icon={History}
-                    title="No events yet"
-                    description={
-                      scopePinned
-                        ? "Lifecycle audit events will appear here."
-                        : "No audit events in sampled scopes."
-                    }
-                    className="border-0 bg-transparent p-0"
-                  />
-                ) : (
-                  <div className="divide-y divide-border/70">
-                    {(auditQ.data?.items ?? []).map((event, i) => {
-                      const href = auditResourceHref(event)
+                  ) : (
+                    <ul className="space-y-2">
+                      {(auditQ.data?.items ?? []).map((event, i) => {
+                        const href = auditResourceHref(event)
 
-                      const inner = (
-                        <>
-                          <Clock
-                            strokeWidth={1.75}
-                            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                          />
+                        const inner = (
+                          <>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/50">
+                              <Clock
+                                strokeWidth={1.75}
+                                className="h-4 w-4 text-muted-foreground"
+                              />
+                            </div>
 
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={cn(
-                                "truncate text-sm text-foreground",
-                                href && "group-hover:text-primary",
-                              )}
-                            >
-                              {auditEventTitle(event)}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              <p className={cn("text-sm font-medium text-foreground", href && "transition-premium group-hover:text-primary")}>
+                                {auditEventTitle(event)}
+                              </p>
+                              <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                                {formatRelativeTime(event.ts)}
+                              </p>
+                            </div>
+                          </>
+                        )
 
-                            <p className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                              {formatRelativeTime(event.ts)}
-                            </p>
+                        return href ? (
+                          <Link
+                            key={`${event.ts}-${event.resource_id}-${i}`}
+                            href={href}
+                            className="group flex items-start gap-3 rounded-lg border border-border/40 bg-muted/20 p-3 transition-premium hover:border-primary/30 hover:bg-primary/5"
+                          >
+                            {inner}
+                          </Link>
+                        ) : (
+                          <div
+                            key={`${event.ts}-${event.resource_id}-${i}`}
+                            className="flex items-start gap-3 rounded-lg border border-border/40 bg-muted/20 p-3"
+                          >
+                            {inner}
                           </div>
-                        </>
-                      )
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </Panel>
 
-                      return href ? (
-                        <Link
-                          key={`${event.ts}-${event.resource_id}-${i}`}
-                          href={href}
-                          className="group flex items-start gap-3 py-3.5 transition-premium first:pt-0 last:pb-0"
-                        >
-                          {inner}
-                        </Link>
-                      ) : (
-                        <div
-                          key={`${event.ts}-${event.resource_id}-${i}`}
-                          className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0"
-                        >
-                          {inner}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </PanelShell>
-
-              <PanelShell>
+              <Panel>
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
                     <Play
@@ -475,7 +474,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 )}
-              </PanelShell>
+              </Panel>
             </div>
           </div>
         )}

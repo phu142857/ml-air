@@ -23,8 +23,8 @@ export function MlopsEmptyState({
         className,
       )}
     >
-      <div className="bezel-shell mb-4 rounded-2xl p-1">
-        <div className="bezel-inner flex h-12 w-12 items-center justify-center">
+      <div className="mb-4 rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-card">
           <Icon
             strokeWidth={1.5}
             className="h-5 w-5 text-muted-foreground"

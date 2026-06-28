@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Panel } from "@/components/ui/panel";
 
 type Props = {
   success: number;
@@ -16,8 +17,8 @@ export function RunsChart({ success, failed, running }: Props) {
   ];
 
   return (
-    <div className="bezel-shell h-56 w-full">
-      <div className="bezel-inner h-full p-3">
+    <Panel className="h-56 w-full">
+      <div className="h-full p-3">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <XAxis dataKey="name" stroke="var(--muted-foreground)" fontSize={11} />
@@ -33,6 +34,6 @@ export function RunsChart({ success, failed, running }: Props) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </Panel>
   );
 };

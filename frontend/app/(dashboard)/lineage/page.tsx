@@ -427,7 +427,6 @@ function LineagePageInner() {
         icon={Network}
         accent="zinc"
         title="Lineage"
-        subtitle={canScope ? "Run inputs/outputs and dataset versions" : undefined}
       />
 
       <div className="page-toolbar">

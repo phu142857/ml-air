@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
+import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 
 interface JsonPayloadPanelProps {
@@ -14,12 +15,12 @@ export function JsonPayloadPanel({ title = "Raw payload", data, className }: Jso
   const [open, setOpen] = useState(false)
 
   return (
-    <div className={cn("bezel-shell overflow-hidden", className)}>
-      <div className="bezel-inner overflow-hidden">
+    <Panel className={cn("overflow-hidden", className)}>
+      <div className="overflow-hidden">
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold tracking-tight text-foreground transition-premium hover:bg-muted/30"
+          className="flex w-full items-center gap-2 px-1 py-2 text-left text-sm font-semibold tracking-tight text-foreground transition-premium hover:bg-muted/30"
           aria-expanded={open}
         >
           {open ? (
@@ -35,6 +36,6 @@ export function JsonPayloadPanel({ title = "Raw payload", data, className }: Jso
           </pre>
         )}
       </div>
-    </div>
+    </Panel>
   )
 }

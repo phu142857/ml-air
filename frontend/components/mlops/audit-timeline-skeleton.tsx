@@ -64,13 +64,15 @@ export function StatsCardsSkeleton() {
   return (
     <div className="grid grid-cols-5 gap-4">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="bezel-shell rounded-xl border-border/60 p-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-2.5 w-20 bg-muted" />
-              <Skeleton className="h-7 w-12 bg-muted" />
+        <div key={index} className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+          <div className="rounded-[calc(var(--radius)+2px)] bg-card p-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-2.5 w-20 bg-muted" />
+                <Skeleton className="h-7 w-12 bg-muted" />
+              </div>
+              <Skeleton className="h-10 w-10 rounded-lg bg-muted" />
             </div>
-            <Skeleton className="h-10 w-10 rounded-lg bg-muted" />
           </div>
         </div>
       ))}
@@ -83,24 +85,26 @@ export function JaegerSidebarSkeleton() {
   return (
     <div className="space-y-4">
       {/* Jaeger status card skeleton */}
-      <div className="bezel-shell rounded-xl border-border/60">
-        <div className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-4 bg-muted" />
-              <Skeleton className="h-4 w-24 bg-muted" />
+      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+        <div className="rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 bg-muted" />
+                <Skeleton className="h-4 w-24 bg-muted" />
+              </div>
+              <Skeleton className="h-5 w-20 rounded-full bg-muted" />
             </div>
-            <Skeleton className="h-5 w-20 rounded-full bg-muted" />
+            <Skeleton className="h-3 w-40 bg-muted/70" />
+            <Skeleton className="h-8 w-full rounded-md bg-muted" />
+            <Skeleton className="h-8 w-full rounded-md bg-primary/10" />
           </div>
-          <Skeleton className="h-3 w-40 bg-muted/70" />
-          <Skeleton className="h-8 w-full rounded-md bg-muted" />
-          <Skeleton className="h-8 w-full rounded-md bg-primary/10" />
         </div>
       </div>
       
       {/* Recent traces skeleton */}
-      <div className="bezel-shell rounded-xl border-border/60">
-        <div className="p-4 space-y-3">
+      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+        <div className="rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6 space-y-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-4 w-4 bg-muted" />
             <Skeleton className="h-4 w-24 bg-muted" />
@@ -125,8 +129,8 @@ export function JaegerSidebarSkeleton() {
       </div>
       
       {/* Trace analytics skeleton */}
-      <div className="bezel-shell rounded-xl border-border/60">
-        <div className="p-4 space-y-3">
+      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+        <div className="rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6 space-y-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-4 w-4 bg-muted" />
             <Skeleton className="h-4 w-28 bg-muted" />

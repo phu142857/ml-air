@@ -6,6 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 
 export interface DataTableColumn<T> {
@@ -43,8 +44,8 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={cn("bezel-shell overflow-hidden", className)}>
-      <div className="bezel-inner overflow-hidden">
+    <Panel className={cn("overflow-hidden", className)}>
+      <div className="overflow-hidden">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <TableRow className="border-border/60 hover:bg-transparent">
@@ -82,6 +83,6 @@ export function DataTable<T>({
           </TableBody>
         </Table>
       </div>
-    </div>
+    </Panel>
   )
 }

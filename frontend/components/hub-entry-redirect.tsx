@@ -32,8 +32,8 @@ export function HubEntryRedirect() {
 
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground ambient-canvas">
-      <div className="bezel-shell rounded-2xl p-1">
-        <div className="bezel-inner flex h-14 w-14 items-center justify-center">
+      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
+        <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-card">
           <Loader2
             strokeWidth={1.75}
             className="h-6 w-6 animate-spin text-primary"

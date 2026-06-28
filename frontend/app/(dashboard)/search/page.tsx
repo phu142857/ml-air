@@ -132,7 +132,6 @@ function SearchPageInner() {
         icon={Search}
         accent="sky"
         title="Search"
-        subtitle="Runs, tasks, and datasets by id or keyword"
       />
 
       <PageScrollBody

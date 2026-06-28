@@ -47,7 +47,6 @@ import {
   fetchDatasetBuffer,
   fetchDatasetReadiness,
   postDatasetReadinessEvaluate,
-  createDatasetTrainingPolicy,
   fetchDatasetTrainingPolicies,
   fetchDatasetTrainingEligibility,
   fetchDatasetVersions,
@@ -63,7 +62,6 @@ import {
   patchDatasetBuffer,
   patchDatasetVersionMetadata,
   fetchRuntimeConfig,
-  upsertDatasetTrainingPolicy,
   type DatasetVersionItem,
   type RunItem,
 } from "@/lib/api";
@@ -71,12 +69,28 @@ import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { datasetSourceTypeBadge, datasetVersionSourceBadge } from "@/lib/dataset-source-type";
-import { datasetStatusBadgeClass, normalizeDatasetStatus, statusToMlopsBadge } from "@/lib/status-style";
+import {
+  datasetStatusBadgeClass,
+  feedbackMessageClass,
+  normalizeDatasetStatus,
+  readinessStatusChipClass,
+  STATUS_CALLOUT_CLASS,
+  STATUS_CHIP_CLASS,
+  STATUS_CHIP_TEXT,
+  statusToMlopsBadge,
+} from "@/lib/status-style";
 import { describeTrainError } from "@/lib/describe-train-error";
+import {
+  DatasetTrainingPolicyPanel,
+  PolicyConfigSummary,
+} from "@/components/readiness/dataset-training-policy-panel";
 import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
 import { cn, formatApiClientError, formatDateTimeCompact, formatRelativeTime } from "@/lib/utils";
+
+/** Single accent for all dataset hub sections (matches list page + header). */
+const DATASET_SECTION_ACCENT = "emerald" as const;
 
 const DATASET_TABS = [
   { id: "overview", label: "Overview" },
@@ -87,25 +101,26 @@ const DATASET_TABS = [
 ] as const;
 
 function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string; className: string } {
-  if (kind === "readiness") {
-    return {
-      label: "Dataset readiness",
-      className:
-        "border-primary/40 bg-primary/10 text-primary backdrop-blur-sm dark:border-primary/30 dark:bg-primary/15 dark:text-primary"
-    };
-  }
+  const shell = `${STATUS_CHIP_CLASS.running} backdrop-blur-sm`;
   return {
-    label: "Training eligibility",
-    className:
-      "border-primary/40 bg-primary/10 text-primary backdrop-blur-sm dark:border-primary/30 dark:bg-primary/15 dark:text-primary/90"
+    label: kind === "readiness" ? "Dataset readiness" : "Training eligibility",
+    className: shell,
   };
+}
+
+function accumulationFeedbackClass(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("saved") || m.includes("materialized") || m.includes("schedule tick")) {
+    return feedbackMessageClass("success");
+  }
+  return feedbackMessageClass("failed");
 }
 
 function DomainChip({ kind }: { kind: "readiness" | "eligibility" }) {
   const c = lifecycleDomainChip(kind);
   return (
     <span
-      className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${c.className}`}
+      className={`inline-flex max-w-full shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${c.className}`}
     >
       {c.label}
     </span>
@@ -129,12 +144,6 @@ function formatEvaluationReasons(reasons: Array<string | Record<string, unknown>
     })
     .join(" · ");
 }
-
-const POLICY_TRIGGER_MODE_OPTIONS = [
-  { value: "manual", label: "manual" },
-  { value: "auto_ready", label: "auto_ready" },
-  { value: "schedule", label: "schedule" }
-];
 
 const ACCUMULATION_STRATEGY_OPTIONS = [
   { value: "snapshot_on_threshold", label: "snapshot_on_threshold" },
@@ -168,7 +177,6 @@ export default function DatasetHubPage() {
   const { tenantId, projectId, token, accessibleScopes } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
   const [selectedVersionId, setSelectedVersionId] = useState("");
-  const [policyMsg, setPolicyMsg] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "versions" | "readiness" | "accumulation" | "training">("overview");
   const isTabLoading = useTabLoading(activeTab);
 
@@ -180,8 +188,6 @@ export default function DatasetHubPage() {
     training: "grid",
   };
   const [selectedPolicyId, setSelectedPolicyId] = useState("");
-  const [policyRequiredSizeDraft, setPolicyRequiredSizeDraft] = useState("1000");
-  const [newPolicyTriggerMode, setNewPolicyTriggerMode] = useState("manual");
   const [evaluationStatusFilter, setEvaluationStatusFilter] = useState("all");
   /** When false, `POST .../runs/trigger` can omit `dataset_version_id` server-side (compat); Hub still pins per-row Train. */
   const [strictDatasetVersionOnTrigger, setStrictDatasetVersionOnTrigger] = useState(true);
@@ -578,27 +584,47 @@ export default function DatasetHubPage() {
       ...older
     ];
   }, [versionsQuery.data?.items]);
-  const policySelectOptions = useMemo(
-    () =>
-      (policiesQuery.data?.items || []).map((p) => ({
-        value: p.policy_id,
-        label: `${p.trigger_mode} · min_rows=${p.required_size}`
-      })),
-    [policiesQuery.data?.items]
+  const trainingEligibilityRows = useMemo(() => {
+    const policyById = new Map((policiesQuery.data?.items || []).map((p) => [p.policy_id, p]));
+    const items = eligibilityQuery.data?.items ?? [];
+    return items.map((it) => {
+      const policy = policyById.get(it.policy_id);
+      return {
+        policyId: it.policy_id,
+        triggerMode: it.trigger_mode,
+        modelId: it.model_id ? String(it.model_id) : null,
+        requiredSize: it.required_size,
+        freshnessHours: policy?.freshness_hours ?? null,
+        validationRulesCount: policy?.validation_rules?.length ?? 0,
+        currentSize: it.current_size,
+        eligible: it.eligible,
+        reasons: (it.reasons || []).map((r) => (typeof r === "string" ? r : JSON.stringify(r)))
+      };
+    });
+  }, [eligibilityQuery.data, policiesQuery.data?.items]);
+
+  const selectedPolicy = useMemo(
+    () => (policiesQuery.data?.items || []).find((p) => p.policy_id === selectedPolicyId) ?? null,
+    [policiesQuery.data?.items, selectedPolicyId]
   );
 
-  const trainingEligibilityRows = useMemo(() => {
-    const items = eligibilityQuery.data?.items ?? [];
-    return items.map((it) => ({
-      policyId: it.policy_id,
-      triggerMode: it.trigger_mode,
-      modelId: it.model_id ? String(it.model_id) : null,
-      requiredSize: it.required_size,
-      currentSize: it.current_size,
-      eligible: it.eligible,
-      reasons: (it.reasons || []).map((r) => (typeof r === "string" ? r : JSON.stringify(r)))
-    }));
-  }, [eligibilityQuery.data]);
+  const selectedVersionCreatedAt = useMemo(() => {
+    const items = versionsQuery.data?.items || [];
+    const vid = selectedVersionForReadiness;
+    if (!vid) return null;
+    return items.find((v) => v.version_id === vid)?.created_at ?? null;
+  }, [versionsQuery.data?.items, selectedVersionForReadiness]);
+
+  const refetchPolicyReadiness = useCallback(async () => {
+    await Promise.all([
+      policiesQuery.refetch(),
+      readinessQuery.refetch(),
+      queryClient.invalidateQueries({
+        queryKey: mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
+        exact: false,
+      }),
+    ]);
+  }, [datasetId, policiesQuery, projectId, queryClient, readinessQuery, tenantId]);
 
   const bufferMaterializationHints = useMemo(() => {
     const buf = bufferQuery.data;
@@ -660,11 +686,10 @@ export default function DatasetHubPage() {
         header: "Status",
         cell: (row) => (
           <span
-            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
-              row.status === "eligible"
-                ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
-            }`}
+            className={cn(
+              "inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold uppercase",
+              readinessStatusChipClass(row.status),
+            )}
           >
             {String(row.status || "blocked").toUpperCase()}
           </span>
@@ -706,7 +731,7 @@ export default function DatasetHubPage() {
             {String(row.status || "").toLowerCase() === "eligible" ? (
               <span className="text-muted-foreground">—</span>
             ) : (
-              <span className="line-clamp-2 text-[color:var(--status-pending-fg)]/90">
+              <span className={`line-clamp-2 ${STATUS_CHIP_TEXT.failed}`}>
                 {formatEvaluationReasons(row.reasons) || "—"}
               </span>
             )}
@@ -722,62 +747,13 @@ export default function DatasetHubPage() {
     [],
   );
 
-  const policyPresets = [
-    { id: "small", label: "Small incremental training", requiredSize: 100 },
-    { id: "daily", label: "Daily retrain", requiredSize: 1000 },
-    { id: "production", label: "Production promotion gate", requiredSize: 5000 }
-  ] as const;
-  const applyPolicyRequiredSize = async (requiredSizeValue: number) => {
-    const req = Math.max(1, Math.floor(requiredSizeValue));
-    const current = (policiesQuery.data?.items || []).find((p) => p.policy_id === selectedPolicyId);
-    if (!current) return;
-    try {
-      setPolicyMsg("");
-      await upsertDatasetTrainingPolicy(tenantId, projectId, datasetId, token, {
-        policy_id: current.policy_id,
-        model_id: current.model_id || undefined,
-        required_size: req,
-        freshness_hours: current.freshness_hours,
-        trigger_mode: current.trigger_mode,
-        validation_rules: current.validation_rules || []
-      });
-      setPolicyRequiredSizeDraft(String(req));
-      await policiesQuery.refetch();
-      await readinessQuery.refetch();
-      setPolicyMsg(`Policy updated to ${req} rows and re-evaluated.`);
-    } catch (err) {
-      setPolicyMsg(`Policy update failed: ${String((err as Error)?.message || err)}`);
-    }
-  };
-  const createPolicy = async () => {
-    const req = Math.max(1, Number.parseInt(policyRequiredSizeDraft, 10) || 1);
-    try {
-      setPolicyMsg("");
-      const created = await createDatasetTrainingPolicy(tenantId, projectId, datasetId, token, {
-        required_size: req,
-        freshness_hours: 24,
-        trigger_mode: newPolicyTriggerMode,
-        validation_rules: []
-      });
-      await policiesQuery.refetch();
-      setSelectedPolicyId(created.policy_id);
-      setPolicyRequiredSizeDraft(String(created.required_size || req));
-      await readinessQuery.refetch();
-      setPolicyMsg("Policy created and selected.");
-    } catch (err) {
-      setPolicyMsg(`Create policy failed: ${String((err as Error)?.message || err)}`);
-    }
-  };
   useEffect(() => {
     const items = policiesQuery.data?.items ?? [];
     if (!items.length) return;
     setSelectedPolicyId((prev) => {
       const stillValid = Boolean(prev && items.some((p) => p.policy_id === prev));
       if (stillValid) return prev;
-      const nextId = String(items[0]?.policy_id || "");
-      const picked = items.find((p) => p.policy_id === nextId);
-      if (picked) setPolicyRequiredSizeDraft(String(picked.required_size ?? 1000));
-      return nextId;
+      return String(items[0]?.policy_id || "");
     });
   }, [policiesQuery.data, datasetId]);
   const canEditVersionMetadata = useMemo(() => {
@@ -861,9 +837,12 @@ export default function DatasetHubPage() {
       },
       {
         id: "status",
-        header: "Status",
+        header: "Quality",
         cell: (v) => (
-          <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}>
+          <span
+            className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
+            title="Snapshot validation status — separate from Readiness eligibility"
+          >
             {normalizeDatasetStatus(v.status)}
           </span>
         ),
@@ -1033,7 +1012,7 @@ export default function DatasetHubPage() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-[color:var(--status-failed-fg)] hover:bg-[var(--status-failed-bg)]"
+                className="h-7 w-7 text-[color:var(--status-failed-fg)] hover:bg-[color:var(--status-failed-bg)]"
                 title="Delete version"
                 aria-label={`Delete ${v.version}`}
                 onClick={(e) => {
@@ -1088,9 +1067,16 @@ export default function DatasetHubPage() {
       {
         label: "Readiness",
         value: (
-          <span className="inline-flex items-center gap-2">
+          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
             <DomainChip kind="readiness" />
-            <span>{String(readinessQuery.data?.status || "pending")}</span>
+            <span
+              className={cn(
+                "inline-flex shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                readinessStatusChipClass(readinessQuery.data?.status),
+              )}
+            >
+              {String(readinessQuery.data?.status || "pending")}
+            </span>
           </span>
         ),
       },
@@ -1151,7 +1137,7 @@ export default function DatasetHubPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 border-[var(--status-failed-border)] bg-card text-xs text-[color:var(--status-failed-fg)]"
+                className={cn("h-8 gap-1.5 bg-card text-xs", STATUS_CHIP_CLASS.failed)}
                 onClick={() => {
                   setDeleteMsg("");
                   setDeleteDatasetOpen(true);
@@ -1177,13 +1163,13 @@ export default function DatasetHubPage() {
       >
 
         {datasetQuery.isError && datasetQuery.isFetched ? (
-          <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
+          <div className={STATUS_CALLOUT_CLASS.failed}>
             Could not load dataset (check scope or id).
           </div>
         ) : null}
 
         {downloadMsg ? (
-          <div className="rounded-xl border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
+          <div className={STATUS_CALLOUT_CLASS.failed}>
             {downloadMsg}
           </div>
         ) : null}
@@ -1194,7 +1180,7 @@ export default function DatasetHubPage() {
         <>
         {activeTab === "overview" ? (
           <div className="grid min-w-0 max-w-[1400px] grid-cols-1 gap-4 lg:grid-cols-2">
-            <DetailSection title="Lifecycle layers" accentBorder="emerald">
+            <DetailSection title="Lifecycle layers" accentBorder={DATASET_SECTION_ACCENT}>
               <div className="flex flex-wrap items-center gap-2">
                 {lifecycleStages.map((label, i) => (
                   <div key={label} className="flex items-center gap-2">
@@ -1202,9 +1188,7 @@ export default function DatasetHubPage() {
                       variant="outline"
                       className={cn(
                         "text-[11px] font-medium",
-                        i <= lifecycleStageIndex
-                          ? "border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] bg-[color:var(--status-success-bg)] dark:text-[color:var(--status-success-fg)]"
-                          : "border-border text-muted-foreground/80"
+                        i <= lifecycleStageIndex ? STATUS_CHIP_CLASS.success : "border-border text-muted-foreground/80"
                       )}
                     >
                       {label}
@@ -1217,7 +1201,7 @@ export default function DatasetHubPage() {
               </div>
             </DetailSection>
 
-            <DetailSection title="Dataset summary" accentBorder="emerald">
+            <DetailSection title="Dataset summary" accentBorder={DATASET_SECTION_ACCENT}>
               <MetadataGrid columns={2} items={overviewSummaryItems} />
               {bufferMaterializationHints ? (
                 <div className="mt-4 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
@@ -1240,7 +1224,7 @@ export default function DatasetHubPage() {
                     <p>Last materialized: —</p>
                   )}
                   {bufferMaterializationHints.strat === "rolling_accumulate" ? (
-                    <p className="text-[color:var(--status-pending-fg)]/90">
+                    <p className={feedbackMessageClass("warning")}>
                       Rolling: buffer grows without auto vN snapshots — see Accumulation.
                     </p>
                   ) : bufferMaterializationHints.rowsToThreshold != null ? (
@@ -1264,9 +1248,7 @@ export default function DatasetHubPage() {
                         variant="outline"
                         className={cn(
                           "text-[11px]",
-                          c.status === "pass"
-                            ? "border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] dark:text-[color:var(--status-success-fg)]"
-                            : "border-red-500/40 text-red-600 dark:text-[color:var(--status-failed-fg)]"
+                          c.status === "pass" ? STATUS_CHIP_CLASS.success : STATUS_CHIP_CLASS.failed
                         )}
                       >
                         {c.status === "pass" ? "PASS" : "FAIL"} · {c.label}
@@ -1279,7 +1261,7 @@ export default function DatasetHubPage() {
 
             <DetailSection
               title="Runs using this dataset"
-              accentBorder="sky"
+              accentBorder={DATASET_SECTION_ACCENT}
               className="lg:col-span-2"
               description="Training and pipeline runs that declared this dataset as input."
             >
@@ -1290,7 +1272,7 @@ export default function DatasetHubPage() {
               ) : datasetRunsQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading runs…</p>
               ) : datasetRunsQuery.isError ? (
-                <p className="text-sm text-destructive">{formatApiClientError(datasetRunsQuery.error)}</p>
+                <p className={feedbackMessageClass("failed", "sm")}>{formatApiClientError(datasetRunsQuery.error)}</p>
               ) : datasetRunsQuery.items.length === 0 ? (
                 <MlopsEmptyState
                   icon={Play}
@@ -1327,7 +1309,7 @@ export default function DatasetHubPage() {
             {!scopePinned ? (
               <DetailSection
                 title="Version retention"
-                accentBorder="amber"
+                accentBorder={DATASET_SECTION_ACCENT}
                 description="Keep newest snapshots; purge older versions when policy is enabled. Referenced versions are skipped when protection is on."
               >
                 <div className="space-y-3 text-xs">
@@ -1435,9 +1417,8 @@ export default function DatasetHubPage() {
 
             <DetailSection
               title="Training eligibility"
-              accentBorder="violet"
+              accentBorder={DATASET_SECTION_ACCENT}
               className="lg:col-span-2"
-              description="Per policy vs pinned version — same scope as Readiness tab."
             >
               <div className="space-y-2 text-xs">
                 {trainingEligibilityRows.length ? (
@@ -1446,21 +1427,22 @@ export default function DatasetHubPage() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="min-w-0 truncate font-mono text-foreground">{r.policyId}</span>
                         <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                            r.eligible
-                              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                              : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
-                          }`}
+                          className={cn(
+                            "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                            r.eligible ? STATUS_CHIP_CLASS.success : STATUS_CHIP_CLASS.failed,
+                          )}
                         >
                           {r.eligible ? "ELIGIBLE" : "BLOCKED"}
                         </span>
                       </div>
                       <div className="mt-1 text-muted-foreground">
-                        mode={r.triggerMode} · current={r.currentSize} · required={r.requiredSize}
+                        mode={r.triggerMode} · rows={r.currentSize}/{r.requiredSize}
+                        {r.freshnessHours != null ? ` · fresh≤${r.freshnessHours}h` : ""}
+                        {r.validationRulesCount > 0 ? ` · rules=${r.validationRulesCount}` : ""}
                         {r.modelId ? ` · model=${r.modelId}` : " · model=any"}
                       </div>
                       {!r.eligible && r.reasons.length ? (
-                        <p className="mt-1 text-[color:var(--status-pending-fg)]/90">{r.reasons.join(" ; ")}</p>
+                        <p className={`mt-1 ${STATUS_CHIP_TEXT.failed}`}>{r.reasons.join(" ; ")}</p>
                       ) : null}
                     </div>
                   ))
@@ -1475,15 +1457,9 @@ export default function DatasetHubPage() {
       {activeTab === "readiness" ? (
         <DetailSection
           title="Readiness policy evaluation"
-          accentBorder="sky"
+          accentBorder={DATASET_SECTION_ACCENT}
           headerActions={<DomainChip kind="readiness" />}
         >
-            <p className="mb-3 text-xs text-muted-foreground">
-              Panel reflects <span className="font-mono text-foreground">GET …/readiness</span> (safe to poll). It does{" "}
-              <span className="font-medium text-foreground">not</span> write audit history — use{" "}
-              <span className="font-semibold text-foreground">Evaluate now</span>; the table under this card lists persisted
-              evaluations.
-            </p>
             {readinessLegacyFallback ? (
               <div className="mb-3 panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">readiness_allow_legacy_fallback</span> — API may infer latest
@@ -1491,110 +1467,44 @@ export default function DatasetHubPage() {
                 for reproducible audits.
               </div>
             ) : null}
-            <details className="mb-3 inset-surface px-3 py-2" open>
-              <summary className="cursor-pointer select-none text-xs font-medium text-foreground hover:text-foreground/90">
-                Version, policy & required size
-              </summary>
-              <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
-                <div className="grid gap-3 md:grid-cols-2">
-              <label className="text-xs text-muted-foreground">
-                Version for readiness
-                <SelectDropdown
-                  value={selectedVersionId}
-                  onChange={setSelectedVersionId}
-                  options={readinessVersionSelectOptions}
-                  className="mt-1"
-                  buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
-                  disabled={readinessVersionSelectOptions.length === 0}
-                  aria-label="Dataset version for readiness"
-                />
-              </label>
-              <label className="text-xs text-muted-foreground">
-                Policy
-                <SelectDropdown
-                  value={selectedPolicyId}
-                  onChange={(id) => {
-                    setSelectedPolicyId(id);
-                    const picked = (policiesQuery.data?.items || []).find((p) => p.policy_id === id);
-                    if (picked) setPolicyRequiredSizeDraft(String(picked.required_size || 1000));
-                  }}
-                  options={policySelectOptions}
-                  className="mt-1"
-                  buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
-                  disabled={policySelectOptions.length === 0}
-                  aria-label="Training policy for readiness"
-                />
-              </label>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
+            <div className="mb-3 max-w-md">
               <SelectDropdown
-                value={newPolicyTriggerMode}
-                onChange={setNewPolicyTriggerMode}
-                options={POLICY_TRIGGER_MODE_OPTIONS}
-                className="w-40 shrink-0"
-                buttonClassName="panel-surface bg-muted/20 px-2 py-2 text-xs"
-                aria-label="Trigger mode for new policy"
+                value={selectedVersionId}
+                onChange={setSelectedVersionId}
+                options={readinessVersionSelectOptions}
+                buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
+                disabled={readinessVersionSelectOptions.length === 0}
+                aria-label="Dataset version for readiness"
               />
-              <input
-                type="number"
-                min={1}
-                value={policyRequiredSizeDraft}
-                onChange={(e) => setPolicyRequiredSizeDraft(e.target.value)}
-                className="w-48 appearance-none panel-surface bg-muted/20 px-2 py-2 text-xs text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                className="px-3 py-1 text-xs"
-                disabled={!selectedPolicyId}
-                onClick={async () => applyPolicyRequiredSize(Number.parseInt(policyRequiredSizeDraft, 10) || 1)}
-              >
-                Confirm Policy
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="px-3 py-1 text-xs"
-                onClick={createPolicy}
-              >
-                Create Policy
-              </Button>
-              {policyMsg ? <span className="text-xs text-muted-foreground">{policyMsg}</span> : null}
-                </div>
-                <div>
-                  <p className="mb-2 text-[11px] text-muted-foreground">Quick required_size presets</p>
-                  <div className="flex flex-wrap gap-2">
-              {policyPresets.map((preset) => (
-                <Button
-                  key={preset.id}
-                  type="button"
-                  variant="secondary"
-                  className="px-2 py-1 text-xs"
-                  disabled={!selectedPolicyId}
-                  onClick={async () => applyPolicyRequiredSize(preset.requiredSize)}
-                >
-                  {preset.label} ({preset.requiredSize})
-                </Button>
-              ))}
-                  </div>
-                </div>
-              </div>
-            </details>
+            </div>
+            <DatasetTrainingPolicyPanel
+              tenantId={tenantId}
+              projectId={projectId}
+              datasetId={datasetId}
+              token={token}
+              scopePinned={scopePinned}
+              policies={policiesQuery.data?.items || []}
+              selectedPolicyId={selectedPolicyId}
+              onSelectedPolicyIdChange={setSelectedPolicyId}
+              onPolicyMutated={refetchPolicyReadiness}
+            />
             {readinessQuery.data ? (
               <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-foreground">
                   <DomainChip kind="readiness" />
                   <span className="text-muted-foreground">Status:</span>
                   <span
-                    className={
-                      readinessQuery.data.ready
-                        ? "text-[color:var(--status-success-fg)]"
-                        : "text-[color:var(--status-failed-fg)]"
-                    }
+                    className={cn(
+                      "inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold uppercase",
+                      readinessStatusChipClass(
+                        readinessQuery.data.eligibility_status || readinessQuery.data.status,
+                      ),
+                    )}
                   >
                     {String(readinessQuery.data.eligibility_status || readinessQuery.data.status || "blocked")}
                   </span>
                 </div>
+                <PolicyConfigSummary policy={selectedPolicy} versionCreatedAt={selectedVersionCreatedAt} />
                 <div className="mb-3 grid gap-x-4 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
                   <div>
                     Current / required rows:{" "}
@@ -1604,7 +1514,14 @@ export default function DatasetHubPage() {
                   </div>
                   <div>
                     Ready:{" "}
-                    <span className="font-medium text-foreground">{readinessQuery.data.ready ? "yes" : "no"}</span>
+                    <span
+                      className={cn(
+                        "font-medium",
+                        readinessQuery.data.ready ? STATUS_CHIP_TEXT.success : STATUS_CHIP_TEXT.failed,
+                      )}
+                    >
+                      {readinessQuery.data.ready ? "yes" : "no"}
+                    </span>
                   </div>
                   <div className="sm:col-span-2">
                     Policy{" "}
@@ -1652,11 +1569,10 @@ export default function DatasetHubPage() {
                       <div key={c.code} className="flex items-center justify-between inset-surface px-2 py-1 text-xs">
                         <span className="text-muted-foreground">{c.label}</span>
                         <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                            c.status === "pass"
-                              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[color:var(--status-success-fg)]"
-                              : "border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
-                          }`}
+                          className={cn(
+                            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                            c.status === "pass" ? STATUS_CHIP_CLASS.success : STATUS_CHIP_CLASS.failed,
+                          )}
                         >
                           {c.status === "pass" ? "PASS" : "FAIL"}
                         </span>
@@ -1672,15 +1588,11 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "accumulation" ? (
-        <DetailSection title="Accumulation buffer" accentBorder="amber">
+        <DetailSection title="Accumulation buffer" accentBorder={DATASET_SECTION_ACCENT}>
             {bufferQuery.isLoading && !bufferQuery.data ? (
               <p className="text-xs text-muted-foreground">Loading buffer…</p>
             ) : bufferQuery.data ? (
               <div className="space-y-3 text-xs text-muted-foreground">
-                <p className="text-[11px] text-muted-foreground">
-                  <span className="text-foreground">Materialization target</span> is separate from training policy{" "}
-                  <span className="font-mono text-foreground">required_size</span> on the Readiness tab.
-                </p>
                 {accumulationStrategyDraft === "snapshot_on_schedule" && bufferMaterializationHints ? (
                   <div className="inset-surface px-3 py-2 text-[11px] text-muted-foreground">
                     Schedule mode: buffer{" "}
@@ -1690,7 +1602,7 @@ export default function DatasetHubPage() {
                   </div>
                 ) : null}
                 {accumulationStrategyDraft === "rolling_accumulate" ? (
-                  <div className="rounded-lg border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-3 py-2 text-[11px] leading-relaxed text-[color:var(--status-pending-fg)]">
+                  <div className={STATUS_CALLOUT_CLASS.warning}>
                     <span className="font-semibold text-foreground">Rolling accumulate:</span> no auto snapshot at threshold — use{" "}
                     <span className="font-semibold">Materialize now</span> or switch strategy.
                   </div>
@@ -1798,15 +1710,7 @@ export default function DatasetHubPage() {
                   ) : null}
                 </div>
                 {accumulationMsg ? (
-                  <p
-                    className={`text-[11px] ${
-                      accumulationMsg.includes("saved")
-                        ? "text-[color:var(--status-success-fg)]/90"
-                        : "text-[color:var(--status-pending-fg)]/90"
-                    }`}
-                  >
-                    {accumulationMsg}
-                  </p>
+                  <p className={accumulationFeedbackClass(accumulationMsg)}>{accumulationMsg}</p>
                 ) : null}
                 {scheduleTickResult ? (
                   <div className="space-y-2 inset-surface px-3 py-2 text-[11px]">
@@ -1892,9 +1796,8 @@ export default function DatasetHubPage() {
       {activeTab === "versions" ? (
         <DetailSection
           title="Dataset versions"
-          accentBorder="sky"
+          accentBorder={DATASET_SECTION_ACCENT}
           className="min-w-0"
-          description="Immutable snapshots. Edit tags/refs from the table when your role allows."
         >
             {versionsQuery.isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
@@ -1917,7 +1820,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "training" ? (
-        <DetailSection title="Run / Train" accentBorder="violet" className="min-w-0">
+        <DetailSection title="Run / Train" accentBorder={DATASET_SECTION_ACCENT} className="min-w-0">
           <ExecutionIntentPanel
             datasetId={datasetId}
             tenantId={tenantId}
@@ -1936,15 +1839,13 @@ export default function DatasetHubPage() {
         <DetailSection
           title="Readiness evaluations"
           className="min-w-0"
-          accentBorder="emerald"
-          description="Rows are written only when you use Evaluate now — not when polling GET …/readiness."
+          accentBorder={DATASET_SECTION_ACCENT}
           headerActions={
             <FilterChips
-              variant="emerald"
               options={[
                 { id: "all", label: "All" },
-                { id: "eligible", label: "Eligible" },
-                { id: "blocked", label: "Blocked" },
+                { id: "eligible", label: "Eligible", tone: "success" },
+                { id: "blocked", label: "Blocked", tone: "failed" },
               ]}
               value={evaluationStatusFilter}
               onChange={(id) => {
@@ -2077,7 +1978,7 @@ export default function DatasetHubPage() {
               />
             ) : null}
             {versionEditorMsg ? (
-              <div className="mt-2 shrink-0 rounded-md border border-[var(--status-failed-border)] bg-[var(--status-failed-bg)] px-2 py-1.5 text-xs text-[color:var(--status-failed-fg)]">
+              <div className={cn("mt-2 shrink-0", STATUS_CALLOUT_CLASS.failedCompact)}>
                 {versionEditorMsg}
               </div>
             ) : null}
@@ -2168,7 +2069,7 @@ export default function DatasetHubPage() {
               />
             </div>
             {versionMetaMsg ? (
-              <div className="rounded-md border border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] px-2 py-1.5 text-xs text-[color:var(--status-pending-fg)]">
+              <div className={STATUS_CALLOUT_CLASS.warningCompact}>
                 {versionMetaMsg}
               </div>
             ) : null}
@@ -2198,7 +2099,7 @@ export default function DatasetHubPage() {
             </DialogDescription>
           </DialogHeader>
           {deleteMsg ? (
-            <p className="text-xs text-[color:var(--status-failed-fg)]">{deleteMsg}</p>
+            <p className={feedbackMessageClass("failed")}>{deleteMsg}</p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => setDeleteDatasetOpen(false)}>
@@ -2225,7 +2126,7 @@ export default function DatasetHubPage() {
             </DialogDescription>
           </DialogHeader>
           {deleteMsg ? (
-            <p className="text-xs text-[color:var(--status-failed-fg)]">{deleteMsg}</p>
+            <p className={feedbackMessageClass("failed")}>{deleteMsg}</p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => setDeleteVersionId(null)}>

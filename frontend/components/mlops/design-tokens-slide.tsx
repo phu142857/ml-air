@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 const accents = [
   {
     name: "Primary accent",
-    hex: "#3B82F6",
+    hex: "#3F86F3",
     class: "border-primary/30 bg-primary/10 text-primary",
   },
   {
@@ -27,7 +27,7 @@ const accents = [
   },
   {
     name: "Neutral",
-    hex: "#71717a",
+    hex: "#9AA6B2",
     class: "border-border/60 bg-muted/30 text-muted-foreground",
   },
 ]
@@ -50,7 +50,10 @@ const surfaces = [
 
 const semanticTokens = [
   { token: "--background", use: "Page shell, sidebar inset" },
-  { token: "--primary", use: "Electric blue accent, links, running state" },
+  { token: "--primary", use: "Running · #3F86F3" },
+  { token: "--status-success", use: "Success · #7cb518" },
+  { token: "--status-warning", use: "Warning · #FCBC04" },
+  { token: "--status-dangerous", use: "Dangerous · #EB4233" },
   { token: "--card", use: "Panels, tables, dialogs" },
   { token: "--muted", use: "Subtle fills, hover rows" },
   { token: "--border", use: "Dividers, inputs, charts grid" },
@@ -129,11 +132,11 @@ export function DesignTokensSlide() {
             <StatusBadge status="warning" />
           </div>
           <div className="grid grid-cols-2 gap-3 font-mono text-xs text-muted-foreground md:grid-cols-3">
-            <div className="rounded-xl border border-border/60 p-3">success → --status-success-*</div>
-            <div className="rounded-xl border border-border/60 p-3">running → primary + spin</div>
-            <div className="rounded-xl border border-border/60 p-3">failed → --status-failed-*</div>
-            <div className="rounded-xl border border-border/60 p-3">pending → --status-pending-*</div>
-            <div className="rounded-xl border border-border/60 p-3">neutral → muted</div>
+            <div className="rounded-xl border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] p-3 text-[color:var(--status-success-fg)]">success → --status-success-*</div>
+            <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-primary">running → primary + spin</div>
+            <div className="rounded-xl border border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] p-3 text-[color:var(--status-failed-fg)]">failed → --status-failed-*</div>
+            <div className="rounded-xl border border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)] p-3 text-[color:var(--status-pending-fg)]">pending → --status-pending-*</div>
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-muted-foreground">neutral → muted</div>
           </div>
         </div>
       </section>

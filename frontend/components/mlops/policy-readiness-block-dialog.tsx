@@ -16,6 +16,7 @@ import {
   failingCriteriaFromSnapshot,
   type TrainGateBlock,
 } from "@/lib/mlair-policy-readiness";
+import { STATUS_CHIP_CLASS } from "@/lib/status-style";
 
 type PipelineGateContext = {
   pipelineId: string;
@@ -98,7 +99,9 @@ export function PolicyReadinessBlockDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-border bg-card sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{block ? blockTitle(block) : "Blocked"}</DialogTitle>
+          <DialogTitle className="text-[color:var(--status-failed-fg)]">
+            {block ? blockTitle(block) : "Blocked"}
+          </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {block ? blockMessage(block) : null}
             {block ? (
@@ -110,11 +113,11 @@ export function PolicyReadinessBlockDialog({
         </DialogHeader>
 
         {failing.length > 0 ? (
-          <ul className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border/80 bg-muted/20 px-3 py-2 text-xs">
+          <ul className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] px-3 py-2 text-xs">
             {failing.map((c) => (
               <li key={c.code} className="flex flex-col gap-0.5">
-                <span className="font-medium text-foreground">{c.label || c.code}</span>
-                <span className="font-mono text-[10px] text-muted-foreground">{c.code}</span>
+                <span className="font-medium text-[color:var(--status-failed-fg)]">{c.label || c.code}</span>
+                <span className="font-mono text-[10px] text-[color:var(--status-failed-fg)]/80">{c.code}</span>
               </li>
             ))}
           </ul>

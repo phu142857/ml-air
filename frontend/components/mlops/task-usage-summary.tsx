@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { Activity } from "lucide-react"
 import type { TaskUsageRecord } from "@/lib/api"
 import {
@@ -15,7 +14,6 @@ import { MetadataGrid, MlopsEmptyState } from "@/components/mlops/layout"
 type TaskUsageSummaryProps = {
   usage: TaskUsageRecord | null | undefined
   enabled?: boolean
-  runId?: string | null
   loading?: boolean
 }
 
@@ -28,7 +26,7 @@ function UsageGroup({ title, children }: { title: string; children: React.ReactN
   )
 }
 
-export function TaskUsageSummary({ usage, enabled = true, runId, loading }: TaskUsageSummaryProps) {
+export function TaskUsageSummary({ usage, enabled = true, loading }: TaskUsageSummaryProps) {
   if (loading) {
     return (
       <div className="text-sm text-muted-foreground">Loading resource metrics…</div>
@@ -57,17 +55,6 @@ export function TaskUsageSummary({ usage, enabled = true, runId, loading }: Task
 
   return (
     <div className="space-y-5">
-      {runId ? (
-        <p className="text-xs text-muted-foreground">
-          Attributed to run{" "}
-          <Link href={`/runs/${encodeURIComponent(runId)}`} className="font-mono text-primary hover:text-primary/80">
-            {runId}
-          </Link>
-          {usage.sample_count != null && usage.sample_count > 0 ? (
-            <span> · {usage.sample_count} heartbeat sample{usage.sample_count === 1 ? "" : "s"}</span>
-          ) : null}
-        </p>
-      ) : null}
       <UsageGroup title="Resource attribution">
         <MetadataGrid
           columns={2}

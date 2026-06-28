@@ -9,104 +9,233 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.985 0.002 240);
-  --foreground: oklch(0.21 0.015 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.015 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.015 240);
-  --primary: oklch(0.55 0.19 252);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.004 240);
-  --secondary-foreground: oklch(0.28 0.02 240);
-  --muted: oklch(0.955 0.006 240);
-  --muted-foreground: oklch(0.52 0.015 240);
-  --accent: oklch(0.94 0.012 252);
-  --accent-foreground: oklch(0.25 0.03 252);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.91 0.008 240 / 0.72);
-  --input: oklch(0.92 0.008 240);
-  --ring: oklch(0.55 0.19 252);
-  --chart-1: oklch(0.55 0.19 252);
-  --chart-2: oklch(0.62 0.17 162);
-  --chart-3: oklch(0.58 0.14 86);
-  --chart-4: oklch(0.52 0.2 25);
-  --chart-5: oklch(0.48 0.08 240);
-  --radius: 0.875rem;
-  --sidebar: oklch(0.99 0.002 240);
-  --sidebar-foreground: oklch(0.28 0.02 240);
-  --sidebar-primary: oklch(0.55 0.19 252);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.945 0.015 252);
-  --sidebar-accent-foreground: oklch(0.25 0.03 252);
-  --sidebar-border: oklch(0.91 0.008 240 / 0.65);
-  --sidebar-ring: oklch(0.55 0.19 252);
-  --shadow-diffused: 0 20px 40px -15px oklch(0.21 0.02 252 / 0.08);
-  --shadow-whisper: 0 1px 2px oklch(0.21 0.02 252 / 0.04);
-  --status-success-fg: oklch(0.38 0.12 162);
-  --status-success-bg: oklch(0.94 0.04 162 / 0.55);
-  --status-success-border: oklch(0.58 0.11 162 / 0.42);
-  --status-failed-fg: oklch(0.45 0.18 25);
-  --status-failed-bg: oklch(0.96 0.04 25 / 0.5);
-  --status-failed-border: oklch(0.62 0.15 25 / 0.42);
-  --status-pending-fg: oklch(0.45 0.11 86);
-  --status-pending-bg: oklch(0.96 0.05 86 / 0.45);
-  --status-pending-border: oklch(0.62 0.13 86 / 0.38);
-  --status-running-fg: oklch(0.45 0.14 252);
-  --status-running-bg: oklch(0.94 0.04 252 / 0.5);
-  --status-running-border: oklch(0.55 0.14 252 / 0.42);
-  --border-default: oklch(0.91 0.008 240 / 0.72);
+  color-scheme: light;
+
+  /* Semantic: running · success · warning · dangerous */
+  --status-running: #3F86F3;
+  --status-success: #7cb518;
+  --status-warning: #FCBC04;
+  --status-dangerous: #EB4233;
+
+  /* Light neutrals: bg · muted · border · secondary text · ink */
+  --palette-bg: #F8FAFC;
+  --palette-muted: #D9EAFD;
+  --palette-border: #BCCCDC;
+  --palette-secondary: #9AA6B2;
+  --palette-ink: #151311;
+
+  --background: var(--palette-bg);
+  --foreground: var(--palette-ink);
+  --card: #FFFFFF;
+  --card-foreground: var(--palette-ink);
+  --popover: #FFFFFF;
+  --popover-foreground: var(--palette-ink);
+  --primary: var(--status-running);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--palette-ink);
+  --secondary-foreground: #FFFFFF;
+  --accent: var(--status-warning);
+  --accent-foreground: var(--palette-ink);
+  --destructive: var(--status-dangerous);
+  --destructive-foreground: #FFFFFF;
+  --muted: var(--palette-muted);
+  --muted-foreground: var(--palette-secondary);
+  --border: var(--palette-border);
+  --input: var(--palette-border);
+  --ring: var(--status-running);
+  --chart-1: var(--status-running);
+  --chart-2: var(--status-success);
+  --chart-3: var(--status-warning);
+  --chart-4: var(--status-dangerous);
+  --chart-5: var(--palette-secondary);
+  --radius: 0.625rem;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: var(--palette-ink);
+  --sidebar-primary: var(--status-running);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: var(--palette-muted);
+  --sidebar-accent-foreground: var(--status-running);
+  --sidebar-border: var(--palette-border);
+  --sidebar-ring: var(--status-running);
+
+  --status-error: var(--status-dangerous);
+  --status-info: var(--status-running);
+  --text-primary: var(--palette-ink);
+  --text-secondary: var(--palette-secondary);
+  --text-disabled: var(--palette-border);
+  --bg-hover: var(--palette-muted);
+  --bg-active: color-mix(in srgb, var(--status-running) 12%, var(--palette-bg));
+  --bg-disabled: var(--palette-bg);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
+  --shadow-diffused: 0 20px 40px -15px rgba(63, 134, 243, 0.12);
+  --shadow-whisper: 0 1px 2px rgba(21, 19, 17, 0.04);
+
+  --status-success-fg: var(--status-success);
+  --status-success-bg: color-mix(in srgb, var(--status-success) 10%, var(--palette-bg));
+  --status-success-border: color-mix(in srgb, var(--status-success) 35%, transparent);
+  --status-failed-fg: var(--status-dangerous);
+  --status-failed-bg: color-mix(in srgb, var(--status-dangerous) 10%, var(--palette-bg));
+  --status-failed-border: color-mix(in srgb, var(--status-dangerous) 35%, transparent);
+  --status-pending-fg: var(--status-warning);
+  --status-pending-bg: color-mix(in srgb, var(--status-warning) 10%, var(--palette-bg));
+  --status-pending-border: color-mix(in srgb, var(--status-warning) 35%, transparent);
+  --status-running-fg: var(--status-running);
+  --status-running-bg: color-mix(in srgb, var(--status-running) 10%, var(--palette-bg));
+  --status-running-border: color-mix(in srgb, var(--status-running) 35%, transparent);
+  --border-default: var(--palette-border);
 }
 
 .dark {
-  --background: oklch(0.145 0.012 240);
-  --foreground: oklch(0.97 0.005 240);
-  --card: oklch(0.185 0.012 240);
-  --card-foreground: oklch(0.97 0.005 240);
-  --popover: oklch(0.17 0.012 240);
-  --popover-foreground: oklch(0.97 0.005 240);
-  --primary: oklch(0.68 0.16 252);
-  --primary-foreground: oklch(0.15 0.02 252);
-  --secondary: oklch(0.24 0.012 240);
-  --secondary-foreground: oklch(0.97 0.005 240);
-  --muted: oklch(0.24 0.012 240);
-  --muted-foreground: oklch(0.68 0.015 240);
-  --accent: oklch(0.26 0.02 252);
-  --accent-foreground: oklch(0.97 0.005 240);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.97 0.005 240);
-  --border: oklch(0.28 0.012 240 / 0.75);
-  --input: oklch(0.26 0.012 240);
-  --ring: oklch(0.68 0.16 252);
-  --chart-1: oklch(0.68 0.16 252);
-  --chart-2: oklch(0.72 0.15 162);
-  --chart-3: oklch(0.78 0.14 86);
-  --chart-4: oklch(0.65 0.2 25);
-  --chart-5: oklch(0.62 0.08 240);
-  --sidebar: oklch(0.165 0.012 240);
-  --sidebar-foreground: oklch(0.97 0.005 240);
-  --sidebar-primary: oklch(0.68 0.16 252);
-  --sidebar-primary-foreground: oklch(0.15 0.02 252);
-  --sidebar-accent: oklch(0.24 0.015 252);
-  --sidebar-accent-foreground: oklch(0.97 0.005 240);
-  --sidebar-border: oklch(0.28 0.012 240 / 0.65);
-  --sidebar-ring: oklch(0.68 0.16 252);
-  --shadow-diffused: 0 24px 48px -18px oklch(0.05 0.02 252 / 0.45);
-  --shadow-whisper: 0 1px 2px oklch(0.05 0.02 252 / 0.35);
-  --status-success-fg: oklch(0.78 0.14 162);
-  --status-success-bg: oklch(0.22 0.05 162 / 0.35);
-  --status-success-border: oklch(0.45 0.1 162 / 0.5);
-  --status-failed-fg: oklch(0.72 0.18 25);
-  --status-failed-bg: oklch(0.22 0.06 25 / 0.35);
-  --status-failed-border: oklch(0.48 0.14 25 / 0.5);
-  --status-pending-fg: oklch(0.82 0.14 86);
-  --status-pending-bg: oklch(0.26 0.05 86 / 0.35);
-  --status-pending-border: oklch(0.5 0.12 86 / 0.45);
-  --status-running-fg: oklch(0.78 0.12 252);
-  --status-running-bg: oklch(0.22 0.06 252 / 0.35);
-  --status-running-border: oklch(0.48 0.12 252 / 0.5);
-  --border-default: oklch(0.32 0.012 240);
+  color-scheme: dark;
+
+  /* Semantic unchanged across themes */
+  --status-running: #3F86F3;
+  --status-success: #7cb518;
+  --status-warning: #FCBC04;
+  --status-dangerous: #EB4233;
+
+  /* Dark neutrals: bg · surface · border · foreground */
+  --palette-bg: #141414;
+  --palette-surface: #181818;
+  --palette-border: #454955;
+  --palette-foreground: #CED0CE;
+
+  --background: var(--palette-bg);
+  --foreground: var(--palette-foreground);
+  --card: var(--palette-surface);
+  --card-foreground: var(--palette-foreground);
+  --popover: var(--palette-surface);
+  --popover-foreground: var(--palette-foreground);
+  --primary: var(--status-running);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--palette-border);
+  --secondary-foreground: var(--palette-foreground);
+  --accent: var(--status-warning);
+  --accent-foreground: var(--palette-bg);
+  --destructive: var(--status-dangerous);
+  --destructive-foreground: #FFFFFF;
+  --muted: var(--palette-border);
+  --muted-foreground: color-mix(in srgb, var(--palette-foreground) 55%, var(--palette-border));
+  --border: var(--palette-border);
+  --input: var(--palette-border);
+  --ring: var(--status-running);
+  --chart-1: var(--status-running);
+  --chart-2: var(--palette-foreground);
+  --chart-3: var(--status-warning);
+  --chart-4: var(--status-dangerous);
+  --chart-5: var(--palette-border);
+  --sidebar: var(--palette-surface);
+  --sidebar-foreground: var(--palette-foreground);
+  --sidebar-primary: var(--status-running);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: var(--palette-border);
+  --sidebar-accent-foreground: var(--palette-foreground);
+  --sidebar-border: var(--palette-border);
+  --sidebar-ring: var(--status-running);
+
+  --status-error: var(--status-dangerous);
+  --status-info: var(--status-running);
+  --text-primary: var(--palette-foreground);
+  --text-secondary: color-mix(in srgb, var(--palette-foreground) 55%, var(--palette-border));
+  --text-disabled: var(--palette-border);
+  --bg-hover: color-mix(in srgb, var(--palette-border) 35%, var(--palette-surface));
+  --bg-active: color-mix(in srgb, var(--status-running) 22%, var(--palette-surface));
+  --bg-disabled: var(--palette-bg);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+  --shadow-diffused: 0 24px 48px -18px rgba(0, 0, 0, 0.45);
+  --shadow-whisper: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  --status-success-fg: var(--status-success);
+  --status-success-bg: color-mix(in srgb, var(--status-success) 18%, var(--palette-surface));
+  --status-success-border: color-mix(in srgb, var(--status-success) 45%, transparent);
+  --status-failed-fg: var(--status-dangerous);
+  --status-failed-bg: color-mix(in srgb, var(--status-dangerous) 18%, var(--palette-surface));
+  --status-failed-border: color-mix(in srgb, var(--status-dangerous) 45%, transparent);
+  --status-pending-fg: var(--status-warning);
+  --status-pending-bg: color-mix(in srgb, var(--status-warning) 18%, var(--palette-surface));
+  --status-pending-border: color-mix(in srgb, var(--status-warning) 45%, transparent);
+  --status-running-fg: var(--status-running);
+  --status-running-bg: color-mix(in srgb, var(--status-running) 18%, var(--palette-surface));
+  --status-running-border: color-mix(in srgb, var(--status-running) 45%, transparent);
+  --border-default: var(--palette-border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+
+    --status-running: #3F86F3;
+    --status-success: #7cb518;
+    --status-warning: #FCBC04;
+    --status-dangerous: #EB4233;
+
+    --palette-bg: #141414;
+    --palette-surface: #181818;
+    --palette-border: #454955;
+    --palette-foreground: #CED0CE;
+
+    --background: var(--palette-bg);
+    --foreground: var(--palette-foreground);
+    --card: var(--palette-surface);
+    --card-foreground: var(--palette-foreground);
+    --popover: var(--palette-surface);
+    --popover-foreground: var(--palette-foreground);
+    --primary: var(--status-running);
+    --primary-foreground: #FFFFFF;
+    --secondary: var(--palette-border);
+    --secondary-foreground: var(--palette-foreground);
+    --accent: var(--status-warning);
+    --accent-foreground: var(--palette-bg);
+    --destructive: var(--status-dangerous);
+    --border: var(--palette-border);
+    --input: var(--palette-border);
+    --ring: var(--status-running);
+    --chart-1: var(--status-running);
+    --chart-2: var(--palette-foreground);
+    --chart-3: var(--status-warning);
+    --chart-4: var(--status-dangerous);
+    --chart-5: var(--palette-border);
+    --sidebar: var(--palette-surface);
+    --sidebar-foreground: var(--palette-foreground);
+    --sidebar-primary: var(--status-running);
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: var(--palette-border);
+    --sidebar-accent-foreground: var(--palette-foreground);
+    --sidebar-border: var(--palette-border);
+    --sidebar-ring: var(--status-running);
+    --status-error: var(--status-dangerous);
+    --status-info: var(--status-running);
+    --text-primary: var(--palette-foreground);
+    --text-secondary: color-mix(in srgb, var(--palette-foreground) 55%, var(--palette-border));
+    --text-disabled: var(--palette-border);
+    --bg-hover: color-mix(in srgb, var(--palette-border) 35%, var(--palette-surface));
+    --bg-active: color-mix(in srgb, var(--status-running) 22%, var(--palette-surface));
+    --bg-disabled: var(--palette-bg);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+    --shadow-diffused: 0 24px 48px -18px rgba(0, 0, 0, 0.45);
+    --shadow-whisper: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --status-success-fg: var(--status-success);
+    --status-success-bg: color-mix(in srgb, var(--status-success) 18%, var(--palette-surface));
+    --status-success-border: color-mix(in srgb, var(--status-success) 45%, transparent);
+    --status-failed-fg: var(--status-dangerous);
+    --status-failed-bg: color-mix(in srgb, var(--status-dangerous) 18%, var(--palette-surface));
+    --status-failed-border: color-mix(in srgb, var(--status-dangerous) 45%, transparent);
+    --status-pending-fg: var(--status-warning);
+    --status-pending-bg: color-mix(in srgb, var(--status-warning) 18%, var(--palette-surface));
+    --status-pending-border: color-mix(in srgb, var(--status-warning) 45%, transparent);
+    --status-running-fg: var(--status-running);
+    --status-running-bg: color-mix(in srgb, var(--status-running) 18%, var(--palette-surface));
+    --status-running-border: color-mix(in srgb, var(--status-running) 45%, transparent);
+    --border-default: var(--palette-border);
+  }
 }
 
 @theme inline {
@@ -136,10 +265,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 6px);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -148,14 +280,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-}
-
-@theme inline {
-  --color-status-success: oklch(0.696 0.17 162.48);
-  --color-status-running: oklch(0.685 0.169 252);
-  --color-status-failed: oklch(0.637 0.237 25.331);
-  --color-status-pending: oklch(0.795 0.184 86.047);
-  --color-status-info: oklch(0.623 0.214 252);
+  --color-status-running: var(--status-running);
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-dangerous: var(--status-dangerous);
+  --color-status-failed: var(--status-dangerous);
+  --color-status-pending: var(--status-warning);
+  --color-status-info: var(--status-running);
 }
 
 @layer base {
@@ -164,11 +295,13 @@
   }
 
   html {
+    @apply font-sans;
     scroll-behavior: smooth;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    letter-spacing: -0.01em;
     font-feature-settings: 'ss01' on, 'cv01' on;
   }
 
@@ -226,6 +359,30 @@
 }
 
 @layer utilities {
+  .shadow-xs {
+    box-shadow: 0 1px 2px 0 color-mix(in oklch, var(--foreground) 2%, transparent);
+  }
+
+  .shadow-sm {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .shadow-md {
+    box-shadow: var(--shadow-md);
+  }
+
+  .shadow-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .shadow-xl {
+    box-shadow: 0 12px 24px -6px color-mix(in oklch, var(--foreground) 9%, transparent);
+  }
+
+  .shadow-2xl {
+    box-shadow: 0 20px 40px -10px color-mix(in oklch, var(--foreground) 12%, transparent);
+  }
+
   .shadow-diffused {
     box-shadow: var(--shadow-diffused);
   }
@@ -234,8 +391,165 @@
     box-shadow: var(--shadow-whisper);
   }
 
+  .transition-smooth {
+    transition-property: all;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .transition-premium {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .transition-premium,
+    .transition-smooth,
+    .interactive-lift,
+    .hover-scale {
+      transition-duration: 0.01ms;
+    }
+  }
+
+  .interactive-lift {
+    transition: all 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .interactive-lift:hover {
+    transform: translateY(-2px);
+  }
+
+  .interactive-lift:active {
+    transform: translateY(0);
+  }
+
+  .panel-card {
+    @apply rounded-xl border border-border/50 bg-card;
+    box-shadow: 0 1px 3px color-mix(in oklch, var(--foreground) 3%, transparent);
+    transition: all 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .panel-card:hover {
+    @apply border-border/80;
+    box-shadow: 0 4px 12px color-mix(in oklch, var(--foreground) 6%, transparent);
+  }
+
+  .stat-container {
+    @apply rounded-xl border border-border/60 bg-gradient-to-br from-card to-card/80 p-6;
+    box-shadow: 0 2px 8px color-mix(in oklch, var(--foreground) 4%, transparent);
+    transition: all 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .stat-container:hover {
+    @apply border-primary/30;
+    box-shadow: 0 8px 16px color-mix(in oklch, var(--primary) 8%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1;
+    transition: all 160ms ease-out;
+  }
+
+  .status-badge:hover {
+    transform: scale(1.05);
+  }
+
+  .button-group {
+    @apply inline-flex items-center gap-2 rounded-lg bg-card p-1 ring-1 ring-border/50;
+  }
+
+  .button-group button {
+    @apply rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200;
+  }
+
+  .button-group button:hover:not(:disabled) {
+    @apply bg-primary/10 text-primary;
+  }
+
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  }
+
+  .dark .focus-ring {
+    @apply focus:ring-offset-background;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, var(--foreground), color-mix(in oklch, var(--foreground) 80%, transparent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .list-item-hover {
+    @apply rounded-lg border border-transparent px-3 py-2 transition-all duration-200;
+  }
+
+  .list-item-hover:hover {
+    @apply border-primary/30 bg-primary/5;
+  }
+
+  .input-enhanced {
+    @apply rounded-lg border border-border/50 bg-background px-3 py-2 text-sm;
+    transition: all 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .input-enhanced:focus {
+    @apply border-primary/50 ring-2 ring-primary/20;
+  }
+
+  .grid-adaptive {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .hover-scale {
+    transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--muted) 50%, transparent),
+      color-mix(in oklch, var(--foreground) 5%, transparent),
+      color-mix(in oklch, var(--muted) 50%, transparent)
+    );
+    background-size: 1000px 100%;
+  }
+
+  .divider-subtle {
+    @apply h-px bg-gradient-to-r from-transparent via-border to-transparent;
+  }
+
   .bezel-shell {
-    @apply rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60;
+    @apply rounded-2xl p-1 ring-1 ring-border/50;
+    background: linear-gradient(135deg, color-mix(in oklch, var(--muted) 60%, transparent), color-mix(in oklch, var(--muted) 40%, transparent), color-mix(in oklch, var(--muted) 30%, transparent));
+    box-shadow: var(--shadow-whisper);
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .bezel-shell:hover {
+    @apply ring-border/80;
+    box-shadow: var(--shadow-diffused);
   }
 
   .bezel-inner {
@@ -243,6 +557,9 @@
     box-shadow:
       var(--shadow-whisper),
       inset 0 1px 0 color-mix(in oklch, var(--foreground) 4%, transparent);
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .glass-panel {
@@ -272,18 +589,6 @@
     box-shadow: inset 3px 0 0 0 var(--primary);
   }
 
-  .transition-premium {
-    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
-    transition-duration: 220ms;
-    transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .transition-premium {
-      transition-duration: 0.01ms;
-    }
-  }
-
   .page-body {
     @apply mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-6 overflow-hidden px-4 py-6 sm:px-6;
   }
@@ -311,13 +616,41 @@
   .panel-surface {
     @apply rounded-2xl border border-border/60 bg-card;
     box-shadow: var(--shadow-whisper);
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .panel-surface:hover {
+    @apply border-border;
+    box-shadow: var(--shadow-diffused);
+  }
+
+  .stat-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1;
+  }
+
+  .stat-badge-success {
+    @apply bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)] ring-[color:var(--status-success-border)];
+  }
+
+  .stat-badge-failed {
+    @apply bg-[color:var(--status-failed-bg)] text-[color:var(--status-failed-fg)] ring-[color:var(--status-failed-border)];
+  }
+
+  .stat-badge-running {
+    @apply bg-[color:var(--status-running-bg)] text-[color:var(--status-running-fg)] ring-[color:var(--status-running-border)];
+  }
+
+  .stat-badge-pending {
+    @apply bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)] ring-[color:var(--status-pending-border)];
   }
 
   .link-primary {
     @apply text-primary hover:text-primary/80;
     transition-property: color, background-color, border-color, box-shadow, transform, opacity;
-    transition-duration: 220ms;
-    transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 }
 
@@ -334,16 +667,16 @@
 
 @keyframes highlight-pulse {
   0% {
-    background-color: oklch(0.685 0.169 252 / 0.15);
-    box-shadow: 0 0 0 0 oklch(0.685 0.169 252 / 0.4);
+    background-color: color-mix(in oklch, var(--primary) 15%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 40%, transparent);
   }
   50% {
-    background-color: oklch(0.685 0.169 252 / 0.08);
-    box-shadow: 0 0 0 4px oklch(0.685 0.169 252 / 0);
+    background-color: color-mix(in oklch, var(--primary) 8%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--primary) 0%, transparent);
   }
   100% {
     background-color: transparent;
-    box-shadow: 0 0 0 0 oklch(0.685 0.169 252 / 0);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
   }
 }
 

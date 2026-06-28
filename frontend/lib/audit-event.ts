@@ -26,7 +26,8 @@ function mapResourceType(rt: string): AuditEvent["eventType"] {
 function mapStatus(payload: Record<string, unknown>, kind: string): AuditEvent["status"] {
   const raw = String(payload.status ?? payload.readiness_status ?? payload.approval_status ?? kind ?? "")
     .toUpperCase()
-  if (raw.includes("FAIL") || raw.includes("ERROR") || raw.includes("REJECT")) return "failed"
+  if (raw.includes("FAIL") || raw.includes("ERROR") || raw.includes("REJECT") || raw.includes("BLOCK")) return "failed"
+  if (raw.includes("ELIGIBLE") || raw.includes("READY")) return "success"
   if (raw.includes("RUN") || raw.includes("PROGRESS")) return "running"
   if (raw.includes("PEND") || raw.includes("QUEUE") || raw.includes("WAIT")) return "pending"
   return "success"

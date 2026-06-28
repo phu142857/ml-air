@@ -55,10 +55,10 @@ export function ResourcePageHeader({
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           {leading}
-          <div className="bezel-shell rounded-2xl p-1">
+          <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
             <span
               className={cn(
-                "bezel-inner flex h-11 w-11 items-center justify-center ring-1",
+                "flex h-11 w-11 items-center justify-center rounded-lg ring-1",
                 styles.wash,
                 styles.ring,
               )}

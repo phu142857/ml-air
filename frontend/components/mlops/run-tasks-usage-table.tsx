@@ -5,6 +5,7 @@ import Link from "next/link"
 import type { TaskItem, TaskLiveUsage, TaskUsageRecord } from "@/lib/api"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { StatusBadge } from "@/components/mlops/status-badge"
+import { Panel } from "@/components/ui/panel"
 import {
   Table,
   TableBody,
@@ -145,8 +146,8 @@ export function RunTasksUsageTable({
       ) : usageLoading ? (
         <p className="text-xs text-muted-foreground">Loading resource usage…</p>
       ) : null}
-      <div className="bezel-shell overflow-hidden">
-        <div className="bezel-inner overflow-x-auto">
+      <Panel>
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
               <TableRow className="border-border/60 hover:bg-transparent">
@@ -213,7 +214,7 @@ export function RunTasksUsageTable({
             </TableBody>
           </Table>
         </div>
-      </div>
+      </Panel>
     </div>
   )
 }
