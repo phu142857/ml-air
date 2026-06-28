@@ -2659,6 +2659,9 @@ export async function fetchModelTriggerPolicy(tenantId: string, projectId: strin
     trigger_mode: "manual" | "auto_ready" | "schedule";
     debounce_minutes: number;
     schedule_cron: string;
+    dataset_id?: string | null;
+    dataset_version_id?: string | null;
+    training_policy_id?: string | null;
   };
 }
 
@@ -2667,7 +2670,14 @@ export async function updateModelTriggerPolicy(
   projectId: string,
   modelId: string,
   token: string,
-  payload: { trigger_mode: "manual" | "auto_ready" | "schedule"; debounce_minutes: number; schedule_cron?: string | null }
+  payload: {
+    trigger_mode: "manual" | "auto_ready" | "schedule";
+    debounce_minutes: number;
+    schedule_cron?: string | null;
+    dataset_id?: string | null;
+    dataset_version_id?: string | null;
+    training_policy_id?: string | null;
+  }
 ) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/trigger-policy`, {
     method: "PUT",
@@ -2680,6 +2690,9 @@ export async function updateModelTriggerPolicy(
     trigger_mode: "manual" | "auto_ready" | "schedule";
     debounce_minutes: number;
     schedule_cron: string;
+    dataset_id?: string | null;
+    dataset_version_id?: string | null;
+    training_policy_id?: string | null;
   };
 }
 

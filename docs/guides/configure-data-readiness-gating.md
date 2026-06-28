@@ -117,14 +117,17 @@ You can persist trigger automation per `tenant/project/model` and let scheduler 
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
   -H "Authorization: Bearer admin-token"
 
-# 2) Enable auto trigger when READY
+# 2) Enable auto trigger when READY (optional data anchor)
 curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
   -H "Authorization: Bearer admin-token" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "auto_ready",
     "debounce_minutes": 10,
-    "schedule_cron": "0 */6 * * *"
+    "schedule_cron": "0 */6 * * *",
+    "dataset_id": "<dataset_id>",
+    "dataset_version_id": "<dataset_version_id>",
+    "training_policy_id": "<training_policy_id>"
   }'
 
 # 3) Enable scheduled trigger
@@ -140,8 +143,8 @@ curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/m
 
 Scheduler behavior:
 
-- `auto_ready`: triggers only when readiness check returns `ready: true`.
-- `schedule`: triggers when cron is due and debounce window is open.
+- `auto_ready`: when a **data anchor** is configured (`dataset_id` + `dataset_version_id`, optional `training_policy_id`), scheduler checks **training eligibility** for that pinned version, then pipeline input readiness, then creates a run. Without a data anchor, behavior matches the legacy path (pipeline readiness only; inherits `override_config` from the latest model-version run).
+- `schedule`: triggers when cron is due and debounce window is open; with a data anchor, training eligibility must pass before the run is created.
 - Debounce is enforced by scanning latest auto-triggered run for the same model.
 - Scheduler tick interval defaults to `30s` (`ML_AIR_TRIGGER_POLICY_TICK_SECONDS`).
 - Scheduled dataset materialization tick can run in parallel for buffers with `snapshot_on_schedule` strategy:

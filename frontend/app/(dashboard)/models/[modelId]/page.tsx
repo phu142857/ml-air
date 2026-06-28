@@ -27,6 +27,9 @@ import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import {
   deleteModel,
   deleteModelVersion,
+  fetchDatasets,
+  fetchDatasetTrainingPolicies,
+  fetchDatasetVersions,
   fetchModels,
   fetchModelServing,
   fetchModelStatus,
@@ -39,6 +42,7 @@ import {
   updateModelVersionApproval,
   updateModelTriggerPolicy
 } from "@/lib/api";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
@@ -101,6 +105,9 @@ export default function ModelDetailPage() {
   const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule">("manual");
   const [debounceMinutes, setDebounceMinutes] = useState("10");
   const [scheduleCron, setScheduleCron] = useState("0 */6 * * *");
+  const [triggerDatasetId, setTriggerDatasetId] = useState("");
+  const [triggerDatasetVersionId, setTriggerDatasetVersionId] = useState("");
+  const [triggerTrainingPolicyId, setTriggerTrainingPolicyId] = useState("");
   const [policyMsg, setPolicyMsg] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
@@ -167,7 +174,66 @@ export default function ModelDetailPage() {
     setTriggerMode(triggerPolicyQuery.data.trigger_mode);
     setDebounceMinutes(String(triggerPolicyQuery.data.debounce_minutes || 10));
     setScheduleCron(triggerPolicyQuery.data.schedule_cron || "0 */6 * * *");
+    setTriggerDatasetId(triggerPolicyQuery.data.dataset_id || "");
+    setTriggerDatasetVersionId(triggerPolicyQuery.data.dataset_version_id || "");
+    setTriggerTrainingPolicyId(triggerPolicyQuery.data.training_policy_id || "");
   }, [triggerPolicyQuery.data]);
+
+  const triggerDatasetsQuery = useQuery({
+    queryKey: ["model-trigger-datasets", tenantId, projectId],
+    queryFn: () => fetchDatasets(tenantId, projectId, token),
+    enabled: Boolean(token && scopePinned && tab === "policy"),
+    staleTime: 60_000,
+  });
+
+  const triggerVersionsQuery = useQuery({
+    queryKey: ["model-trigger-dataset-versions", tenantId, projectId, triggerDatasetId],
+    queryFn: () => fetchDatasetVersions(tenantId, projectId, triggerDatasetId, token),
+    enabled: Boolean(token && scopePinned && triggerDatasetId),
+    staleTime: 30_000,
+  });
+
+  const triggerTrainingPoliciesQuery = useQuery({
+    queryKey: ["model-trigger-training-policies", tenantId, projectId, triggerDatasetId],
+    queryFn: () => fetchDatasetTrainingPolicies(tenantId, projectId, triggerDatasetId, token),
+    enabled: Boolean(token && scopePinned && triggerDatasetId),
+    staleTime: 30_000,
+  });
+
+  const triggerDatasetOptions = useMemo(() => {
+    const items = triggerDatasetsQuery.data?.items ?? [];
+    return [
+      { value: "", label: "No dataset pin (legacy)" },
+      ...items.map((d) => ({
+        value: d.dataset_id,
+        label: d.name ? `${d.name} (${d.dataset_id.slice(0, 8)}…)` : d.dataset_id,
+      })),
+    ];
+  }, [triggerDatasetsQuery.data?.items]);
+
+  const triggerVersionOptions = useMemo(() => {
+    const items = triggerVersionsQuery.data?.items ?? [];
+    return [
+      { value: "", label: "Select version" },
+      ...items.map((v) => ({
+        value: v.version_id,
+        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`,
+      })),
+    ];
+  }, [triggerVersionsQuery.data?.items]);
+
+  const triggerTrainingPolicyOptions = useMemo(() => {
+    const items = triggerTrainingPoliciesQuery.data?.items ?? [];
+    return [
+      { value: "", label: "Default policy for model" },
+      ...items
+        .filter((p) => !p.model_id || p.model_id === modelId)
+        .map((p) => ({
+          value: p.policy_id,
+          label: `${p.policy_id.slice(0, 8)}… · rows≥${p.required_size}`,
+        })),
+    ];
+  }, [triggerTrainingPoliciesQuery.data?.items, modelId]);
 
   useEffect(() => {
     setServingSlotDraft({});
@@ -242,13 +308,19 @@ export default function ModelDetailPage() {
       updateModelTriggerPolicy(tenantId, projectId, modelId, token, {
         trigger_mode: triggerMode,
         debounce_minutes: Math.max(1, Number.parseInt(debounceMinutes || "10", 10) || 10),
-        schedule_cron: scheduleCron.trim() || "0 */6 * * *"
+        schedule_cron: scheduleCron.trim() || "0 */6 * * *",
+        dataset_id: triggerDatasetId.trim() || null,
+        dataset_version_id: triggerDatasetVersionId.trim() || null,
+        training_policy_id: triggerTrainingPolicyId.trim() || null,
       }),
     onSuccess: async (saved) => {
       setPolicyMsg("Saved");
       setTriggerMode(saved.trigger_mode);
       setDebounceMinutes(String(saved.debounce_minutes || 10));
       setScheduleCron(saved.schedule_cron || "0 */6 * * *");
+      setTriggerDatasetId(saved.dataset_id || "");
+      setTriggerDatasetVersionId(saved.dataset_version_id || "");
+      setTriggerTrainingPolicyId(saved.training_policy_id || "");
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.triggerPolicy(tenantId, projectId, modelId) });
       window.setTimeout(() => setPolicyMsg(""), 1500);
     },
@@ -591,6 +663,51 @@ export default function ModelDetailPage() {
                 className="mt-1 w-full inset-surface px-2 py-2 text-xs text-foreground"
               />
             </label>
+          </div>
+          <div className="mt-4 space-y-3 border-t border-border/60 pt-3">
+            <p className="text-xs font-semibold text-foreground">Data anchor (auto-trigger)</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-xs text-muted-foreground">
+                Dataset
+                <SelectDropdown
+                  value={triggerDatasetId}
+                  onChange={(next) => {
+                    setTriggerDatasetId(next);
+                    setTriggerDatasetVersionId("");
+                    setTriggerTrainingPolicyId("");
+                  }}
+                  options={triggerDatasetOptions}
+                  className="mt-1"
+                  buttonClassName="inset-surface px-2 py-2 text-xs"
+                  disabled={!scopePinned || triggerDatasetsQuery.isLoading}
+                  aria-label="Trigger policy dataset"
+                />
+              </label>
+              <label className="text-xs text-muted-foreground">
+                Dataset version
+                <SelectDropdown
+                  value={triggerDatasetVersionId}
+                  onChange={setTriggerDatasetVersionId}
+                  options={triggerVersionOptions}
+                  className="mt-1"
+                  buttonClassName="inset-surface px-2 py-2 text-xs"
+                  disabled={!triggerDatasetId || triggerVersionsQuery.isLoading}
+                  aria-label="Trigger policy dataset version"
+                />
+              </label>
+              <label className="text-xs text-muted-foreground md:col-span-2">
+                Training policy (optional)
+                <SelectDropdown
+                  value={triggerTrainingPolicyId}
+                  onChange={setTriggerTrainingPolicyId}
+                  options={triggerTrainingPolicyOptions}
+                  className="mt-1"
+                  buttonClassName="inset-surface px-2 py-2 text-xs"
+                  disabled={!triggerDatasetId || triggerTrainingPoliciesQuery.isLoading}
+                  aria-label="Trigger policy training policy"
+                />
+              </label>
+            </div>
           </div>
           <div className="mt-2 text-xs text-muted-foreground">
             Applied mode: <span className="text-foreground">{effectiveTriggerMode}</span> · debounce:{" "}

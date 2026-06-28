@@ -647,6 +647,9 @@ class TriggerPolicyIn(BaseModel):
     trigger_mode: str = "manual"
     debounce_minutes: int = 10
     schedule_cron: str | None = None
+    dataset_id: str | None = None
+    dataset_version_id: str | None = None
+    training_policy_id: str | None = None
 
 
 class ScopeSwitchIn(BaseModel):
@@ -3579,14 +3582,25 @@ def upsert_model_trigger_policy_v1(
     row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
     if not row:
         raise HTTPException(status_code=404, detail="model_not_found")
-    return trigger_policy_service.upsert_trigger_policy(
-        tenant_id=tenant_id,
-        project_id=project_id,
-        model_id=model_id,
-        trigger_mode=payload.trigger_mode,
-        debounce_minutes=payload.debounce_minutes,
-        schedule_cron=payload.schedule_cron,
-    )
+    try:
+        return trigger_policy_service.upsert_trigger_policy(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            trigger_mode=payload.trigger_mode,
+            debounce_minutes=payload.debounce_minutes,
+            schedule_cron=payload.schedule_cron,
+            dataset_id=payload.dataset_id,
+            dataset_version_id=payload.dataset_version_id,
+            training_policy_id=payload.training_policy_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code in {"dataset_not_found", "dataset_version_not_found", "dataset_training_policy_not_found"}:
+            raise HTTPException(status_code=404, detail=code) from exc
+        if code == "dataset_id_required_with_policy":
+            raise HTTPException(status_code=422, detail=code) from exc
+        raise HTTPException(status_code=422, detail=code) from exc
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")

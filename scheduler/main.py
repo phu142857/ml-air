@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+import urllib.parse
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 import hashlib
@@ -149,6 +150,26 @@ def _api_post(path: str, payload: dict, timeout: int = 10) -> dict | None:
     return None
 
 
+def _api_get(path: str, timeout: int = 10) -> dict | None:
+    req = urllib.request.Request(
+        url=f"{_api_base_url()}{path}",
+        method="GET",
+        headers={"Authorization": f"Bearer {_api_token()}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        logger.warning("api_get_http_error path=%s status=%s body=%s", path, exc.code, body[:300])
+    except urllib.error.URLError as exc:
+        logger.warning("api_get_url_error path=%s err=%s", path, exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("api_get_error path=%s err=%s", path, exc)
+    return None
+
+
 def _parse_cron_int(raw: str, lower: int, upper: int) -> set[int]:
     val = int(raw)
     if val < lower or val > upper:
@@ -236,6 +257,9 @@ def _load_trigger_policies() -> list[dict]:
                     p.trigger_mode,
                     p.debounce_minutes,
                     COALESCE(p.schedule_cron, '0 */6 * * *') AS schedule_cron,
+                    p.dataset_id,
+                    p.dataset_version_id,
+                    p.training_policy_id,
                     r.pipeline_id,
                     COALESCE(r.training_mode, 'standard') AS training_mode,
                     COALESCE(r.override_config, '{}'::jsonb) AS override_config
@@ -254,7 +278,7 @@ def _load_trigger_policies() -> list[dict]:
             rows = cur.fetchall()
     items: list[dict] = []
     for row in rows:
-        override = row[8]
+        override = row[11]
         if isinstance(override, str):
             try:
                 override = json.loads(override)
@@ -268,12 +292,59 @@ def _load_trigger_policies() -> list[dict]:
                 "trigger_mode": row[3],
                 "debounce_minutes": max(1, int(row[4] or 10)),
                 "schedule_cron": row[5] or "0 */6 * * *",
-                "pipeline_id": row[6],
-                "training_mode": (row[7] or "standard"),
+                "dataset_id": row[6],
+                "dataset_version_id": row[7],
+                "training_policy_id": row[8],
+                "pipeline_id": row[9],
+                "training_mode": (row[10] or "standard"),
                 "override_config": override if isinstance(override, dict) else {},
             }
         )
     return items
+
+
+def _merge_trigger_override_config(policy: dict) -> dict:
+    override = dict(policy.get("override_config") or {})
+    vid = str(policy.get("dataset_version_id") or "").strip()
+    pid = str(policy.get("training_policy_id") or "").strip()
+    if vid:
+        override["dataset_version_id"] = vid
+    if pid:
+        override["policy_id"] = pid
+    return override
+
+
+def _dataset_training_eligible(policy: dict) -> bool:
+    tenant_id = policy["tenant_id"]
+    project_id = policy["project_id"]
+    dataset_id = str(policy.get("dataset_id") or "").strip()
+    dataset_version_id = str(policy.get("dataset_version_id") or "").strip()
+    if not dataset_id or not dataset_version_id:
+        return True
+    query: dict[str, str] = {"dataset_version_id": dataset_version_id}
+    policy_id = str(policy.get("training_policy_id") or "").strip()
+    if policy_id:
+        query["policy_id"] = policy_id
+    qs = urllib.parse.urlencode(query)
+    path = f"/v1/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/eligibility?{qs}"
+    data = _api_get(path, timeout=15)
+    if not data:
+        return False
+    items = data.get("items") or []
+    if policy_id:
+        for row in items:
+            if str(row.get("policy_id") or "") == policy_id:
+                return bool(row.get("eligible"))
+        return False
+    model_id = str(policy.get("model_id") or "").strip()
+    if model_id:
+        for row in items:
+            row_model = str(row.get("model_id") or "").strip()
+            if not row_model or row_model == model_id:
+                if bool(row.get("eligible")):
+                    return True
+        return False
+    return any(bool(row.get("eligible")) for row in items)
 
 
 def _debounce_open(tenant_id: str, project_id: str, model_id: str, debounce_minutes: int) -> bool:
@@ -309,14 +380,15 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
     mode = str(policy.get("training_mode") or "standard").strip().lower()
     if mode not in {"quick", "standard", "full"}:
         mode = "standard"
-    override_config = policy.get("override_config") or {}
-    context = {"auto_trigger": {"model_id": model_id, "reason": reason}}
+    override_config = _merge_trigger_override_config(policy)
+    context = {"auto_trigger": {"model_id": model_id, "reason": reason}, "mlair_model_id": model_id}
     if reason == "auto_ready":
+        if not _dataset_training_eligible(policy):
+            return False
         check_body: dict = {"training_mode": mode, "override_config": override_config}
-        if isinstance(override_config, dict):
-            _vid = str(override_config.get("dataset_version_id") or "").strip()
-            if _vid:
-                check_body["dataset_version_id"] = _vid
+        vid = str(override_config.get("dataset_version_id") or "").strip()
+        if vid:
+            check_body["dataset_version_id"] = vid
         check = _api_post(
             f"/v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness",
             check_body,
@@ -334,10 +406,9 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
         "override_config": override_config,
         "context": context,
     }
-    if isinstance(override_config, dict):
-        vid = str(override_config.get("dataset_version_id") or "").strip()
-        if vid:
-            payload["dataset_version_id"] = vid
+    vid = str(override_config.get("dataset_version_id") or "").strip()
+    if vid:
+        payload["dataset_version_id"] = vid
     out = _api_post(
         f"/v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/run",
         payload,
@@ -376,6 +447,9 @@ def _process_trigger_policies() -> None:
             continue
         if mode == "schedule":
             if _cron_due(policy["schedule_cron"], now_utc):
+                if policy.get("dataset_version_id") and not _dataset_training_eligible(policy):
+                    TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="not_eligible").inc()
+                    continue
                 if not _trigger_policy_run(policy, reason="schedule"):
                     TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="api_error").inc()
             else:
