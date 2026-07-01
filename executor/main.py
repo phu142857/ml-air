@@ -33,6 +33,11 @@ TASK_DURATION_SECONDS = Histogram(
     "Executor task runtime in seconds",
     ["pipeline_id"],
 )
+TASK_USAGE_MISSING_TOTAL = Counter(
+    "mlair_executor_task_usage_missing_total",
+    "Tasks finished without resource usage when monitor enabled",
+    ["pipeline_id", "status"],
+)
 QUEUE_INFLIGHT = Gauge(
     "mlair_executor_queue_inflight",
     "Current executor inflight tasks by queue",
@@ -564,6 +569,19 @@ def main() -> None:
                 done_payload["usage_samples"] = usage_samples
             if resource_monitor_meta:
                 done_payload["resource_monitor"] = resource_monitor_meta
+            if resource_monitor_enabled() and monitor is not None:
+                has_samples = bool(usage_samples)
+                ru = resource_usage if isinstance(resource_usage, dict) else {}
+                has_ru = any(ru.get(k) for k in ("duration_ms", "cpu_time_seconds", "memory_rss_kb", "gpu_seconds"))
+                if not has_samples and not has_ru:
+                    TASK_USAGE_MISSING_TOTAL.labels(pipeline_id=pipeline_id, status=status).inc()
+                    logger.warning(
+                        "task_finished_missing_usage run_id=%s task_id=%s pipeline_id=%s status=%s",
+                        task["run_id"],
+                        task["task_id"],
+                        pipeline_id,
+                        status,
+                    )
             from otel_bootstrap import inject_w3c_carrier_on_event
 
             inject_w3c_carrier_on_event(done_payload)

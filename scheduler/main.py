@@ -245,59 +245,92 @@ def _cron_due(expr: str, now_utc: datetime) -> bool:
     )
 
 
+def _resolve_trigger_pipeline(tenant_id: str, project_id: str, model_id: str) -> tuple[str | None, str, dict]:
+    """Resolve pipeline for auto-trigger: model_pipeline_mapping first, else latest version run."""
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pipeline_id
+                FROM model_pipeline_mapping
+                WHERE tenant_id = %s AND project_id = %s AND model_id = %s
+                """,
+                (tenant_id, project_id, model_id),
+            )
+            mapped = cur.fetchone()
+            if mapped and str(mapped[0] or "").strip():
+                return str(mapped[0]).strip(), "standard", {}
+
+            cur.execute(
+                """
+                SELECT r.pipeline_id,
+                       COALESCE(r.training_mode, 'standard'),
+                       COALESCE(r.override_config, '{}'::jsonb)
+                FROM model_versions mv
+                JOIN runs r ON r.run_id = mv.run_id
+                WHERE mv.model_id = %s
+                  AND r.tenant_id = %s
+                  AND r.project_id = %s
+                ORDER BY mv.version DESC
+                LIMIT 1
+                """,
+                (model_id, tenant_id, project_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None, "standard", {}
+    override = row[2]
+    if isinstance(override, str):
+        try:
+            override = json.loads(override)
+        except Exception:
+            override = {}
+    return str(row[0]), str(row[1] or "standard"), override if isinstance(override, dict) else {}
+
+
 def _load_trigger_policies() -> list[dict]:
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT
-                    p.tenant_id,
-                    p.project_id,
-                    p.model_id,
-                    p.trigger_mode,
-                    p.debounce_minutes,
-                    COALESCE(p.schedule_cron, '0 */6 * * *') AS schedule_cron,
-                    p.dataset_id,
-                    p.dataset_version_id,
-                    p.training_policy_id,
-                    r.pipeline_id,
-                    COALESCE(r.training_mode, 'standard') AS training_mode,
-                    COALESCE(r.override_config, '{}'::jsonb) AS override_config
-                FROM model_trigger_policies p
-                JOIN LATERAL (
-                    SELECT r.pipeline_id, r.training_mode, r.override_config
-                    FROM model_versions mv
-                    JOIN runs r ON r.run_id = mv.run_id
-                    WHERE mv.model_id = p.model_id
-                    ORDER BY mv.version DESC
-                    LIMIT 1
-                ) r ON TRUE
-                WHERE p.trigger_mode IN ('auto_ready', 'schedule')
+                SELECT tenant_id, project_id, model_id, trigger_mode, debounce_minutes,
+                       COALESCE(schedule_cron, '0 */6 * * *'),
+                       dataset_id, dataset_version_id, training_policy_id
+                FROM model_trigger_policies
+                WHERE trigger_mode IN ('auto_ready', 'schedule')
                 """
             )
             rows = cur.fetchall()
     items: list[dict] = []
     for row in rows:
-        override = row[11]
-        if isinstance(override, str):
-            try:
-                override = json.loads(override)
-            except Exception:
-                override = {}
+        tenant_id = row[0]
+        project_id = row[1]
+        model_id = row[2]
+        mode = str(row[3] or "unknown")
+        pipeline_id, training_mode, override_config = _resolve_trigger_pipeline(tenant_id, project_id, model_id)
+        if not pipeline_id:
+            TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="no_pipeline").inc()
+            logger.info(
+                "trigger_policy_skip_no_pipeline tenant_id=%s project_id=%s model_id=%s",
+                tenant_id,
+                project_id,
+                model_id,
+            )
+            continue
         items.append(
             {
-                "tenant_id": row[0],
-                "project_id": row[1],
-                "model_id": row[2],
+                "tenant_id": tenant_id,
+                "project_id": project_id,
+                "model_id": model_id,
                 "trigger_mode": row[3],
                 "debounce_minutes": max(1, int(row[4] or 10)),
                 "schedule_cron": row[5] or "0 */6 * * *",
                 "dataset_id": row[6],
                 "dataset_version_id": row[7],
                 "training_policy_id": row[8],
-                "pipeline_id": row[9],
-                "training_mode": (row[10] or "standard"),
-                "override_config": override if isinstance(override, dict) else {},
+                "pipeline_id": pipeline_id,
+                "training_mode": training_mode,
+                "override_config": override_config,
             }
         )
     return items
@@ -372,7 +405,26 @@ def _debounce_open(tenant_id: str, project_id: str, model_id: str, debounce_minu
     return elapsed >= (max(1, debounce_minutes) * 60)
 
 
-def _trigger_policy_run(policy: dict, reason: str) -> bool:
+def _record_trigger_attempt(policy: dict, outcome: str, skip_reason: str | None = None) -> None:
+    tenant_id = policy["tenant_id"]
+    project_id = policy["project_id"]
+    model_id = policy["model_id"]
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE model_trigger_policies
+                SET last_trigger_attempt_at = NOW(),
+                    last_trigger_outcome = %s,
+                    last_skip_reason = %s,
+                    updated_at = NOW()
+                WHERE tenant_id = %s AND project_id = %s AND model_id = %s
+                """,
+                (outcome, skip_reason, tenant_id, project_id, model_id),
+            )
+
+
+def _trigger_policy_run(policy: dict, reason: str) -> tuple[bool, str]:
     tenant_id = policy["tenant_id"]
     project_id = policy["project_id"]
     pipeline_id = policy["pipeline_id"]
@@ -384,7 +436,14 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
     context = {"auto_trigger": {"model_id": model_id, "reason": reason}, "mlair_model_id": model_id}
     if reason == "auto_ready":
         if not _dataset_training_eligible(policy):
-            return False
+            logger.info(
+                "trigger_policy_skip_not_eligible tenant_id=%s project_id=%s model_id=%s dataset_version_id=%s",
+                tenant_id,
+                project_id,
+                model_id,
+                override_config.get("dataset_version_id"),
+            )
+            return False, "not_eligible"
         check_body: dict = {"training_mode": mode, "override_config": override_config}
         vid = str(override_config.get("dataset_version_id") or "").strip()
         if vid:
@@ -395,7 +454,7 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
             timeout=15,
         )
         if not check or not bool(check.get("ready")):
-            return False
+            return False, "gate_blocked"
     idem = f"auto:{model_id}:{reason}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
     payload = {
         "pipeline_id": pipeline_id,
@@ -424,8 +483,8 @@ def _trigger_policy_run(policy: dict, reason: str) -> bool:
             model_id,
             reason,
         )
-        return True
-    return False
+        return True, "triggered"
+    return False, "api_error"
 
 
 def _process_trigger_policies() -> None:
@@ -440,18 +499,28 @@ def _process_trigger_policies() -> None:
             debounce_minutes=policy["debounce_minutes"],
         ):
             TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="debounce").inc()
+            _record_trigger_attempt(policy, "skipped", "debounce")
             continue
         if mode == "auto_ready":
-            if not _trigger_policy_run(policy, reason="auto_ready"):
-                TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="not_ready_or_api_error").inc()
+            ok, skip_reason = _trigger_policy_run(policy, reason="auto_ready")
+            if ok:
+                _record_trigger_attempt(policy, "triggered", None)
+            else:
+                TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason=skip_reason).inc()
+                _record_trigger_attempt(policy, "skipped", skip_reason)
             continue
         if mode == "schedule":
             if _cron_due(policy["schedule_cron"], now_utc):
                 if policy.get("dataset_version_id") and not _dataset_training_eligible(policy):
                     TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="not_eligible").inc()
+                    _record_trigger_attempt(policy, "skipped", "not_eligible")
                     continue
-                if not _trigger_policy_run(policy, reason="schedule"):
-                    TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="api_error").inc()
+                ok, skip_reason = _trigger_policy_run(policy, reason="schedule")
+                if ok:
+                    _record_trigger_attempt(policy, "triggered", None)
+                else:
+                    TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason=skip_reason).inc()
+                    _record_trigger_attempt(policy, "skipped", skip_reason)
             else:
                 TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="cron_not_due").inc()
 

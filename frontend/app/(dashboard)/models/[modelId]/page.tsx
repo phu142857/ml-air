@@ -718,6 +718,21 @@ export default function ModelDetailPage() {
               </>
             ) : null}
           </div>
+          {triggerPolicyQuery.data?.last_trigger_attempt_at ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              Last auto-trigger:{" "}
+              <span className="text-foreground">
+                {formatDateTimeCompact(triggerPolicyQuery.data.last_trigger_attempt_at)}
+              </span>
+              {" · "}
+              <span className="text-foreground">{triggerPolicyQuery.data.last_trigger_outcome || "—"}</span>
+              {triggerPolicyQuery.data.last_skip_reason ? (
+                <>
+                  {" · "}skip: <span className="text-foreground">{triggerPolicyQuery.data.last_skip_reason}</span>
+                </>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-2 flex items-center gap-2">
             <Button
               className="rounded-lg px-3 py-1 text-xs"

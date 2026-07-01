@@ -9,6 +9,7 @@ Run MLAir next to your application stack **without** git-submoduling this reposi
 1. **Pin images by digest or SemVer tag** from your registry (for example `ghcr.io/<org>/ml-air-api:v0.4.0`). Build tags via this repo’s `publish-images` workflow or your own CI.
 2. **Keep configuration in your compose or Helm values** only:
    - `ML_AIR_DATABASE_URL`, `ML_AIR_REDIS_URL`, secrets, ports
+   - **`ML_AIR_DOCKER_IMAGE`** — auto-wired from your pinned API image ref (see [Run environment capture](./run-environment.md))
    - **`NEXT_PUBLIC_API_BASE_URL`** for the frontend image must match what browsers use to reach the API (set at **image build time**, not only container env).
    - Optional: **`MLAIR_MODEL_PROMOTE_*`** on the API if you notify an external executor on promote.
 3. **Do not** mount `./ml-air` from a monorepo sibling into MLAir containers. Treat MLAir as a **dependency service**, like Postgres or Redis.

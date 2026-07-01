@@ -699,6 +699,99 @@ def get_run_usage_bundle(run_id: str) -> dict[str, Any]:
     }
 
 
+def list_run_usage_samples(
+    *,
+    run_id: str,
+    task_id: str | None = None,
+    limit: int = 500,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """Paginated CPU/RAM/GPU timeline samples for a run (joined via tasks)."""
+    rid = str(run_id or "").strip()
+    enabled = usage_tracking_enabled()
+    if not enabled:
+        return {
+            "run_id": rid,
+            "task_id": task_id,
+            "enabled": False,
+            "samples": [],
+            "next_cursor": None,
+            "count": 0,
+        }
+    if not rid:
+        return {
+            "run_id": "",
+            "task_id": task_id,
+            "enabled": True,
+            "samples": [],
+            "next_cursor": None,
+            "count": 0,
+        }
+
+    lim = max(1, min(2000, int(limit)))
+    after_id: int | None = None
+    if cursor:
+        try:
+            after_id = int(str(cursor).strip())
+        except ValueError:
+            after_id = None
+    tid_filter = str(task_id or "").strip() or None
+
+    params: list[Any] = [rid]
+    clauses = ["t.run_id = %s"]
+    if tid_filter:
+        clauses.append("s.task_id = %s")
+        params.append(tid_filter)
+    if after_id is not None:
+        clauses.append("s.id > %s")
+        params.append(after_id)
+    params.append(lim + 1)
+
+    sql = f"""
+        SELECT s.id, s.task_id, s.sampled_at, s.cpu_percent, s.memory_mb,
+               s.gpu_util_percent, s.gpu_memory_mb
+        FROM task_usage_samples s
+        INNER JOIN tasks t ON t.task_id = s.task_id
+        WHERE {" AND ".join(clauses)}
+        ORDER BY s.sampled_at ASC, s.id ASC
+        LIMIT %s
+    """
+
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall()
+
+    has_more = len(rows) > lim
+    if has_more:
+        rows = rows[:lim]
+
+    samples: list[dict[str, Any]] = []
+    for row in rows:
+        sampled_at = row[2]
+        samples.append(
+            {
+                "id": int(row[0]),
+                "task_id": str(row[1]),
+                "sampled_at": sampled_at.isoformat() if hasattr(sampled_at, "isoformat") else str(sampled_at),
+                "cpu_percent": float(row[3]) if row[3] is not None else None,
+                "memory_mb": float(row[4]) if row[4] is not None else None,
+                "gpu_util_percent": float(row[5]) if row[5] is not None else None,
+                "gpu_memory_mb": float(row[6]) if row[6] is not None else None,
+            }
+        )
+
+    next_cursor = str(samples[-1]["id"]) if has_more and samples else None
+    return {
+        "run_id": rid,
+        "task_id": tid_filter,
+        "enabled": True,
+        "samples": samples,
+        "next_cursor": next_cursor,
+        "count": len(samples),
+    }
+
+
 def _stat_agg_select() -> str:
     return ", ".join(
         [

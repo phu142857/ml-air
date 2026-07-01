@@ -59,7 +59,8 @@ def get_trigger_policy(tenant_id: str, project_id: str, model_id: str) -> dict:
                 """
                 SELECT trigger_mode, debounce_minutes, schedule_cron,
                        dataset_id, dataset_version_id, training_policy_id,
-                       created_at, updated_at
+                       created_at, updated_at,
+                       last_trigger_attempt_at, last_trigger_outcome, last_skip_reason
                 FROM model_trigger_policies
                 WHERE tenant_id = %s AND project_id = %s AND model_id = %s
                 """,
@@ -77,6 +78,9 @@ def get_trigger_policy(tenant_id: str, project_id: str, model_id: str) -> dict:
             "dataset_id": None,
             "dataset_version_id": None,
             "training_policy_id": None,
+            "last_trigger_attempt_at": None,
+            "last_trigger_outcome": None,
+            "last_skip_reason": None,
             "source": "default",
         }
     return {
@@ -91,6 +95,9 @@ def get_trigger_policy(tenant_id: str, project_id: str, model_id: str) -> dict:
         "training_policy_id": row[5],
         "created_at": row[6].isoformat(),
         "updated_at": row[7].isoformat(),
+        "last_trigger_attempt_at": row[8].isoformat() if row[8] else None,
+        "last_trigger_outcome": row[9],
+        "last_skip_reason": row[10],
         "source": "stored",
     }
 

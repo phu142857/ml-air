@@ -36,3 +36,18 @@ def get_project_usage_bundle(
 
 def get_tenant_usage_bundle(*, tenant_id: str, days: int | None = 30) -> dict[str, Any]:
     return usage_cost.get_tenant_usage_bundle(tenant_id=tenant_id, days=days)
+
+
+def list_run_usage_samples(
+    *,
+    run_id: str,
+    task_id: str | None = None,
+    limit: int = 500,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    return usage_cost.list_run_usage_samples(
+        run_id=run_id,
+        task_id=task_id,
+        limit=limit,
+        cursor=cursor,
+    )

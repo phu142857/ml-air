@@ -23,6 +23,7 @@ export const mlairKeys = {
     logsInfinite: (runId: string) => ["run-logs", runId, "infinite"] as const,
     tracking: (runId: string) => ["run-tracking", runId] as const,
     usage: (runId: string) => ["run-usage", runId] as const,
+    usageSamples: (runId: string, taskId: string) => ["run-usage-samples", runId, taskId] as const,
     readiness: (runId: string) => ["run-readiness", runId] as const
   },
   task: {

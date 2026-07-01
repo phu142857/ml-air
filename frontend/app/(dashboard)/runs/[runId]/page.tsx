@@ -17,6 +17,7 @@ import {
   Network,
   ListTodo,
   Activity,
+  Cpu,
   FileDown,
 } from "lucide-react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
@@ -27,6 +28,7 @@ import { JaegerLink } from "@/components/mlops/jaeger-link"
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { RunTasksUsageTable } from "@/components/mlops/run-tasks-usage-table"
+import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import {
@@ -62,6 +64,7 @@ import {
   fetchRunTasks,
   fetchRunTracking,
   fetchRunUsage,
+  fetchRunUsageSamples,
   fetchRunReadiness,
   cancelRun,
   normalizeProjectId,
@@ -84,6 +87,7 @@ import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
+import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
 
 const RUN_USAGE_LIVE_REFRESH_MS = 1000
 const ACTIVE_RUN_REFETCH_MS = 4000
@@ -92,6 +96,7 @@ const RUN_TABS = [
   { id: "overview", label: "Overview" },
   { id: "graph", label: "Execution graph", icon: <Network className="h-3.5 w-3.5" /> },
   { id: "tasks", label: "Tasks & resources", icon: <ListTodo className="h-3.5 w-3.5" /> },
+  { id: "resources", label: "Resources", icon: <Cpu className="h-3.5 w-3.5" /> },
   { id: "logs", label: "Logs", icon: <Terminal className="h-3.5 w-3.5" /> },
   { id: "metrics", label: "Metrics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
   { id: "artifacts", label: "Artifacts", icon: <FileBox className="h-3.5 w-3.5" /> },
@@ -102,6 +107,7 @@ const RUN_TAB_SKELETON: Record<string, "grid" | "table" | "terminal" | "chart"> 
   overview: "grid",
   graph: "grid",
   tasks: "table",
+  resources: "chart",
   logs: "terminal",
   metrics: "chart",
   artifacts: "table",
@@ -249,6 +255,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const [tab, setTab] = useState("overview")
   const isTabLoading = useTabLoading(tab)
   const chartTheme = useChartTheme()
+  const grafanaUiUrl = useGrafanaUiUrl()
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
 
@@ -313,6 +320,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   )
 
   const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
+  const [resourceTaskId, setResourceTaskId] = useState<string>("all")
 
   const trackingQuery = useQuery({
     queryKey: mlairKeys.run.tracking(runId),
@@ -330,6 +338,21 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     enabled: enabled && Boolean(runQuery.data),
     refetchOnMount: "always",
     refetchInterval: () => usageLiveRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
+    retry: false,
+  })
+
+  const usageSamplesQuery = useQuery({
+    queryKey: mlairKeys.run.usageSamples(runId, resourceTaskId),
+    queryFn: () =>
+      fetchRunUsageSamples(tenantId, projectId, runId, token, {
+        taskId: resourceTaskId === "all" ? undefined : resourceTaskId,
+        limit: 1000,
+      }),
+    enabled: enabled && Boolean(runQuery.data) && tab === "resources",
+    refetchOnMount: "always",
+    refetchInterval: () =>
+      tab === "resources" ? usageLiveRefetchMs(runQuery.data?.status) || false : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -501,6 +524,33 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     return items
   }, [run, canScope, tenantId, projectId, status.label, traceId])
 
+  const runEnvironmentMetadataItems = useMemo(() => {
+    const env = run?.environment
+    if (!env || typeof env !== "object") return []
+    const git = env.git
+    const gitLabel =
+      git?.commit != null
+        ? `${git.commit?.slice(0, 12) ?? "—"}${git.branch ? ` (${git.branch})` : ""}${git.dirty ? " *" : ""}${git.source === "build" ? " [build]" : ""}`
+        : "unavailable"
+    return [
+      { label: "Captured at", value: env.captured_at ? formatDateTimeCompact(env.captured_at) : "—", mono: true },
+      { label: "Capturer", value: env.capturer ?? env.service_name ?? "—" },
+      { label: "Deployment", value: env.ml_air_environment ?? "—" },
+      { label: "Runtime", value: env.runtime_kind ?? "—" },
+      { label: "Python", value: env.python_version ?? "—", mono: true },
+      { label: "Platform", value: env.platform ?? "—" },
+      { label: "Machine", value: env.machine ?? "—", mono: true },
+      { label: "CPU cores", value: env.cpu_count != null ? String(env.cpu_count) : "—" },
+      { label: "Memory", value: env.memory_total_mb != null ? `${env.memory_total_mb} MB` : "—" },
+      { label: "CUDA", value: env.cuda_version ?? "—", mono: true },
+      { label: "GPU", value: env.gpu_name ?? "—" },
+      { label: "Docker image", value: env.docker_image ?? "—", mono: true },
+      { label: "Git", value: gitLabel, mono: true },
+      { label: "Packages digest", value: env.python_packages_digest ?? "—", mono: true },
+      { label: "Seed", value: env.random_seed ?? "—", mono: true },
+    ]
+  }, [run?.environment])
+
   if (runQuery.isFetched && !runQuery.isLoading && !run && !runQuery.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -662,6 +712,12 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   <MetadataGrid columns={2} items={runOverviewMetadataItems} />
                 </DetailSection>
 
+                {runEnvironmentMetadataItems.length > 0 ? (
+                  <DetailSection title="Environment" accentBorder="sky">
+                    <MetadataGrid columns={2} items={runEnvironmentMetadataItems} />
+                  </DetailSection>
+                ) : null}
+
                 {readinessQuery.isSuccess && gateResults.length > 0 ? (
                   <DetailSection
                     title="Readiness gates"
@@ -709,6 +765,27 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   runId={runId}
                   usageEnabled={usageQuery.data?.enabled ?? true}
                   usageLoading={usageQuery.isLoading}
+                />
+              )}
+            </DetailSection>
+          </RunTabPanel>
+        </TabsContent>
+
+        <TabsContent value="resources" className={tabPanelScrollClassName()}>
+          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.resources}>
+            <DetailSection title="Resource timeline" accentBorder="sky">
+              {usageSamplesQuery.isError ? (
+                <p className="text-sm text-red-300">{formatApiClientError(usageSamplesQuery.error)}</p>
+              ) : (
+                <RunResourceTimeline
+                  tasks={tasks}
+                  samples={usageSamplesQuery.data?.samples ?? []}
+                  usageByTaskId={usageByTaskId}
+                  selectedTaskId={resourceTaskId}
+                  onTaskChange={setResourceTaskId}
+                  loading={usageSamplesQuery.isLoading}
+                  enabled={usageSamplesQuery.data?.enabled ?? usageQuery.data?.enabled ?? true}
+                  grafanaUiUrl={grafanaUiUrl}
                 />
               )}
             </DetailSection>

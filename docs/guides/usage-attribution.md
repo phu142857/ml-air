@@ -43,7 +43,17 @@ The executor needs **`ML_AIR_DATABASE_URL`** for periodic flush (set in quicksta
 
 ## External workers
 
-When `ML_AIR_TASK_EXECUTION_MODE=external`, MLAir cannot read processes on the worker host. Use the lease worker API and the shared SDK:
+When `ML_AIR_TASK_EXECUTION_MODE=external`, MLAir cannot read processes on the worker host. Use **`sdk.start_run`** (recommended) or the lease worker API:
+
+```python
+from sdk import start_run, post_task_complete_from_bundle
+
+with start_run(task_id=task_id, run_id=run_id, flush_interval_seconds=0) as run:
+    train()
+post_task_complete_from_bundle(task_id, worker_id=worker_id, usage_bundle=run.complete_bundle())
+```
+
+Lower-level API (same contract):
 
 ```python
 from sdk.resource_monitor import ResourceMonitor
@@ -52,6 +62,8 @@ with ResourceMonitor(task_id=task_id, flush_interval_seconds=0) as monitor:
     run_training()
 payload = monitor.complete_bundle()  # resource_usage + usage_samples
 ```
+
+Reference worker: [`scripts/external_worker_example.py`](../../scripts/external_worker_example.py).
 
 See [Resource Usage Contract v1](./resource-usage-contract-v1.md) and [External worker execution](./external-worker-execution.md).
 

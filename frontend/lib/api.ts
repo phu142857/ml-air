@@ -91,6 +91,36 @@ export type RunItem = {
   config_snapshot?: Record<string, unknown> | null;
   training_mode?: string;
   override_config?: Record<string, unknown> | null;
+  environment?: RunEnvironment | null;
+};
+
+export type RunEnvironment = {
+  captured_at?: string;
+  capturer?: string;
+  python_version?: string;
+  python_implementation?: string;
+  platform?: string;
+  hostname?: string;
+  machine?: string;
+  processor?: string;
+  cpu_count?: number;
+  memory_total_mb?: number;
+  timezone?: string;
+  runtime_kind?: string;
+  ml_air_environment?: string;
+  service_name?: string;
+  cuda_version?: string;
+  gpu_name?: string;
+  docker_image?: string;
+  python_packages_digest?: string;
+  random_seed?: string;
+  git?: {
+    commit?: string | null;
+    branch?: string | null;
+    dirty?: boolean | null;
+    root?: string | null;
+    source?: string | null;
+  };
 };
 
 export type TaskItem = {
@@ -252,6 +282,25 @@ export type RunUsageBundle = {
   tasks: TaskUsageRecord[];
   live?: TaskLiveUsage[];
   enabled: boolean;
+};
+
+export type UsageSamplePoint = {
+  id: number;
+  task_id: string;
+  sampled_at: string;
+  cpu_percent?: number | null;
+  memory_mb?: number | null;
+  gpu_util_percent?: number | null;
+  gpu_memory_mb?: number | null;
+};
+
+export type RunUsageSamplesBundle = {
+  run_id: string;
+  task_id?: string | null;
+  enabled: boolean;
+  samples: UsageSamplePoint[];
+  next_cursor?: string | null;
+  count: number;
 };
 
 export type TaskUsageBundle = {
@@ -1538,6 +1587,31 @@ export async function fetchRunUsage(tenantId: string, projectId: string, runId: 
   return data as RunUsageBundle;
 }
 
+export async function fetchRunUsageSamples(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+  opts?: { taskId?: string; limit?: number; cursor?: string },
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const params = new URLSearchParams();
+  if (opts?.taskId) params.set("task_id", opts.taskId);
+  if (opts?.limit != null) params.set("limit", String(opts.limit));
+  if (opts?.cursor) params.set("cursor", opts.cursor);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/usage-samples${qs}`,
+    {
+      headers: authHeaders(token),
+      cache: "no-store",
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as RunUsageSamplesBundle;
+}
+
 export async function fetchTaskUsage(
   tenantId: string,
   projectId: string,
@@ -2662,6 +2736,9 @@ export async function fetchModelTriggerPolicy(tenantId: string, projectId: strin
     dataset_id?: string | null;
     dataset_version_id?: string | null;
     training_policy_id?: string | null;
+    last_trigger_attempt_at?: string | null;
+    last_trigger_outcome?: string | null;
+    last_skip_reason?: string | null;
   };
 }
 

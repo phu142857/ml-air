@@ -2,7 +2,9 @@
 
 **MLAir is a lifecycle operating system for ML** — dataset version → readiness → gated run → model governance. Docs are task-oriented and production-first (action, runnable commands, minimal theory upfront).
 
-**Positioning:** [One-pager](./MLAIR-one-pager.md) · [Paper abstract framing](./positioning/paper-abstract-framing.md) · [Case studies (MLAir path vs baseline)](./guides/case-study-mlair-only-path.md)
+**Positioning:** [One-pager](./MLAIR-one-pager.md) · [Case studies (MLAir path vs baseline)](./guides/case-study-mlair-only-path.md)
+
+Paper drafts (abstract framing, evaluation notes) live in local `paper-writing/` at the repo root — **gitignored**, not on GitHub. LaTeX source: `PhuNT_NhatTM_May2026_Paper/` (sibling folder).
 
 ## Documentation Philosophy
 
@@ -47,6 +49,8 @@ Each guide follows:
 - [Task execution mode (internal vs external)](./concepts/task-execution-mode.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)
 - [Resource usage attribution](./guides/usage-attribution.md)
+- [Run environment capture (reproducibility snapshot)](./guides/run-environment.md)
+- [Resource timeline (run detail)](./guides/monitor-run.md#resource-timeline-chart)
 - [Resource Usage Contract v1](./guides/resource-usage-contract-v1.md)
 - [Configure Data Readiness and Gating](./guides/configure-data-readiness-gating.md)
 - [Monitor a Run](./guides/monitor-run.md)

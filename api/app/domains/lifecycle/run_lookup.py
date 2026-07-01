@@ -10,7 +10,7 @@ from app.domains.shared.db_service import db_conn
 _RUN_COLUMNS = """
     run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks,
     experiment_id, pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name,
-    plugin_context, created_at, updated_at, override_config, training_mode
+    plugin_context, created_at, updated_at, override_config, training_mode, environment
 """
 
 
@@ -44,6 +44,7 @@ def _row_to_run(row: tuple) -> dict[str, Any]:
         "updated_at": row[16],
         "override_config": _parse_json_field(row[17]) or {},
         "training_mode": row[18],
+        "environment": _parse_json_field(row[19]) if len(row) > 19 else None,
     }
 
 

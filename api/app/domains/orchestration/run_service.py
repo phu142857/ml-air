@@ -58,6 +58,13 @@ def _row_to_run(row: tuple) -> dict:
             ovrd = json.loads(ovrd)
         except Exception:
             ovrd = None
+    env = row[19] if len(row) > 19 else None
+    if isinstance(env, str):
+        import json
+        try:
+            env = json.loads(env)
+        except Exception:
+            env = None
     return {
         "run_id": row[0],
         "tenant_id": row[1],
@@ -78,6 +85,7 @@ def _row_to_run(row: tuple) -> dict:
         "updated_at": row[16].isoformat(),
         "training_mode": row[18] or "full",
         "override_config": ovrd if isinstance(ovrd, dict) else (ovrd or {}),
+        "environment": env if isinstance(env, dict) else (env or None),
     }
 
 
@@ -85,7 +93,7 @@ def _select_run_columns() -> str:
     return """
         run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id,
         pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context,
-        created_at, updated_at, override_config, training_mode
+        created_at, updated_at, override_config, training_mode, environment
     """
 
 
@@ -154,6 +162,15 @@ def create_run(
     if mode not in {"quick", "standard", "full"}:
         mode = "full"
 
+    run_environment: dict | None = None
+    try:
+        from sdk.environment import collect_environment
+
+        run_environment = collect_environment(capturer="mlair-api")
+    except Exception:
+        logger.exception("run_environment_capture_failed")
+        run_environment = None
+
     with db_conn() as conn:
         with conn.cursor() as cur:
             if idempotency_key:
@@ -182,9 +199,9 @@ def create_run(
                 INSERT INTO runs(
                     run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id,
                     pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context,
-                    override_config, training_mode
+                    override_config, training_mode, environment
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING {_select_run_columns()}
                 """,
                 (
@@ -205,6 +222,7 @@ def create_run(
                     Json(pctx) if pctx else None,
                     Json(ovrd_cfg) if ovrd_cfg else None,
                     mode,
+                    Json(run_environment) if run_environment else None,
                 ),
             )
             created = cur.fetchone()

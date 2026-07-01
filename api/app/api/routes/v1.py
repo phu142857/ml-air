@@ -1836,6 +1836,29 @@ def get_run_usage_v1(
     return usage_service.get_run_usage_bundle(run_id)
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/usage-samples")
+def get_run_usage_samples_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    task_id: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    return usage_service.list_run_usage_samples(
+        run_id=run_id,
+        task_id=task_id,
+        limit=limit,
+        cursor=cursor,
+    )
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/usage")
 def get_project_usage_v1(
     tenant_id: str,
