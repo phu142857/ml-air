@@ -19,9 +19,9 @@ BASE = os.getenv("ML_AIR_BASE_URL", os.getenv("ML_AIR_API_BASE_URL", "http://127
 TENANT = os.getenv("ML_AIR_TENANT_ID", "default")
 PROJECT = os.getenv("ML_AIR_PROJECT_ID", "default_project")
 TOKEN = os.getenv("ML_AIR_TRACKING_TOKEN", os.getenv("MLAIR_API_TOKEN", "admin-token"))
-RUN_ID = (os.getenv("MLAIR_VERIFY_RUN_ID") or os.getenv("YOLO_RUN_ID") or "").strip()
-MIN_SAMPLES = int(os.getenv("MLAIR_VERIFY_MIN_SAMPLES", os.getenv("YOLO_MIN_SAMPLES", "10")))
-REQUIRE_GPU = os.getenv("MLAIR_VERIFY_REQUIRE_GPU", os.getenv("YOLO_REQUIRE_GPU", "0")).strip() not in {
+RUN_ID = (os.getenv("MLAIR_VERIFY_RUN_ID") or "").strip()
+MIN_SAMPLES = int(os.getenv("MLAIR_VERIFY_MIN_SAMPLES", "10"))
+REQUIRE_GPU = os.getenv("MLAIR_VERIFY_REQUIRE_GPU", "0").strip() not in {
     "0",
     "false",
     "False",
@@ -115,7 +115,7 @@ def main() -> int:
     else:
         ok(f"2.1: {len(samples)} usage samples")
 
-    model_id = (os.getenv("MLAIR_VERIFY_MODEL_ID") or os.getenv("YOLO_MODEL_ID") or "").strip()
+    model_id = (os.getenv("MLAIR_VERIFY_MODEL_ID") or "").strip()
     if model_id:
         c, prov = req("GET", f"{prefix}/models/{model_id}/provenance")
         if c != 200:
@@ -126,9 +126,9 @@ def main() -> int:
             fail("model provenance missing run hop")
         ok(f"2.3: model {model_id} provenance chain ({prov.get('run', {}).get('run_id')})")
 
-    dataset_id = (os.getenv("MLAIR_VERIFY_DATASET_ID") or os.getenv("YOLO_DATASET_ID") or "").strip()
-    from_v = (os.getenv("MLAIR_VERIFY_DIFF_FROM") or os.getenv("YOLO_DIFF_FROM") or "").strip()
-    to_v = (os.getenv("MLAIR_VERIFY_DIFF_TO") or os.getenv("YOLO_DIFF_TO") or "").strip()
+    dataset_id = (os.getenv("MLAIR_VERIFY_DATASET_ID") or "").strip()
+    from_v = (os.getenv("MLAIR_VERIFY_DIFF_FROM") or "").strip()
+    to_v = (os.getenv("MLAIR_VERIFY_DIFF_TO") or "").strip()
     if dataset_id and from_v and to_v:
         c, diff = req("GET", f"{prefix}/datasets/{dataset_id}/versions/diff?from={from_v}&to={to_v}")
         if c != 200:

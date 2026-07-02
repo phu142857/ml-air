@@ -2,8 +2,6 @@
 
 **MLAir is a lifecycle operating system for ML** — dataset version → readiness → gated run → model governance. Docs are task-oriented and production-first (action, runnable commands, minimal theory upfront).
 
-**Positioning:** [One-pager](./MLAIR-one-pager.md) · [Case studies (MLAir path vs baseline)](./guides/case-study-mlair-only-path.md)
-
 Paper drafts (abstract framing, evaluation notes) live in local `paper-writing/` at the repo root — **gitignored**, not on GitHub. LaTeX source: `PhuNT_NhatTM_May2026_Paper/` (sibling folder).
 
 ## Documentation Philosophy
@@ -24,7 +22,6 @@ Each guide follows:
 
 ## Getting Started
 
-- [MLAir one-pager (stakeholders)](./MLAIR-one-pager.md)
 - [Configuration (single reference)](./configuration.md)
 - [Installation](./getting-started/installation.md)
 - [Quickstart](./getting-started/quickstart.md)
@@ -45,7 +42,6 @@ Each guide follows:
 - [Sign-off record template](./operations/signoff-record-template.md)
 - [Runbook: Legacy compatibility sunset](./runbooks/legacy-compat-sunset.md)
 - [Runbook: Production strict lifecycle (staging/prod env)](./runbooks/production-strict-lifecycle.md)
-- [Case study: MLAir-only path vs comparison baseline](./guides/case-study-mlair-only-path.md)
 - [Run a Pipeline](./guides/run-pipeline.md)
 - [Task execution mode (internal vs external)](./concepts/task-execution-mode.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)

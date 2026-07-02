@@ -50,12 +50,12 @@ class TestWorkerTaskTracking(unittest.TestCase):
     def test_persist_run_plugin_tracking(self, mock_metric: MagicMock, mock_artifact: MagicMock) -> None:
         wts._persist_run_plugin_tracking(
             run_id="run-1",
-            plugin_name="cv_yolo_train",
+            plugin_name="train",
             metrics={"mAP50": 0.91, "loss": {"value": 0.1, "step": 3}},
             artifacts=[{"path": "train/best.pt", "uri": "minio://x/best.pt"}],
         )
         mock_metric.assert_called_once()
-        self.assertEqual(mock_metric.call_args.kwargs["key"], "cv_yolo_train.mAP50")
+        self.assertEqual(mock_metric.call_args.kwargs["key"], "train.mAP50")
         self.assertEqual(mock_metric.call_args.kwargs["value"], 0.91)
         mock_artifact.assert_called_once()
         self.assertEqual(mock_artifact.call_args.kwargs["path"], "train/best.pt")

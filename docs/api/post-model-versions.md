@@ -18,7 +18,7 @@ curl -X POST \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "artifact_uri": "s3://mlair-artifacts/vet-ai/clinic-a/model_20260426_101010",
+    "artifact_uri": "s3://mlair-artifacts/example-project/model_20260426_101010",
     "stage": "staging"
   }'
 ```

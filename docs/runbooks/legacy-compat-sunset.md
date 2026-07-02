@@ -11,7 +11,7 @@ Move all environments to **version-centric** dataset and readiness behavior. **L
 - `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS=1` (set `0` only for catalogued non-dataset pipelines)
 - `ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL=0`
 
-Prod/staging **must** match [`production-strict-lifecycle.md`](./production-strict-lifecycle.md) and [`deploy/env/*-strict.env.example`](../../deploy/env/). Case studies and papers: [`case-study-mlair-only-path.md`](../guides/case-study-mlair-only-path.md).
+Prod/staging **must** match [`production-strict-lifecycle.md`](./production-strict-lifecycle.md) and [`deploy/env/*-strict.env.example`](../../deploy/env/).
 
 ---
 
@@ -58,7 +58,7 @@ Suggested dates for a **2026 Q2** cutover (adjust per org release train). Copy i
 - [ ] No sustained **`422 DATASET_VERSION_REQUIRED`** from unknown clients (see API logs).
 - [ ] Materialization produces `vN` rows on schedule ([readiness-v2-cutover](./readiness-v2-cutover.md)).
 - [ ] Execution realtime sign-off passed ([execution-realtime-ops](./execution-realtime-ops.md)).
-- [ ] Paper/docs split MLAir path vs E2 baseline ([case-study-mlair-only-path.md](../guides/case-study-mlair-only-path.md)).
+- [ ] Paper/docs split MLAir path vs E2 baseline.
 
 ---
 
@@ -100,7 +100,7 @@ Restart API after env changes. Document rollback in incident ticket; set a **re-
 
 - [x] **Prod config documented** — [`production-strict-lifecycle.md`](./production-strict-lifecycle.md) + `deploy/env/*-strict.env.example`
 - [ ] **M1 executed** — staging strict ≥ 28 days, sign-off table filled (**operator**)
-- [x] **Case study split documented** — [`case-study-mlair-only-path.md`](../guides/case-study-mlair-only-path.md) (MLAir path vs E2 baseline)
+- [x] **Case study split documented** (MLAir path vs E2 baseline)
 - [ ] **No parallel glue in ops runbooks** — operator paths use Hub `run_id` only (**operator** audit of internal runbooks)
 
 ---

@@ -1796,7 +1796,7 @@ export async function fetchModels(tenantId: string, projectId: string, token: st
       });
       const data = (await res.json().catch(() => ({}))) as { items?: ModelItem[] } | Record<string, unknown>;
       if (!res.ok) {
-        // Do not swallow 403/401 as "no models" — that hides token/scope misconfiguration for clinic projects.
+        // Do not swallow 403/401 as "no models" — that hides token/scope misconfiguration for scoped projects.
         throw new Error(JSON.stringify(data));
       }
       return data as { items: ModelItem[] };

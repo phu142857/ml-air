@@ -28,7 +28,7 @@ Trigger run → Scheduler → Redis (mlair:tasks:*) → Executor → task_finish
 
 **Required services:** `api`, `scheduler`, **`executor`**, `redis`, `postgres`. If `executor` is down, tasks stay **`RUNNING`** with no progress.
 
-**Plugin note:** `mlair_runner.py` ships **demo adapters** (`app_train_adapter`, …). Production training (YOLO, ETL, …) still runs in **internal** mode when you point the runner at your real module — see [executor/README.md](../../executor/README.md).
+**Plugin note:** `mlair_runner.py` ships **demo adapters** (`app_train_adapter`, …). Production training (your real training module, ETL, …) still runs in **internal** mode when you point the runner at your real module — see [executor/README.md](../../executor/README.md).
 
 ## External mode (`external`)
 
@@ -53,7 +53,7 @@ These are **separate** ideas:
 
 | Concept | Meaning |
 |---------|---------|
-| **Plugin** | Name of a pipeline step (`config_snapshot.tasks[].plugin`, e.g. `app_train_adapter`, `yolo_train`) |
+| **Plugin** | Name of a pipeline step (`config_snapshot.tasks[].plugin`, e.g. `app_train_adapter`, `custom_train`) |
 | **Execution mode** | Where that step’s code **runs** (MLAir executor vs your worker) |
 
 The same pipeline and plugin name can run **internally** (executor subprocess) or **externally** (worker implements the plugin capability).
@@ -73,7 +73,7 @@ The same pipeline and plugin name can run **internally** (executor subprocess) o
 
 | Scenario | Suggested mode |
 |----------|----------------|
-| Quickstart, DACN/YOLO in Compose, single stack | **internal** |
+| Quickstart, single stack in Compose | **internal** |
 | GPU farm / training service already outside MLAir | **external** |
 | Want zero worker code for usage on same host as executor | **internal** |
 

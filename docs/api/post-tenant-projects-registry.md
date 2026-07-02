@@ -6,7 +6,7 @@ Declare a **project id** for a tenant in MLAir’s **catalog** (`tenant_projects
 
 ## When to use
 
-- Onboarding a new clinic or environment where the external app already knows `project_id` but MLAir has no scoped data yet.
+- Onboarding a new project or environment where the external app already knows `project_id` but MLAir has no scoped data yet.
 - Aligning the scope switcher with control-plane mappings without waiting for the first run or sync.
 
 ## Steps
@@ -22,7 +22,7 @@ curl -sS -X POST \
   "http://localhost:8080/v1/tenants/default/projects/registry" \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"clinic_north","name":"North clinic"}'
+  -d '{"project_id":"project_north","name":"North project"}'
 ```
 
 ## Result
@@ -32,8 +32,8 @@ HTTP **200** with a small object, for example:
 ```json
 {
   "tenant_id": "default",
-  "project_id": "clinic_north",
-  "name": "North clinic"
+  "project_id": "project_north",
+  "name": "North project"
 }
 ```
 

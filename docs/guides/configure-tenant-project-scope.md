@@ -2,7 +2,7 @@
 
 ## Goal
 
-Configure scope behavior so MLAir correctly lists and filters `tenant/project` in multi-tenant deployments (including clinic-style projects from external apps such as `vet-ai`).
+Configure scope behavior so MLAir correctly lists and filters `tenant/project` in multi-tenant deployments (including projects created by external apps).
 
 ## How listing works
 
@@ -17,8 +17,8 @@ Display names: if a project is in `tenant_projects`, the API uses the stored `na
 
 1. Run database migrations so `tenant_projects` exists (`alembic upgrade head` in your deploy process).
 2. Keep operational discovery as today: sync or user activity still creates the usual scoped rows.
-3. For projects that must be selectable **before** first run/model/dataset (for example a new clinic), register them in the catalog (see **Command** below) or insert equivalent rows into `tenant_projects`.
-4. Ensure external app sync still creates scoped resources per clinic/project when activity exists (discovery continues to pick those up).
+3. For projects that must be selectable **before** first run/model/dataset (for example a new project), register them in the catalog (see **Command** below) or insert equivalent rows into `tenant_projects`.
+4. Ensure external app sync still creates scoped resources per project when activity exists (discovery continues to pick those up).
 5. Load scope in MLAir UI and verify tenant/project dropdown values.
 6. Confirm `all` behavior matches expected filtering for both tenant and project.
 
@@ -38,13 +38,13 @@ curl -sS -X POST \
   "http://localhost:8080/v1/tenants/default/projects/registry" \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"clinic_acme","name":"Clinic ACME"}'
+  -d '{"project_id":"acme_project","name":"ACME"}'
 
-# 3) Trigger sync from vet-ai to ensure clinic scopes exist
+# 3) Trigger sync from your external app to ensure its scopes exist
 curl -X POST -H "Authorization: Bearer admin-secret" \
-  "http://localhost:8000/mlair/models/sync"
+  "http://localhost:8000/your-app/models/sync"
 
-# 4) Verify tenant projects again (should include clinic_* scopes)
+# 4) Verify tenant projects again (should include the new scopes)
 curl -H "Authorization: Bearer admin-token" \
   "http://localhost:8080/v1/tenants/default/projects?limit=200"
 ```
@@ -62,15 +62,9 @@ curl -H "Authorization: Bearer admin-token" \
 
 ## Notes
 
-- In `vet-ai`, default clinic scope behavior should be dynamic per clinic:
-  - `project_id = clinic_<clinic_id_slug>`
-- Use explicit map override only for legacy migration:
-  - `MLAIR_USE_CLINIC_PROJECT_MAP=true`
-  - `MLAIR_CLINIC_PROJECT_MAP_JSON={...}`
-- Recommended defaults for new deployments:
-  - `MLAIR_MODEL_SCOPE_PER_CLINIC=true`
-  - `MLAIR_USE_CLINIC_PROJECT_MAP=false`
-  - `MLAIR_ENSURE_CLINIC_SCOPES=true`
+- MLAir does not impose a project-mapping scheme. The external app decides how it maps its own entities to `tenant_id` / `project_id`; MLAir only stores and returns those scopes (mapping flag names vary by product).
+- Prefer dynamic per-source scopes over static maps; reserve explicit map overrides for legacy migration.
+- For projects that must exist before any operational rows, register them in the catalog (`POST .../projects/registry`).
 
 ## Troubleshooting
 
@@ -82,9 +76,9 @@ curl -H "Authorization: Bearer admin-token" \
   - Verify project discovery API output next (`GET /v1/tenants/{tenant}/projects`).
   - Ensure sync has run and created tenant/project-scoped data, **or** register catalog rows for empty projects.
   - Check token scope (`tenant_id`, `project_ids`) in `whoami`.
-- **Clinic data merged into a non-clinic project (for example `risk_project`)**
-  - Disable legacy map override (`MLAIR_USE_CLINIC_PROJECT_MAP=false`).
-  - Re-sync scopes from external app.
+- **Data merged into the wrong project (for example `risk_project`)**
+  - Check the external app's own scope-mapping configuration.
+  - Re-sync scopes from the external app.
 
 ## Done
 

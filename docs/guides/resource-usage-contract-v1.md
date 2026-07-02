@@ -20,7 +20,7 @@ Legacy ingest fields (`duration_ms`, `memory_rss_kb`, `gpu_seconds`, …) remain
 
 ## Worker SDK (`sdk/resource_monitor.py`)
 
-Any Python worker (YOLO, PyTorch, TensorFlow, LLM, custom) can use the same monitor:
+Any Python worker (PyTorch, TensorFlow, LLM, custom) can use the same monitor:
 
 ```python
 from sdk.resource_monitor import ResourceMonitor

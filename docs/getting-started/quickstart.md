@@ -40,14 +40,14 @@ You should get a successful smoke run and be able to open MLAir at `http://local
 
 ## Startup Hooks (External Integrations)
 
-If your external service supports startup sync to the MLAir model registry, enable it with **that service’s own** environment flags and optional clinic/tenant mapping (names vary by product).
+If your external service supports startup sync to the MLAir model registry, enable it with **that service’s own** environment flags and optional project/tenant mapping (names vary by product).
 
 ```bash
 # Example placeholders — use your bridge’s documented variables instead
 export YOUR_APP_MLAIR_SYNC_MODELS_ON_STARTUP=true
-export MLAIR_MODEL_SCOPE_PER_CLINIC=true
-export MLAIR_CLINIC_PROJECT_MAP_JSON='{"clinic-a":"project_clinic_a"}'
-export MLAIR_CLINIC_TENANT_MAP_JSON='{"clinic-a":"default"}'
+export YOUR_APP_MODEL_SCOPE_PER_PROJECT=true
+export YOUR_APP_PROJECT_MAP_JSON='{"source-a":"project_a"}'
+export YOUR_APP_TENANT_MAP_JSON='{"source-a":"default"}'
 ```
 
 This hook should be best-effort (startup does not fail if sync fails).

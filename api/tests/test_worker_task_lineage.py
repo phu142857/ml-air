@@ -22,11 +22,11 @@ def _running_row() -> dict:
         "project_id": "default_project",
         "run_id": "run-lineage-1",
         "status": "RUNNING",
-        "leased_by": "worker-cv-1",
+        "leased_by": "worker-1",
         "attempt": 1,
-        "pipeline_id": "cv-lifecycle",
-        "plugin": "cv_yolo_detect",
-        "plugin_name": "cv_yolo_detect",
+        "pipeline_id": "example-pipeline",
+        "plugin": "detect",
+        "plugin_name": "detect",
         "plugin_context": {},
         "started_at": datetime.now(timezone.utc),
         "priority": "normal",
@@ -50,7 +50,7 @@ def _connect_ctx() -> MagicMock:
 
 
 _SAMPLE_LINEAGE = {
-    "inputs": [{"name": "cv-traffic-frames", "version": "v2", "source_type": "csv_import"}],
+    "inputs": [{"name": "example-dataset", "version": "v2", "source_type": "csv_import"}],
     "outputs": [
         {"name": "detected", "version": "v1", "source_type": "csv_import"},
         {"name": "not-detected", "version": "v1", "source_type": "csv_import"},

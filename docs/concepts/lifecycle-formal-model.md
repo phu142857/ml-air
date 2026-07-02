@@ -6,17 +6,19 @@ Engineering contract derived from shipped MLAir behavior. **Not** a machine-chec
 
 ## Entities
 
-| Symbol | Domain | Persistent store |
-| --- | --- | --- |
-| `D` | Dataset (logical name per tenant/project) | `datasets` |
-| `V` | Dataset version (immutable snapshot) | `dataset_versions` |
-| `B` | Accumulation buffer | `dataset_buffers` |
-| `P` | Readiness policy | policy config + eval rows |
-| `R` | Readiness evaluation | `dataset_readiness_evaluations` |
-| `M` | Model | `models` |
-| `MV` | Model version | `model_versions` |
-| `Run` | Execution run | `runs` |
-| `Task` | DAG task instance | `tasks` |
+Each entity maps to at least one API field (response body / query param) and a DB column, so reviewers can trace a symbol from spec → HTTP surface → storage.
+
+| Symbol | Domain | API field (≥1) | Persistent store (column) |
+| --- | --- | --- | --- |
+| `D` | Dataset (logical name per tenant/project) | `dataset_id`, `name` (`GET .../datasets`) | `datasets.id`, `datasets.name` |
+| `V` | Dataset version (immutable snapshot) | `dataset_version_id`, `version`, `checksum`, `record_count` (`GET .../datasets/{id}/versions`) | `dataset_versions.id`, `dataset_versions.version` |
+| `B` | Accumulation buffer | `current_size`, `target_threshold` (`GET .../datasets/{id}/buffer`) | `dataset_buffers.current_size`, `dataset_buffers.target_threshold` |
+| `P` | Readiness / training policy | `policy_id`, `required_size` (`GET\|PUT .../training-policies`) | policy config JSON + eval rows |
+| `R` | Readiness evaluation | `status`, `reasons[]`, `canonical_code` (`GET .../readiness`, `POST .../readiness/evaluate`) | `dataset_readiness_evaluations.status`, `.result` |
+| `M` | Model | `model_id`, `name` (`GET .../models`) | `models.id`, `models.name` |
+| `MV` | Model version | `version`, `stage`, `approval_status` (`GET .../models/{id}/versions`) | `model_versions.version`, `.stage`, `.approval_status` |
+| `Run` | Execution run | `run_id`, `status`, `environment` (`GET .../runs/{id}`) | `runs.run_id`, `runs.status`, `runs.environment` |
+| `Task` | DAG task instance | `task_id`, `status` (`GET .../runs/{id}/tasks`) | `tasks.task_id`, `tasks.status` |
 
 ## Invariants (selected)
 
@@ -59,6 +61,31 @@ eligibility(D, MV?, policy?) → { eligible_models[], blocked_models[], reasons[
 ## Event semantics (closed set v1)
 
 Canonical types are enumerated in [`realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py) and [realtime-event-envelope.md](../api/realtime-event-envelope.md).
+
+### Pre/post conditions per `EventType` (v1)
+
+Every `EventType` in `realtime_events.py` has a row. **Common precondition** (enforced in `publish_mlair_event`): non-empty `tenant_id`, `project_id`, and `type`; optional signature when `event_signing_service.signing_enabled()`; schema validation when enabled. **Common postcondition:** best-effort outbox record → Redis pub/sub publish → `schedule_deliver_semantic_webhooks`. Rows below list the *emitter-specific* pre/post beyond the common contract.
+
+| `EventType` | Emitter | Precondition (emitter-specific) | Postcondition (emitter-specific) |
+| --- | --- | --- | --- |
+| `run.created` | `emit_run_created` | Run row committed | Hub invalidates run list/detail |
+| `run.updated` | `emit_run_updated` | Run status/columns changed | Hub invalidates run detail |
+| `run.tracking.updated` | `emit_run_tracking_updated` | Task tracking (metrics/logs/artifacts) persisted | Hub polls tracking surfaces |
+| `task.updated` | `emit_task_updated` | Task row status changed | Hub invalidates task list/detail |
+| `model.promoted` | `emit_model_promoted` | Model version `stage` changed via promote | `mlair_lifecycle_model_promoted_total{stage}` inc |
+| `model.eligibility.updated` | `emit_model_eligibility_updated` | Model governance/registry change affecting eligibility | Also emits `eligibility.updated{kind:model}` |
+| `eligibility.updated` | `emit_model_eligibility_updated` / `emit_training_eligibility_updated` | Derived: emitted alongside model or training eligibility change | Hub invalidates eligibility surfaces |
+| `dataset.updated` | `emit_dataset_updated` | Dataset row/metadata mutated | Hub invalidates dataset detail |
+| `dataset.buffer.updated` | `emit_dataset_buffer_updated` | Buffer `current_size`/window changed on append | Hub invalidates buffer panel |
+| `buffer.threshold_met` | `emit_buffer_threshold_met` | `current_size` first crosses `>= target_threshold` | `mlair_lifecycle_buffer_threshold_met_total{accumulation_strategy}` inc |
+| `dataset.version.created` | `emit_dataset_version_created` | New immutable `V` committed (upload/materialize) | Hub invalidates version list |
+| `dataset.readiness.updated` | `emit_dataset_readiness_updated` | Readiness recomputed (policy or size delta) | Hub invalidates readiness tab |
+| `training.eligibility.updated` | `emit_training_eligibility_updated` | Eligibility evaluated at/around trigger | Also emits `eligibility.updated{kind:training}` |
+| `training.policy.updated` | `emit_training_policy_updated` | Dataset training policy created/upserted | Hub cache invalidation |
+| `training.triggered` | `emit_training_triggered` | Run row exists for Hub/intent train (gate may still block) | `mlair_lifecycle_training_triggered_total{blocked_by_gate,tenant_id}` inc |
+| `training.completed` | `maybe_emit_training_completed_from_run_row` | Run `SUCCESS` **and** pinned `dataset_version_id` present | `mlair_lifecycle_training_completed_total` inc |
+
+Machine-checked type ↔ schema parity: [`test_semantic_event_type_schema_parity.py`](../../api/tests/test_semantic_event_type_schema_parity.py).
 
 | Guarantee | Description |
 | --- | --- |

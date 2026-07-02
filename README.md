@@ -2,9 +2,9 @@
 
 **MLAir is a lifecycle operating system for ML** — a **governance-centric control plane** that anchors training on **immutable dataset versions**, **policy-backed readiness**, **gated runs**, and **model promotion**. **Pipelines are the execution substrate** (DAG, retries, replay), not the product story.
 
-> Not a “mini Airflow + MLflow.” Orchestration and tracking exist **inside** one **`run_id`**, version pin, and audit trail — see [case studies](docs/guides/case-study-mlair-only-path.md).
+> Not a “mini Airflow + MLflow.” Orchestration and tracking exist **inside** one **`run_id`**, version pin, and audit trail.
 
-Multi-tenant API + Next.js Hub for datasets, readiness, runs, registry, lineage, and observability. **Start here:** [one-pager](docs/MLAIR-one-pager.md) · [Hub lifecycle-first UX](docs/guides/hub-lifecycle-first.md)
+Multi-tenant API + Next.js Hub for datasets, readiness, runs, registry, lineage, and observability. **Start here:** [Hub lifecycle-first UX](docs/guides/hub-lifecycle-first.md)
 
 ---
 
@@ -310,7 +310,7 @@ Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI
 
 See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, and advanced JWT/JWKS settings.
 
-**Staging / production (Lifecycle OS):** use documented strict env — [`docs/runbooks/production-strict-lifecycle.md`](docs/runbooks/production-strict-lifecycle.md), [`deploy/env/staging-strict.env.example`](deploy/env/staging-strict.env.example), sunset milestones in [`docs/runbooks/legacy-compat-sunset.md`](docs/runbooks/legacy-compat-sunset.md). Case studies (Vet-AI, YOLO) run **only through MLAir API/Hub**; E2 Airflow+MLflow is comparison baseline — [`docs/guides/case-study-mlair-only-path.md`](docs/guides/case-study-mlair-only-path.md).
+**Staging / production (Lifecycle OS):** use documented strict env — [`docs/runbooks/production-strict-lifecycle.md`](docs/runbooks/production-strict-lifecycle.md), [`deploy/env/staging-strict.env.example`](deploy/env/staging-strict.env.example), sunset milestones in [`docs/runbooks/legacy-compat-sunset.md`](docs/runbooks/legacy-compat-sunset.md).
 
 ---
 

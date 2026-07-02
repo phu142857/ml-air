@@ -14,7 +14,6 @@ import {
   fetchModels,
   fetchPipelineVersions,
   fetchPipelines,
-  normalizeProjectId,
   type DatasetTrainingPolicy,
   type DatasetVersionItem,
 } from "@/lib/api";
@@ -47,12 +46,8 @@ type Props = {
   className?: string;
 };
 
-function buildRunContext(projectId: string, modelId?: string): Record<string, string> | undefined {
-  const scopedPid = normalizeProjectId(String(projectId || "").trim());
+function buildRunContext(modelId?: string): Record<string, string> | undefined {
   const ctx: Record<string, string> = {};
-  if (scopedPid.startsWith("clinic_")) {
-    ctx.clinic_id = scopedPid.slice("clinic_".length);
-  }
   if (modelId?.trim()) ctx.mlair_model_id = modelId.trim();
   return Object.keys(ctx).length ? ctx : undefined;
 }
@@ -250,7 +245,7 @@ export function ExecutionIntentPanel({
           idempotencyKey: `hub-train-${Date.now()}`,
           trainingMode,
           overrideConfig: policyPayload,
-          context: buildRunContext(projectId, selectedModelId),
+          context: buildRunContext(selectedModelId),
         });
         if (res.run_id) router.push(`/runs/${encodeURIComponent(res.run_id)}`);
         return;
@@ -264,7 +259,7 @@ export function ExecutionIntentPanel({
         useLatestPipelineVersion: true,
         idempotencyKey: `hub-pipeline-run-${Date.now()}`,
         overrideConfig: policyPayload,
-        context: buildRunContext(projectId),
+        context: buildRunContext(),
       });
       if (res.run_id) router.push(`/runs/${encodeURIComponent(res.run_id)}`);
     } catch (err) {

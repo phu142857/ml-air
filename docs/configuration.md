@@ -149,7 +149,7 @@ python bin/mlair doctor
 | Mode | Command | Runtime |
 |------|---------|---------|
 | **Recommended local** | `mlair serve` | Compose: api + scheduler + executor + realtime + frontend + postgres + redis |
-| **Production / Vet-AI** | Pinned ghcr images + compose | Same topology, scaled executor, HA scheduler |
+| **Production** | Pinned ghcr images + compose | Same topology, scaled executor, HA scheduler |
 | **SDK / worker only** | `pip install mlair` | `sdk.start_run`, `mlair worker` (external) |
 
 The **Python package is one wheel** (`mlair` + `sdk`). **Processes remain microservices** for scale and blast-radius — the CLI hides compose wiring.
@@ -176,7 +176,7 @@ mlair serve --profile production
 
 Equivalent to `deploy/env/production-strict.env.example`. Runbook: [Production strict lifecycle](./runbooks/production-strict-lifecycle.md).
 
-### Consume from another repo (Vet-AI)
+### Consume from another repo
 
 Keep using pinned images and `MLAIR_API_IMAGE` — no monorepo submodule. Set profile `staging` or pass env from your compose. See [Consume MLAir from Compose](./guides/consume-mlair-from-compose.md).
 

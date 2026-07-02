@@ -1,6 +1,6 @@
 # Production maturity (Phase 10)
 
-Operational hardening for MLAir core (API, scheduler, executor, Hub). Integrator apps (e.g. Vet-AI) are out of scope.
+Operational hardening for MLAir core (API, scheduler, executor, Hub). Integrator apps are out of scope.
 
 ## Signed semantic events
 

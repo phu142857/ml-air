@@ -109,6 +109,27 @@ Content-Type: application/json
 
 After a successful **`POST .../models/{model_id}/promote`**, MLAir may call a **downstream** URL you configure. Full contract (headers, JSON schema, when the call is skipped, idempotency, SLA): **[Downstream model promote webhook](./downstream-model-promote-webhook.md)**. Env summary: [Promote a model](./promote-model.md).
 
+## Auto-retrain trigger controller (scheduler)
+
+When a model has a **trigger policy** (`model_trigger_policies`), the scheduler evaluates it each tick and either fires a run or records a **skip reason**. The controller is idempotent per minute and debounced, so repeated ticks inside the window do not duplicate runs.
+
+**Debounce window τ:** `_debounce_open(...)` opens only when `elapsed >= max(1, debounce_minutes) * 60` seconds since the last attempt (`debounce_minutes` default **10**, floor **1**). Combined with a per-minute idempotency key, at most one trigger fires per model per τ window.
+
+**Eligibility:** before firing, the controller checks training eligibility for the resolved `dataset_version_id` (readiness + governance). Ineligible → skip, do not create a run.
+
+**Skip reasons** (emitted to `mlair_trigger_policy_skipped_total{mode,reason}` and persisted to `model_trigger_policies.last_skip_reason`; each matches a scheduler log line):
+
+| `skip_reason` | When | Scheduler log |
+| --- | --- | --- |
+| `no_pipeline` | Model has no resolvable pipeline mapping | `trigger_policy_skip_no_pipeline` |
+| `debounce` | Inside τ window since last attempt | (counter `reason="debounce"`) |
+| `not_eligible` | Readiness/eligibility fails for the pinned version | `trigger_policy_skip_not_eligible` |
+| `gate_blocked` | Execution gate would block the run at trigger time | (counter `reason="gate_blocked"`) |
+| `cron_not_due` | `schedule` mode and the cron window is not due | (counter `reason="cron_not_due"`) |
+| `api_error` | Trigger call to the API failed (transient) | (counter `reason="api_error"`) |
+
+On success the attempt is recorded via `_record_trigger_attempt(policy, "triggered")`, updating `last_trigger_attempt_at` / `last_outcome`. Skips call `_record_trigger_attempt(policy, "skipped", skip_reason)`.
+
 ## `plugin_context` for `POST .../runs/trigger`
 
 This object is attached to the **run** and flows to the **scheduler / worker** as part of the task payload (alongside `config_snapshot` from the pinned pipeline version). It is built **in the API** immediately after:

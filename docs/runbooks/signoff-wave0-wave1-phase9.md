@@ -2,7 +2,7 @@
 
 Copy sections into your change ticket. **Code in repo is shipped** for Wave 0/1 automation; items marked **operator** must be executed and ticked in **your** environment (staging → production).
 
-References: [execution-realtime-ops](./execution-realtime-ops.md) · [wave1-production-maturity](./wave1-production-maturity.md) · [legacy-compat-sunset](./legacy-compat-sunset.md) · [production-strict-lifecycle](./production-strict-lifecycle.md) · [case-study-mlair-only-path](../guides/case-study-mlair-only-path.md) · [ROADMAP Phase 9](../../ROADMAP.md#phase-9--research--paper-grade-formalization)
+References: [execution-realtime-ops](./execution-realtime-ops.md) · [wave1-production-maturity](./wave1-production-maturity.md) · [legacy-compat-sunset](./legacy-compat-sunset.md) · [production-strict-lifecycle](./production-strict-lifecycle.md) · [ROADMAP Phase 9](../../ROADMAP.md#phase-9--research--paper-grade-formalization)
 
 ---
 

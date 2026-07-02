@@ -8,7 +8,7 @@ Run pipelines only when required input datasets are ready, while still allowing 
 
 - **Training policy**: persisted rules for a dataset (and optionally a model), identified by `policy_id` — for example `required_size`, `freshness_hours`, `validation_rules`. Prefer policy-backed thresholds over ad-hoc per-request sizes.
 - **Readiness / training eligibility evaluation**: `GET /datasets/{dataset_id}/readiness` evaluates `(dataset_version_id + policy_id)` and returns `eligibility_status`, `eligibility_criteria` (derived read; no DB audit row). Persisted history uses `POST /datasets/{dataset_id}/readiness/evaluate` or `GET .../readiness/evaluations` to list prior rows — lifecycle-oriented, not a global “dataset.ready” flag.
-- **Pipeline input gate (execution)**: `config.inputs[]` on the **pipeline version** (for example `{ "dataset": "cv-traffic-frames", "required_size": 50 }`). Evaluated at `POST .../runs/trigger`, `POST .../pipelines/{id}/run`, and **`POST .../pipelines/{id}/evaluate-inputs`** (non-mutating preflight). When the version declares `inputs`, those rows **override** compat `override_config.inputs` stubs — Hub train no longer injects `required_size: 1`.
+- **Pipeline input gate (execution)**: `config.inputs[]` on the **pipeline version** (for example `{ "dataset": "example-dataset", "required_size": 50 }`). Evaluated at `POST .../runs/trigger`, `POST .../pipelines/{id}/run`, and **`POST .../pipelines/{id}/evaluate-inputs`** (non-mutating preflight). When the version declares `inputs`, those rows **override** compat `override_config.inputs` stubs — Hub train no longer injects `required_size: 1`.
 - **Execution gate (pipeline/run)**: same as pipeline input gate at run creation; failed runs are marked **FAILED** with `PIPELINE_INPUT_REQUIRED_SIZE_NOT_MET` / `blocking_datasets` (do not leave external tasks queued without a worker lease).
 - **Accumulation materialization target**: `target_threshold` on **`PATCH .../datasets/{dataset_id}/buffer`** (and `GET .../buffer`) controls staging “when to materialize” for supported paths — **not** the same field as **`required_size`** on a training policy (eligibility on a version).
 
@@ -17,11 +17,11 @@ Run pipelines only when required input datasets are ready, while still allowing 
 - **Dataset eligibility evaluation** (`GET /datasets/{dataset_id}/readiness`): evaluates selected `dataset_version_id` against selected `policy_id` (policy-driven training eligibility). **`ready: true` here does not imply pipeline `inputs[]` are satisfied.**
 - **Pipeline input gate** (`POST /pipelines/{pipeline_id}/evaluate-inputs` or trigger/run paths): compares each declared pipeline input dataset to `required_size` using `dataset_versions.record_count` when the pinned `dataset_version_id` belongs to that input dataset; otherwise `datasets.current_size` for the named dataset.
 
-Use dataset eligibility for lifecycle monitoring; use **evaluate-inputs** (or Hub Run / Train preflight) before starting CV/YOLO pipelines with `inputs[].required_size`.
+Use dataset eligibility for lifecycle monitoring; use **evaluate-inputs** (or Hub Run / Train preflight) before starting pipelines with `inputs[].required_size`.
 
 ### Pinning `dataset_version_id`
 
-When triggering with a version pin, the pin applies only to pipeline input rows whose resolved `dataset_id` matches that version’s dataset. Pinning an `upload` version does **not** satisfy `cv-traffic-frames: 50` in the pipeline config — the gate still reads the `cv-traffic-frames` dataset aggregate (or its own version if you pin that dataset).
+When triggering with a version pin, the pin applies only to pipeline input rows whose resolved `dataset_id` matches that version’s dataset. Pinning an `upload` version does **not** satisfy `example-dataset: 50` in the pipeline config — the gate still reads the `example-dataset` dataset aggregate (or its own version if you pin that dataset).
 
 ## Steps
 

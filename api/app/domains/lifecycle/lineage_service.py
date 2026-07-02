@@ -1675,7 +1675,7 @@ def _skip_unpinned_lineage_version_row(
     """
   When ``runtime_feedback`` omits an explicit ``version``, only the accumulation buffer
   should grow until ``snapshot_on_threshold`` materializes. Do not insert ephemeral ``vN``
-  rows on every ingest (Vet-AI feedback mirror path).
+  rows on every ingest (e.g. a feedback/accumulation mirror path).
     """
     if materialized_version_id:
         return False

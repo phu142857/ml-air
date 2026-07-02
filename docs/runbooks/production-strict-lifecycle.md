@@ -48,7 +48,7 @@ Rollback window: **≤ 14 days**, incident ticket required, re-cutover date reco
 | --- | --- | --- |
 | Strict pins | Same defaults in `docker-compose.quickstart.yml` | **Must** match this runbook |
 | Legacy fallback | Do not set `=1` in shared `.env` committed to repo | **Never** without rollback ticket |
-| Parallel glue | E2 Airflow+MLflow lab OK for **benchmark only** | **Not** daily ops — see [case study](../guides/case-study-mlair-only-path.md) |
+| Parallel glue | E2 Airflow+MLflow lab OK for **benchmark only** | **Not** daily ops |
 
 ## References
 

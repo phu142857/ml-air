@@ -18,7 +18,7 @@ curl -X POST \
   -H "Authorization: Bearer maintainer-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "vet-ai-model-clinic-a",
+    "name": "example-model",
     "description": "Registry entry synced from external app"
   }'
 ```

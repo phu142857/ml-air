@@ -85,6 +85,60 @@ class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
         mock_create_run.assert_called_once()
 
 
+class TestStrictDatasetVersionPinInvariant(unittest.TestCase):
+    """Invariant: with strict pin on (default), unpinned runs are blocked; pinned runs pass."""
+
+    @patch.dict(
+        os.environ,
+        {
+            "ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1",
+            "ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS": "1",
+        },
+        clear=False,
+    )
+    def test_all_post_runs_unpinned_blocked(self) -> None:
+        with self.assertRaises(HTTPException) as ctx:
+            v1._ensure_strict_dataset_version_for_all_post_runs_when_enabled({})
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail.get("reason"), "DATASET_VERSION_REQUIRED")
+
+    @patch.dict(
+        os.environ,
+        {
+            "ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1",
+            "ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS": "1",
+        },
+        clear=False,
+    )
+    def test_all_post_runs_pinned_allowed(self) -> None:
+        v1._ensure_strict_dataset_version_for_all_post_runs_when_enabled(
+            {"dataset_version_id": "dv-1"}
+        )
+
+    @patch.dict(
+        os.environ,
+        {"ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "0"},
+        clear=False,
+    )
+    def test_strict_off_unpinned_allowed(self) -> None:
+        v1._ensure_strict_dataset_version_for_all_post_runs_when_enabled({})
+
+    @patch.dict(
+        os.environ,
+        {"ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1"},
+        clear=False,
+    )
+    @patch(
+        "app.api.routes.v1.readiness_service.effective_declared_readiness_inputs",
+        return_value=[{"dataset": "example-dataset", "required_size": 50}],
+    )
+    def test_declared_inputs_unpinned_blocked(self, _eff) -> None:
+        with self.assertRaises(HTTPException) as ctx:
+            v1._ensure_strict_dataset_version_for_declared_inputs({}, {})
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail.get("reason"), "DATASET_VERSION_REQUIRED")
+
+
 class TestReadinessDedupeInvariant(unittest.TestCase):
     """Property: semantic-equal readiness rows match regardless of reason order."""
 
