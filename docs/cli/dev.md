@@ -1,27 +1,28 @@
-# `mlair dev up`
+# `mlair serve` (formerly `mlair dev up`)
 
 ## Goal
 
-Start local MLAir development stack.
+Start the local MLAir microservice stack with one command.
 
 ## Steps
 
-1. Ensure `.env` is present.
-2. Start services.
-3. Verify health.
+1. Install package: `pip install -e .`
+2. Run preflight: `mlair doctor`
+3. Start stack: `mlair serve`
 
 ## Command
 
 ```bash
-python ./mlair dev up
-make health
+mlair serve
+mlair serve --build
+mlair dev up          # alias
+python -m mlair serve
 ```
 
 ## Result
 
-All quickstart services are running and healthy.
-The stack is ready to execute a pipeline run with plugin tasks and lineage capture.
+Docker Compose starts API, scheduler, executor, realtime, Hub, Postgres, and Redis.
 
 ## Done
 
-Proceed to [Run command](./run.md).
+See [Configuration](../configuration.md) and [Quickstart](../getting-started/quickstart.md).

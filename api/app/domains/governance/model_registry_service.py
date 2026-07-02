@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 import os
 import re
+from typing import Any
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -1146,3 +1147,76 @@ def set_model_serving_slot(
         stage=None,
     )
     return list_model_serving_slots(model_id)
+
+
+def _dataset_version_id_from_run(run: dict[str, Any]) -> str | None:
+    for src in (
+        run.get("plugin_context") if isinstance(run.get("plugin_context"), dict) else {},
+        run.get("override_config") if isinstance(run.get("override_config"), dict) else {},
+        run,
+    ):
+        if not isinstance(src, dict):
+            continue
+        dvid = src.get("dataset_version_id")
+        if dvid and str(dvid).strip():
+            return str(dvid).strip()
+    return None
+
+
+def get_model_provenance(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    *,
+    version: int | None = None,
+) -> dict[str, Any] | None:
+    from app.domains.lifecycle import lineage_service
+    from app.domains.orchestration import run_service
+
+    model = get_model(tenant_id, project_id, model_id)
+    if not model:
+        return None
+    versions = list_model_versions(model_id)
+    if not versions:
+        return {
+            "model": model,
+            "model_version": None,
+            "run": None,
+            "dataset_version": None,
+            "lineage": None,
+        }
+    mv: dict[str, Any] | None = None
+    if version is not None:
+        for row in versions:
+            if int(row.get("version") or 0) == int(version):
+                mv = row
+                break
+        if mv is None:
+            return None
+    else:
+        mv = versions[0]
+    run_summary: dict[str, Any] | None = None
+    dataset_version: dict[str, Any] | None = None
+    lineage: dict[str, Any] | None = None
+    run_id = str(mv.get("run_id") or "").strip() if mv else ""
+    if run_id:
+        run = run_service.get_run(run_id)
+        if run and str(run.get("tenant_id")) == tenant_id and str(run.get("project_id")) == project_id:
+            run_summary = {
+                "run_id": run_id,
+                "status": run.get("status"),
+                "pipeline_id": run.get("pipeline_id"),
+                "created_at": run.get("created_at"),
+                "updated_at": run.get("updated_at"),
+            }
+            dvid = _dataset_version_id_from_run(run)
+            if dvid:
+                dataset_version = lineage_service.get_dataset_version(tenant_id, project_id, dvid)
+            lineage = lineage_service.get_lineage_for_run(tenant_id, project_id, run_id)
+    return {
+        "model": model,
+        "model_version": mv,
+        "run": run_summary,
+        "dataset_version": dataset_version,
+        "lineage": lineage,
+    }

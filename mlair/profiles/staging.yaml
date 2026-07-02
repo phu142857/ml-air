@@ -1,0 +1,21 @@
+profile: staging
+ml_air_environment: staging
+
+compose:
+  file: deploy/docker-compose.quickstart.yml
+
+features:
+  usage_tracking: true
+  resource_monitor: true
+  strict_dataset_version_required: true
+  strict_dataset_version_all_post_runs: true
+  readiness_allow_legacy_fallback: false
+  skip_approval_for_promote: false
+  warn_implicit_dataset_head: true
+  lineage_legacy_default_version_label: false
+
+observability:
+  grafana_url: http://localhost:33000
+
+auth:
+  tracking_token: admin-token

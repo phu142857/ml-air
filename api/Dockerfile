@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context: repository root (`.`).
-#   docker build -f api/Dockerfile -t ml-air-api:local .
+#   docker build -f api/Dockerfile -t ml-air-api:latest .
 ARG PYTHON_BASE_IMAGE=python:3.11-slim
 
 FROM ${PYTHON_BASE_IMAGE} AS builder

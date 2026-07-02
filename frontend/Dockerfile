@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context: repository root (`.`).
-#   docker build -f frontend/Dockerfile -t ml-air-frontend:local .
+#   docker build -f frontend/Dockerfile -t ml-air-frontend:latest .
 # Do not use context ./frontend — root package.json has no "build" script.
 FROM node:20-alpine AS deps
 
@@ -38,6 +38,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 ARG MLAIR_NEXT_INTERNAL_API_URL=http://api:8080
 ENV MLAIR_NEXT_INTERNAL_API_URL=${MLAIR_NEXT_INTERNAL_API_URL}

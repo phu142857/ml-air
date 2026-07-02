@@ -1,0 +1,27 @@
+profile: microservices
+ml_air_environment: development
+
+# Multi-container dev stack (API, scheduler, executor, … as separate containers).
+compose:
+  file: deploy/docker-compose.quickstart.yml
+
+ports:
+  api: 8080
+  frontend: 38080
+  redis: 6379
+  postgres: 5432
+
+features:
+  usage_tracking: true
+  resource_monitor: true
+  strict_dataset_version_required: false
+  strict_dataset_version_all_post_runs: false
+  readiness_allow_legacy_fallback: true
+  skip_approval_for_promote: true
+
+observability:
+  grafana_url: http://localhost:33000
+  realtime_ws: ws://localhost:8001
+
+auth:
+  tracking_token: admin-token

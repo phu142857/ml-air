@@ -55,7 +55,7 @@ Details: [readiness-and-gating](./api/readiness-and-gating.md)
 
 ```bash
 make up
-open http://localhost:38080   # Datasets → Run / Train
+open http://localhost:8080   # Datasets → Run / Train
 ```
 
 Docs: [README](../README.md) · [staging/prod sign-off](./runbooks/staging-prod-signoff.md) · [CLI smoke only](./cli/commands.md) (`dev` / `run` / `logs`)

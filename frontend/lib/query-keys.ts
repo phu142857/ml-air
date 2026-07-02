@@ -79,6 +79,10 @@ export const mlairKeys = {
       ["dataset-retention-preview", tenantId, projectId, datasetId] as const,
     versions: (tenantId: string, projectId: string, datasetId: string) =>
       ["dataset-versions", tenantId, projectId, datasetId] as const,
+    versionDiff: (tenantId: string, projectId: string, datasetId: string, fromId: string, toId: string) =>
+      ["dataset-version-diff", tenantId, projectId, datasetId, fromId, toId] as const,
+    versionProvenance: (tenantId: string, projectId: string, datasetId: string, versionId: string) =>
+      ["dataset-version-provenance", tenantId, projectId, datasetId, versionId] as const,
     versionPreview: (tenantId: string, projectId: string, versionId: string) =>
       ["dataset-version-preview", tenantId, projectId, versionId] as const,
     readiness: (tenantId: string, projectId: string, datasetId: string, requiredSize: number) =>
@@ -103,6 +107,8 @@ export const mlairKeys = {
       ["model-resolved-pipeline", tenantId, projectId, modelId] as const,
     status: (tenantId: string, projectId: string, modelId: string) =>
       ["model-status", tenantId, projectId, modelId] as const,
+    provenance: (tenantId: string, projectId: string, modelId: string, version: number | null) =>
+      ["model-provenance", tenantId, projectId, modelId, version ?? "latest"] as const,
     statusRun: (tenantId: string, projectId: string, runId: string | undefined) =>
       ["model-status-run", tenantId, projectId, runId] as const,
     recentRuns: (tenantId: string, projectId: string, modelId: string, fingerprint: string) =>

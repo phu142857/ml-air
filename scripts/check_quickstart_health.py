@@ -58,33 +58,42 @@ def main() -> int:
 
     _require_running_services(args.compose_file)
 
-    frontend_port = int(os.getenv("ML_AIR_FRONTEND_PORT", "38080"))
-    api_port = int(os.getenv("ML_AIR_API_PORT", "8080"))
-    scheduler_metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
-    executor_metrics_port = int(os.getenv("ML_AIR_EXECUTOR_METRICS_PORT", "9103"))
-    redis_port = int(os.getenv("ML_AIR_REDIS_PORT", "6379"))
-    postgres_port = int(os.getenv("ML_AIR_POSTGRES_PORT", "5432"))
-    minio_api_port = int(os.getenv("ML_AIR_MINIO_API_PORT", "9000"))
-    minio_console_port = int(os.getenv("ML_AIR_MINIO_CONSOLE_PORT", "9001"))
-    prometheus_port = int(os.getenv("ML_AIR_PROMETHEUS_PORT", "39090"))
-    grafana_port = int(os.getenv("ML_AIR_GRAFANA_PORT", "33000"))
-    realtime_port = int(os.getenv("MLAIR_REALTIME_PORT", "8001"))
-    realtime_metrics_port = int(os.getenv("ML_AIR_REALTIME_METRICS_PORT", "9104"))
+    is_allinone = "allinone" in args.compose_file
+    if is_allinone:
+        hub_port = int(os.getenv("MLAIR_PORT", "8080"))
+        checks = [
+            ("hub", lambda: _http_ok(f"http://localhost:{hub_port}")),
+            ("api-health", lambda: _http_ok(f"http://localhost:{hub_port}/health")),
+            ("realtime-health", lambda: _http_ok(f"http://localhost:{hub_port}/healthz")),
+        ]
+    else:
+        frontend_port = int(os.getenv("ML_AIR_FRONTEND_PORT", "38080"))
+        api_port = int(os.getenv("ML_AIR_API_PORT", "8080"))
+        scheduler_metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
+        executor_metrics_port = int(os.getenv("ML_AIR_EXECUTOR_METRICS_PORT", "9103"))
+        redis_port = int(os.getenv("ML_AIR_REDIS_PORT", "6379"))
+        postgres_port = int(os.getenv("ML_AIR_POSTGRES_PORT", "5432"))
+        minio_api_port = int(os.getenv("ML_AIR_MINIO_API_PORT", "9000"))
+        minio_console_port = int(os.getenv("ML_AIR_MINIO_CONSOLE_PORT", "9001"))
+        prometheus_port = int(os.getenv("ML_AIR_PROMETHEUS_PORT", "39090"))
+        grafana_port = int(os.getenv("ML_AIR_GRAFANA_PORT", "33000"))
+        realtime_port = int(os.getenv("MLAIR_REALTIME_PORT", "8001"))
+        realtime_metrics_port = int(os.getenv("ML_AIR_REALTIME_METRICS_PORT", "9104"))
 
-    checks = [
-        ("frontend", lambda: _http_ok(f"http://localhost:{frontend_port}")),
-        ("api-health", lambda: _http_ok(f"http://localhost:{api_port}/health")),
-        ("scheduler-metrics", lambda: _http_ok(f"http://localhost:{scheduler_metrics_port}/metrics")),
-        ("executor-metrics", lambda: _http_ok(f"http://localhost:{executor_metrics_port}/metrics")),
-        ("prometheus", lambda: _http_ok(f"http://localhost:{prometheus_port}/-/healthy")),
-        ("grafana", lambda: _http_ok(f"http://localhost:{grafana_port}/api/health")),
-        ("redis-tcp", lambda: _tcp_ok("127.0.0.1", redis_port)),
-        ("postgres-tcp", lambda: _tcp_ok("127.0.0.1", postgres_port)),
-        ("minio-api-tcp", lambda: _tcp_ok("127.0.0.1", minio_api_port)),
-        ("minio-console", lambda: _http_ok(f"http://localhost:{minio_console_port}")),
-        ("realtime-health", lambda: _http_ok(f"http://localhost:{realtime_port}/healthz")),
-        ("realtime-metrics", lambda: _http_ok(f"http://localhost:{realtime_metrics_port}/metrics")),
-    ]
+        checks = [
+            ("frontend", lambda: _http_ok(f"http://localhost:{frontend_port}")),
+            ("api-health", lambda: _http_ok(f"http://localhost:{api_port}/health")),
+            ("scheduler-metrics", lambda: _http_ok(f"http://localhost:{scheduler_metrics_port}/metrics")),
+            ("executor-metrics", lambda: _http_ok(f"http://localhost:{executor_metrics_port}/metrics")),
+            ("prometheus", lambda: _http_ok(f"http://localhost:{prometheus_port}/-/healthy")),
+            ("grafana", lambda: _http_ok(f"http://localhost:{grafana_port}/api/health")),
+            ("redis-tcp", lambda: _tcp_ok("127.0.0.1", redis_port)),
+            ("postgres-tcp", lambda: _tcp_ok("127.0.0.1", postgres_port)),
+            ("minio-api-tcp", lambda: _tcp_ok("127.0.0.1", minio_api_port)),
+            ("minio-console", lambda: _http_ok(f"http://localhost:{minio_console_port}")),
+            ("realtime-health", lambda: _http_ok(f"http://localhost:{realtime_port}/healthz")),
+            ("realtime-metrics", lambda: _http_ok(f"http://localhost:{realtime_metrics_port}/metrics")),
+        ]
 
     deadline = time.time() + args.wait_seconds
     pending = {name: fn for name, fn in checks}

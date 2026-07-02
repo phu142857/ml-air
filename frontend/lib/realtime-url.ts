@@ -1,29 +1,21 @@
 /**
  * Resolve WebSocket base URL for MLAir realtime (push sync).
- * Realtime is on by default; env/runtime overrides are optional for production topology.
+ * Realtime is on by default; env/runtime overrides are optional for split-host deploys.
  */
-
-const DEFAULT_DEV_REALTIME_WS = "ws://localhost:8001";
 
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-/** Infer browser-reachable realtime URL when deploy config omits it (local / quickstart). */
+/** Infer browser-reachable realtime URL when deploy config omits it (same-origin Hub). */
 export function inferRealtimeWsBaseFromLocation(): string | null {
   if (typeof window === "undefined") return null;
-  const { hostname, protocol } = window.location;
-  const host = hostname.trim().toLowerCase();
+  const { protocol } = window.location;
+  const host = window.location.host.trim();
   if (!host) return null;
 
   const wsProto = protocol === "https:" ? "wss" : "ws";
-
-  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
-    return DEFAULT_DEV_REALTIME_WS;
-  }
-
-  // ALB / reverse-proxy: realtime on same host as Hub (path `/ws` added at connect time).
-  return `${wsProto}://${window.location.host}`;
+  return `${wsProto}://${host}`;
 }
 
 /**
@@ -36,7 +28,9 @@ export function resolveRealtimeWsBase(
 ): string {
   const explicit = String(runtimeUrl ?? "").trim() || String(buildEnvUrl ?? "").trim();
   if (explicit) return stripTrailingSlash(explicit);
-  return stripTrailingSlash(inferRealtimeWsBaseFromLocation() ?? DEFAULT_DEV_REALTIME_WS);
+  const inferred = inferRealtimeWsBaseFromLocation();
+  if (inferred) return stripTrailingSlash(inferred);
+  return "ws://localhost:8080";
 }
 
 export function isRealtimeConfigured(

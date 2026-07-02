@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlair"
+version = "0.1.0"
+description = "MLAir lifecycle OS — unified CLI, SDK, and sensible defaults over microservice runtime"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "MLAir" }]
+keywords = ["mlops", "ml", "lifecycle", "orchestration"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "PyYAML>=6.0.1",
+]
+
+[project.optional-dependencies]
+sdk-runtime = [
+  "psutil>=5.9.0",
+]
+
+[project.scripts]
+mlair = "mlair.cli:main"
+
+[project.urls]
+Documentation = "https://github.com/phu142857/ml-air"
+Configuration = "https://github.com/phu142857/ml-air/blob/main/docs/configuration.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mlair*", "sdk*"]
+
+[tool.setuptools.package-data]
+mlair = ["profiles/*.yaml"]

@@ -1,0 +1,93 @@
+# syntax=docker/dockerfile:1
+# MLAir all-in-one: API + scheduler + executor + realtime + Hub + Postgres + Redis in one container.
+# Build context: repository root.
+#   docker build -f deploy/Dockerfile.allinone -t ml-air:latest .
+ARG NODE_IMAGE=node:20-bookworm-slim
+ARG PYTHON_IMAGE=python:3.11-slim-bookworm
+
+FROM ${NODE_IMAGE} AS frontend-deps
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+FROM ${NODE_IMAGE} AS frontend-build
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_BASE_URL=
+ARG NEXT_PUBLIC_MLAIR_REALTIME_WS=
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ENV NEXT_PUBLIC_MLAIR_REALTIME_WS=${NEXT_PUBLIC_MLAIR_REALTIME_WS}
+COPY --from=frontend-deps /app/node_modules ./node_modules
+COPY frontend .
+RUN npm run build
+
+FROM ${PYTHON_IMAGE} AS py-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential gcc \
+    && rm -rf /var/lib/apt/lists/*
+COPY deploy/allinone/requirements.txt /build/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel && \
+    pip wheel --wheel-dir /wheels -r /build/requirements.txt
+
+FROM ${PYTHON_IMAGE} AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app \
+    ML_AIR_DATABASE_URL=postgresql://mlair:mlair@127.0.0.1:5432/mlair?client_encoding=utf8 \
+    ML_AIR_REDIS_URL=redis://127.0.0.1:6379/0 \
+    ML_AIR_TRACKING_TOKEN=admin-token \
+    ML_AIR_JWT_HS256_SECRET=mlair-dev-jwt-secret-32bytes-minimum-key \
+    ML_AIR_MANIFEST_SIGNING_KEY=mlair-dev-manifest-signing-key \
+    ML_AIR_MANIFEST_ACTIVE_KEY_ID=v1 \
+    ML_AIR_DATASET_ARTIFACT_ROOT=file:///mlair/artifacts/datasets \
+    ML_AIR_DEFAULT_MODEL_ARTIFACT_ROOT=file:///mlair/artifacts/models \
+    ML_AIR_USAGE_TRACKING_ENABLED=1 \
+    ML_AIR_RESOURCE_MONITOR_ENABLED=1 \
+    MLAIR_IMAGE_REF=ml-air:latest
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql postgresql-contrib redis-server supervisor nginx curl ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=py-builder /wheels /wheels
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+COPY sdk /app/sdk
+COPY api /app/api
+COPY scheduler /app/scheduler
+COPY executor /app/executor
+COPY realtime/app /app/realtime/app
+
+RUN if [ -d "/app/api/builtin_reference_plugins" ]; then \
+      pip install --no-cache-dir /app/api/builtin_reference_plugins; \
+    fi
+
+COPY --from=frontend-build /app/.next/standalone /app/frontend
+COPY --from=frontend-build /app/.next/static /app/frontend/.next/static
+COPY --from=frontend-build /app/public /app/frontend/public
+
+RUN useradd -m appuser \
+    && mkdir -p /mlair/artifacts/datasets /mlair/artifacts/models /var/log/supervisor \
+    && chown -R appuser:appuser /app /mlair/artifacts
+
+COPY deploy/allinone/entrypoint.sh /entrypoint.sh
+COPY deploy/allinone/supervisord.conf /etc/supervisor/conf.d/mlair.conf
+COPY deploy/allinone/nginx.conf /etc/nginx/conf.d/mlair.conf
+RUN chmod +x /entrypoint.sh \
+    && rm -f /etc/nginx/sites-enabled/default
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=12 \
+  CMD curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

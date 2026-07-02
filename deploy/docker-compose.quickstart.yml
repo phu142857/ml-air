@@ -7,8 +7,11 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
         NEXT_PUBLIC_MLAIR_REALTIME_WS: ${NEXT_PUBLIC_MLAIR_REALTIME_WS:-ws://localhost:8001}
         MLAIR_NEXT_INTERNAL_API_URL: ${MLAIR_NEXT_INTERNAL_API_URL:-http://api:8080}
+    image: ${MLAIR_FRONTEND_IMAGE:-ml-air-frontend:latest}
     container_name: ml-air-frontend
     environment:
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
       MLAIR_NEXT_INTERNAL_API_URL: ${MLAIR_NEXT_INTERNAL_API_URL:-http://api:8080}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -27,9 +30,10 @@ services:
       dockerfile: api/Dockerfile
       args:
         PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
-        MLAIR_IMAGE_REF: ${ML_AIR_DOCKER_IMAGE:-deploy-api:latest}
+        MLAIR_IMAGE_REF: ${ML_AIR_DOCKER_IMAGE:-ml-air-api:latest}
         MLAIR_SOURCE_COMMIT: ${MLAIR_SOURCE_COMMIT:-}
         MLAIR_SOURCE_BRANCH: ${MLAIR_SOURCE_BRANCH:-}
+    image: ${MLAIR_API_IMAGE:-ml-air-api:latest}
     container_name: ml-air-api
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -78,8 +82,7 @@ services:
       ML_AIR_RUNTIME_REALTIME_BASE_URL: ${ML_AIR_RUNTIME_REALTIME_BASE_URL:-ws://localhost:8001}
       # Run environment capture (runs.environment) — zero-config defaults; see docs/guides/run-environment.md
       ML_AIR_ENVIRONMENT: ${ML_AIR_ENVIRONMENT:-development}
-      ML_AIR_DOCKER_IMAGE: ${ML_AIR_DOCKER_IMAGE:-deploy-api:latest}
-      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_API:-mlair-api}
+      ML_AIR_DOCKER_IMAGE: ${ML_AIR_DOCKER_IMAGE:-ml-air-api:latest}
     ports:
       - "${ML_AIR_API_PORT:-8080}:8080"
     volumes:
@@ -105,6 +108,7 @@ services:
       dockerfile: realtime/Dockerfile
       args:
         PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
+    image: ${MLAIR_REALTIME_IMAGE:-ml-air-realtime:latest}
     container_name: ml-air-realtime
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -131,6 +135,7 @@ services:
       dockerfile: scheduler/Dockerfile
       args:
         PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
+    image: ${MLAIR_SCHEDULER_IMAGE:-ml-air-scheduler:latest}
     # No fixed container_name — allows `docker compose up -d --scale scheduler=2` for HA sign-off.
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}
@@ -173,6 +178,7 @@ services:
       dockerfile: executor/Dockerfile
       args:
         PYTHON_BASE_IMAGE: ${ML_AIR_PYTHON_BASE_IMAGE:-python:3.11-slim}
+    image: ${MLAIR_EXECUTOR_IMAGE:-ml-air-executor:latest}
     container_name: ml-air-executor
     environment:
       ML_AIR_REDIS_URL: ${ML_AIR_REDIS_URL:-redis://redis:6379/0}

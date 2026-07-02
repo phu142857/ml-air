@@ -13,6 +13,18 @@ Boot MLAir locally and run a demo pipeline in minutes.
 
 ## Command
 
+**Recommended (unified CLI):**
+
+```bash
+pip install -e .
+mlair serve --build
+mlair health
+make seed-demo
+make smoke-quickstart
+```
+
+**Makefile equivalent:**
+
 ```bash
 cp .env.example .env
 make build
@@ -24,7 +36,7 @@ make smoke-quickstart
 
 ## Result
 
-You should get a successful smoke run and be able to open UI at `http://localhost:38080`.
+You should get a successful smoke run and be able to open MLAir at `http://localhost:8080`.
 
 ## Startup Hooks (External Integrations)
 

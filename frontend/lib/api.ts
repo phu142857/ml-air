@@ -1930,6 +1930,123 @@ export async function fetchDatasetVersions(tenantId: string, projectId: string, 
   return data as { items: DatasetVersionItem[] };
 }
 
+export type DatasetVersionDiffResponse = {
+  dataset_id: string;
+  from: {
+    version_id: string;
+    version: string;
+    checksum?: string | null;
+    record_count: number;
+    source_type?: string;
+    canonical_source_type?: string;
+    status?: string;
+    quality_score: number;
+    created_at: string;
+  };
+  to: DatasetVersionDiffResponse["from"];
+  delta: {
+    record_count_delta: number;
+    checksum_changed: boolean;
+    source_type_changed: boolean;
+    canonical_source_type_changed: boolean;
+    quality_score_delta: number;
+    status_changed: boolean;
+    tags_added: string[];
+    tags_removed: string[];
+    external_refs_count_delta: number;
+  };
+};
+
+export async function fetchDatasetVersionDiff(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  fromVersionId: string,
+  toVersionId: string,
+  token: string
+) {
+  const sp = new URLSearchParams({ from: fromVersionId, to: toVersionId });
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/versions/diff?${sp}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetVersionDiffResponse;
+}
+
+export type DatasetVersionProvenanceResponse = {
+  dataset_id: string;
+  version: DatasetVersionItem;
+  materialized_from_buffer: boolean;
+  accumulation?: {
+    accumulation_strategy: string;
+    target_threshold: number;
+    current_size: number;
+    last_materialized_at?: string | null;
+  } | null;
+  producing_runs: Array<{ run_id: string; task_id: string }>;
+  input_versions: Array<{
+    version_id: string;
+    version: string;
+    dataset_id?: string;
+    dataset_name?: string;
+    record_count: number;
+  }>;
+};
+
+export async function fetchDatasetVersionProvenance(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  versionId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/versions/${versionId}/provenance`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetVersionProvenanceResponse;
+}
+
+export type ModelProvenanceResponse = {
+  model: { model_id: string; name?: string; tenant_id?: string; project_id?: string };
+  model_version: {
+    version: number;
+    run_id?: string | null;
+    artifact_uri?: string | null;
+    stage?: string | null;
+  } | null;
+  run: {
+    run_id: string;
+    status?: string;
+    pipeline_id?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  } | null;
+  dataset_version: DatasetVersionItem | null;
+  lineage: { run_id: string; edges: Array<Record<string, unknown>> } | null;
+};
+
+export async function fetchModelProvenance(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  version?: number
+) {
+  const sp = version != null ? `?version=${encodeURIComponent(String(version))}` : "";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/provenance${sp}`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ModelProvenanceResponse;
+}
+
 export async function fetchDatasetBuffer(tenantId: string, projectId: string, datasetId: string, token: string) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/datasets/${datasetId}/buffer`, {
     headers: authHeaders(token),

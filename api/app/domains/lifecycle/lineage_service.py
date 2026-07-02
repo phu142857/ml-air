@@ -2138,6 +2138,149 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
     return out
 
 
+def _diff_version_snapshots(from_v: dict[str, Any], to_v: dict[str, Any]) -> dict[str, Any]:
+    from_tags = set(from_v.get("tags") or [])
+    to_tags = set(to_v.get("tags") or [])
+    from_checksum = str(from_v.get("checksum") or "").strip()
+    to_checksum = str(to_v.get("checksum") or "").strip()
+    from_refs = from_v.get("external_refs") or []
+    to_refs = to_v.get("external_refs") or []
+    return {
+        "record_count_delta": int(to_v.get("record_count") or 0) - int(from_v.get("record_count") or 0),
+        "checksum_changed": from_checksum != to_checksum,
+        "source_type_changed": str(from_v.get("source_type") or "") != str(to_v.get("source_type") or ""),
+        "canonical_source_type_changed": str(from_v.get("canonical_source_type") or "")
+        != str(to_v.get("canonical_source_type") or ""),
+        "quality_score_delta": int(to_v.get("quality_score") or 0) - int(from_v.get("quality_score") or 0),
+        "status_changed": str(from_v.get("status") or "") != str(to_v.get("status") or ""),
+        "tags_added": sorted(to_tags - from_tags),
+        "tags_removed": sorted(from_tags - to_tags),
+        "external_refs_count_delta": len(to_refs) - len(from_refs),
+    }
+
+
+def _version_diff_endpoint(from_v: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "version_id": from_v["version_id"],
+        "version": from_v["version"],
+        "checksum": from_v.get("checksum"),
+        "record_count": int(from_v.get("record_count") or 0),
+        "source_type": from_v.get("source_type"),
+        "canonical_source_type": from_v.get("canonical_source_type"),
+        "status": from_v.get("status"),
+        "quality_score": int(from_v.get("quality_score") or 0),
+        "created_at": from_v.get("created_at"),
+    }
+
+
+def diff_dataset_versions(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    from_version_id: str,
+    to_version_id: str,
+) -> dict[str, Any] | None:
+    from_id = str(from_version_id or "").strip()
+    to_id = str(to_version_id or "").strip()
+    if not from_id or not to_id:
+        raise ValueError("diff_version_ids_required")
+    if from_id == to_id:
+        raise ValueError("diff_same_version")
+    from_v = get_dataset_version(tenant_id, project_id, from_id)
+    to_v = get_dataset_version(tenant_id, project_id, to_id)
+    if not from_v or not to_v:
+        return None
+    if str(from_v.get("dataset_id") or "") != dataset_id or str(to_v.get("dataset_id") or "") != dataset_id:
+        raise ValueError("version_dataset_mismatch")
+    return {
+        "dataset_id": dataset_id,
+        "from": _version_diff_endpoint(from_v),
+        "to": _version_diff_endpoint(to_v),
+        "delta": _diff_version_snapshots(from_v, to_v),
+    }
+
+
+def get_dataset_version_provenance(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+) -> dict[str, Any] | None:
+    version = get_dataset_version(tenant_id, project_id, version_id)
+    if not version or str(version.get("dataset_id") or "") != dataset_id:
+        return None
+    materialized_from_buffer = False
+    accumulation: dict[str, Any] | None = None
+    producing_runs: list[dict[str, Any]] = []
+    input_versions: list[dict[str, Any]] = []
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT materialized_from_buffer
+                FROM dataset_versions dv
+                JOIN datasets d ON d.dataset_id = dv.dataset_id
+                WHERE d.tenant_id = %s AND d.project_id = %s AND dv.version_id = %s
+                """,
+                (tenant_id, project_id, version_id),
+            )
+            mat_row = cur.fetchone()
+            if mat_row:
+                materialized_from_buffer = bool(mat_row[0])
+            if materialized_from_buffer:
+                cur.execute(
+                    """
+                    SELECT accumulation_strategy, target_threshold, current_size, last_materialized_at
+                    FROM dataset_accumulation_buffers
+                    WHERE dataset_id = %s
+                    """,
+                    (dataset_id,),
+                )
+                buf_row = cur.fetchone()
+                if buf_row:
+                    accumulation = {
+                        "accumulation_strategy": str(buf_row[0] or DEFAULT_ACCUMULATION_STRATEGY),
+                        "target_threshold": int(buf_row[1] or 0),
+                        "current_size": int(buf_row[2] or 0),
+                        "last_materialized_at": buf_row[3].isoformat() if buf_row[3] else None,
+                    }
+            cur.execute(
+                """
+                SELECT e.run_id, e.task_id, e.input_dataset_version_id
+                FROM lineage_edges e
+                WHERE e.tenant_id = %s AND e.project_id = %s AND e.output_dataset_version_id = %s
+                ORDER BY e.created_at ASC
+                """,
+                (tenant_id, project_id, version_id),
+            )
+            edge_rows = cur.fetchall()
+    input_ids: set[str] = set()
+    for run_id, task_id, input_vid in edge_rows:
+        producing_runs.append({"run_id": run_id, "task_id": task_id})
+        if input_vid:
+            input_ids.add(str(input_vid))
+    for input_vid in sorted(input_ids):
+        inp = get_dataset_version(tenant_id, project_id, input_vid)
+        if inp:
+            input_versions.append(
+                {
+                    "version_id": inp["version_id"],
+                    "version": inp["version"],
+                    "dataset_id": inp.get("dataset_id"),
+                    "dataset_name": inp.get("dataset_name"),
+                    "record_count": int(inp.get("record_count") or 0),
+                }
+            )
+    return {
+        "dataset_id": dataset_id,
+        "version": version,
+        "materialized_from_buffer": materialized_from_buffer,
+        "accumulation": accumulation,
+        "producing_runs": producing_runs,
+        "input_versions": input_versions,
+    }
+
+
 def patch_dataset_version_additive_metadata(
     tenant_id: str,
     project_id: str,

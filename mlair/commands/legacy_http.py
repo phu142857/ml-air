@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
+"""Legacy HTTP helpers: ``mlair run`` and ``mlair logs``."""
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 def _base_url() -> str:
-    return os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
+    return os.getenv("ML_AIR_BASE_URL", os.getenv("ML_AIR_API_BASE_URL", "http://localhost:8080")).rstrip("/")
 
 
 def _tenant() -> str:
@@ -24,7 +24,7 @@ def _project() -> str:
 
 
 def _token() -> str:
-    return os.getenv("ML_AIR_TOKEN", "maintainer-token")
+    return os.getenv("ML_AIR_TOKEN", os.getenv("ML_AIR_TRACKING_TOKEN", "admin-token"))
 
 
 def _req(method: str, path: str, token: str | None = None, body: dict | None = None) -> tuple[int, dict]:
@@ -55,7 +55,6 @@ def _load_pipeline_file(path: str) -> dict:
     if not p.exists():
         raise ValueError(f"pipeline file not found: {path}")
     text = p.read_text(encoding="utf-8")
-    # JSON is always supported (valid YAML superset for many simple cases).
     try:
         data = json.loads(text)
         if not isinstance(data, dict):
@@ -64,25 +63,16 @@ def _load_pipeline_file(path: str) -> dict:
     except json.JSONDecodeError:
         pass
     try:
-        import yaml  # type: ignore
-    except Exception as exc:  # noqa: BLE001
+        import yaml
+    except ImportError as exc:
         raise ValueError(
-            "cannot parse YAML without PyYAML. Install: pip install pyyaml "
+            "cannot parse YAML without PyYAML. Install: pip install mlair "
             "or provide JSON content in the file."
         ) from exc
     data = yaml.safe_load(text)
     if not isinstance(data, dict):
         raise ValueError("pipeline file must contain an object")
     return data
-
-
-def cmd_dev_up(_: argparse.Namespace) -> int:
-    compose_file = os.getenv("COMPOSE_FILE", "deploy/docker-compose.quickstart.yml")
-    proc = subprocess.run(
-        ["docker", "compose", "-f", compose_file, "up", "-d"],
-        check=False,
-    )
-    return proc.returncode
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -136,44 +126,3 @@ def cmd_logs(args: argparse.Namespace) -> int:
             message = item.get("message", "")
             print(f"{ts} [{level}] {message}")
     return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="mlair",
-        description="MLAir developer CLI (minimal alpha).",
-        epilog=(
-            "Examples:\n"
-            "  mlair dev up\n"
-            "  mlair run examples/pipeline.demo.yaml\n"
-            "  mlair logs <run_id> --limit 50"
-        ),
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    dev = sub.add_parser("dev", help="Local development commands")
-    dev_sub = dev.add_subparsers(dest="dev_command", required=True)
-    dev_up = dev_sub.add_parser("up", help="Start quickstart stack (no build)")
-    dev_up.set_defaults(func=cmd_dev_up)
-
-    run = sub.add_parser("run", help="Trigger a pipeline run from config file")
-    run.add_argument("pipeline_file", help="Pipeline config (.yaml/.json)")
-    run.set_defaults(func=cmd_run)
-
-    logs = sub.add_parser("logs", help="Read logs for a run")
-    logs.add_argument("run_id", help="Run ID")
-    logs.add_argument("--limit", type=int, default=200, help="Maximum log lines")
-    logs.set_defaults(func=cmd_logs)
-
-    return parser
-
-
-def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-    return int(args.func(args))
-
-
-if __name__ == "__main__":
-    sys.exit(main())

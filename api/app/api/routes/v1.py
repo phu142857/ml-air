@@ -16,6 +16,7 @@ from app.domains.governance.model_registry_service import (
     delete_model,
     delete_model_version,
     get_model,
+    get_model_provenance,
     get_model_status,
     get_model_version_approval,
     list_model_serving_slots,
@@ -2386,6 +2387,57 @@ def list_dataset_versions_v1(
     return {"items": lineage_service.list_dataset_versions(tenant_id, project_id, dataset_id)}
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/diff")
+def diff_dataset_versions_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    from_version_id: str = Query(..., alias="from"),
+    to_version_id: str = Query(..., alias="to"),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    try:
+        out = lineage_service.diff_dataset_versions(
+            tenant_id,
+            project_id,
+            dataset_id,
+            from_version_id,
+            to_version_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code in {"diff_same_version", "diff_version_ids_required", "version_dataset_mismatch"}:
+            raise HTTPException(status_code=400, detail=code) from exc
+        raise
+    if not out:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return out
+
+
+@router.get(
+    "/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/provenance"
+)
+def get_dataset_version_provenance_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
+        raise HTTPException(status_code=404, detail="dataset_not_found")
+    out = lineage_service.get_dataset_version_provenance(tenant_id, project_id, dataset_id, version_id)
+    if not out:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return out
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/readiness/evaluations")
 def list_dataset_readiness_evaluations_v1(
     tenant_id: str,
@@ -3521,6 +3573,22 @@ def get_model_v1(
     if not row:
         raise HTTPException(status_code=404, detail="model_not_found")
     return row
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/provenance")
+def get_model_provenance_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int | None = Query(default=None, description="Model registry version number; latest when omitted."),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    out = get_model_provenance(tenant_id=tenant_id, project_id=project_id, model_id=model_id, version=version)
+    if not out:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return out
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/status")

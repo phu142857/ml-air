@@ -1,0 +1,22 @@
+profile: development
+ml_air_environment: development
+
+compose:
+  file: deploy/docker-compose.allinone.yml
+
+ports:
+  hub: 8080
+
+features:
+  usage_tracking: true
+  resource_monitor: true
+  strict_dataset_version_required: false
+  strict_dataset_version_all_post_runs: false
+  readiness_allow_legacy_fallback: true
+  skip_approval_for_promote: true
+
+observability:
+  grafana_url: http://localhost:33000
+
+auth:
+  tracking_token: admin-token

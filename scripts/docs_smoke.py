@@ -18,8 +18,8 @@ def main() -> int:
         run(["make", "up"])
         run(["make", "health"])
         run(["make", "seed-demo"])
-        run(["python", "./mlair", "--help"])
-        run(["python", "./mlair", "run", "examples/pipeline.demo.yaml"])
+        run(["python", "-m", "mlair", "--help"])
+        run(["python", "-m", "mlair", "run", "examples/pipeline.demo.yaml"])
     except RuntimeError as exc:
         msg = str(exc)
         print(f"[FAIL] docs smoke failed: {msg}")

@@ -6,7 +6,11 @@ from psycopg import Connection, connect
 
 
 def _db_url() -> str:
-    return os.getenv("ML_AIR_DATABASE_URL", "postgresql://mlair:mlair@postgres:5432/mlair")
+    url = os.getenv("ML_AIR_DATABASE_URL", "postgresql://mlair:mlair@postgres:5432/mlair")
+    if "client_encoding=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}client_encoding=utf8"
+    return url
 
 
 def database_url() -> str:

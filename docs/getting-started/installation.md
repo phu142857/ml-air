@@ -2,30 +2,42 @@
 
 ## Goal
 
-Install and prepare a local MLAir environment.
+Install MLAir and prepare a local environment with **one package** and **sensible defaults**.
 
 ## Steps
 
 1. Clone the repository.
-2. Copy environment defaults.
-3. Run preflight checks.
+2. Install the unified `mlair` package (includes SDK).
+3. Run preflight and start the stack.
 
 ## Command
 
 ```bash
 git clone <repo-url>
 cd ml-air
-cp .env.example .env
-make doctor
+pip install -e .
+mlair doctor
+mlair serve
 ```
+
+Alternative without pip (from repo root):
+
+```bash
+python -m mlair doctor
+python -m mlair serve
+```
+
+Optional: copy `mlair.yaml.example` → `mlair.yaml` only if you need overrides. See [Configuration](../configuration.md).
 
 ## Result
 
-You should see `doctor` checks pass (warnings are acceptable if non-blocking).
-The environment is now ready for pipeline run execution, plugin loading, task processing, and lineage tracking.
+`mlair doctor` passes (warnings OK). `mlair serve` starts API, scheduler, executor, realtime, Hub, Postgres, and Redis via Docker Compose.
+
+- API: `http://localhost:8080`
+- MLAir (Hub + API): `http://localhost:8080`
 
 ## Done
 
-You can continue with [Quickstart](./quickstart.md).
+Continue with [Quickstart](./quickstart.md).
 
-For running MLAir **next to another stack** without vendoring this repo, see [Consume MLAir from Compose (decoupled)](../guides/consume-mlair-from-compose.md). For outbound promote webhooks, see [Downstream model promote webhook](../guides/downstream-model-promote-webhook.md).
+For running MLAir **next to another stack** without vendoring this repo, see [Consume MLAir from Compose (decoupled)](../guides/consume-mlair-from-compose.md).

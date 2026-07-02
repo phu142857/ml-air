@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Database, Download, Eye, GitBranch, Loader2, Play, Plus, Tags, Trash2, X } from "lucide-react";
+import { ChevronRight, Copy, Database, Download, Eye, GitBranch, Loader2, Play, Plus, Tags, Trash2, X } from "lucide-react";
 import {
   DetailSection,
   DetailTabBar,
@@ -20,6 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { DatasetVersionDiffPanel } from "@/components/mlops/dataset-version-diff-panel";
+import { DatasetVersionProvenancePanel } from "@/components/mlops/dataset-version-provenance-panel";
 import { ExecutionIntentPanel } from "@/components/mlops/execution-intent-panel";
 import {
   DatasetVersionScrollEditor,
@@ -863,6 +865,29 @@ export default function DatasetHubPage() {
         id: "rows",
         header: "Rows",
         cell: (v) => <>{Number(v.record_count || 0)}</>,
+      },
+      {
+        id: "checksum",
+        header: "Checksum",
+        className: "max-w-[7rem]",
+        cell: (v) => {
+          const cs = String(v.checksum || "").trim();
+          if (!cs) return <span className="text-[10px] text-muted-foreground">—</span>;
+          return (
+            <button
+              type="button"
+              className="inline-flex max-w-full items-center gap-1 truncate font-mono text-[10px] text-muted-foreground hover:text-foreground"
+              title={`Copy checksum: ${cs}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void navigator.clipboard.writeText(cs);
+              }}
+            >
+              <Copy className="h-3 w-3 shrink-0" aria-hidden />
+              {cs.slice(0, 10)}…
+            </button>
+          );
+        },
       },
       {
         id: "tags",
@@ -1808,13 +1833,29 @@ export default function DatasetHubPage() {
                 description="Materialize or import a dataset version to see immutable snapshots here."
               />
             ) : (
-              <MlopsDataTable
+              <>
+                <DatasetVersionDiffPanel
+                  tenantId={tenantId}
+                  projectId={projectId}
+                  datasetId={datasetId}
+                  token={token}
+                  versions={versionsQuery.data?.items || []}
+                />
+                <DatasetVersionProvenancePanel
+                  tenantId={tenantId}
+                  projectId={projectId}
+                  datasetId={datasetId}
+                  token={token}
+                  versions={versionsQuery.data?.items || []}
+                />
+                <MlopsDataTable
                 columns={versionColumns}
                 data={versionsQuery.data?.items || []}
                 keyExtractor={(v) => v.version_id}
                 emptyMessage="No versions yet."
                 className="text-sm"
               />
+              </>
             )}
         </DetailSection>
       ) : null}

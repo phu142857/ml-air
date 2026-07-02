@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Shared compile layer for api / scheduler / executor / realtime.
-# Build once: docker build -t ml-air-python-base:local -f docker/python-base.Dockerfile .
+# Build once: docker build -t ml-air-python-base:latest -f docker/python-base.Dockerfile .
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

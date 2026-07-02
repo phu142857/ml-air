@@ -25,6 +25,7 @@ Each guide follows:
 ## Getting Started
 
 - [MLAir one-pager (stakeholders)](./MLAIR-one-pager.md)
+- [Configuration (single reference)](./configuration.md)
 - [Installation](./getting-started/installation.md)
 - [Quickstart](./getting-started/quickstart.md)
 - [Run Your First Pipeline](./getting-started/run-first-pipeline.md)

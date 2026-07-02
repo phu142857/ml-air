@@ -17,8 +17,13 @@ target_metadata = None
 def _database_url() -> str:
     raw_url = os.getenv("ML_AIR_DATABASE_URL", config.get_main_option("sqlalchemy.url"))
     if raw_url.startswith("postgresql://"):
-        return raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return raw_url
+        url = raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    else:
+        url = raw_url
+    if "client_encoding=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}client_encoding=utf8"
+    return url
 
 
 def run_migrations_offline() -> None:

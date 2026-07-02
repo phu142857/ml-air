@@ -1,0 +1,17 @@
+# Optional local overrides — copy to mlair.yaml and edit.
+# Sensible defaults apply when this file is absent (profile: development).
+# Full reference: docs/configuration.md
+
+profile: development
+
+# compose:
+#   file: deploy/docker-compose.allinone.yml
+
+# ports:
+#   hub: 8080
+
+# features:
+#   strict_dataset_version_required: false
+
+# auth:
+#   tracking_token: admin-token

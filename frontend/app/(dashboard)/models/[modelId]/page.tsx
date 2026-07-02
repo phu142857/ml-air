@@ -65,6 +65,7 @@ import { getRuntimeConfig } from "@/lib/runtime-config";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
+import { ModelProvenancePanel } from "@/components/mlops/model-provenance-panel";
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
@@ -611,6 +612,15 @@ export default function ModelDetailPage() {
               { label: "Description", value: model?.description ?? "—" },
             ]}
           />
+          {scopePinned ? (
+            <ModelProvenancePanel
+              tenantId={tenantId}
+              projectId={projectId}
+              modelId={modelId}
+              token={token}
+              version={productionVersion}
+            />
+          ) : null}
       </DetailSection>
         )}
         {tab === "policy" && (

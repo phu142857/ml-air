@@ -256,21 +256,30 @@ Do not alias these to “gate” generically in UI copy. Full contract: [`docs/a
 
 **Install**
 
-- `git clone <your-fork-or-mirror>/ml-air.git && cd ml-air`
-- `cp .env.example .env` and adjust ports if they conflict on your machine
+```bash
+git clone <your-fork-or-mirror>/ml-air.git && cd ml-air
+pip install -e .    # unified package: mlair CLI + sdk
+```
 
 **Run (recommended)**
 
-- `docker compose -f deploy/docker-compose.quickstart.yml up -d --build`
+```bash
+mlair doctor
+mlair serve --build
+mlair health
+```
+
+Configuration: [docs/configuration.md](docs/configuration.md) — sensible defaults, optional `mlair.yaml`. Makefile (`make up`) remains supported.
 
 **Verify**
 
-- API: `curl -sS http://localhost:8080/health`
-- UI (default from `.env.example`): open `http://localhost:38080`
+- API + Hub + realtime: `curl -sS http://localhost:8080/health` and open `http://localhost:8080`
 - Example API (token from docs / `.env.example`):  
 `curl -sS "http://localhost:8080/v1/tenants/default/projects?limit=10" -H "Authorization: Bearer maintainer-token"`
 
-**Defaults (`.env.example`):** API **8080**, UI **38080**, Postgres / Redis / MinIO / Prometheus / Grafana wired in the quickstart compose file.
+**Defaults:** one container `mlair` on **port 8080** — Hub UI, REST API (`/v1`), and WebSocket realtime (`/ws`) on the same origin. Postgres and Redis run inside the container (no separate compose services).
+
+**Legacy multi-container:** `mlair serve --profile microservices --build` (separate API **8080**, Hub **38080**, realtime **8001**).
 
 **Full operator docs:** [docs/index.md](docs/index.md). **Post-pull DB:** run `cd api && alembic upgrade head` (see [CONTRIBUTING.md](CONTRIBUTING.md) § Database migrations).
 
@@ -293,10 +302,10 @@ Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI
 | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED` | When `1`, train trigger and declared-inputs run paths require an explicit `dataset_version_id`; `runtime-config.features.strict_dataset_version_required` mirrors | `1` (see `docs/api/dataset-version-immutability.md`) |
 | `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` | When `1` (default; and strict required is on), generic `POST .../runs`, gated `POST .../pipelines/{id}/run`, and `check-readiness` require a pin even without declared dataset inputs; set `0` for legacy non-dataset pipelines; `runtime-config.features.strict_dataset_version_all_post_runs` mirrors | `1` |
 | `ML_AIR_ENABLE_SERVING_SLOTS_HTTP` | When `1`, mount model **serving slot** routes (`GET|PUT .../serving`); `runtime-config.features.serving_slots_http` mirrors for the UI | `0` |
-| `NEXT_PUBLIC_API_BASE_URL` | Browser → API base URL                     | `http://localhost:8080`                                          |
+| `NEXT_PUBLIC_API_BASE_URL` | Browser → API base URL (empty = same origin `/v1`) | empty (all-in-one) or `http://localhost:8080` (microservices) |
 | `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_URL` | Optional JSON `POST` beacon for train intent (Hub vs pipeline) | empty (disabled) |
 | `NEXT_PUBLIC_MLAIR_TRAIN_TELEMETRY_DEBUG` | Log train-intent payloads to browser console (`1` = on) | empty |
-| `COMPOSE_FILE`             | Makefile / scripts default compose         | `deploy/docker-compose.quickstart.yml`                           |
+| `COMPOSE_FILE`             | Makefile / scripts default compose         | `deploy/docker-compose.allinone.yml`                           |
 
 
 See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, and advanced JWT/JWKS settings.

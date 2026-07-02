@@ -4,7 +4,7 @@ SHELL := /bin/bash
 ML_AIR_BASE_URL ?= http://localhost:8080
 ML_AIR_TENANT_ID ?= default
 ML_AIR_PROJECT_ID ?= default_project
-COMPOSE_FILE ?= deploy/docker-compose.quickstart.yml
+COMPOSE_FILE ?= deploy/docker-compose.allinone.yml
 BACKUP_DIR ?= backups/postgres
 BACKUP_FILE ?=
 BACKFILL_LIMIT ?= 1000
@@ -25,7 +25,7 @@ BACKFILL_ARGS += --project-id $(BACKFILL_PROJECT_ID)
 endif
 
 CONTAINER_ENGINE ?= docker
-ML_AIR_PYTHON_BASE_IMAGE ?= ml-air-python-base:local
+ML_AIR_PYTHON_BASE_IMAGE ?= ml-air-python-base:latest
 
 .PHONY: build-base build-images build
 build-base:
@@ -40,6 +40,10 @@ build:
 .PHONY: up
 up:
 	docker compose -f $(COMPOSE_FILE) up -d
+
+.PHONY: serve
+serve:
+	python -m mlair serve
 
 .PHONY: down
 down:
@@ -86,7 +90,7 @@ wave5: verify-wave5
 
 .PHONY: doctor
 doctor:
-	python scripts/doctor.py --compose-file $(COMPOSE_FILE)
+	python -m mlair doctor
 
 .PHONY: fresh-machine-test
 fresh-machine-test:
@@ -171,6 +175,14 @@ test-smoke-phase2:
 	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
 	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
 	python scripts/test_smoke_phase2.py
+
+.PHONY: verify-phase2-run
+verify-phase2-run:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	ML_AIR_TRACKING_TOKEN=$${ML_AIR_TRACKING_TOKEN:-admin-token} \
+	python scripts/verify_phase2_run.py
 
 .PHONY: test-smoke-v03
 test-smoke-v03:
