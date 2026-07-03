@@ -106,7 +106,7 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 
 ### Release hygiene (maintainers)
 
-- Before tagging a milestone: run `make up` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see [CONTRIBUTING.md](CONTRIBUTING.md) for DB migrations and review expectations).
+- Before tagging a milestone: run `mlair rebuild` (or full quickstart) then `make test-all`; confirm migrations on a fresh DB; update `CHANGELOG.md` / release notes; tag and push (see [CONTRIBUTING.md](CONTRIBUTING.md) for DB migrations and review expectations).
 
 ---
 
@@ -265,11 +265,12 @@ pip install -e .    # unified package: mlair CLI + sdk
 
 ```bash
 mlair doctor
-mlair serve --build
+mlair build
+mlair start
 mlair health
 ```
 
-Configuration: [docs/configuration.md](docs/configuration.md) — sensible defaults, optional `mlair.yaml`. Makefile (`make up`) remains supported.
+Configuration: [docs/configuration.md](docs/configuration.md) — sensible defaults, optional `mlair.yaml`.
 
 **Verify**
 
@@ -279,7 +280,7 @@ Configuration: [docs/configuration.md](docs/configuration.md) — sensible defau
 
 **Defaults:** one container `mlair` on **port 8080** — Hub UI, REST API (`/v1`), and WebSocket realtime (`/ws`) on the same origin. Postgres and Redis run inside the container (no separate compose services).
 
-**Legacy multi-container:** `mlair serve --profile microservices --build` (separate API **8080**, Hub **38080**, realtime **8001**).
+**Legacy multi-container:** `mlair rebuild --profile microservices` (separate API **8080**, Hub **38080**, realtime **8001**).
 
 **Full operator docs:** [docs/index.md](docs/index.md). **Post-pull DB:** run `cd api && alembic upgrade head` (see [CONTRIBUTING.md](CONTRIBUTING.md) § Database migrations).
 
@@ -371,9 +372,15 @@ ml-air/
 
 From repo root (stack up where a target requires a live API):
 
-- `make health` — quick compose health probe  
-- `make doctor` — diagnostics  
-- `make test-env-sync` — `.env` / `.env.example` drift  
+**Stack (unified CLI):**
+
+- `mlair doctor` — preflight (docker, ports, compose file)
+- `mlair build` / `mlair start` / `mlair rebuild` / `mlair stop` — images and containers
+- `mlair health` — wait for API + Hub health
+
+**Tests & maintainer gates** (Makefile wrappers — see [Makefile](Makefile)):
+
+- `make test-env-sync` — `.env` / `.env.example` drift
 - `make test-manifest-key-rotation` — manifest key rotation guard  
 - `make test-prometheus-rules` — `promtool check rules` on `deploy/monitoring/alerts/mlair-alerts.yml`  
 - `make test-smoke-mlair` — API smoke  

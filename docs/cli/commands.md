@@ -20,24 +20,21 @@ python bin/mlair --help
 
 ```bash
 mlair doctor
-mlair serve              # docker compose up -d (development profile)
-mlair serve --build      # rebuild images
+mlair build              # docker compose build (images only)
+mlair start              # docker compose up -d (from existing images)
+mlair rebuild            # build then (re)start
 mlair health
-mlair stop
+mlair stop               # docker compose down
 ```
 
-Backward-compatible alias:
-
-```bash
-mlair dev up           # same as mlair serve
-```
+`mlair build --no-cache` / `mlair rebuild --no-cache` skip the build cache; `mlair start --foreground` / `mlair rebuild --foreground` attach logs.
 
 ## Configuration
 
 ```bash
 mlair config print
-mlair serve --profile staging
-mlair serve --config ./mlair.yaml
+mlair start --profile staging
+mlair start --config ./mlair.yaml
 ```
 
 ## Trigger runs and logs

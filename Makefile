@@ -35,23 +35,23 @@ build-images: build-base
 	ML_AIR_PYTHON_BASE_IMAGE=$(ML_AIR_PYTHON_BASE_IMAGE) CONTAINER_ENGINE=$(CONTAINER_ENGINE) ML_AIR_BUILD_PYTHON_BASE=0 bash scripts/build-images.sh
 
 build:
-	docker compose -f $(COMPOSE_FILE) build
+	python -m mlair build
 
 .PHONY: up
 up:
-	docker compose -f $(COMPOSE_FILE) up -d
+	python -m mlair start
 
 .PHONY: serve
 serve:
-	python -m mlair serve
+	python -m mlair start
 
 .PHONY: down
 down:
-	docker compose -f $(COMPOSE_FILE) down
+	python -m mlair stop
 
 .PHONY: health
 health:
-	python scripts/check_quickstart_health.py --compose-file $(COMPOSE_FILE)
+	python -m mlair health
 
 .PHONY: verify-wave0
 verify-wave0:
@@ -105,7 +105,7 @@ gate1-lock:
 
 .PHONY: rebuild
 rebuild:
-	docker compose -f $(COMPOSE_FILE) up -d --build
+	python -m mlair rebuild
 
 .PHONY: test-smoke-mlair
 test-smoke-mlair:

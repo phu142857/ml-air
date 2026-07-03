@@ -15,7 +15,7 @@
 ## Quick Checks
 
 ```bash
-make health
+mlair health
 python ./mlair logs <run_id> --limit 200
 make test-observability
 ```

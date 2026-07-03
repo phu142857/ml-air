@@ -75,6 +75,8 @@ class TaskResourceMonitor:
         self._gpu_mem_mb_seconds_acc = 0.0
         self._last_flush_at = 0.0
         self._lock = threading.Lock()
+        # pid -> persistent psutil.Process (holds cpu_percent baseline across samples)
+        self._proc_cache: dict[int, Any] = {}
 
     @property
     def root_pid(self) -> int | None:
@@ -100,9 +102,12 @@ class TaskResourceMonitor:
         self._started_at = time.perf_counter()
         self._cpu_times0 = self._cpu_time_seconds_tree(self._root_pid)
         self._disk_io0 = self._disk_io_tree(self._root_pid)
+        self._proc_cache = {}
         for proc in self._process_tree(self._root_pid):
             try:
-                proc.cpu_percent(interval=None)
+                p = psutil.Process(proc.pid)
+                p.cpu_percent(interval=None)  # prime baseline; counts from next sample
+                self._proc_cache[proc.pid] = p
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
@@ -223,12 +228,29 @@ class TaskResourceMonitor:
         mem_bytes = 0
         pids: set[int] = set()
         for proc in procs:
-            pids.add(proc.pid)
+            pid = proc.pid
+            pids.add(pid)
             try:
-                cpu_pct += float(proc.cpu_percent(interval=None))
                 mem_bytes += int(proc.memory_info().rss)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
+            cached = self._proc_cache.get(pid)
+            if cached is None:
+                # New child spawned mid-run: create + prime (contributes next sample).
+                try:
+                    cached = psutil.Process(pid)
+                    cached.cpu_percent(interval=None)
+                    self._proc_cache[pid] = cached
+                    continue
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            try:
+                cpu_pct += float(cached.cpu_percent(interval=None))
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                self._proc_cache.pop(pid, None)
+        # drop cached procs no longer in the tree
+        for dead in set(self._proc_cache) - pids:
+            self._proc_cache.pop(dead, None)
 
         gpu_util, gpu_mem_mb = _gpu_stats_for_pids(pids)
 
@@ -327,26 +349,33 @@ def _gpu_stats_for_pids(pids: set[int]) -> tuple[float | None, float | None]:
         device_count = pynvml.nvmlDeviceGetCount()
         for idx in range(device_count):
             handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
+            dev_util = None
             try:
-                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                if util_peak is None or float(util.gpu) > util_peak:
-                    util_peak = float(util.gpu)
+                dev_util = float(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
+                if util_peak is None or dev_util > util_peak:
+                    util_peak = dev_util
             except Exception:
                 pass
+            matched = False
             try:
                 for proc in pynvml.nvmlDeviceGetComputeRunningProcesses(handle):
-                    if int(proc.pid) in pids:
+                    if int(proc.pid) in pids and getattr(proc, "usedGpuMemory", None):
                         used_mb = float(proc.usedGpuMemory) / (1024.0 * 1024.0)
+                        matched = True
                         if mem_peak_mb is None or used_mb > mem_peak_mb:
                             mem_peak_mb = used_mb
-                        if util_peak is None:
-                            try:
-                                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                                util_peak = float(util.gpu)
-                            except Exception:
-                                pass
             except Exception:
-                continue
+                pass
+            # Container PID-namespace: NVML reports host PIDs that won't match our
+            # container PIDs. If the device is active but nothing matched, attribute
+            # device-level used memory (accurate for a dedicated GPU container).
+            if not matched and dev_util and dev_util > 0:
+                try:
+                    used_mb = float(pynvml.nvmlDeviceGetMemoryInfo(handle).used) / (1024.0 * 1024.0)
+                    if mem_peak_mb is None or used_mb > mem_peak_mb:
+                        mem_peak_mb = used_mb
+                except Exception:
+                    pass
     finally:
         try:
             pynvml.nvmlShutdown()

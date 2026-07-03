@@ -40,14 +40,17 @@ jobs:
       - name: Prepare env
         run: cp .env.example .env
 
+      - name: Install mlair CLI
+        run: pip install -e .
+
       - name: Preflight doctor
-        run: make doctor
+        run: mlair doctor
 
       - name: Boot quickstart stack
-        run: make rebuild
+        run: mlair rebuild
 
       - name: Verify quickstart health
-        run: make health
+        run: mlair health
 
       - name: Seed demo data
         run: make seed-demo
@@ -57,7 +60,7 @@ jobs:
 
       - name: Teardown stack
         if: always()
-        run: make down
+        run: mlair stop
 
   env-sync-guard:
     runs-on: ubuntu-latest

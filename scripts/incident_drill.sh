@@ -7,7 +7,7 @@ TENANT_ID="${ML_AIR_TENANT_ID:-default}"
 PROJECT_ID="${ML_AIR_PROJECT_ID:-default_project}"
 
 if ! curl -fsS --connect-timeout 2 --max-time 5 "${API_BASE_URL}/health" >/dev/null 2>&1; then
-  echo "[FAIL] API not reachable at ${API_BASE_URL} — start quickstart (make rebuild) before incident drill." >&2
+  echo "[FAIL] API not reachable at ${API_BASE_URL} — start stack (mlair rebuild) before incident drill." >&2
   exit 1
 fi
 

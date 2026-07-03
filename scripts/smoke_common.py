@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 
 
-def require_api_reachable(base_url: str, *, hint_command: str = "make rebuild") -> None:
+def require_api_reachable(base_url: str, *, hint_command: str = "mlair rebuild") -> None:
     """Exit 1 with a short message if the API /health is not reachable."""
     base = base_url.rstrip("/")
     try:

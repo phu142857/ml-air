@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 2 verification (G1 + observability APIs) against a running `mlair serve` stack."""
+"""Phase 2 verification (G1 + observability APIs) against a running MLAir stack (mlair start / rebuild)."""
 
 from __future__ import annotations
 

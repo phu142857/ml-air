@@ -1,4 +1,4 @@
-"""``mlair serve`` — start microservice stack via Docker Compose."""
+"""MLAir runtime commands — separate ``build`` / ``start`` / ``stop`` / ``rebuild`` via Docker Compose."""
 
 from __future__ import annotations
 
@@ -30,39 +30,37 @@ def _compose_file(cfg: dict) -> Path:
     return default_compose_file()
 
 
-def run_serve(
+def _prepare(
+    profile: str | None,
+    config_path: str | None,
     *,
-    build: bool = False,
-    detach: bool = True,
-    profile: str | None = None,
-    config_path: str | None = None,
-) -> int:
+    ensure_env: bool = False,
+) -> tuple[Path, dict] | None:
+    """Shared setup: chdir to repo root, load config, resolve compose file."""
     root = repo_root()
     if not root.is_dir():
         print("[mlair] cannot locate repository root", file=sys.stderr)
-        return 1
+        return None
 
     os.chdir(root)
     cfg = load_config(config_path, profile=profile or os.getenv("MLAIR_PROFILE"))
     apply_to_environ(cfg)
-    _ensure_env_file()
+    if ensure_env:
+        _ensure_env_file()
 
     compose_path = _compose_file(cfg)
     if not compose_path.is_file():
         print(f"[mlair] compose file not found: {compose_path}", file=sys.stderr)
-        return 1
+        return None
+    return compose_path, cfg
 
-    cmd = ["docker", "compose", "-f", str(compose_path), "up"]
-    if detach:
-        cmd.append("-d")
-    if build:
-        cmd.append("--build")
 
-    print(f"[mlair] profile={cfg.get('profile')} compose={compose_path}")
-    proc = subprocess.run(cmd, check=False)
-    if proc.returncode != 0:
-        return proc.returncode
+def _compose(compose_path: Path, *args: str) -> int:
+    proc = subprocess.run(["docker", "compose", "-f", str(compose_path), *args], check=False)
+    return proc.returncode
 
+
+def _print_endpoints(cfg: dict) -> None:
     compose_rel = str((cfg.get("compose") or {}).get("file") or "")
     is_allinone = "allinone" in compose_rel
     if is_allinone:
@@ -76,20 +74,90 @@ def run_serve(
         print(f"  API:      http://localhost:{api_port}")
         print(f"  Hub:      http://localhost:{ui_port}")
         print(f"  Realtime: ws://localhost:{os.getenv('MLAIR_REALTIME_PORT', '8001')}")
-    print(f"  Health:   mlair health")
-    print(f"  Docs:     docs/configuration.md")
+    print("  Health:   mlair health")
+    print("  Docs:     docs/configuration.md")
+
+
+def run_build(*, no_cache: bool = False, profile: str | None = None, config_path: str | None = None) -> int:
+    """Build images only (no start)."""
+    prep = _prepare(profile, config_path, ensure_env=True)
+    if prep is None:
+        return 1
+    compose_path, cfg = prep
+    print(f"[mlair] build profile={cfg.get('profile')} compose={compose_path}")
+    args = ["build"]
+    if no_cache:
+        args.append("--no-cache")
+    return _compose(compose_path, *args)
+
+
+def run_start(*, detach: bool = True, profile: str | None = None, config_path: str | None = None) -> int:
+    """Start the stack from existing images (no build)."""
+    prep = _prepare(profile, config_path, ensure_env=True)
+    if prep is None:
+        return 1
+    compose_path, cfg = prep
+    print(f"[mlair] start profile={cfg.get('profile')} compose={compose_path}")
+    args = ["up"]
+    if detach:
+        args.append("-d")
+    rc = _compose(compose_path, *args)
+    if rc != 0:
+        return rc
+    _print_endpoints(cfg)
     return 0
 
 
-def run_stop(
+def run_rebuild(
     *,
+    no_cache: bool = False,
+    detach: bool = True,
     profile: str | None = None,
     config_path: str | None = None,
 ) -> int:
-    root = repo_root()
-    os.chdir(root)
-    cfg = load_config(config_path, profile=profile or os.getenv("MLAIR_PROFILE"))
-    apply_to_environ(cfg)
-    compose_path = _compose_file(cfg)
-    proc = subprocess.run(["docker", "compose", "-f", str(compose_path), "down"], check=False)
-    return proc.returncode
+    """Rebuild images then (re)start."""
+    prep = _prepare(profile, config_path, ensure_env=True)
+    if prep is None:
+        return 1
+    compose_path, cfg = prep
+    print(f"[mlair] rebuild profile={cfg.get('profile')} compose={compose_path}")
+    build_args = ["build"]
+    if no_cache:
+        build_args.append("--no-cache")
+    rc = _compose(compose_path, *build_args)
+    if rc != 0:
+        return rc
+    args = ["up"]
+    if detach:
+        args.append("-d")
+    rc = _compose(compose_path, *args)
+    if rc != 0:
+        return rc
+    _print_endpoints(cfg)
+    return 0
+
+
+def run_stop(*, profile: str | None = None, config_path: str | None = None) -> int:
+    """Stop and remove the stack containers."""
+    prep = _prepare(profile, config_path)
+    if prep is None:
+        return 1
+    compose_path, _cfg = prep
+    return _compose(compose_path, "down")
+
+
+def run_serve(
+    *,
+    build: bool = False,
+    detach: bool = True,
+    profile: str | None = None,
+    config_path: str | None = None,
+) -> int:
+    """Deprecated alias: ``serve`` == ``start``; ``serve --build`` == ``rebuild`` (cache reused)."""
+    if build:
+        print(
+            "[mlair] note: `serve --build` is deprecated — use `mlair build` / `mlair rebuild`",
+            file=sys.stderr,
+        )
+        return run_rebuild(no_cache=False, detach=detach, profile=profile, config_path=config_path)
+    return run_start(detach=detach, profile=profile, config_path=config_path)

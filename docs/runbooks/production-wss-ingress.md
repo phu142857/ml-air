@@ -63,7 +63,7 @@ Client `realtime_base_url`: `wss://mlair.example.com/realtime` (no trailing slas
 
 1. `curl -sS https://mlair.example.com/v1/runtime-config | jq .realtime_base_url` → `wss://…`
 2. Browser DevTools → Network → WS → **101 Switching Protocols**
-3. `make verify-wave0` against API URL (set `ML_AIR_BASE_URL`); WS check uses `realtime_base_url` from runtime-config
+3. `python scripts/verify_execution_realtime.py` against API URL (set `ML_AIR_BASE_URL`); WS check uses `realtime_base_url` from runtime-config
 
 ## Related
 

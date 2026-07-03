@@ -17,19 +17,9 @@ Boot MLAir locally and run a demo pipeline in minutes.
 
 ```bash
 pip install -e .
-mlair serve --build
+mlair doctor
+mlair rebuild
 mlair health
-make seed-demo
-make smoke-quickstart
-```
-
-**Makefile equivalent:**
-
-```bash
-cp .env.example .env
-make build
-make up
-make health
 make seed-demo
 make smoke-quickstart
 ```

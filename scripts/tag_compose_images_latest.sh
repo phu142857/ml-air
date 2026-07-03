@@ -28,4 +28,4 @@ if [[ "${any}" -eq 0 ]]; then
   exit 1
 fi
 
-echo "Done. Use: mlair serve --profile microservices"
+echo "Done. Use: mlair rebuild --profile microservices"

@@ -6,7 +6,7 @@
 - The **UI** resolves a WebSocket URL by default (`/v1/runtime-config`, static `mlair-runtime-config.js`, or host inference — see [execution-realtime-ops](./execution-realtime-ops.md)). It **always** runs safety polling (faster when WS is down/reconnecting) on runs, pipelines, dashboard, datasets, and models.
 - With the realtime process dead, open pages **reconnect with backoff**; polling should still converge within seconds without a full page reload.
 
-**Wave 0 sign-off:** `make verify-wave0` (after `make up` / `make health`).
+**Wave 0 sign-off:** `python scripts/verify_execution_realtime.py` (after `mlair rebuild` / `mlair health`).
 
 ## Quick checks
 

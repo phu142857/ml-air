@@ -11,7 +11,8 @@ Use MLAir immediately after install. Override only when you need staging/product
 ```bash
 pip install -e .          # from repository root
 mlair doctor
-mlair serve --build
+mlair build               # build images
+mlair start               # start from images
 mlair health
 ```
 
@@ -36,7 +37,7 @@ Override the host mapping with `ports.hub` in `mlair.yaml` or `MLAIR_PORT` in th
 ### Legacy multi-container layout
 
 ```bash
-mlair serve --profile microservices --build
+mlair rebuild --profile microservices
 ```
 
 ## Configuration layers (priority)
@@ -63,14 +64,14 @@ Bundled in `mlair/profiles/` (also shipped inside the `mlair` wheel).
 
 | Profile | Use case | Strict dataset pin | Promote approval |
 |---------|----------|----------------------|------------------|
-| `development` | Local single-container (`mlair serve`) | off | skipped (dev) |
+| `development` | Local single-container (`mlair start`) | off | skipped (dev) |
 | `microservices` | Legacy multi-container compose | off | skipped (dev) |
 | `staging` | Pre-prod sign-off | on | enforced |
 | `production` | Lifecycle OS production | on | enforced |
 
 ```bash
-mlair serve --profile staging
-MLAIR_PROFILE=production mlair serve
+mlair start --profile staging
+MLAIR_PROFILE=production mlair start
 ```
 
 ### Profile → environment variables
@@ -127,20 +128,20 @@ auth:
 
 | Command | Description |
 |---------|-------------|
-| `mlair serve` | Start microservice stack via Docker Compose |
-| `mlair serve --build` | Rebuild images then start |
+| `mlair build` | Build images only (`docker compose build`) |
+| `mlair start` | Start from existing images (`docker compose up -d`) |
+| `mlair rebuild` | Build images then (re)start |
 | `mlair stop` | `docker compose down` |
 | `mlair doctor` | Preflight (docker, ports, compose) |
 | `mlair health` | Wait for API/UI health |
 | `mlair config print` | Show merged config |
 | `mlair run <file.yaml>` | Trigger pipeline run |
 | `mlair logs <run_id>` | Fetch run logs |
-| `mlair dev up` | Alias for `mlair serve` (backward compatible) |
 
 Without `pip install`, from repo root:
 
 ```bash
-python -m mlair serve
+python -m mlair rebuild
 python bin/mlair doctor
 ```
 
@@ -148,7 +149,7 @@ python bin/mlair doctor
 
 | Mode | Command | Runtime |
 |------|---------|---------|
-| **Recommended local** | `mlair serve` | Compose: api + scheduler + executor + realtime + frontend + postgres + redis |
+| **Recommended local** | `mlair rebuild` | Single all-in-one container on port 8080 |
 | **Production** | Pinned ghcr images + compose | Same topology, scaled executor, HA scheduler |
 | **SDK / worker only** | `pip install mlair` | `sdk.start_run`, `mlair worker` (external) |
 
@@ -166,12 +167,12 @@ export ML_AIR_JWT_HS256_SECRET=...
 export ML_AIR_TRACKING_TOKEN=...
 ```
 
-`mlair serve` creates `.env` from `.env.example` on first run if missing. For production, use secret manager + compose override — see `deploy/env/staging-strict.env.example`.
+`mlair start` creates `.env` from `.env.example` on first run if missing. For production, use secret manager + compose override — see `deploy/env/staging-strict.env.example`.
 
 ### Strict lifecycle (staging / production)
 
 ```bash
-mlair serve --profile production
+mlair start --profile production
 ```
 
 Equivalent to `deploy/env/production-strict.env.example`. Runbook: [Production strict lifecycle](./runbooks/production-strict-lifecycle.md).
@@ -190,4 +191,4 @@ Keep using pinned images and `MLAIR_API_IMAGE` — no monorepo submodule. Set pr
 
 ## Done
 
-Defaults → `mlair serve` → Hub. Customize via profile or `mlair.yaml` only when required.
+Defaults → `mlair rebuild` → Hub. Customize via profile or `mlair.yaml` only when required.

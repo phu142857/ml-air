@@ -1,28 +1,32 @@
-# `mlair serve` (formerly `mlair dev up`)
+# MLAir CLI (local development)
 
 ## Goal
 
-Start the local MLAir microservice stack with one command.
+Start and stop the local MLAir stack with the unified CLI.
 
 ## Steps
 
-1. Install package: `pip install -e .`
+1. Install: `pip install -e .` from repository root.
 2. Run preflight: `mlair doctor`
-3. Start stack: `mlair serve`
+3. Start stack: `mlair rebuild` (or `mlair build` then `mlair start`)
 
 ## Command
 
 ```bash
-mlair serve
-mlair serve --build
-mlair dev up          # alias
-python -m mlair serve
+mlair doctor
+mlair build           # images only
+mlair start           # from existing images
+mlair rebuild         # build then (re)start
+mlair health
+mlair stop
+python -m mlair rebuild
 ```
 
 ## Result
 
-Docker Compose starts API, scheduler, executor, realtime, Hub, Postgres, and Redis.
+- MLAir: `http://localhost:8080` (Hub + API + realtime)
+- Health: `mlair health`
 
 ## Done
 
-See [Configuration](../configuration.md) and [Quickstart](../getting-started/quickstart.md).
+Continue with [Quickstart](../getting-started/quickstart.md).

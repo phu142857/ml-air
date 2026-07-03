@@ -9,7 +9,7 @@ EXECUTOR_METRICS_PORT="${ML_AIR_EXECUTOR_METRICS_PORT:-9103}"
 
 echo "[1/6] API health"
 curl -fsS "${API_BASE_URL}/health" >/dev/null || {
-  echo "[FAIL] API not reachable at ${API_BASE_URL} — start quickstart (make rebuild) before observability checks." >&2
+  echo "[FAIL] API not reachable at ${API_BASE_URL} — start stack (mlair rebuild) before observability checks." >&2
   exit 1
 }
 

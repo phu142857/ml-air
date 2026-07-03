@@ -15,7 +15,7 @@ Verify manifest signature and required artifacts policy.
 ```bash
 export ML_AIR_MANIFEST_VERIFY_SIGNATURE=true
 export ML_AIR_MANIFEST_REQUIRED_ARTIFACTS=true
-make up
+mlair start
 ```
 
 ## Result

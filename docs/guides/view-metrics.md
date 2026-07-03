@@ -13,7 +13,7 @@ View platform and run metrics for health and performance.
 ## Command
 
 ```bash
-make up
+mlair start
 curl "http://localhost:9090/api/v1/query?query=mlair_scheduler_queue_depth"
 ```
 

@@ -1,4 +1,4 @@
-# MLAir single-container runtime (default for `mlair serve`).
+# MLAir single-container runtime (default for `mlair start` / `mlair rebuild`).
 # One service, one public port: Hub + API (/v1) + realtime (/ws) via internal nginx.
 #
 # This file is PURE MLAir — no domain workloads. Integrations live in their own repo

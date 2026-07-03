@@ -11,7 +11,7 @@ from mlair import __version__
 from mlair.commands.doctor import run_doctor
 from mlair.commands.health import run_health
 from mlair.commands.legacy_http import cmd_logs, cmd_run
-from mlair.commands.serve import run_serve, run_stop
+from mlair.commands.serve import run_build, run_rebuild, run_serve, run_start, run_stop
 from mlair.config.loader import apply_to_environ, load_config, resolved_config
 
 
@@ -41,7 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Quick start:\n"
             "  pip install -e .\n"
             "  mlair doctor\n"
-            "  mlair serve\n"
+            "  mlair build\n"
+            "  mlair start\n"
             "  mlair health\n\n"
             "Configuration: docs/configuration.md"
         ),
@@ -51,12 +52,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    serve = sub.add_parser("serve", help="Start MLAir (single container: API, Hub, workers, Postgres, Redis)")
-    serve.add_argument("--build", action="store_true", help="Rebuild images before start")
-    serve.add_argument("--foreground", action="store_true", help="Attach compose logs (no -d)")
-    serve.set_defaults(func="_cmd_serve")
+    build = sub.add_parser("build", help="Build images only (no start)")
+    build.add_argument("--no-cache", action="store_true", help="Build without using cache")
+    build.set_defaults(func="_cmd_build")
+
+    start = sub.add_parser("start", help="Start MLAir from existing images (no build)")
+    start.add_argument("--foreground", action="store_true", help="Attach compose logs (no -d)")
+    start.set_defaults(func="_cmd_start")
+
+    rebuild = sub.add_parser("rebuild", help="Rebuild images then (re)start")
+    rebuild.add_argument("--no-cache", action="store_true", help="Build without using cache")
+    rebuild.add_argument("--foreground", action="store_true", help="Attach compose logs (no -d)")
+    rebuild.set_defaults(func="_cmd_rebuild")
 
     sub.add_parser("stop", help="Stop compose stack").set_defaults(func="_cmd_stop")
+
+    serve = sub.add_parser("serve", help="Deprecated alias: `start` (use `mlair start` / `build` / `rebuild`)")
+    serve.add_argument("--build", action="store_true", help="Deprecated: rebuild before start (use `mlair rebuild`)")
+    serve.add_argument("--foreground", action="store_true", help="Attach compose logs (no -d)")
+    serve.set_defaults(func="_cmd_serve")
 
     sub.add_parser("doctor", help="Preflight checks (docker, ports, compose)").set_defaults(func="_cmd_doctor")
 
@@ -81,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dev = sub.add_parser("dev", help="Deprecated alias for local development")
     dev_sub = dev.add_subparsers(dest="dev_command", required=True)
-    dev_up = dev_sub.add_parser("up", help="Alias for `mlair serve`")
+    dev_up = dev_sub.add_parser("up", help="Alias for `mlair start`")
     dev_up.set_defaults(func="_cmd_serve")
 
     return parser
@@ -97,6 +111,25 @@ def _dispatch(args: argparse.Namespace) -> int:
     apply_to_environ(cfg)
 
     func = args.func
+    if func == "_cmd_build":
+        return run_build(
+            no_cache=bool(getattr(args, "no_cache", False)),
+            profile=profile,
+            config_path=config_path,
+        )
+    if func == "_cmd_start":
+        return run_start(
+            detach=not bool(getattr(args, "foreground", False)),
+            profile=profile,
+            config_path=config_path,
+        )
+    if func == "_cmd_rebuild":
+        return run_rebuild(
+            no_cache=bool(getattr(args, "no_cache", False)),
+            detach=not bool(getattr(args, "foreground", False)),
+            profile=profile,
+            config_path=config_path,
+        )
     if func == "_cmd_serve":
         return run_serve(
             build=bool(getattr(args, "build", False)),

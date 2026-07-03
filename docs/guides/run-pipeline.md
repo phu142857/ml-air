@@ -19,7 +19,7 @@ Trigger and monitor a pipeline run from CLI.
 ## Command
 
 ```bash
-python ./mlair dev up
+mlair rebuild
 python ./mlair run examples/pipeline.demo.yaml
 python ./mlair logs <run_id> --limit 100
 ```

@@ -12,7 +12,7 @@ MLAir as **Lifecycle OS** must survive **production**, not only local compose: H
 
 | Item | Staging | Production | Notes |
 | --- | --- | --- | --- |
-| `make wave0` (automated PASS) | **Required** | **Required** | health + realtime verify |
+| `mlair health` + `verify_execution_realtime.py` (automated PASS) | **Required** | **Required** | health + realtime verify |
 | Hub manual (runs, WS, polling fallback) | **Required** | **Required** | ~2 min, pinned scope |
 | `python scripts/verify_strict_lifecycle.py` | **Required** | **Required** | strict `runtime-config.features` |
 | `make wave1` / `make chaos-wave1` | **Recommended** | **Recommended** | chaos on staging minimum |
@@ -44,7 +44,8 @@ Run from a machine that can reach the stack (set `ML_AIR_BASE_URL` if not `http:
 cd /path/to/ml-air
 
 # 1 — Automated Wave 0
-make wave0
+mlair health
+python scripts/verify_execution_realtime.py
 python scripts/verify_strict_lifecycle.py
 
 # 2 — Hub manual (~2 min) — see checklist below
@@ -72,7 +73,7 @@ After staging sign-off:
 1. Apply prod env: [`deploy/env/production-strict.env.example`](../../deploy/env/production-strict.env.example)
 2. Fill WSS table in [production-wss-ingress](./production-wss-ingress.md) — set `ML_AIR_RUNTIME_REALTIME_BASE_URL=wss://…`
 3. Deploy Alertmanager routes if multi-tenant
-4. `make wave0` against prod API URL (`ML_AIR_BASE_URL=https://…`)
+4. `mlair health` and `python scripts/verify_execution_realtime.py` against prod API URL (`ML_AIR_BASE_URL=https://…`)
 5. `python scripts/verify_strict_lifecycle.py`
 6. **Hub manual on prod** with **HTTPS** — DevTools WS must show **101** on **wss://**
 7. Confirm **Runs list + run detail** update without F5 when a run completes
@@ -99,7 +100,7 @@ Pin tenant + project in Hub header (not aggregate `all`).
 | Hostname / release (git SHA) | | |
 | Hub URL | | |
 | `ML_AIR_RUNTIME_REALTIME_BASE_URL` | _ws://… or N/A_ | _wss://…_ |
-| `make wave0` — date, operator, PASS/FAIL | | |
+| Wave 0 automated — date, operator, PASS/FAIL | | |
 | `verify_strict_lifecycle.py` — PASS/FAIL | | |
 | Hub manual — PASS/FAIL + notes | | |
 | `make wave1` / chaos — PASS/FAIL | | |

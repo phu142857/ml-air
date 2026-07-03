@@ -17,8 +17,8 @@ WebSocket is **transport only**; Postgres remains source of truth. See [Executio
 ## Automated sign-off (local quickstart)
 
 ```bash
-make health                    # stack containers + realtime /healthz
-make verify-wave0            # runtime-config + WS handshake + Redis TCP
+mlair health                    # stack containers + realtime /healthz
+python scripts/verify_execution_realtime.py   # runtime-config + WS handshake + Redis TCP
 ```
 
 Optional env overrides: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_AIR_PROJECT_ID`, `ML_AIR_REALTIME_VERIFY_TOKEN` (default `viewer-token`).
@@ -46,7 +46,7 @@ Static bootstrap file: `frontend/public/mlair-runtime-config.js` ships `realtime
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Everything stale until F5 | Realtime down **and** API publish off | `make health`; set `MLAIR_REALTIME_ENABLED=true`; restart API/scheduler/realtime |
+| Everything stale until F5 | Realtime down **and** API publish off | `mlair health`; set `MLAIR_REALTIME_ENABLED=true`; restart API/scheduler/realtime |
 | WS pending / failed | Wrong URL, CORS/mixed content, auth token | Match `ML_AIR_AUTH_TOKENS_JSON` / JWT with Hub token; use **WSS** on HTTPS sites |
 | Run list updates, DAG stuck | Task id mismatch (fixed in app) — old build | Upgrade frontend/API; hard refresh |
 | Only one tenant/project broken | Scope mismatch on WS query params | Hub `tenantId` / `projectId` must match event scope |

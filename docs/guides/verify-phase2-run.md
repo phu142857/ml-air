@@ -1,11 +1,11 @@
 # Verify Phase 2 observability on a run
 
-Smoke-check G1 + resource timeline APIs after a **SUCCESS** training run on a running `mlair serve` stack.
+Smoke-check G1 + resource timeline APIs after a **SUCCESS** training run on a running MLAir stack (`mlair start` / `mlair rebuild`).
 
 ## Prerequisite
 
 ```bash
-mlair serve --build
+mlair rebuild
 mlair health
 ```
 

@@ -20,7 +20,7 @@
 
 | Step | Command | Date | Operator | PASS / FAIL | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Stack health + Wave 0 | `make wave0` | | | | |
+| Stack health + Wave 0 | `mlair health` + `python scripts/verify_execution_realtime.py` | | | | |
 | Strict lifecycle config | `python scripts/verify_strict_lifecycle.py` | | | | |
 | Wave 1 + chaos | `make wave1` | | | | |
 | Scheduler HA | `make validate-scheduler-ha` | | | | _staging before prod HA_ |

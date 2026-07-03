@@ -6,7 +6,7 @@ Complete one lifecycle train flow: **dataset version → readiness → run** —
 
 ## Recommended path (Hub)
 
-1. Start MLAir: `mlair serve` (or `make up`).
+1. Start MLAir: `mlair start` (first time or after image changes: `mlair rebuild`).
 2. Open MLAir: `http://localhost:8080` → **Datasets**.
 3. Open a dataset → tab **Run / Train** → **Train with model** or **Run with pipeline**.
 4. Open the run from the success link or **Runs** (maintainer nav) for task progress.
@@ -18,7 +18,7 @@ See [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).
 For CI or headless smoke only:
 
 ```bash
-mlair serve
+mlair rebuild
 mlair run examples/pipeline.demo.yaml
 mlair logs <run_id> --limit 100
 ```

@@ -13,7 +13,7 @@ Start Prometheus with MLAir scrape targets.
 ## Command
 
 ```bash
-make up
+mlair start
 curl "http://localhost:9090/-/healthy"
 ```
 

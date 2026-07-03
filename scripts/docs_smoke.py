@@ -15,8 +15,8 @@ def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
 
 def main() -> int:
     try:
-        run(["make", "up"])
-        run(["make", "health"])
+        run(["python", "-m", "mlair", "rebuild"])
+        run(["python", "-m", "mlair", "health"])
         run(["make", "seed-demo"])
         run(["python", "-m", "mlair", "--help"])
         run(["python", "-m", "mlair", "run", "examples/pipeline.demo.yaml"])
@@ -26,7 +26,7 @@ def main() -> int:
         if "TLS handshake timeout" in msg or "timeout" in msg.lower():
             print(
                 "[HINT] Image pull or registry failed — check network/VPN/firewall, then retry "
-                "`make up` or `make rebuild` before `python scripts/docs_smoke.py`."
+                "`mlair rebuild` before `python scripts/docs_smoke.py`."
             )
         return 1
     print(
@@ -34,8 +34,8 @@ def main() -> int:
             {
                 "status": "ok",
                 "checks": [
-                    "make up",
-                    "make health",
+                    "mlair rebuild",
+                    "mlair health",
                     "make seed-demo",
                     "mlair --help",
                     "mlair run examples/pipeline.demo.yaml",

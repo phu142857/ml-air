@@ -14,9 +14,9 @@ References: [execution-realtime-ops](./execution-realtime-ops.md) · [wave1-prod
 
 | Step | Command | Pass criteria |
 | --- | --- | --- |
-| Stack health | `make health` | API, postgres, redis, realtime `/healthz` OK |
-| Wave 0 verify | `make verify-wave0` | `scripts/verify_execution_realtime.py` exit 0 |
-| Combined | `make wave0` | health + verify-wave0 |
+| Stack health | `mlair health` | API, postgres, redis, realtime `/healthz` OK |
+| Wave 0 verify | `python scripts/verify_execution_realtime.py` | exit 0 |
+| Combined | `mlair health` then verify script | both pass |
 
 Optional env: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_AIR_PROJECT_ID`, `ML_AIR_REALTIME_VERIFY_TOKEN` (default `viewer-token`).
 
@@ -52,7 +52,7 @@ From [legacy-compat-sunset](./legacy-compat-sunset.md) pre-sunset / **M1 staging
 | --- | --- |
 | Environment | _staging / production_ |
 | Hostname / release | _e.g. mlair.example.com @ git SHA_ |
-| `make wave0` date + operator | _YYYY-MM-DD, name_ |
+| Wave 0 automated — date + operator | _YYYY-MM-DD, name_ |
 | Hub manual checklist | _pass / fail + notes_ |
 | WSS URL documented | _yes / N/A dev-only_ |
 | Ticket / approval ID | _…_ |
@@ -148,7 +148,7 @@ Use this when closing a **research milestone**, not a deploy:
 
 Execute in order:
 
-1. `make wave0` + `make verify-strict-lifecycle` + Hub manual checklist (Wave 0)
+1. `mlair health` + `python scripts/verify_execution_realtime.py` + `make verify-strict-lifecycle` + Hub manual checklist (Wave 0)
 2. Legacy / version-centric pre-sunset items if cutting over readiness (Wave 0b)
 3. `make wave1` on same stack
 4. `make validate-scheduler-ha` on staging + observe 24–48h

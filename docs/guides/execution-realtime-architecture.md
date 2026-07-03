@@ -27,7 +27,7 @@ WebSocket is **transport only**, not the source of truth.
 | Frontend | `useMlairRealtime`: debounced invalidation + selective cache patch |
 | DAG | `GET .../pipelines/{id}/dag` overlays **latest run** task statuses (server-built) |
 
-**Wave 0 (ops):** Realtime is **on by default** (runtime-config + frontend inference). Operator sign-off: [execution-realtime-ops](../runbooks/execution-realtime-ops.md) and `make verify-wave0`.
+**Wave 0 (ops):** Realtime is **on by default** (runtime-config + frontend inference). Operator sign-off: [execution-realtime-ops](../runbooks/execution-realtime-ops.md) and `python scripts/verify_execution_realtime.py`.
 
 Known gaps before full projection model:
 
