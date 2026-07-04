@@ -60,6 +60,83 @@ def _compose(compose_path: Path, *args: str) -> int:
     return proc.returncode
 
 
+def _build_sdk_wheel(root: Path) -> Path | None:
+    """(Re)generate the distributable SDK wheel into ``dist/``.
+
+    The all-in-one server image builds from source (``COPY sdk``), so it is
+    always fresh. External workers, however, install the packaged wheel — which
+    goes stale silently if never rebuilt. Regenerating it on every ``build`` /
+    ``rebuild`` makes packaging a first-class, always-current output instead of
+    a manual side step. Best-effort: a failure warns but never blocks the image
+    build.
+    """
+    dist = root / "dist"
+    dist.mkdir(exist_ok=True)
+    for stale in dist.glob("mlair-*.whl"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+
+    print("[mlair] packaging SDK wheel -> dist/")
+    proc = subprocess.run(
+        [sys.executable, "-m", "pip", "wheel", ".", "-w", str(dist), "--no-deps"],
+        check=False,
+    )
+    if proc.returncode != 0:
+        print(
+            "[mlair] WARNING: SDK wheel build failed — image build continues, "
+            "but external workers won't get a refreshed wheel.",
+            file=sys.stderr,
+        )
+        return None
+
+    wheels = sorted(dist.glob("mlair-*.whl"))
+    wheel = wheels[-1] if wheels else None
+    if wheel is not None:
+        rel = wheel.relative_to(root)
+        print(f"[mlair] SDK wheel ready: {rel}")
+        _sync_wheel_to_consumers(wheel)
+        print(
+            "[mlair] external workers: copy this wheel into the worker image build "
+            "context and `pip install --force-reinstall --no-deps` it in the Dockerfile."
+        )
+    return wheel
+
+
+def _sync_wheel_to_consumers(wheel: Path) -> None:
+    """Copy the fresh wheel into consumer vendor dirs listed in
+    ``MLAIR_WHEEL_SYNC_DIR`` (os.pathsep-separated).
+
+    Keeps MLAir decoupled — it has no knowledge of any specific project; the
+    operator opts in per machine. Stale ``mlair-*.whl`` in each target is
+    removed first so the consumer image build layer invalidates cleanly.
+    """
+    import shutil
+
+    raw = os.getenv("MLAIR_WHEEL_SYNC_DIR", "").strip()
+    if not raw:
+        return
+    for entry in raw.split(os.pathsep):
+        target = entry.strip()
+        if not target:
+            continue
+        dest = Path(target).expanduser()
+        if not dest.is_dir():
+            print(f"[mlair] WARNING: wheel sync target not a directory: {dest}", file=sys.stderr)
+            continue
+        for stale in dest.glob("mlair-*.whl"):
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+        try:
+            shutil.copy2(wheel, dest / wheel.name)
+            print(f"[mlair] synced wheel -> {dest / wheel.name}")
+        except OSError as exc:
+            print(f"[mlair] WARNING: failed to sync wheel to {dest}: {exc}", file=sys.stderr)
+
+
 def _print_endpoints(cfg: dict) -> None:
     compose_rel = str((cfg.get("compose") or {}).get("file") or "")
     is_allinone = "allinone" in compose_rel
@@ -78,26 +155,50 @@ def _print_endpoints(cfg: dict) -> None:
     print("  Docs:     docs/configuration.md")
 
 
-def run_build(*, no_cache: bool = False, profile: str | None = None, config_path: str | None = None) -> int:
-    """Build images only (no start)."""
+def run_build(
+    *,
+    no_cache: bool = False,
+    wheel: bool = True,
+    profile: str | None = None,
+    config_path: str | None = None,
+) -> int:
+    """Build images only (no start). Also (re)packages the SDK wheel by default."""
     prep = _prepare(profile, config_path, ensure_env=True)
     if prep is None:
         return 1
     compose_path, cfg = prep
     print(f"[mlair] build profile={cfg.get('profile')} compose={compose_path}")
+    if wheel:
+        _build_sdk_wheel(repo_root())
     args = ["build"]
     if no_cache:
         args.append("--no-cache")
     return _compose(compose_path, *args)
 
 
-def run_start(*, detach: bool = True, profile: str | None = None, config_path: str | None = None) -> int:
-    """Start the stack from existing images (no build)."""
+def run_start(
+    *,
+    detach: bool = True,
+    pull: bool = False,
+    profile: str | None = None,
+    config_path: str | None = None,
+) -> int:
+    """Start the stack from existing images (no build).
+
+    ``pull=True`` fetches the image from its registry first — use this with a
+    published image (e.g. ``MLAIR_IMAGE=ghcr.io/<owner>/ml-air:latest``) so you
+    can run MLAir without building from source.
+    """
     prep = _prepare(profile, config_path, ensure_env=True)
     if prep is None:
         return 1
     compose_path, cfg = prep
     print(f"[mlair] start profile={cfg.get('profile')} compose={compose_path}")
+    if pull:
+        print(f"[mlair] pulling image {os.getenv('MLAIR_IMAGE', 'ml-air:latest')}")
+        rc = _compose(compose_path, "pull")
+        if rc != 0:
+            return rc
     args = ["up"]
     if detach:
         args.append("-d")
@@ -111,16 +212,19 @@ def run_start(*, detach: bool = True, profile: str | None = None, config_path: s
 def run_rebuild(
     *,
     no_cache: bool = False,
+    wheel: bool = True,
     detach: bool = True,
     profile: str | None = None,
     config_path: str | None = None,
 ) -> int:
-    """Rebuild images then (re)start."""
+    """Rebuild images then (re)start. Also (re)packages the SDK wheel by default."""
     prep = _prepare(profile, config_path, ensure_env=True)
     if prep is None:
         return 1
     compose_path, cfg = prep
     print(f"[mlair] rebuild profile={cfg.get('profile')} compose={compose_path}")
+    if wheel:
+        _build_sdk_wheel(repo_root())
     build_args = ["build"]
     if no_cache:
         build_args.append("--no-cache")

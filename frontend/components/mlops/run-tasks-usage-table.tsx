@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import type { TaskItem, TaskLiveUsage, TaskUsageRecord } from "@/lib/api"
+import { ChevronRight } from "lucide-react"
+import type { TaskItem, TaskLiveUsage, TaskUsageRecord, UsageSamplePoint } from "@/lib/api"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { StatusBadge } from "@/components/mlops/status-badge"
+import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
 import { Panel } from "@/components/ui/panel"
 import {
   Table,
@@ -34,7 +36,14 @@ type RunTasksUsageTableProps = {
   runId: string
   usageEnabled?: boolean
   usageLoading?: boolean
+  expandedTaskId: string | null
+  onToggleTask: (taskId: string) => void
+  samples: UsageSamplePoint[]
+  samplesLoading?: boolean
+  samplesEnabled?: boolean
 }
+
+const TABLE_COL_COUNT = 7
 
 const TERMINAL_STATUSES = new Set([
   "SUCCESS",
@@ -111,6 +120,11 @@ export function RunTasksUsageTable({
   runId,
   usageEnabled = true,
   usageLoading = false,
+  expandedTaskId,
+  onToggleTask,
+  samples,
+  samplesLoading = false,
+  samplesEnabled = true,
 }: RunTasksUsageTableProps) {
   const [nowMs, setNowMs] = useState(() => Date.now())
 
@@ -151,6 +165,7 @@ export function RunTasksUsageTable({
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
               <TableRow className="border-border/60 hover:bg-transparent">
+                <TableHead className="w-8" aria-hidden />
                 <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Task
                 </TableHead>
@@ -185,30 +200,76 @@ export function RunTasksUsageTable({
                   project_id: projectId,
                   run_id: runId,
                 })
+                const isExpanded = expandedTaskId === task.task_id
 
                 return (
-                  <TableRow key={task.task_id} className="border-border/50 hover:bg-muted/30">
-                    <TableCell className="min-w-[140px] py-2">
-                      <div className="min-w-0">
-                        <Link
-                          href={taskHref}
-                          className="truncate text-xs font-medium text-primary hover:text-primary/80"
+                  <Fragment key={task.task_id}>
+                    <TableRow
+                      className={cn(
+                        "cursor-pointer border-border/50 hover:bg-muted/30",
+                        isExpanded && "bg-muted/40",
+                      )}
+                      onClick={() => onToggleTask(task.task_id)}
+                      aria-expanded={isExpanded}
+                    >
+                      <TableCell className="py-2 pr-0">
+                        <ChevronRight
+                          className={cn(
+                            "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                            isExpanded && "rotate-90",
+                          )}
+                        />
+                      </TableCell>
+                      <TableCell className="min-w-[140px] py-2">
+                        <div className="min-w-0">
+                          <Link
+                            href={taskHref}
+                            onClick={(e) => e.stopPropagation()}
+                            className="truncate text-xs font-medium text-primary hover:text-primary/80"
+                          >
+                            {label}
+                          </Link>
+                          {usage?.plugin ? (
+                            <p className="truncate font-mono text-[10px] text-muted-foreground">{task.task_id}</p>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <StatusBadge status={statusToMlopsBadge(task.status)} label={task.status} size="sm" />
+                      </TableCell>
+                      <TableCell className="py-2">{metricCell(elapsed, isRunning)}</TableCell>
+                      <TableCell className="py-2">{metricCell(formatPct(metrics.cpu), isRunning)}</TableCell>
+                      <TableCell className="py-2">{metricCell(formatMemMb(metrics.memory), isRunning)}</TableCell>
+                      <TableCell className="py-2">{metricCell(formatPct(metrics.gpu), isRunning)}</TableCell>
+                    </TableRow>
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableCell colSpan={TABLE_COL_COUNT} className="p-0">
+                        <div
+                          className="grid transition-[grid-template-rows] duration-300 ease-out"
+                          style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
                         >
-                          {label}
-                        </Link>
-                        {usage?.plugin ? (
-                          <p className="truncate font-mono text-[10px] text-muted-foreground">{task.task_id}</p>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <StatusBadge status={statusToMlopsBadge(task.status)} label={task.status} size="sm" />
-                    </TableCell>
-                    <TableCell className="py-2">{metricCell(elapsed, isRunning)}</TableCell>
-                    <TableCell className="py-2">{metricCell(formatPct(metrics.cpu), isRunning)}</TableCell>
-                    <TableCell className="py-2">{metricCell(formatMemMb(metrics.memory), isRunning)}</TableCell>
-                    <TableCell className="py-2">{metricCell(formatPct(metrics.gpu), isRunning)}</TableCell>
-                  </TableRow>
+                          <div className="overflow-hidden">
+                            <div className="border-t border-border/50 bg-muted/20 px-3 py-4">
+                              {isExpanded ? (
+                                <RunResourceTimeline
+                                  tasks={[]}
+                                  samples={samples}
+                                  usageByTaskId={usageByTaskId}
+                                  runUsage={null}
+                                  selectedTaskId={task.task_id}
+                                  onTaskChange={() => {}}
+                                  loading={samplesLoading}
+                                  enabled={samplesEnabled}
+                                  grafanaUiUrl={null}
+                                  embedded
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </Fragment>
                 )
               })}
             </TableBody>

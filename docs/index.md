@@ -2,7 +2,25 @@
 
 **MLAir is a lifecycle operating system for ML** — dataset version → readiness → gated run → model governance. Docs are task-oriented and production-first (action, runnable commands, minimal theory upfront).
 
-Paper drafts (abstract framing, evaluation notes) live in local `paper-writing/` at the repo root — **gitignored**, not on GitHub. LaTeX source: `PhuNT_NhatTM_May2026_Paper/` (sibling folder).
+## Run MLAir
+
+One all-in-one image (Hub + API `/v1` + realtime `/ws` + scheduler + executor + Postgres + Redis) on a single port `8080`. Database migrations and every service start automatically inside the container — there is nothing else to run.
+
+```bash
+git clone <repo-url> && cd ml-air
+pip install -e .                 # installs the `mlair` CLI
+
+# Option A — build the image locally, then start:
+mlair build && mlair start
+
+# Option B — pull the pre-built image (GHCR), then start:
+export MLAIR_IMAGE=ghcr.io/<owner>/ml-air:latest
+mlair start --pull
+
+mlair health                     # verify the stack is up
+```
+
+Then open **http://localhost:8080**. Defaults work out of the box; override via [Configuration](./configuration.md). Step-by-step in [Installation](./getting-started/installation.md).
 
 ## Documentation Philosophy
 
@@ -27,21 +45,12 @@ Each guide follows:
 - [Quickstart](./getting-started/quickstart.md)
 - [Run Your First Pipeline](./getting-started/run-first-pipeline.md)
 
-**Model registry contract:** **stages** `staging` / `production` / `archived`, **approval** (`GET|PUT .../versions/{v}/approval`), **`POST .../models/{model_id}/promote`** (production requires `approved` unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`) — see [ARCHITECTURE.md](../ARCHITECTURE.md) §7. **Serving slots** (`model_serving_slots`; draft `GET|PUT .../serving/...`) are described there and in OpenAPI; the **HTTP routes are currently disabled** in `v1.py` and the UI is hidden until re-enabled.
+**Model registry (quick reference):** stages `staging` / `production` / `archived`, an approval step, and model promotion (production requires an approved version unless `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1`). See [Promote a Model](./guides/promote-model.md) and the [API Overview](./api/overview.md).
 
 ## Guides
 
 ### Run and Orchestration
 
-- [Runbook: Realtime / WebSocket service](./runbooks/realtime-service.md)
-- [Runbook: Execution realtime ops (Wave 0)](./runbooks/execution-realtime-ops.md)
-- [Runbook: Production WSS ingress](./runbooks/production-wss-ingress.md)
-- [Runbook: Wave 1 production maturity](./runbooks/wave1-production-maturity.md)
-- [Runbook: Staging → production sign-off (Lifecycle OS)](./runbooks/staging-prod-signoff.md)
-- [Sign-off: Wave 0 / 1 / Phase 9](./runbooks/signoff-wave0-wave1-phase9.md)
-- [Sign-off record template](./operations/signoff-record-template.md)
-- [Runbook: Legacy compatibility sunset](./runbooks/legacy-compat-sunset.md)
-- [Runbook: Production strict lifecycle (staging/prod env)](./runbooks/production-strict-lifecycle.md)
 - [Run a Pipeline](./guides/run-pipeline.md)
 - [Task execution mode (internal vs external)](./concepts/task-execution-mode.md)
 - [External Worker Execution (lease / pull)](./guides/external-worker-execution.md)
@@ -138,6 +147,20 @@ Each guide follows:
 - [Reference: external integration surfaces](./guides/reference-integrations.md)
 - [Integrate App with Plugin](./guides/integrate-app-with-plugin.md)
 - [Sync External Model Registry](./guides/sync-external-model-registry.md)
+
+## Operations & Runbooks (for operators)
+
+Advanced material for running MLAir in staging/production — not needed to use MLAir day to day.
+
+- [Runbook: Realtime / WebSocket service](./runbooks/realtime-service.md)
+- [Runbook: Execution realtime ops (Wave 0)](./runbooks/execution-realtime-ops.md)
+- [Runbook: Production WSS ingress](./runbooks/production-wss-ingress.md)
+- [Runbook: Wave 1 production maturity](./runbooks/wave1-production-maturity.md)
+- [Runbook: Staging → production sign-off (Lifecycle OS)](./runbooks/staging-prod-signoff.md)
+- [Sign-off: Wave 0 / 1 / Phase 9](./runbooks/signoff-wave0-wave1-phase9.md)
+- [Sign-off record template](./operations/signoff-record-template.md)
+- [Runbook: Legacy compatibility sunset](./runbooks/legacy-compat-sunset.md)
+- [Runbook: Production strict lifecycle (staging/prod env)](./runbooks/production-strict-lifecycle.md)
 
 ## Troubleshooting
 

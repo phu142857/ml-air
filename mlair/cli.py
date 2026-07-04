@@ -54,14 +54,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     build = sub.add_parser("build", help="Build images only (no start)")
     build.add_argument("--no-cache", action="store_true", help="Build without using cache")
+    build.add_argument("--no-wheel", action="store_true", help="Skip repackaging the SDK wheel into dist/")
     build.set_defaults(func="_cmd_build")
 
     start = sub.add_parser("start", help="Start MLAir from existing images (no build)")
     start.add_argument("--foreground", action="store_true", help="Attach compose logs (no -d)")
+    start.add_argument("--pull", action="store_true", help="Pull the image from its registry first (e.g. GHCR)")
     start.set_defaults(func="_cmd_start")
 
     rebuild = sub.add_parser("rebuild", help="Rebuild images then (re)start")
     rebuild.add_argument("--no-cache", action="store_true", help="Build without using cache")
+    rebuild.add_argument("--no-wheel", action="store_true", help="Skip repackaging the SDK wheel into dist/")
     rebuild.add_argument("--foreground", action="store_true", help="Attach compose logs (no -d)")
     rebuild.set_defaults(func="_cmd_rebuild")
 
@@ -114,18 +117,21 @@ def _dispatch(args: argparse.Namespace) -> int:
     if func == "_cmd_build":
         return run_build(
             no_cache=bool(getattr(args, "no_cache", False)),
+            wheel=not bool(getattr(args, "no_wheel", False)),
             profile=profile,
             config_path=config_path,
         )
     if func == "_cmd_start":
         return run_start(
             detach=not bool(getattr(args, "foreground", False)),
+            pull=bool(getattr(args, "pull", False)),
             profile=profile,
             config_path=config_path,
         )
     if func == "_cmd_rebuild":
         return run_rebuild(
             no_cache=bool(getattr(args, "no_cache", False)),
+            wheel=not bool(getattr(args, "no_wheel", False)),
             detach=not bool(getattr(args, "foreground", False)),
             profile=profile,
             config_path=config_path,

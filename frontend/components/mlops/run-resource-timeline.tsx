@@ -23,7 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { TaskItem, TaskUsageRecord, UsageSamplePoint } from "@/lib/api"
+import type {
+  RunUsageRecord,
+  TaskItem,
+  TaskUsageRecord,
+  UsageSamplePoint,
+  UsageSampleStats,
+} from "@/lib/api"
 import { formatMemMb, formatPct, taskUsageLabel } from "@/lib/usage-format"
 import { useChartTheme } from "@/hooks/use-chart-theme"
 import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
@@ -58,28 +64,38 @@ export function RunResourceTimeline({
   tasks,
   samples,
   usageByTaskId,
+  runUsage,
   selectedTaskId,
   onTaskChange,
   loading,
   enabled,
   grafanaUiUrl,
+  embedded = false,
 }: {
   tasks: TaskItem[]
   samples: UsageSamplePoint[]
   usageByTaskId: Map<string, TaskUsageRecord>
+  runUsage: RunUsageRecord | null
   selectedTaskId: string
   onTaskChange: (taskId: string) => void
   loading: boolean
   enabled: boolean
   grafanaUiUrl: string | null
+  // When embedded (e.g. inside an expanded task row) the task selector and
+  // Grafana button are hidden — the task is already fixed by the caller.
+  embedded?: boolean
 }) {
   const chartTheme = useChartTheme()
   const chartData = useMemo(() => buildChartSeries(samples), [samples])
   const showGpu = useMemo(() => hasGpuSeries(samples), [samples])
 
-  const peakTaskId =
-    selectedTaskId !== "all" ? selectedTaskId : (tasks[0]?.task_id ?? "")
-  const peakUsage = peakTaskId ? usageByTaskId.get(peakTaskId) : undefined
+  // Peak header must match the chart scope: for "all" use the run-level aggregate
+  // (backend MAX across tasks), otherwise the selected task's aggregate. Using
+  // tasks[0] for "all" made the header desync from both the chart and the tasks table.
+  const isAll = selectedTaskId === "all"
+  const peakUsage: UsageSampleStats | undefined = isAll
+    ? runUsage ?? undefined
+    : usageByTaskId.get(selectedTaskId)
 
   const grafanaHref = grafanaDashboardUrl(grafanaUiUrl, "mlair-overview.json")
 
@@ -87,16 +103,6 @@ export function RunResourceTimeline({
     { label: "CPU peak", value: formatPct(peakUsage?.cpu_pct_peak ?? null), mono: true },
     { label: "Memory peak", value: formatMemMb(peakUsage?.memory_mb_peak ?? null), mono: true },
     { label: "GPU peak", value: formatPct(peakUsage?.gpu_util_pct_peak ?? null), mono: true },
-    {
-      label: "GPU memory peak",
-      value: formatMemMb(peakUsage?.gpu_memory_mb_peak ?? null),
-      mono: true,
-    },
-    {
-      label: "Samples",
-      value: peakUsage?.sample_count != null ? String(peakUsage.sample_count) : String(samples.length),
-      mono: true,
-    },
   ]
 
   if (!enabled) {
@@ -111,6 +117,7 @@ export function RunResourceTimeline({
 
   return (
     <div className="space-y-4">
+      {embedded ? null : (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Task</span>
@@ -137,6 +144,7 @@ export function RunResourceTimeline({
           </Button>
         ) : null}
       </div>
+      )}
 
       {peakUsage || samples.length > 0 ? (
         <MetadataGrid columns={3} items={peakItems} />
@@ -200,28 +208,16 @@ export function RunResourceTimeline({
                 isAnimationActive={false}
               />
               {showGpu ? (
-                <>
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="gpu"
-                    name="GPU %"
-                    stroke={CHART_COLORS.gpu}
-                    dot={false}
-                    strokeWidth={2}
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="gpuMem"
-                    name="GPU mem MB"
-                    stroke={CHART_COLORS.gpuMem}
-                    dot={false}
-                    strokeWidth={2}
-                    isAnimationActive={false}
-                  />
-                </>
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="gpu"
+                  name="GPU %"
+                  stroke={CHART_COLORS.gpu}
+                  dot={false}
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                />
               ) : null}
             </LineChart>
           </ResponsiveContainer>

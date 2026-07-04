@@ -75,8 +75,12 @@ class TaskResourceMonitor:
         self._gpu_mem_mb_seconds_acc = 0.0
         self._last_flush_at = 0.0
         self._lock = threading.Lock()
-        # pid -> persistent psutil.Process (holds cpu_percent baseline across samples)
-        self._proc_cache: dict[int, Any] = {}
+        # CPU% is derived from the delta of cumulative tree cpu_times between
+        # samples (robust to process churn / PID reuse, unlike per-process
+        # cpu_percent() which needs a stable object + baseline and silently
+        # reports 0 when the tree changes each sample).
+        self._last_cpu_total: float | None = None
+        self._last_cpu_ts: float | None = None
 
     @property
     def root_pid(self) -> int | None:
@@ -102,14 +106,9 @@ class TaskResourceMonitor:
         self._started_at = time.perf_counter()
         self._cpu_times0 = self._cpu_time_seconds_tree(self._root_pid)
         self._disk_io0 = self._disk_io_tree(self._root_pid)
-        self._proc_cache = {}
-        for proc in self._process_tree(self._root_pid):
-            try:
-                p = psutil.Process(proc.pid)
-                p.cpu_percent(interval=None)  # prime baseline; counts from next sample
-                self._proc_cache[proc.pid] = p
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
+        # Prime CPU delta baseline; first sample measures from here.
+        self._last_cpu_total = self._cpu_times0
+        self._last_cpu_ts = time.monotonic()
 
     def stop(self) -> dict[str, Any]:
         self._stop.set()
@@ -224,33 +223,29 @@ class TaskResourceMonitor:
         if not procs:
             return None
 
-        cpu_pct = 0.0
         mem_bytes = 0
         pids: set[int] = set()
+        cpu_total = 0.0
         for proc in procs:
-            pid = proc.pid
-            pids.add(pid)
+            pids.add(proc.pid)
+            mem_bytes += self._proc_mem_bytes(proc)
             try:
-                mem_bytes += int(proc.memory_info().rss)
+                ct = proc.cpu_times()
+                cpu_total += float(ct.user + ct.system)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
-            cached = self._proc_cache.get(pid)
-            if cached is None:
-                # New child spawned mid-run: create + prime (contributes next sample).
-                try:
-                    cached = psutil.Process(pid)
-                    cached.cpu_percent(interval=None)
-                    self._proc_cache[pid] = cached
-                    continue
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            try:
-                cpu_pct += float(cached.cpu_percent(interval=None))
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                self._proc_cache.pop(pid, None)
-        # drop cached procs no longer in the tree
-        for dead in set(self._proc_cache) - pids:
-            self._proc_cache.pop(dead, None)
+
+        # CPU% from cumulative cpu_times delta over wall time (sum-of-cores scale;
+        # e.g. 350 on an 8-core box). normalize_cpu_tree_percent divides by the
+        # logical CPU count to yield 0–100 machine utilization.
+        now = time.monotonic()
+        cpu_pct = 0.0
+        if self._last_cpu_total is not None and self._last_cpu_ts is not None:
+            dt = now - self._last_cpu_ts
+            if dt > 0:
+                cpu_pct = max(0.0, (cpu_total - self._last_cpu_total) / dt * 100.0)
+        self._last_cpu_total = cpu_total
+        self._last_cpu_ts = now
 
         gpu_util, gpu_mem_mb = _gpu_stats_for_pids(pids)
 
@@ -298,13 +293,37 @@ class TaskResourceMonitor:
                 continue
         return total
 
+    @staticmethod
+    def _proc_mem_bytes(proc: Any) -> int:
+        """Memory footprint of one process, preferring PSS/USS over RSS.
+
+        Summing RSS across a process tree double-counts pages shared between
+        parent/children (shared libs, CUDA context, forked dataloader workers),
+        which inflates the total to tens of GB. PSS apportions shared pages so
+        the tree sum reflects the real footprint; USS is the next best; RSS is
+        the last-resort fallback where smaps is unreadable.
+        """
+        if psutil is None:
+            return 0
+        try:
+            full = proc.memory_full_info()
+            pss = int(getattr(full, "pss", 0) or 0)
+            if pss > 0:
+                return pss
+            uss = int(getattr(full, "uss", 0) or 0)
+            if uss > 0:
+                return uss
+        except Exception:
+            pass
+        try:
+            return int(proc.memory_info().rss)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return 0
+
     def _memory_rss_bytes_tree(self, root_pid: int) -> int:
         total = 0
         for proc in self._process_tree(root_pid):
-            try:
-                total += int(proc.memory_info().rss)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
+            total += self._proc_mem_bytes(proc)
         return total
 
     @staticmethod

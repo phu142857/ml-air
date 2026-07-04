@@ -215,7 +215,7 @@ sequenceDiagram
 
 
 
-**Terminology (Phase 0 glossary — same names in Hub, API, docs):**
+**Terminology (glossary — same names in Hub, API, docs):**
 
 | Term | Meaning |
 | --- | --- |

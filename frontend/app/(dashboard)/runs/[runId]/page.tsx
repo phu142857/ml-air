@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useMemo, useState, type ReactNode } from "react"
+import { use, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -17,7 +17,6 @@ import {
   Network,
   ListTodo,
   Activity,
-  Cpu,
   FileDown,
 } from "lucide-react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
@@ -28,7 +27,6 @@ import { JaegerLink } from "@/components/mlops/jaeger-link"
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { RunTasksUsageTable } from "@/components/mlops/run-tasks-usage-table"
-import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import {
@@ -87,8 +85,6 @@ import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
-import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
-
 const RUN_USAGE_LIVE_REFRESH_MS = 1000
 const ACTIVE_RUN_REFETCH_MS = 4000
 
@@ -96,7 +92,6 @@ const RUN_TABS = [
   { id: "overview", label: "Overview" },
   { id: "graph", label: "Execution graph", icon: <Network className="h-3.5 w-3.5" /> },
   { id: "tasks", label: "Tasks & resources", icon: <ListTodo className="h-3.5 w-3.5" /> },
-  { id: "resources", label: "Resources", icon: <Cpu className="h-3.5 w-3.5" /> },
   { id: "logs", label: "Logs", icon: <Terminal className="h-3.5 w-3.5" /> },
   { id: "metrics", label: "Metrics", icon: <BarChart3 className="h-3.5 w-3.5" /> },
   { id: "artifacts", label: "Artifacts", icon: <FileBox className="h-3.5 w-3.5" /> },
@@ -107,7 +102,6 @@ const RUN_TAB_SKELETON: Record<string, "grid" | "table" | "terminal" | "chart"> 
   overview: "grid",
   graph: "grid",
   tasks: "table",
-  resources: "chart",
   logs: "terminal",
   metrics: "chart",
   artifacts: "table",
@@ -255,7 +249,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const [tab, setTab] = useState("overview")
   const isTabLoading = useTabLoading(tab)
   const chartTheme = useChartTheme()
-  const grafanaUiUrl = useGrafanaUiUrl()
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
 
@@ -320,7 +313,11 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   )
 
   const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
-  const [resourceTaskId, setResourceTaskId] = useState<string>("all")
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const toggleExpandedTask = useCallback(
+    (taskId: string) => setExpandedTaskId((prev) => (prev === taskId ? null : taskId)),
+    [],
+  )
 
   const trackingQuery = useQuery({
     queryKey: mlairKeys.run.tracking(runId),
@@ -343,16 +340,19 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   })
 
   const usageSamplesQuery = useQuery({
-    queryKey: mlairKeys.run.usageSamples(runId, resourceTaskId),
+    queryKey: mlairKeys.run.usageSamples(runId, expandedTaskId ?? "none"),
     queryFn: () =>
       fetchRunUsageSamples(tenantId, projectId, runId, token, {
-        taskId: resourceTaskId === "all" ? undefined : resourceTaskId,
+        taskId: expandedTaskId ?? undefined,
         limit: 1000,
       }),
-    enabled: enabled && Boolean(runQuery.data) && tab === "resources",
+    enabled:
+      enabled && Boolean(runQuery.data) && tab === "tasks" && Boolean(expandedTaskId),
     refetchOnMount: "always",
     refetchInterval: () =>
-      tab === "resources" ? usageLiveRefetchMs(runQuery.data?.status) || false : false,
+      tab === "tasks" && expandedTaskId
+        ? usageLiveRefetchMs(runQuery.data?.status) || false
+        : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -765,27 +765,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   runId={runId}
                   usageEnabled={usageQuery.data?.enabled ?? true}
                   usageLoading={usageQuery.isLoading}
-                />
-              )}
-            </DetailSection>
-          </RunTabPanel>
-        </TabsContent>
-
-        <TabsContent value="resources" className={tabPanelScrollClassName()}>
-          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.resources}>
-            <DetailSection title="Resource timeline" accentBorder="sky">
-              {usageSamplesQuery.isError ? (
-                <p className="text-sm text-red-300">{formatApiClientError(usageSamplesQuery.error)}</p>
-              ) : (
-                <RunResourceTimeline
-                  tasks={tasks}
+                  expandedTaskId={expandedTaskId}
+                  onToggleTask={toggleExpandedTask}
                   samples={usageSamplesQuery.data?.samples ?? []}
-                  usageByTaskId={usageByTaskId}
-                  selectedTaskId={resourceTaskId}
-                  onTaskChange={setResourceTaskId}
-                  loading={usageSamplesQuery.isLoading}
-                  enabled={usageSamplesQuery.data?.enabled ?? usageQuery.data?.enabled ?? true}
-                  grafanaUiUrl={grafanaUiUrl}
+                  samplesLoading={usageSamplesQuery.isLoading}
+                  samplesEnabled={
+                    usageSamplesQuery.data?.enabled ?? usageQuery.data?.enabled ?? true
+                  }
                 />
               )}
             </DetailSection>
