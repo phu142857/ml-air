@@ -45,7 +45,7 @@ def req(method: str, path: str, token: str | None = None, body: dict | None = No
             return exc.code, {"raw": payload}
 
 
-def wait_run_success(run_id: str, timeout_seconds: int = 60) -> bool:
+def wait_run_success(run_id: str, timeout_seconds: int = 120) -> bool:
     deadline = time.time() + timeout_seconds
     path = f"/v1/tenants/{TENANT}/projects/{PROJECT}/runs/{run_id}"
     while time.time() < deadline:
@@ -61,7 +61,10 @@ def wait_run_success(run_id: str, timeout_seconds: int = 60) -> bool:
 def main() -> int:
     require_api_reachable(BASE)
     run_tag = str(int(time.time() * 1000))
-    pipeline_id = "fail_once_demo_pipeline"
+    # Clean, deterministic pipeline: no deliberate failure injection (that is
+    # smoke_quickstart's job). `fail_once*`/`always_fail*` prefixes are failure-mode
+    # fixtures in executor/main.py — do not use them for demo data seeding.
+    pipeline_id = "seed_demo_pipeline"
     version_payload = {
         "config": {
             "tasks": [
