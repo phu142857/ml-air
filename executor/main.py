@@ -504,6 +504,7 @@ def main() -> None:
             resource_usage = merge_resource_usage(legacy_ru, monitored_ru)
             usage_samples = (usage_report or {}).get("usage_samples") if usage_report else None
             resource_monitor_meta = (usage_report or {}).get("resource_monitor") if usage_report else None
+            resource_events = (usage_report or {}).get("resource_events") if usage_report else None
             _post_manifest(task=task, plugin_result=plugin_exec, status=status)
             TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()
             TASK_DURATION_SECONDS.labels(pipeline_id=pipeline_id).observe(wall_seconds)
@@ -569,6 +570,8 @@ def main() -> None:
                 done_payload["usage_samples"] = usage_samples
             if resource_monitor_meta:
                 done_payload["resource_monitor"] = resource_monitor_meta
+            if resource_events:
+                done_payload["resource_events"] = resource_events
             if resource_monitor_enabled() and monitor is not None:
                 has_samples = bool(usage_samples)
                 ru = resource_usage if isinstance(resource_usage, dict) else {}

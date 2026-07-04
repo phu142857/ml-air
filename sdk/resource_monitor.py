@@ -81,6 +81,14 @@ class TaskResourceMonitor:
         # reports 0 when the tree changes each sample).
         self._last_cpu_total: float | None = None
         self._last_cpu_ts: float | None = None
+        self._net_io0: tuple[int, int] | None = None
+        self._gpu_backend = None
+        try:
+            from sdk.gpu_backend import detect_gpu_backend
+
+            self._gpu_backend = detect_gpu_backend()
+        except Exception:
+            self._gpu_backend = None
 
     @property
     def root_pid(self) -> int | None:
@@ -106,6 +114,7 @@ class TaskResourceMonitor:
         self._started_at = time.perf_counter()
         self._cpu_times0 = self._cpu_time_seconds_tree(self._root_pid)
         self._disk_io0 = self._disk_io_tree(self._root_pid)
+        self._net_io0 = _net_io_counters()
         # Prime CPU delta baseline; first sample measures from here.
         self._last_cpu_total = self._cpu_times0
         self._last_cpu_ts = time.monotonic()
@@ -128,6 +137,8 @@ class TaskResourceMonitor:
         cpu_seconds = 0.0
         disk_read = None
         disk_write = None
+        network_rx = None
+        network_tx = None
         if self._root_pid is not None and psutil is not None:
             cpu_end = self._cpu_time_seconds_tree(self._root_pid)
             cpu_seconds = max(0.0, cpu_end - self._cpu_times0)
@@ -135,6 +146,10 @@ class TaskResourceMonitor:
             if self._disk_io0 is not None and disk_end is not None:
                 disk_read = max(0, disk_end[0] - self._disk_io0[0])
                 disk_write = max(0, disk_end[1] - self._disk_io0[1])
+            net_end = _net_io_counters()
+            if self._net_io0 is not None and net_end is not None:
+                network_rx = max(0, net_end[0] - self._net_io0[0])
+                network_tx = max(0, net_end[1] - self._net_io0[1])
 
         memory_rss_kb = None
         if samples:
@@ -156,11 +171,21 @@ class TaskResourceMonitor:
             "gpu_memory_mb_seconds": gpu_mem_mb_seconds,
             "disk_read_bytes": disk_read,
             "disk_write_bytes": disk_write,
+            "network_rx_bytes": network_rx,
+            "network_tx_bytes": network_tx,
         }
+
+        try:
+            from sdk.resource_events import collect_resource_events
+
+            events = collect_resource_events(root_pid=self._root_pid)
+        except Exception:
+            events = []
 
         return {
             "resource_usage": resource_usage,
             "usage_samples": samples,
+            "resource_events": events,
             "resource_monitor": {
                 "root_pid": self._root_pid,
                 "sample_count": len(samples),
@@ -247,19 +272,40 @@ class TaskResourceMonitor:
         self._last_cpu_total = cpu_total
         self._last_cpu_ts = now
 
-        gpu_util, gpu_mem_mb = _gpu_stats_for_pids(pids)
+        gpu_util, gpu_mem_mb, gpu_power_w, gpu_temp_c = None, None, None, None
+        if self._gpu_backend is not None:
+            gpu_stats = self._gpu_backend.read_stats(pids)
+            gpu_util = gpu_stats.get("gpu_util_percent")
+            gpu_mem_mb = gpu_stats.get("gpu_memory_mb")
+            gpu_power_w = gpu_stats.get("gpu_power_w")
+            gpu_temp_c = gpu_stats.get("gpu_temp_c")
 
         from sdk.usage_cost_math import normalize_cpu_tree_percent
 
         cpu_pct = normalize_cpu_tree_percent(cpu_pct) or 0.0
 
-        return {
+        net_rx, net_tx = None, None
+        net_end = _net_io_counters()
+        if self._net_io0 is not None and net_end is not None:
+            net_rx = max(0, net_end[0] - self._net_io0[0])
+            net_tx = max(0, net_end[1] - self._net_io0[1])
+
+        sample: dict[str, Any] = {
             "sampled_at": _iso_now(),
             "cpu_percent": cpu_pct,
             "memory_mb": mem_bytes / (1024.0 * 1024.0) if mem_bytes > 0 else 0.0,
             "gpu_util_percent": gpu_util,
             "gpu_memory_mb": gpu_mem_mb,
         }
+        if net_rx is not None:
+            sample["network_rx_bytes"] = net_rx
+        if net_tx is not None:
+            sample["network_tx_bytes"] = net_tx
+        if gpu_power_w is not None:
+            sample["gpu_power_w"] = gpu_power_w
+        if gpu_temp_c is not None:
+            sample["gpu_temp_c"] = gpu_temp_c
+        return sample
 
     @staticmethod
     def _process_tree(root_pid: int) -> list[Any]:
@@ -349,59 +395,15 @@ class TaskResourceMonitor:
         return (read_total, write_total) if seen else None
 
 
-def _gpu_stats_for_pids(pids: set[int]) -> tuple[float | None, float | None]:
-    if not pids:
-        return None, None
+def _net_io_counters() -> tuple[int, int] | None:
+    """Container/host network bytes (best-effort when per-process stats unavailable)."""
+    if psutil is None:
+        return None
     try:
-        import pynvml  # type: ignore[import-untyped]
-    except ImportError:
-        return None, None
-
-    try:
-        pynvml.nvmlInit()
+        counters = psutil.net_io_counters()
+        return int(counters.bytes_recv), int(counters.bytes_sent)
     except Exception:
-        return None, None
-
-    util_peak: float | None = None
-    mem_peak_mb: float | None = None
-    try:
-        device_count = pynvml.nvmlDeviceGetCount()
-        for idx in range(device_count):
-            handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
-            dev_util = None
-            try:
-                dev_util = float(pynvml.nvmlDeviceGetUtilizationRates(handle).gpu)
-                if util_peak is None or dev_util > util_peak:
-                    util_peak = dev_util
-            except Exception:
-                pass
-            matched = False
-            try:
-                for proc in pynvml.nvmlDeviceGetComputeRunningProcesses(handle):
-                    if int(proc.pid) in pids and getattr(proc, "usedGpuMemory", None):
-                        used_mb = float(proc.usedGpuMemory) / (1024.0 * 1024.0)
-                        matched = True
-                        if mem_peak_mb is None or used_mb > mem_peak_mb:
-                            mem_peak_mb = used_mb
-            except Exception:
-                pass
-            # Container PID-namespace: NVML reports host PIDs that won't match our
-            # container PIDs. If the device is active but nothing matched, attribute
-            # device-level used memory (accurate for a dedicated GPU container).
-            if not matched and dev_util and dev_util > 0:
-                try:
-                    used_mb = float(pynvml.nvmlDeviceGetMemoryInfo(handle).used) / (1024.0 * 1024.0)
-                    if mem_peak_mb is None or used_mb > mem_peak_mb:
-                        mem_peak_mb = used_mb
-                except Exception:
-                    pass
-    finally:
-        try:
-            pynvml.nvmlShutdown()
-        except Exception:
-            pass
-
-    return util_peak, mem_peak_mb
+        return None
 
 
 def merge_resource_usage(*parts: dict[str, Any] | None) -> dict[str, Any]:
@@ -414,6 +416,8 @@ def merge_resource_usage(*parts: dict[str, Any] | None) -> dict[str, Any]:
         "gpu_memory_mb_seconds": None,
         "disk_read_bytes": None,
         "disk_write_bytes": None,
+        "network_rx_bytes": None,
+        "network_tx_bytes": None,
     }
     for part in parts:
         if not isinstance(part, dict):
@@ -492,10 +496,14 @@ class ResourceMonitor:
         from sdk.usage_contract import contract_complete_resource_usage
 
         report = self._report_or_build()
-        return {
+        bundle: dict[str, Any] = {
             "resource_usage": contract_complete_resource_usage(report),
             "usage_samples": report.get("usage_samples") or [],
         }
+        events = report.get("resource_events")
+        if events:
+            bundle["resource_events"] = events
+        return bundle
 
     def latest_heartbeat_usage(self) -> dict[str, Any] | None:
         """Latest live sample for ``POST .../heartbeat`` ``usage`` field."""

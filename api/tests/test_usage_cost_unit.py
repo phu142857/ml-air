@@ -39,6 +39,7 @@ class TestUsageMath(unittest.TestCase):
         self.assertEqual(agg["sample_count"], 3)
         self.assertAlmostEqual(agg["cpu_pct_avg"], 60.0)
         self.assertAlmostEqual(agg["cpu_pct_peak"], 80.0)
+        self.assertAlmostEqual(agg["cpu_pct_p95"], 78.0)
         self.assertAlmostEqual(agg["memory_mb_avg"], (512 + 768 + 1024) / 3)
         self.assertAlmostEqual(agg["memory_mb_peak"], 1024.0)
         self.assertAlmostEqual(agg["gpu_util_pct_avg"], 30.0)

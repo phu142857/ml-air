@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -21,12 +22,21 @@ logger = logging.getLogger("mlair.usage")
 _SAMPLE_STAT_KEYS = (
     "cpu_pct_avg",
     "cpu_pct_peak",
+    "cpu_pct_p95",
     "memory_mb_avg",
     "memory_mb_peak",
     "gpu_util_pct_avg",
     "gpu_util_pct_peak",
     "gpu_memory_mb_avg",
     "gpu_memory_mb_peak",
+    "gpu_power_w_avg",
+    "gpu_power_w_peak",
+    "gpu_temp_c_peak",
+)
+
+_USAGE_TOTAL_KEYS = (
+    "network_rx_bytes",
+    "network_tx_bytes",
 )
 
 
@@ -104,6 +114,15 @@ def persist_usage_samples(*, task_id: str, samples: list[dict[str, Any]]) -> int
             except (TypeError, ValueError):
                 return None
 
+        def _i(key: str) -> int | None:
+            val = sample.get(key)
+            if val is None:
+                return None
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return None
+
         ts = parse_ts(sample.get("sampled_at"))
         rows.append(
             (
@@ -113,6 +132,10 @@ def persist_usage_samples(*, task_id: str, samples: list[dict[str, Any]]) -> int
                 _f("memory_mb"),
                 _f("gpu_util_percent"),
                 _f("gpu_memory_mb"),
+                _i("network_rx_bytes"),
+                _i("network_tx_bytes"),
+                _f("gpu_power_w"),
+                _f("gpu_temp_c"),
             )
         )
 
@@ -123,8 +146,11 @@ def persist_usage_samples(*, task_id: str, samples: list[dict[str, Any]]) -> int
         with conn.cursor() as cur:
             cur.executemany(
                 """
-                INSERT INTO task_usage_samples (task_id, sampled_at, cpu_percent, memory_mb, gpu_util_percent, gpu_memory_mb)
-                VALUES (%s, COALESCE(%s, NOW()), %s, %s, %s, %s)
+                INSERT INTO task_usage_samples (
+                    task_id, sampled_at, cpu_percent, memory_mb, gpu_util_percent, gpu_memory_mb,
+                    network_rx_bytes, network_tx_bytes, gpu_power_w, gpu_temp_c
+                )
+                VALUES (%s, COALESCE(%s, NOW()), %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 rows,
             )
@@ -167,7 +193,12 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
     gpu_mem_mb_seconds = float(ru.get("gpu_memory_mb_seconds") or 0.0)
     disk_read = int(ru["disk_read_bytes"]) if ru.get("disk_read_bytes") is not None else None
     disk_write = int(ru["disk_write_bytes"]) if ru.get("disk_write_bytes") is not None else None
+    network_rx = int(ru["network_rx_bytes"]) if ru.get("network_rx_bytes") is not None else None
+    network_tx = int(ru["network_tx_bytes"]) if ru.get("network_tx_bytes") is not None else None
     fallback_mem_mb = (float(ru["memory_rss_kb"]) / 1024.0) if ru.get("memory_rss_kb") else None
+    resource_events = done_event.get("resource_events")
+    if not isinstance(resource_events, list):
+        resource_events = None
 
     event_samples = done_event.get("usage_samples")
     if isinstance(event_samples, list) and event_samples:
@@ -177,7 +208,8 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT sampled_at, cpu_percent, memory_mb, gpu_util_percent, gpu_memory_mb
+                SELECT sampled_at, cpu_percent, memory_mb, gpu_util_percent, gpu_memory_mb,
+                       network_rx_bytes, network_tx_bytes, gpu_power_w, gpu_temp_c
                 FROM task_usage_samples
                 WHERE task_id = %s
                 ORDER BY sampled_at ASC
@@ -197,6 +229,10 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
     memory_rss_peak_kb = agg["memory_rss_peak_kb"] or None
     if stats.get("memory_mb_peak") is not None:
         memory_rss_peak_kb = int(float(stats["memory_mb_peak"]) * 1024)
+    if agg.get("network_rx_bytes") is not None:
+        network_rx = int(agg["network_rx_bytes"])
+    if agg.get("network_tx_bytes") is not None:
+        network_tx = int(agg["network_tx_bytes"])
 
     params: dict[str, Any] = {
         "task_id": task_id,
@@ -211,6 +247,9 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
         "gpu_memory_mb_seconds": gpu_mem_mb_seconds if gpu_mem_mb_seconds > 0 else None,
         "disk_read_bytes": disk_read,
         "disk_write_bytes": disk_write,
+        "network_rx_bytes": network_rx,
+        "network_tx_bytes": network_tx,
+        "resource_events": json.dumps(resource_events) if resource_events else None,
         "sample_count": agg["sample_count"],
         **stats,
     }
@@ -224,12 +263,16 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
                     runtime_seconds, cpu_seconds, memory_rss_peak_kb, memory_mb_seconds,
                     gpu_seconds, gpu_memory_mb_seconds,
                     disk_read_bytes, disk_write_bytes,
+                    network_rx_bytes, network_tx_bytes,
+                    resource_events,
                     sample_count, {stat_cols_sql}, aggregated_at
                 ) VALUES (
                     %(task_id)s, %(run_id)s, %(tenant_id)s, %(project_id)s,
                     %(runtime_seconds)s, %(cpu_seconds)s, %(memory_rss_peak_kb)s, %(memory_mb_seconds)s,
                     %(gpu_seconds)s, %(gpu_memory_mb_seconds)s,
                     %(disk_read_bytes)s, %(disk_write_bytes)s,
+                    %(network_rx_bytes)s, %(network_tx_bytes)s,
+                    %(resource_events)s::jsonb,
                     %(sample_count)s, {stat_placeholders}, NOW()
                 )
                 ON CONFLICT (task_id) DO UPDATE SET
@@ -241,6 +284,9 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
                     gpu_memory_mb_seconds = EXCLUDED.gpu_memory_mb_seconds,
                     disk_read_bytes = EXCLUDED.disk_read_bytes,
                     disk_write_bytes = EXCLUDED.disk_write_bytes,
+                    network_rx_bytes = EXCLUDED.network_rx_bytes,
+                    network_tx_bytes = EXCLUDED.network_tx_bytes,
+                    resource_events = EXCLUDED.resource_events,
                     sample_count = EXCLUDED.sample_count,
                     {stat_updates},
                     aggregated_at = NOW()
@@ -261,12 +307,16 @@ def rollup_run_usage(run_id: str) -> None:
         [
             "AVG(cpu_pct_avg) FILTER (WHERE cpu_pct_avg IS NOT NULL)",
             "MAX(cpu_pct_peak)",
+            "MAX(cpu_pct_p95)",
             "AVG(memory_mb_avg) FILTER (WHERE memory_mb_avg IS NOT NULL)",
             "MAX(memory_mb_peak)",
             "AVG(gpu_util_pct_avg) FILTER (WHERE gpu_util_pct_avg IS NOT NULL)",
             "MAX(gpu_util_pct_peak)",
             "AVG(gpu_memory_mb_avg) FILTER (WHERE gpu_memory_mb_avg IS NOT NULL)",
             "MAX(gpu_memory_mb_peak)",
+            "AVG(gpu_power_w_avg) FILTER (WHERE gpu_power_w_avg IS NOT NULL)",
+            "MAX(gpu_power_w_peak)",
+            "MAX(gpu_temp_c_peak)",
         ]
     )
 
@@ -284,6 +334,8 @@ def rollup_run_usage(run_id: str) -> None:
                     COALESCE(SUM(gpu_memory_mb_seconds), 0),
                     COALESCE(SUM(disk_read_bytes), 0),
                     COALESCE(SUM(disk_write_bytes), 0),
+                    COALESCE(SUM(network_rx_bytes), 0),
+                    COALESCE(SUM(network_tx_bytes), 0),
                     COUNT(*),
                     {stat_aggs}
                 FROM task_usage
@@ -294,11 +346,11 @@ def rollup_run_usage(run_id: str) -> None:
             )
             row = cur.fetchone()
 
-    if not row or int(row[10] or 0) == 0:
+    if not row or int(row[12] or 0) == 0:
         return
 
     tenant_id, project_id = str(row[0]), str(row[1])
-    stats = _sample_stats_from_row(row, 11)
+    stats = _sample_stats_from_row(row, 13)
 
     stat_cols_sql = ", ".join(_SAMPLE_STAT_KEYS)
     stat_placeholders = ", ".join(f"%({k})s" for k in _SAMPLE_STAT_KEYS)
@@ -316,7 +368,9 @@ def rollup_run_usage(run_id: str) -> None:
         "gpu_memory_mb_seconds": float(row[7] or 0) or None,
         "disk_read_bytes": int(row[8] or 0) or None,
         "disk_write_bytes": int(row[9] or 0) or None,
-        "task_count": int(row[10] or 0),
+        "network_rx_bytes": int(row[10] or 0) or None,
+        "network_tx_bytes": int(row[11] or 0) or None,
+        "task_count": int(row[12] or 0),
         **stats,
     }
 
@@ -329,12 +383,14 @@ def rollup_run_usage(run_id: str) -> None:
                     runtime_seconds, cpu_seconds, memory_rss_peak_kb, memory_mb_seconds,
                     gpu_seconds, gpu_memory_mb_seconds,
                     disk_read_bytes, disk_write_bytes,
+                    network_rx_bytes, network_tx_bytes,
                     task_count, {stat_cols_sql}, aggregated_at
                 ) VALUES (
                     %(run_id)s, %(tenant_id)s, %(project_id)s,
                     %(runtime_seconds)s, %(cpu_seconds)s, %(memory_rss_peak_kb)s, %(memory_mb_seconds)s,
                     %(gpu_seconds)s, %(gpu_memory_mb_seconds)s,
                     %(disk_read_bytes)s, %(disk_write_bytes)s,
+                    %(network_rx_bytes)s, %(network_tx_bytes)s,
                     %(task_count)s, {stat_placeholders}, NOW()
                 )
                 ON CONFLICT (run_id) DO UPDATE SET
@@ -348,6 +404,8 @@ def rollup_run_usage(run_id: str) -> None:
                     gpu_memory_mb_seconds = EXCLUDED.gpu_memory_mb_seconds,
                     disk_read_bytes = EXCLUDED.disk_read_bytes,
                     disk_write_bytes = EXCLUDED.disk_write_bytes,
+                    network_rx_bytes = EXCLUDED.network_rx_bytes,
+                    network_tx_bytes = EXCLUDED.network_tx_bytes,
                     task_count = EXCLUDED.task_count,
                     {stat_updates},
                     aggregated_at = NOW()
@@ -367,8 +425,10 @@ def _base_usage_fields(row: tuple, *, start: int) -> dict[str, Any]:
         "gpu_memory_mb_seconds": float(row[start + 5]) if row[start + 5] is not None else None,
         "disk_read_bytes": int(row[start + 6]) if row[start + 6] is not None else None,
         "disk_write_bytes": int(row[start + 7]) if row[start + 7] is not None else None,
+        "network_rx_bytes": int(row[start + 8]) if row[start + 8] is not None else None,
+        "network_tx_bytes": int(row[start + 9]) if row[start + 9] is not None else None,
     }
-    out.update(_sample_stats_from_row(row, start + 8))
+    out.update(_sample_stats_from_row(row, start + 10))
     return out
 
 
@@ -379,8 +439,9 @@ def _row_to_run_usage(row: tuple) -> dict[str, Any]:
         "project_id": row[2],
     }
     base.update(_base_usage_fields(row, start=3))
-    base["task_count"] = row[19]
-    base["aggregated_at"] = row[20].isoformat() if row[20] else None
+    stat_offset = 3 + 10 + len(_SAMPLE_STAT_KEYS)
+    base["task_count"] = row[stat_offset]
+    base["aggregated_at"] = row[stat_offset + 1].isoformat() if row[stat_offset + 1] else None
     return base
 
 
@@ -395,6 +456,7 @@ def get_run_usage(run_id: str) -> dict[str, Any] | None:
                        runtime_seconds, cpu_seconds, memory_rss_peak_kb, memory_mb_seconds,
                        gpu_seconds, gpu_memory_mb_seconds,
                        disk_read_bytes, disk_write_bytes,
+                       network_rx_bytes, network_tx_bytes,
                        {stat_cols}, task_count, aggregated_at
                 FROM run_usage WHERE run_id = %s
                 """,
@@ -418,10 +480,12 @@ def _row_to_task_usage(row: tuple) -> dict[str, Any]:
         "gpu_memory_mb_seconds": float(row[7]) if row[7] is not None else None,
         "disk_read_bytes": int(row[8]) if row[8] is not None else None,
         "disk_write_bytes": int(row[9]) if row[9] is not None else None,
-        "sample_count": row[10],
-        "plugin": row[19] if row[19] else None,
+        "network_rx_bytes": int(row[10]) if row[10] is not None else None,
+        "network_tx_bytes": int(row[11]) if row[11] is not None else None,
+        "sample_count": row[12],
+        "plugin": row[12 + len(_SAMPLE_STAT_KEYS) + 1] if len(row) > 12 + len(_SAMPLE_STAT_KEYS) + 1 else None,
     }
-    item.update(_sample_stats_from_row(row, 11))
+    item.update(_sample_stats_from_row(row, 13))
     return item
 
 
@@ -430,7 +494,9 @@ def _task_usage_select_sql(*, stat_alias: str = "tu") -> str:
     return f"""
         SELECT tu.task_id, tu.run_id, tu.runtime_seconds, tu.cpu_seconds, tu.memory_rss_peak_kb,
                tu.memory_mb_seconds, tu.gpu_seconds, tu.gpu_memory_mb_seconds,
-               tu.disk_read_bytes, tu.disk_write_bytes, tu.sample_count,
+               tu.disk_read_bytes, tu.disk_write_bytes,
+               tu.network_rx_bytes, tu.network_tx_bytes,
+               tu.sample_count,
                {stat_cols}, t.plugin
         FROM task_usage tu
         LEFT JOIN tasks t ON t.task_id = tu.task_id
@@ -749,7 +815,8 @@ def list_run_usage_samples(
 
     sql = f"""
         SELECT s.id, s.task_id, s.sampled_at, s.cpu_percent, s.memory_mb,
-               s.gpu_util_percent, s.gpu_memory_mb
+               s.gpu_util_percent, s.gpu_memory_mb,
+               s.network_rx_bytes, s.network_tx_bytes, s.gpu_power_w, s.gpu_temp_c
         FROM task_usage_samples s
         INNER JOIN tasks t ON t.task_id = s.task_id
         WHERE {" AND ".join(clauses)}
@@ -778,6 +845,10 @@ def list_run_usage_samples(
                 "memory_mb": float(row[4]) if row[4] is not None else None,
                 "gpu_util_percent": float(row[5]) if row[5] is not None else None,
                 "gpu_memory_mb": float(row[6]) if row[6] is not None else None,
+                "network_rx_bytes": int(row[7]) if row[7] is not None else None,
+                "network_tx_bytes": int(row[8]) if row[8] is not None else None,
+                "gpu_power_w": float(row[9]) if row[9] is not None else None,
+                "gpu_temp_c": float(row[10]) if row[10] is not None else None,
             }
         )
 
@@ -797,12 +868,16 @@ def _stat_agg_select() -> str:
         [
             "AVG(cpu_pct_avg) FILTER (WHERE cpu_pct_avg IS NOT NULL)",
             "MAX(cpu_pct_peak)",
+            "MAX(cpu_pct_p95)",
             "AVG(memory_mb_avg) FILTER (WHERE memory_mb_avg IS NOT NULL)",
             "MAX(memory_mb_peak)",
             "AVG(gpu_util_pct_avg) FILTER (WHERE gpu_util_pct_avg IS NOT NULL)",
             "MAX(gpu_util_pct_peak)",
             "AVG(gpu_memory_mb_avg) FILTER (WHERE gpu_memory_mb_avg IS NOT NULL)",
             "MAX(gpu_memory_mb_peak)",
+            "AVG(gpu_power_w_avg) FILTER (WHERE gpu_power_w_avg IS NOT NULL)",
+            "MAX(gpu_power_w_peak)",
+            "MAX(gpu_temp_c_peak)",
         ]
     )
 

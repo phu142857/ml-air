@@ -38,26 +38,66 @@ const CHART_COLORS = {
   cpu: "#38bdf8",
   memory: "#a78bfa",
   gpu: "#34d399",
-  gpuMem: "#fbbf24",
+  power: "#f97316",
+  temp: "#fb7185",
 } as const
 
-function buildChartSeries(samples: UsageSamplePoint[]) {
+function buildChartSeries(samples: UsageSamplePoint[], mergeAllTasks = false) {
   if (!samples.length) return []
-  const t0 = new Date(samples[0].sampled_at).getTime()
-  return samples.map((s) => {
+
+  if (!mergeAllTasks) {
+    const t0 = new Date(samples[0].sampled_at).getTime()
+    return samples.map((s) => {
+      const elapsed = Math.max(0, Math.round((new Date(s.sampled_at).getTime() - t0) / 1000))
+      return pointToChart(elapsed, s)
+    })
+  }
+
+  const t0 = Math.min(...samples.map((s) => new Date(s.sampled_at).getTime()))
+  const buckets = new Map<number, ReturnType<typeof pointToChart>>()
+  for (const s of samples) {
     const elapsed = Math.max(0, Math.round((new Date(s.sampled_at).getTime() - t0) / 1000))
-    return {
-      elapsed,
-      cpu: s.cpu_percent ?? undefined,
-      memory: s.memory_mb ?? undefined,
-      gpu: s.gpu_util_percent ?? undefined,
-      gpuMem: s.gpu_memory_mb ?? undefined,
+    const prev = buckets.get(elapsed)
+    const next = pointToChart(elapsed, s)
+    if (!prev) {
+      buckets.set(elapsed, next)
+      continue
     }
-  })
+    buckets.set(elapsed, {
+      elapsed,
+      cpu: maxDefined(prev.cpu, next.cpu),
+      memory: maxDefined(prev.memory, next.memory),
+      gpu: maxDefined(prev.gpu, next.gpu),
+      power: maxDefined(prev.power, next.power),
+      temp: maxDefined(prev.temp, next.temp),
+    })
+  }
+  return [...buckets.values()].sort((a, b) => a.elapsed - b.elapsed)
+}
+
+function maxDefined(a?: number, b?: number) {
+  if (a == null) return b
+  if (b == null) return a
+  return Math.max(a, b)
+}
+
+function pointToChart(elapsed: number, s: UsageSamplePoint) {
+  return {
+    elapsed,
+    cpu: s.cpu_percent ?? undefined,
+    memory: s.memory_mb ?? undefined,
+    gpu: s.gpu_util_percent ?? undefined,
+    power: s.gpu_power_w ?? undefined,
+    temp: s.gpu_temp_c ?? undefined,
+  }
 }
 
 function hasGpuSeries(samples: UsageSamplePoint[]) {
   return samples.some((s) => s.gpu_util_percent != null || s.gpu_memory_mb != null)
+}
+
+function hasPowerSeries(samples: UsageSamplePoint[]) {
+  return samples.some((s) => s.gpu_power_w != null || s.gpu_temp_c != null)
 }
 
 export function RunResourceTimeline({
@@ -81,18 +121,17 @@ export function RunResourceTimeline({
   loading: boolean
   enabled: boolean
   grafanaUiUrl: string | null
-  // When embedded (e.g. inside an expanded task row) the task selector and
-  // Grafana button are hidden — the task is already fixed by the caller.
   embedded?: boolean
 }) {
   const chartTheme = useChartTheme()
-  const chartData = useMemo(() => buildChartSeries(samples), [samples])
-  const showGpu = useMemo(() => hasGpuSeries(samples), [samples])
-
-  // Peak header must match the chart scope: for "all" use the run-level aggregate
-  // (backend MAX across tasks), otherwise the selected task's aggregate. Using
-  // tasks[0] for "all" made the header desync from both the chart and the tasks table.
   const isAll = selectedTaskId === "all"
+  const chartData = useMemo(
+    () => buildChartSeries(samples, isAll),
+    [samples, isAll],
+  )
+  const showGpu = useMemo(() => hasGpuSeries(samples), [samples])
+  const showPower = useMemo(() => hasPowerSeries(samples), [samples])
+
   const peakUsage: UsageSampleStats | undefined = isAll
     ? runUsage ?? undefined
     : usageByTaskId.get(selectedTaskId)
@@ -101,8 +140,12 @@ export function RunResourceTimeline({
 
   const peakItems = [
     { label: "CPU peak", value: formatPct(peakUsage?.cpu_pct_peak ?? null), mono: true },
+    { label: "CPU P95", value: formatPct(peakUsage?.cpu_pct_p95 ?? null), mono: true },
+    { label: "CPU avg", value: formatPct(peakUsage?.cpu_pct_avg ?? null), mono: true },
     { label: "Memory peak", value: formatMemMb(peakUsage?.memory_mb_peak ?? null), mono: true },
     { label: "GPU peak", value: formatPct(peakUsage?.gpu_util_pct_peak ?? null), mono: true },
+    { label: "GPU power peak", value: peakUsage?.gpu_power_w_peak != null ? `${peakUsage.gpu_power_w_peak.toFixed(0)} W` : "—", mono: true },
+    { label: "GPU temp peak", value: peakUsage?.gpu_temp_c_peak != null ? `${peakUsage.gpu_temp_c_peak.toFixed(0)} °C` : "—", mono: true },
   ]
 
   if (!enabled) {
@@ -147,7 +190,7 @@ export function RunResourceTimeline({
       )}
 
       {peakUsage || samples.length > 0 ? (
-        <MetadataGrid columns={3} items={peakItems} />
+        <MetadataGrid columns={4} items={peakItems} />
       ) : null}
 
       {loading ? (
@@ -180,44 +223,25 @@ export function RunResourceTimeline({
               <Tooltip
                 contentStyle={{ ...chartTheme.tooltipStyle, borderRadius: 8, fontSize: 12 }}
                 formatter={(value: number, name: string) => {
-                  if (name === "memory" || name === "gpuMem") return [formatMemMb(value), name]
+                  if (name === "memory") return [formatMemMb(value), name]
                   if (name === "cpu" || name === "gpu") return [formatPct(value), name]
+                  if (name === "power") return [`${value.toFixed(0)} W`, name]
+                  if (name === "temp") return [`${value.toFixed(0)} °C`, name]
                   return [value, name]
                 }}
                 labelFormatter={(v) => `t+${v}s`}
               />
               <Legend />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="cpu"
-                name="CPU %"
-                stroke={CHART_COLORS.cpu}
-                dot={false}
-                strokeWidth={2}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="memory"
-                name="Memory MB"
-                stroke={CHART_COLORS.memory}
-                dot={false}
-                strokeWidth={2}
-                isAnimationActive={false}
-              />
+              <Line yAxisId="left" type="monotone" dataKey="cpu" name="CPU %" stroke={CHART_COLORS.cpu} dot={false} strokeWidth={2} isAnimationActive={false} />
+              <Line yAxisId="right" type="monotone" dataKey="memory" name="Memory MB" stroke={CHART_COLORS.memory} dot={false} strokeWidth={2} isAnimationActive={false} />
               {showGpu ? (
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="gpu"
-                  name="GPU %"
-                  stroke={CHART_COLORS.gpu}
-                  dot={false}
-                  strokeWidth={2}
-                  isAnimationActive={false}
-                />
+                <Line yAxisId="left" type="monotone" dataKey="gpu" name="GPU %" stroke={CHART_COLORS.gpu} dot={false} strokeWidth={2} isAnimationActive={false} />
+              ) : null}
+              {showPower ? (
+                <>
+                  <Line yAxisId="left" type="monotone" dataKey="power" name="GPU power W" stroke={CHART_COLORS.power} dot={false} strokeWidth={2} isAnimationActive={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="temp" name="GPU temp °C" stroke={CHART_COLORS.temp} dot={false} strokeWidth={2} isAnimationActive={false} />
+                </>
               ) : null}
             </LineChart>
           </ResponsiveContainer>

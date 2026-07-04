@@ -177,12 +177,18 @@ export type RunTracking = {
 export type UsageSampleStats = {
   cpu_pct_avg?: number | null;
   cpu_pct_peak?: number | null;
+  cpu_pct_p95?: number | null;
   memory_mb_avg?: number | null;
   memory_mb_peak?: number | null;
   gpu_util_pct_avg?: number | null;
   gpu_util_pct_peak?: number | null;
   gpu_memory_mb_avg?: number | null;
   gpu_memory_mb_peak?: number | null;
+  gpu_power_w_avg?: number | null;
+  gpu_power_w_peak?: number | null;
+  gpu_temp_c_peak?: number | null;
+  network_rx_bytes?: number | null;
+  network_tx_bytes?: number | null;
 };
 
 export type UsageSummaryRecord = {
@@ -292,6 +298,10 @@ export type UsageSamplePoint = {
   memory_mb?: number | null;
   gpu_util_percent?: number | null;
   gpu_memory_mb?: number | null;
+  network_rx_bytes?: number | null;
+  network_tx_bytes?: number | null;
+  gpu_power_w?: number | null;
+  gpu_temp_c?: number | null;
 };
 
 export type RunUsageSamplesBundle = {

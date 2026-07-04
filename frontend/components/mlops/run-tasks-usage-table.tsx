@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
-import type { TaskItem, TaskLiveUsage, TaskUsageRecord, UsageSamplePoint } from "@/lib/api"
+import type { TaskItem, TaskLiveUsage, TaskUsageRecord, UsageSamplePoint, RunUsageRecord } from "@/lib/api"
 import { buildTaskDetailHref } from "@/lib/task-detail-href"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
@@ -36,11 +36,17 @@ type RunTasksUsageTableProps = {
   runId: string
   usageEnabled?: boolean
   usageLoading?: boolean
+  runUsage?: RunUsageRecord | null
+  runTimelineTaskId?: string
+  onRunTimelineTaskChange?: (taskId: string) => void
+  runSamples?: UsageSamplePoint[]
+  runSamplesLoading?: boolean
+  samplesEnabled?: boolean
+  grafanaUiUrl?: string | null
   expandedTaskId: string | null
   onToggleTask: (taskId: string) => void
   samples: UsageSamplePoint[]
   samplesLoading?: boolean
-  samplesEnabled?: boolean
 }
 
 const TABLE_COL_COUNT = 7
@@ -120,11 +126,17 @@ export function RunTasksUsageTable({
   runId,
   usageEnabled = true,
   usageLoading = false,
+  runUsage = null,
+  runTimelineTaskId = "all",
+  onRunTimelineTaskChange,
+  runSamples = [],
+  runSamplesLoading = false,
+  samplesEnabled = true,
+  grafanaUiUrl = null,
   expandedTaskId,
   onToggleTask,
   samples,
   samplesLoading = false,
-  samplesEnabled = true,
 }: RunTasksUsageTableProps) {
   const [nowMs, setNowMs] = useState(() => Date.now())
 
@@ -154,12 +166,27 @@ export function RunTasksUsageTable({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {!usageEnabled ? (
         <p className="text-xs text-muted-foreground">Usage tracking is disabled on the platform.</p>
       ) : usageLoading ? (
         <p className="text-xs text-muted-foreground">Loading resource usage…</p>
       ) : null}
+
+      <Panel className="p-4">
+        <RunResourceTimeline
+          tasks={rows}
+          samples={runSamples}
+          usageByTaskId={usageByTaskId}
+          runUsage={runUsage}
+          selectedTaskId={runTimelineTaskId}
+          onTaskChange={onRunTimelineTaskChange ?? (() => {})}
+          loading={runSamplesLoading}
+          enabled={samplesEnabled}
+          grafanaUiUrl={grafanaUiUrl}
+        />
+      </Panel>
+
       <Panel>
         <div className="overflow-x-auto">
           <Table>

@@ -85,6 +85,7 @@ import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
+import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
 const RUN_USAGE_LIVE_REFRESH_MS = 1000
 const ACTIVE_RUN_REFETCH_MS = 4000
 
@@ -314,10 +315,12 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [runTimelineTaskId, setRunTimelineTaskId] = useState<string>("all")
   const toggleExpandedTask = useCallback(
     (taskId: string) => setExpandedTaskId((prev) => (prev === taskId ? null : taskId)),
     [],
   )
+  const grafanaUiUrl = useGrafanaUiUrl()
 
   const trackingQuery = useQuery({
     queryKey: mlairKeys.run.tracking(runId),
@@ -353,6 +356,21 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       tab === "tasks" && expandedTaskId
         ? usageLiveRefetchMs(runQuery.data?.status) || false
         : false,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
+    retry: false,
+  })
+
+  const runUsageSamplesQuery = useQuery({
+    queryKey: mlairKeys.run.usageSamples(runId, runTimelineTaskId === "all" ? "all" : runTimelineTaskId),
+    queryFn: () =>
+      fetchRunUsageSamples(tenantId, projectId, runId, token, {
+        taskId: runTimelineTaskId === "all" ? undefined : runTimelineTaskId,
+        limit: 2000,
+      }),
+    enabled: enabled && Boolean(runQuery.data) && tab === "tasks",
+    refetchOnMount: "always",
+    refetchInterval: () =>
+      tab === "tasks" ? usageLiveRefetchMs(runQuery.data?.status) || false : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -765,12 +783,18 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   runId={runId}
                   usageEnabled={usageQuery.data?.enabled ?? true}
                   usageLoading={usageQuery.isLoading}
+                  runUsage={usageQuery.data?.usage ?? null}
+                  runTimelineTaskId={runTimelineTaskId}
+                  onRunTimelineTaskChange={setRunTimelineTaskId}
+                  runSamples={runUsageSamplesQuery.data?.samples ?? []}
+                  runSamplesLoading={runUsageSamplesQuery.isLoading}
+                  grafanaUiUrl={grafanaUiUrl}
                   expandedTaskId={expandedTaskId}
                   onToggleTask={toggleExpandedTask}
                   samples={usageSamplesQuery.data?.samples ?? []}
                   samplesLoading={usageSamplesQuery.isLoading}
                   samplesEnabled={
-                    usageSamplesQuery.data?.enabled ?? usageQuery.data?.enabled ?? true
+                    runUsageSamplesQuery.data?.enabled ?? usageQuery.data?.enabled ?? true
                   }
                 />
               )}
