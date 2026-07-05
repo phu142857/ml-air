@@ -120,6 +120,14 @@ export default function PipelineDetailPage() {
     ? `${pipelineRow.total_runs} total runs · last ${String(pipelineRow.latest_status || "—")}${pipelineRow.updated_at ? ` · updated ${formatRelativeTime(pipelineRow.updated_at)}` : ""}`
     : "Orchestration and observability — run and train from Dataset Hub";
 
+  const pageSubtitle = [
+    pipelineId,
+    selectedConfigVersion ? `config v${selectedConfigVersion.version}` : null,
+    headerSubtitle,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBreadcrumb
@@ -131,12 +139,8 @@ export default function PipelineDetailPage() {
       <ResourcePageHeader
         icon={GitBranch}
         accent="amber"
-        title={`Pipeline · ${pipelineId}`}
-        subtitle={
-          selectedConfigVersion
-            ? `${headerSubtitle} · config v${selectedConfigVersion.version}`
-            : headerSubtitle
-        }
+        title="Pipeline"
+        subtitle={pageSubtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -221,16 +225,19 @@ export default function PipelineDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="panel-surface px-4 py-3">
+          <div className="panel-surface min-w-0 px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline id</p>
-            <p className="mt-1 truncate font-mono text-sm text-foreground/90">{resolvedPipelineId}</p>
+            <p className="mt-1 truncate font-mono text-sm text-foreground/90" title={resolvedPipelineId}>
+              {resolvedPipelineId}
+            </p>
           </div>
-          <div className="panel-surface px-4 py-3">
+          <div className="panel-surface min-w-0 px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest run</p>
-            <p className="mt-1 text-sm text-foreground/90">
+            <p className="mt-1 min-w-0 text-sm text-foreground/90">
               {latestRunId ? (
                 <Link
-                  className="font-mono text-primary hover:underline"
+                  className="block truncate font-mono text-primary hover:underline"
+                  title={latestRunId}
                   href={`/runs/${encodeURIComponent(latestRunId)}`}
                 >
                   {latestRunId}
@@ -307,15 +314,6 @@ export default function PipelineDetailPage() {
             </div>
           )}
         </DetailSection>
-
-        <div className="inset-surface px-4 py-3 text-sm text-muted-foreground">
-          Production runs start from{" "}
-          <Link href="/datasets" className="font-medium text-[color:var(--status-success-fg)] hover:underline">
-            Dataset Hub
-          </Link>
-          : train with a model (mapped pipeline) or run a pipeline explicitly. This page shows topology and versions;
-          open a run for live execution status.
-        </div>
       </PageScrollBody>
 
       <PipelineConfigEditorDialog

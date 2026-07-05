@@ -393,12 +393,6 @@ export function ExecutionIntentPanel({
         onRequiredSizeChange={setRequiredSize}
       />
 
-      {!hasTrainingPolicy ? (
-        <p className={feedbackMessageClass("warning")}>
-          Create a training policy on the Readiness tab before Run / Train.
-        </p>
-      ) : null}
-
       {msg ? <p className={feedbackMessageClass("failed")}>{msg}</p> : null}
 
       <PolicyReadinessBlockDialog

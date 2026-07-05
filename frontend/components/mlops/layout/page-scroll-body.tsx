@@ -18,7 +18,7 @@ export function PageScrollBody({ children, className, header }: PageScrollBodyPr
     <div className={cn("page-body", className)}>
       {header}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="scroll-region">{children}</div>
+        <div className="scroll-region flex flex-col gap-6">{children}</div>
       </div>
     </div>
   )

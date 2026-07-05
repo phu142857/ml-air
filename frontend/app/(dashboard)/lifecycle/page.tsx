@@ -554,7 +554,7 @@ function LifecycleContent() {
                 )}
               />
             </CollapsibleTrigger>
-            <CollapsibleContent className="border-t border-border px-3 pb-3 pt-2">
+            <CollapsibleContent className="max-h-[min(28rem,45vh)] overflow-y-auto border-t border-border px-3 pb-3 pt-2">
               <div className="grid gap-3 sm:grid-cols-2">
                 {semanticObservabilitySurfaces.map((surf) => (
                   <div

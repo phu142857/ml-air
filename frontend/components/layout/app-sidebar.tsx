@@ -131,7 +131,7 @@ export function AppSidebar() {
         <NavGroup label="Lifecycle" items={lifecycleNav} />
         <NavGroup label="Overview" items={platformNav} />
         {showExecutionNav ? (
-          <NavGroup label="Execution (maintainer)" items={executionNav} />
+          <NavGroup label="Execution" items={executionNav} />
         ) : null}
         <NavGroup label="Admin" items={settingsNav} />
       </SidebarContent>
