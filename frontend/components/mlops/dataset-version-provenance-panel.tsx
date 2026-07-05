@@ -15,9 +15,10 @@ type Props = {
   datasetId: string;
   token: string;
   versions: DatasetVersionItem[];
+  onOpenAccumulation?: () => void;
 };
 
-export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, token, versions }: Props) {
+export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, token, versions, onOpenAccumulation }: Props) {
   const [versionId, setVersionId] = useState("");
 
   const options = versions.map((v) => ({
@@ -75,6 +76,15 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
             <div className="text-muted-foreground">
               {provQuery.data.materialized_from_buffer ? "From accumulation buffer" : "Direct import / manual"}
             </div>
+            {provQuery.data.materialized_from_buffer && onOpenAccumulation ? (
+              <button
+                type="button"
+                className="mt-1 text-primary underline"
+                onClick={onOpenAccumulation}
+              >
+                View buffer window →
+              </button>
+            ) : null}
             {provQuery.data.accumulation ? (
               <div className="text-muted-foreground">
                 Strategy {provQuery.data.accumulation.accumulation_strategy} · threshold{" "}

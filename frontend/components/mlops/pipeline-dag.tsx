@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import {
   ReactFlow,
   Background,
@@ -29,6 +30,13 @@ import {
   truncateDagLabel,
 } from "@/lib/pipeline-dag-layout"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
+import { buildTaskDetailHref } from "@/lib/task-detail-href"
+
+export type PipelineDagTaskScope = {
+  runId: string
+  tenantId?: string
+  projectId?: string
+}
 
 const stageTypeIcons = {
   ingest: Download,
@@ -56,6 +64,7 @@ const statusColors = {
 
 interface StageNodeData {
   stage: PipelineStage
+  clickable?: boolean
   [key: string]: unknown
 }
 
@@ -83,7 +92,8 @@ function StageNode({ data }: NodeProps<Node<StageNodeData>>) {
       <div
         className={cn(
           "w-[220px] max-w-[220px] rounded-lg border px-3 py-2.5 transition-all",
-          status
+          status,
+          data.clickable && "cursor-pointer hover:shadow-sm"
         )}
       >
         <div className="mb-2 flex items-center gap-2">
@@ -142,9 +152,11 @@ const nodeTypes = {
 
 interface PipelineDAGProps {
   pipeline: Pipeline
+  taskScope?: PipelineDagTaskScope
 }
 
-export function PipelineDAG({ pipeline }: PipelineDAGProps) {
+export function PipelineDAG({ pipeline, taskScope }: PipelineDAGProps) {
+  const router = useRouter()
   const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme()
 
   const stages = Array.isArray(pipeline?.stages) ? pipeline.stages : []
@@ -164,7 +176,7 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
       id: stage.id,
       type: "stage",
       position: positions[stage.id] ?? { x: 0, y: 0 },
-      data: { stage },
+      data: { stage, clickable: Boolean(taskScope?.runId?.trim()) },
     }))
 
     const initialEdges: Edge[] = stages.flatMap((stage) =>
@@ -188,7 +200,7 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
     const canvasHeight = estimateDagCanvasHeight(nodeIds, dagEdges, { minHeight: 260 })
 
     return { nodes: initialNodes, edges: initialEdges, canvasHeight }
-  }, [stages, flowEdgeStroke])
+  }, [stages, flowEdgeStroke, taskScope?.runId])
 
   const [nodesState, setNodes, onNodesChange] = useNodesState(nodes)
   const [edgesState, setEdges, onEdgesChange] = useEdgesState(edges)
@@ -197,6 +209,18 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
     setNodes(nodes)
     setEdges(edges)
   }, [nodes, edges, setNodes, setEdges])
+
+  const handleNodeClick = (_: React.MouseEvent, node: Node<StageNodeData>) => {
+    if (!taskScope?.runId?.trim()) return
+    const taskId = `${taskScope.runId}:${node.id}`
+    router.push(
+      buildTaskDetailHref(taskId, {
+        tenant_id: taskScope.tenantId,
+        project_id: taskScope.projectId,
+        run_id: taskScope.runId,
+      }),
+    )
+  }
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -209,6 +233,7 @@ export function PipelineDAG({ pipeline }: PipelineDAGProps) {
           edges={edgesState}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeClick={taskScope?.runId ? handleNodeClick : undefined}
           nodeTypes={nodeTypes}
           colorMode={flowColorMode}
           defaultMarkerColor={flowEdgeStroke}

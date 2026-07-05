@@ -2973,12 +2973,19 @@ def append_dataset_buffer_by_name_v1(
         ) from exc
 
 
-def _materialize_dataset_buffer_http_response(tenant_id: str, project_id: str, dataset_id: str) -> dict:
+def _materialize_dataset_buffer_http_response(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    *,
+    created_by: str | None = None,
+) -> dict:
     try:
         out = lineage_service.materialize_dataset_buffer_now(
             tenant_id=tenant_id,
             project_id=project_id,
             dataset_id=dataset_id,
+            created_by=created_by,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -3001,7 +3008,12 @@ def materialize_dataset_buffer_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    return _materialize_dataset_buffer_http_response(tenant_id, project_id, dataset_id)
+    return _materialize_dataset_buffer_http_response(
+        tenant_id,
+        project_id,
+        dataset_id,
+        created_by=principal.subject,
+    )
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/materialize")
@@ -3014,7 +3026,12 @@ def materialize_dataset_v1(
     """Dataset-scoped alias for ``POST .../datasets/{dataset_id}/buffer/materialize`` (same semantics)."""
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    return _materialize_dataset_buffer_http_response(tenant_id, project_id, dataset_id)
+    return _materialize_dataset_buffer_http_response(
+        tenant_id,
+        project_id,
+        dataset_id,
+        created_by=principal.subject,
+    )
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/datasets/buffer/materialize-scheduled")

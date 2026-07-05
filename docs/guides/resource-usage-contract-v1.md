@@ -8,10 +8,14 @@ Worker-agnostic resource telemetry for MLAir runs and tasks. No framework names,
 
 | Field | Meaning |
 |-------|---------|
-| `cpu_percent`, `cpu_percent_peak` | **0–100 machine utilization** on the worker host (not “sum of cores unbounded”). |
+| `cpu_percent`, `cpu_percent_peak` | **0–100 utilization** — cgroup quota when container limits exist (`sdk/cgroup.py`), else host-wide. |
 | `memory_mb`, `memory_mb_peak` | RSS of the monitored process tree, megabytes. |
-| `gpu_util_percent`, `gpu_percent_peak` | GPU utilization 0–100 when NVML (or worker) provides it. |
+| `gpu_util_percent`, `gpu_percent_peak` | GPU utilization 0–100 via `GPUBackend` (NVML default). |
 | `gpu_memory_mb`, `gpu_memory_mb_peak` | GPU memory used by monitored PIDs, MB. |
+| `cpu_pct_p95`, `gpu_pct_p95`, `memory_mb_p95` | P95 over `usage_samples[]` when present. |
+| `network_rx_bytes`, `network_tx_bytes` | Process-tree network I/O delta when available. |
+| `gpu_power_w_avg`, `gpu_power_w_peak`, `gpu_temp_c_peak` | Optional NVML power/temperature. |
+| `device_id` | GPU index (0..N-1) per sample when multi-GPU. |
 | `duration_seconds` | Wall-clock seconds for the task on the worker. |
 | `cpu_time_seconds` | Process CPU time (user+system) seconds. |
 | `disk_read_bytes` / `disk_write_bytes` | Process-tree disk I/O delta when available. |
@@ -61,6 +65,12 @@ payload = monitor.complete_bundle()
     "memory_mb_peak": 4120,
     "gpu_percent_peak": 88,
     "gpu_memory_mb_peak": 7420,
+    "cpu_pct_p95": 88,
+    "network_rx_bytes": 1048576,
+    "network_tx_bytes": 524288,
+    "gpu_power_w_peak": 285,
+    "gpu_temp_c_peak": 72,
+    "resource_events": ["oom_kill_candidate"],
     "disk_read_bytes": 1073741824,
     "disk_write_bytes": 536870912
   },
@@ -70,7 +80,10 @@ payload = monitor.complete_bundle()
       "cpu_percent": 72,
       "memory_mb": 3500,
       "gpu_util_percent": 95,
-      "gpu_memory_mb": 6200
+      "gpu_memory_mb": 6200,
+      "device_id": 0,
+      "network_rx_bytes": 4096,
+      "network_tx_bytes": 2048
     }
   ]
 }

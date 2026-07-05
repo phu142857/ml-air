@@ -926,6 +926,7 @@ def _materialize_runtime_feedback_if_needed(
     checksum: str | None,
     size: int | None,
     force: bool = False,
+    created_by: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Atomic materialization: lock dataset scope, create vN once, then reset buffer."""
     now_size = max(0, int(size or 0))
@@ -999,9 +1000,9 @@ def _materialize_runtime_feedback_if_needed(
                                 (
                                     version_id, dataset_id, version, uri, checksum, source_type, canonical_source_type, record_count,
                                     status, quality_score, summary, details, materialized_from_buffer, materialization_idempotency_key,
-                                    tags, external_refs
+                                    tags, external_refs, created_by
                                 )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s, %s::jsonb, %s::jsonb)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', 100, %s, %s::jsonb, true, %s, %s::jsonb, %s::jsonb, %s)
                             """,
                             (
                                 version_id,
@@ -1017,6 +1018,7 @@ def _materialize_runtime_feedback_if_needed(
                                 idem_key,
                                 json.dumps([]),
                                 json.dumps([]),
+                                (str(created_by).strip() or None) if created_by else None,
                             ),
                         )
                         insert_ok = True
@@ -1130,6 +1132,7 @@ def materialize_dataset_buffer_now(
     tenant_id: str,
     project_id: str,
     dataset_id: str,
+    created_by: str | None = None,
 ) -> dict[str, Any] | None:
     """Manual materialization endpoint for operator-driven strategies."""
     ds = get_dataset(tenant_id, project_id, dataset_id)
@@ -1150,6 +1153,7 @@ def materialize_dataset_buffer_now(
         checksum=str(ds.get("checksum") or "") or None,
         size=int(buf.get("current_size") or 0),
         force=True,
+        created_by=created_by,
     )
     if not version_id or not version:
         raise ValueError("buffer_not_ready_for_materialization")
@@ -2015,7 +2019,7 @@ def _merge_distinct_external_refs(
 def _dataset_version_list_item_from_row(r: tuple[Any, ...]) -> dict:
     st = r[5] or "manual_upload"
     db_canon = r[6]
-    return {
+    out = {
         "version_id": r[0],
         "version": r[1],
         "uri": r[2],
@@ -2033,6 +2037,11 @@ def _dataset_version_list_item_from_row(r: tuple[Any, ...]) -> dict:
         "tags": _tags_list_from_db(r[12]) if len(r) > 12 else [],
         "external_refs": _external_refs_list_from_db(r[13]) if len(r) > 13 else [],
     }
+    if len(r) > 14:
+        out["materialized_from_buffer"] = bool(r[14])
+    if len(r) > 15 and r[15]:
+        out["created_by"] = str(r[15])
+    return out
 
 
 def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dataset_id: str) -> dict | None:
@@ -2058,7 +2067,7 @@ def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dat
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
                      , dv.source_type, dv.canonical_source_type, dv.record_count
                      , dv.status, dv.quality_score, dv.summary, dv.details
-                     , dv.tags, dv.external_refs
+                     , dv.tags, dv.external_refs, dv.materialized_from_buffer, dv.created_by
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
@@ -2082,7 +2091,7 @@ def list_dataset_versions(tenant_id: str, project_id: str, dataset_id: str) -> l
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at
                      , dv.source_type, dv.canonical_source_type, dv.record_count
                      , dv.status, dv.quality_score, dv.summary, dv.details
-                     , dv.tags, dv.external_refs
+                     , dv.tags, dv.external_refs, dv.materialized_from_buffer, dv.created_by
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND d.dataset_id = %s
@@ -2102,7 +2111,7 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
                 SELECT dv.version_id, dv.version, dv.uri, dv.checksum, dv.created_at, d.dataset_id, d.name,
                        dv.source_type, dv.canonical_source_type, dv.record_count,
                        dv.status, dv.quality_score, dv.summary, dv.details,
-                       dv.tags, dv.external_refs
+                       dv.tags, dv.external_refs, dv.materialized_from_buffer, dv.created_by
                 FROM dataset_versions dv
                 JOIN datasets d ON d.dataset_id = dv.dataset_id
                 WHERE d.tenant_id = %s AND d.project_id = %s AND dv.version_id = %s
@@ -2133,6 +2142,8 @@ def get_dataset_version(tenant_id: str, project_id: str, version_id: str) -> dic
         "details": row[13] or [],
         "tags": _tags_list_from_db(row[14]),
         "external_refs": _external_refs_list_from_db(row[15]),
+        "materialized_from_buffer": bool(row[16]) if len(row) > 16 else False,
+        "created_by": str(row[17]) if len(row) > 17 and row[17] else None,
     }
     _validate_dataset_version_snapshot_if_enabled(out["uri"], out["checksum"])
     return out

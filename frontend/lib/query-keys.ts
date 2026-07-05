@@ -183,5 +183,9 @@ export const mlairKeys = {
   },
   lifecycle: (tenantId: string, projectId: string) =>
     ["lifecycle", tenantId, projectId] as const,
+  semantic: {
+    outbox: (tenantId: string, projectId: string, modelId: string) =>
+      ["semantic-outbox", tenantId, projectId, modelId] as const,
+  },
   jaegerStatus: (jaegerUrl: string) => ["jaeger", "status", jaegerUrl] as const
 };

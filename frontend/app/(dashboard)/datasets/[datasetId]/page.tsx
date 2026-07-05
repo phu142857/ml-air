@@ -855,9 +855,23 @@ export default function DatasetHubPage() {
         cell: (v) => {
           const b = datasetVersionSourceBadge(v);
           return (
-            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
-              {b.label}
-            </span>
+            <div className="flex flex-col gap-0.5">
+              <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>
+                {b.label}
+              </span>
+              {v.materialized_from_buffer ? (
+                <button
+                  type="button"
+                  className="w-fit text-[10px] text-primary underline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTab("accumulation");
+                  }}
+                >
+                  Buffer window →
+                </button>
+              ) : null}
+            </div>
           );
         },
       },
@@ -948,7 +962,12 @@ export default function DatasetHubPage() {
       {
         id: "created",
         header: "Created",
-        cell: (v) => <span className="whitespace-nowrap">{formatDateTimeCompact(v.created_at)}</span>,
+        cell: (v) => (
+          <div className="whitespace-nowrap text-[10px]">
+            <div>{formatDateTimeCompact(v.created_at)}</div>
+            {v.created_by ? <div className="text-muted-foreground">by {v.created_by}</div> : null}
+          </div>
+        ),
       },
     ];
     if (scopePinned || canEditVersionMetadata) {
@@ -1847,6 +1866,7 @@ export default function DatasetHubPage() {
                   datasetId={datasetId}
                   token={token}
                   versions={versionsQuery.data?.items || []}
+                  onOpenAccumulation={() => setActiveTab("accumulation")}
                 />
                 <MlopsDataTable
                 columns={versionColumns}

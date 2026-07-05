@@ -168,7 +168,7 @@ def evaluate_promotion_eligibility(
 
 
 def _version_row_to_dict(row: tuple) -> dict:
-    """Map SELECT/RETURNING row: version_id, model_id, version, run_id, artifact_uri, stage, created_at, approval_*."""
+    """Map SELECT/RETURNING row: version_id, model_id, version, run_id, artifact_uri, stage, created_at, approval_*, stage_updated_at."""
     return {
         "version_id": row[0],
         "model_id": row[1],
@@ -180,6 +180,7 @@ def _version_row_to_dict(row: tuple) -> dict:
         "approval_status": row[7],
         "approval_reason": row[8],
         "approval_updated_at": row[9].isoformat() if row[9] else None,
+        "stage_updated_at": row[10].isoformat() if len(row) > 10 and row[10] else None,
     }
 
 
@@ -434,7 +435,7 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
-                    approval_status, approval_reason, approval_updated_at
+                    approval_status, approval_reason, approval_updated_at, stage_updated_at
                 """,
                 (
                     version_id,
@@ -532,7 +533,7 @@ def create_model_version_from_upload(
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
-                    approval_status, approval_reason, approval_updated_at
+                    approval_status, approval_reason, approval_updated_at, stage_updated_at
                 """,
                 (
                     version_id,
@@ -622,7 +623,7 @@ def create_model_version_from_uploads(
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
-                    approval_status, approval_reason, approval_updated_at
+                    approval_status, approval_reason, approval_updated_at, stage_updated_at
                 """,
                 (
                     version_id,
@@ -656,7 +657,7 @@ def list_model_versions(model_id: str) -> list[dict]:
             cur.execute(
                 """
                 SELECT version_id, model_id, version, run_id, artifact_uri, stage, created_at,
-                    approval_status, approval_reason, approval_updated_at
+                    approval_status, approval_reason, approval_updated_at, stage_updated_at
                 FROM model_versions
                 WHERE model_id = %s
                 ORDER BY version DESC
@@ -731,16 +732,17 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
 
     with db_conn() as conn:
         with conn.cursor() as cur:
+            now = datetime.now(timezone.utc)
             cur.execute("UPDATE model_versions SET stage = 'archived' WHERE model_id = %s AND stage = %s", (model_id, stage))
             cur.execute(
                 """
                 UPDATE model_versions
-                SET stage = %s
+                SET stage = %s, stage_updated_at = %s
                 WHERE model_id = %s AND version = %s
                 RETURNING version_id, model_id, version, run_id, artifact_uri, stage, created_at,
-                    approval_status, approval_reason, approval_updated_at
+                    approval_status, approval_reason, approval_updated_at, stage_updated_at, stage_updated_at
                 """,
-                (stage, model_id, version),
+                (stage, now, model_id, version),
             )
             row = cur.fetchone()
     if not row:
@@ -1063,7 +1065,7 @@ def update_model_version_approval(
                       AND m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s
                   )
                 RETURNING mv.version_id, mv.model_id, mv.version, mv.run_id, mv.artifact_uri, mv.stage,
-                    mv.created_at, mv.approval_status, mv.approval_reason, mv.approval_updated_at
+                    mv.created_at, mv.approval_status, mv.approval_reason, mv.approval_updated_at, mv.stage_updated_at
                 """,
                 (st, reason, now, model_id, int(version), tenant_id, project_id, model_id),
             )

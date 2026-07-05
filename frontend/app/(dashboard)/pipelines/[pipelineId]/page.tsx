@@ -23,6 +23,7 @@ import { PipelineConfigEditorDialog } from "@/components/mlops/pipeline-config-e
 import { fetchPipelineVersions, fetchPipelines } from "@/lib/api";
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology";
+import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph";
 import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { useAppContext } from "@/lib/app-context";
@@ -64,6 +65,7 @@ export default function PipelineDetailPage() {
   );
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [dagView, setDagView] = useState<"config" | "latest-run">("latest-run");
 
   useEffect(() => {
     if (!versionItems.length) {
@@ -93,6 +95,26 @@ export default function PipelineDetailPage() {
 
   const resolvedPipelineId = topology?.pipeline_id ?? pipelineId;
   const latestRunId = pipelineRow?.latest_run_id?.trim() || "";
+
+  const { pipeline: runOverlayPipeline, isLoading: runOverlayLoading, graphQuery: runGraphQuery } =
+    useRunExecutionGraph(tenantId, projectId, latestRunId, token, scopePinned && Boolean(latestRunId));
+
+  useEffect(() => {
+    if (!latestRunId) setDagView("config");
+  }, [latestRunId]);
+
+  const dagPipeline = useMemo(() => {
+    if (dagView === "latest-run" && runOverlayPipeline) {
+      return normalizePipelineForDag(runOverlayPipeline);
+    }
+    if (topologyPipeline) return normalizePipelineForDag(topologyPipeline);
+    return null;
+  }, [dagView, runOverlayPipeline, topologyPipeline]);
+
+  const dagTaskScope =
+    dagView === "latest-run" && latestRunId
+      ? { runId: latestRunId, tenantId, projectId }
+      : undefined;
 
   const headerSubtitle = pipelineRow
     ? `${pipelineRow.total_runs} total runs · last ${String(pipelineRow.latest_status || "—")}${pipelineRow.updated_at ? ` · updated ${formatRelativeTime(pipelineRow.updated_at)}` : ""}`
@@ -222,23 +244,63 @@ export default function PipelineDetailPage() {
 
         <DetailSection
           title="Pipeline topology"
-          description="Static stages and dependencies from the latest pipeline config (no run overlay)."
+          description={
+            dagView === "latest-run" && latestRunId
+              ? `Task status overlay from latest run ${latestRunId.slice(0, 12)}… — click a node to open task detail.`
+              : "Static stages and dependencies from the latest pipeline config."
+          }
           accentBorder="amber"
+          headerActions={
+            latestRunId ? (
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  className={`rounded-md px-2 py-1 text-xs font-medium ${
+                    dagView === "latest-run"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setDagView("latest-run")}
+                >
+                  Latest run
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md px-2 py-1 text-xs font-medium ${
+                    dagView === "config"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setDagView("config")}
+                >
+                  Config only
+                </button>
+              </div>
+            ) : null
+          }
         >
           {!scopePinned ? (
             <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-4 text-center text-sm text-muted-foreground">
               Pin a tenant and project in the header to load pipeline topology.
             </div>
-          ) : topologyLoading ? (
+          ) : dagView === "latest-run" && latestRunId && runOverlayLoading ? (
+            <div className="flex min-h-[260px] items-center justify-center inset-surface text-sm text-muted-foreground">
+              Loading run overlay…
+            </div>
+          ) : dagView === "latest-run" && latestRunId && runGraphQuery.isError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Could not load run overlay: {String(runGraphQuery.error)}
+            </div>
+          ) : topologyLoading && dagView === "config" ? (
             <div className="flex min-h-[260px] items-center justify-center inset-surface text-sm text-muted-foreground">
               Loading topology…
             </div>
-          ) : topologyQuery.isError ? (
+          ) : topologyQuery.isError && dagView === "config" ? (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               Could not load topology: {String(topologyQuery.error)}
             </div>
-          ) : topologyPipeline ? (
-            <PipelineDAG key={pipelineId} pipeline={normalizePipelineForDag(topologyPipeline)!} />
+          ) : dagPipeline ? (
+            <PipelineDAG key={`${pipelineId}-${dagView}-${latestRunId || "cfg"}`} pipeline={dagPipeline} taskScope={dagTaskScope} />
           ) : (
             <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
               No topology for this pipeline.

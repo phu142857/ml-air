@@ -50,7 +50,11 @@ export function RunExecutionGraph({ tenantId, projectId, runId, token, enabled, 
 
   return (
     <div className={className}>
-      <PipelineDAG key={`${runId}-${pipeline.stages.map((s) => s.status).join("-")}`} pipeline={pipeline} />
+      <PipelineDAG
+        key={`${runId}-${pipeline.stages.map((s) => s.status).join("-")}`}
+        pipeline={pipeline}
+        taskScope={{ runId, tenantId, projectId }}
+      />
     </div>
   );
 }

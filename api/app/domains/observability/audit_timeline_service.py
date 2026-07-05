@@ -124,6 +124,26 @@ def list_audit_timeline_page(
 
       UNION ALL
 
+      -- Model stage updated (promote / rollback)
+      SELECT
+        mv.stage_updated_at AS ts,
+        'model.version.stage_updated'::text AS kind,
+        'model'::text AS resource_type,
+        m.model_id::text AS resource_id,
+        NULL::text AS source,
+        json_build_object(
+          'version_id', mv.version_id,
+          'version', mv.version,
+          'stage', mv.stage
+        ) AS payload
+      FROM model_versions mv
+      JOIN models m ON m.model_id = mv.model_id
+      WHERE m.tenant_id = %(tenant_id)s AND m.project_id = %(project_id)s
+        AND mv.stage_updated_at IS NOT NULL
+        AND mv.stage_updated_at <> mv.created_at
+
+      UNION ALL
+
       -- Serving slot updated
       SELECT
         ms.updated_at AS ts,

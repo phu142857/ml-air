@@ -368,7 +368,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             </CommandGroup>
 
             {showExecutionNav ? (
-              <CommandGroup heading="Execution (maintainer)">
+              <CommandGroup heading="Execution">
                 {executionNavigation.map((item) => (
                   <CommandItem
                     key={item.href}

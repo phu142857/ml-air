@@ -66,6 +66,12 @@ import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
 import { ModelProvenancePanel } from "@/components/mlops/model-provenance-panel";
+import {
+  ModelApprovalHistory,
+  ModelPromoteWebhookLog,
+  ModelStageTimeline,
+  ModelVersionComparePanel,
+} from "@/components/mlops/model-governance-panels";
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
@@ -621,6 +627,40 @@ export default function ModelDetailPage() {
               version={productionVersion}
             />
           ) : null}
+          {scopePinned && versionsQuery.data?.items?.length ? (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                <h3 className="mb-3 text-sm font-semibold text-foreground">Stage transition timeline</h3>
+                <ModelStageTimeline
+                  tenantId={tenantId}
+                  projectId={projectId}
+                  modelId={modelId}
+                  token={token}
+                  versions={versionsQuery.data.items}
+                />
+              </div>
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                <h3 className="mb-3 text-sm font-semibold text-foreground">Approval history</h3>
+                <ModelApprovalHistory
+                  tenantId={tenantId}
+                  projectId={projectId}
+                  modelId={modelId}
+                  token={token}
+                  versions={versionsQuery.data.items}
+                />
+              </div>
+            </div>
+          ) : null}
+          {scopePinned ? (
+            <div className="mt-4">
+              <ModelPromoteWebhookLog
+                tenantId={tenantId}
+                projectId={projectId}
+                modelId={modelId}
+                token={token}
+              />
+            </div>
+          ) : null}
       </DetailSection>
         )}
         {tab === "policy" && (
@@ -895,12 +935,25 @@ export default function ModelDetailPage() {
             description="Import from local, change the stage filter, or register a version from a training run."
           />
         ) : (
+          <>
+          {scopePinned ? (
+            <div className="mb-4">
+              <ModelVersionComparePanel
+                tenantId={tenantId}
+                projectId={projectId}
+                modelId={modelId}
+                token={token}
+                versions={filteredVersions}
+              />
+            </div>
+          ) : null}
           <MlopsDataTable
             columns={versionColumns}
             data={paginatedVersions}
             keyExtractor={(v) => v.version_id}
             emptyMessage="No versions for current filter."
           />
+          </>
         )}
       </DetailSection>
         )}

@@ -460,6 +460,7 @@ export type ModelVersionItem = {
   approval_status?: ModelApprovalStatus | string;
   approval_reason?: string | null;
   approval_updated_at?: string | null;
+  stage_updated_at?: string | null;
 };
 
 export type ModelServingSlotEntry = {
@@ -1088,6 +1089,33 @@ export async function fetchSemanticEventReplay(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { items: SemanticEventEnvelope[]; last_sequence: number };
+}
+
+export type SemanticEventOutboxItem = {
+  outbox_id: string;
+  event_type: string;
+  created_at?: string | null;
+  redis_delivered_at?: string | null;
+  envelope?: Record<string, unknown>;
+};
+
+export async function fetchSemanticEventOutbox(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; eventType?: string; delivered?: "yes" | "no" },
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const sp = new URLSearchParams({ limit: String(opts?.limit ?? 50) });
+  if (opts?.eventType?.trim()) sp.set("event_type", opts.eventType.trim());
+  if (opts?.delivered) sp.set("delivered", opts.delivered);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/semantic-events/outbox?${sp}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: SemanticEventOutboxItem[] };
 }
 
 export async function fetchRun(tenantId: string, projectId: string, runId: string, token: string) {
@@ -3180,6 +3208,8 @@ export type DatasetVersionItem = {
   details?: Array<Record<string, unknown>>;
   tags?: string[];
   external_refs?: DatasetVersionExternalRef[];
+  materialized_from_buffer?: boolean;
+  created_by?: string | null;
 };
 
 async function searchApiForScope(
