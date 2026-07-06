@@ -20,7 +20,6 @@ class PipelineInputsReadinessTests(unittest.TestCase):
             },
             override_config={"dataset_version_id": "ver-1"},
             plugin_context={},
-            training_mode="standard",
         )
         self.assertFalse(out["ready"])
         self.assertFalse(out["pipeline_input_ready"])
@@ -42,7 +41,6 @@ class PipelineInputsReadinessTests(unittest.TestCase):
             pipeline_config={"inputs": [{"dataset": "example-dataset", "required_size": 50}]},
             override_config={"dataset_version_id": "ver-pin"},
             plugin_context={"dataset_version_id": "ver-pin"},
-            training_mode="standard",
         )
         self.assertTrue(out["ready"])
         self.assertEqual(out["details"][0]["actual_size"], 60)
@@ -64,7 +62,6 @@ class PipelineInputsReadinessTests(unittest.TestCase):
             pipeline_config={"inputs": [{"dataset": "example-dataset", "required_size": 50}]},
             override_config={"dataset_version_id": "ver-upload"},
             plugin_context={},
-            training_mode="standard",
         )
         self.assertFalse(out["ready"])
         self.assertEqual(out["blocking_datasets"][0]["dataset"], "example-dataset")

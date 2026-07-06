@@ -1,9 +1,11 @@
 export function formatRuntimeSeconds(sec: number | null | undefined): string {
   if (sec == null || Number.isNaN(sec)) return "—"
   const s = Math.max(0, Math.round(sec))
-  const h = Math.floor(s / 3600)
+  const d = Math.floor(s / 86_400)
+  const h = Math.floor((s % 86_400) / 3600)
   const m = Math.floor((s % 3600) / 60)
   const r = s % 60
+  if (d > 0) return `${d}d ${h}h`
   if (h > 0) return `${h}h ${m}m`
   if (m > 0) return `${m}m ${r}s`
   return `${r}s`

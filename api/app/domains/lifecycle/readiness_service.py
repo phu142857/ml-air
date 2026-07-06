@@ -25,11 +25,7 @@ from app.domains.lifecycle.run_lookup import load_run_for_readiness
 
 logger = logging.getLogger("mlair.api.readiness_service")
 
-TRAINING_MODE_MIN_ROWS = {
-    "quick": 50,
-    "standard": 1000,
-    "full": 10000,
-}
+DEFAULT_PIPELINE_INPUT_MIN_ROWS = 1000
 
 
 class ReadinessEligibilityBlocked(ValueError):
@@ -152,11 +148,8 @@ def evaluate_pipeline_inputs_readiness(
     pipeline_config: dict[str, Any] | None,
     override_config: dict[str, Any] | None = None,
     plugin_context: dict[str, Any] | None = None,
-    training_mode: str = "full",
 ) -> dict[str, Any]:
     """Evaluate pipeline ``config.inputs[]`` against dataset sizes (execution gate, not training policy)."""
-    mode = str(training_mode or "full").strip().lower()
-    mode_min_rows = TRAINING_MODE_MIN_ROWS.get(mode, TRAINING_MODE_MIN_ROWS["full"])
     override_cfg = override_config if isinstance(override_config, dict) else {}
     snapshot_cfg = pipeline_config if isinstance(pipeline_config, dict) else {}
     pctx = plugin_context if isinstance(plugin_context, dict) else {}
@@ -179,7 +172,7 @@ def evaluate_pipeline_inputs_readiness(
         name = str(item.get("dataset") or "").strip()
         if not name:
             continue
-        required_size = _to_required_size(item.get("required_size"), mode_min_rows)
+        required_size = _to_required_size(item.get("required_size"), DEFAULT_PIPELINE_INPUT_MIN_ROWS)
         dataset_id, actual_size = _dataset_actual_size(tenant_id, project_id, name)
         if pinned_dataset_id and dataset_id and dataset_id == pinned_dataset_id and pinned_record_count is not None:
             actual_size = int(pinned_record_count)
@@ -191,7 +184,6 @@ def evaluate_pipeline_inputs_readiness(
             "actual_size": int(actual_size),
             "required_size": int(required_size),
             "status": status,
-            "training_mode": mode,
         }
         if pinned_vid and pinned_dataset_id and dataset_id and dataset_id == pinned_dataset_id:
             row["dataset_version_id"] = pinned_vid
@@ -222,7 +214,6 @@ def evaluate_pipeline_inputs_readiness(
     return {
         "tenant_id": tenant_id,
         "project_id": project_id,
-        "training_mode": mode,
         "ready": ready,
         "pipeline_input_ready": ready,
         "details": details,
@@ -246,7 +237,6 @@ def check_run_readiness(tenant_id: str, project_id: str, run_id: str) -> dict[st
         pipeline_config=snapshot_cfg,
         override_config=override_cfg,
         plugin_context=pctx if isinstance(pctx, dict) else {},
-        training_mode=str(run.get("training_mode") or "full"),
     )
     for row in result.get("details") or []:
         if not isinstance(row, dict):

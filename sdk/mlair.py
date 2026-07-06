@@ -93,13 +93,11 @@ def trigger_run_by_model(
     dataset_id: str,
     dataset_version_id: str | None = None,
     idempotency_key: str | None = None,
-    training_mode: str = "full",
     override_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model_id": model_id,
         "dataset_id": dataset_id,
-        "training_mode": training_mode,
     }
     if dataset_version_id:
         payload["dataset_version_id"] = dataset_version_id

@@ -89,7 +89,6 @@ export type RunItem = {
   updated_at?: string;
   created_at?: string;
   config_snapshot?: Record<string, unknown> | null;
-  training_mode?: string;
   override_config?: Record<string, unknown> | null;
   environment?: RunEnvironment | null;
 };
@@ -512,7 +511,6 @@ export type RunReadiness = {
   run_id: string;
   tenant_id: string;
   project_id: string;
-  training_mode: string;
   ready: boolean;
   details: ReadinessItem[];
   blocking_datasets: ReadinessItem[];
@@ -1023,7 +1021,6 @@ export async function triggerRun(
     idempotency_key?: string | null;
     priority: string;
     max_parallel_tasks: number;
-    training_mode?: string;
     use_latest_pipeline_version?: boolean;
     dataset_version_id?: string;
     context?: Record<string, unknown>;
@@ -1417,7 +1414,6 @@ export async function evaluatePipelineInputs(
   pipelineId: string,
   token: string,
   payload: {
-    training_mode: string;
     override_config?: Record<string, unknown>;
     dataset_version_id?: string;
   }
@@ -1455,7 +1451,6 @@ export async function checkPipelineReadiness(
   pipelineId: string,
   token: string,
   payload: {
-    training_mode: string;
     override_config?: Record<string, unknown>;
     /** Optional; when set, gate uses dataset_versions.record_count for that snapshot. */
     dataset_version_id?: string;
@@ -1484,7 +1479,6 @@ export async function triggerPipelineRunWithGating(
     idempotency_key?: string | null;
     priority: string;
     max_parallel_tasks: number;
-    training_mode: string;
     pipeline_version_id?: string;
     use_latest_pipeline_version?: boolean;
     override_config?: Record<string, unknown>;
@@ -1884,12 +1878,12 @@ export async function fetchDatasetReadiness(
   projectId: string,
   datasetId: string,
   token: string,
-  requiredSize = 1000,
+  requiredSize?: number,
   datasetVersionId?: string,
   policyId?: string
 ) {
   const scoped = normalizeProjectId(projectId);
-  const req = Math.max(1, Math.floor(requiredSize));
+  const req = Math.max(1, Math.floor(requiredSize ?? 1000));
   const versionQuery = datasetVersionId ? `&dataset_version_id=${encodeURIComponent(datasetVersionId)}` : "";
   const policyQuery = policyId ? `&policy_id=${encodeURIComponent(policyId)}` : "";
   const res = await fetch(
@@ -2788,7 +2782,6 @@ export async function triggerRunFromModelDataset(
     idempotency_key?: string | null;
     priority?: string;
     max_parallel_tasks?: number;
-    training_mode: string;
     override_config?: Record<string, unknown>;
     context?: Record<string, unknown>;
   }

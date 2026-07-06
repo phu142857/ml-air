@@ -124,7 +124,6 @@ class TriggerRunIn(BaseModel):
     max_parallel_tasks: int = Field(default=1000, ge=1, le=1000)
     pipeline_version_id: str | None = None
     use_latest_pipeline_version: bool = False
-    training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
     dataset_version_id: str | None = Field(
         default=None,
@@ -151,7 +150,6 @@ class TriggerRunByModelIn(BaseModel):
     idempotency_key: str | None = None
     priority: str = Field(default="normal")
     max_parallel_tasks: int = Field(default=1000, ge=1, le=1000)
-    training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
 
 
@@ -160,7 +158,6 @@ class ModelPipelineMappingIn(BaseModel):
 
 
 class CheckReadinessIn(BaseModel):
-    training_mode: str = "full"
     override_config: dict = Field(default_factory=dict)
     dataset_version_id: str | None = Field(
         default=None,
@@ -343,7 +340,6 @@ def _enforce_pipeline_inputs_readiness(
     pipeline_config: dict,
     override_config: dict | None = None,
     plugin_context: dict | None = None,
-    training_mode: str = "full",
 ) -> None:
     """Block when pipeline ``inputs[].required_size`` is not satisfied (distinct from training policy readiness)."""
     result = readiness_service.evaluate_pipeline_inputs_readiness(
@@ -352,7 +348,6 @@ def _enforce_pipeline_inputs_readiness(
         pipeline_config=pipeline_config,
         override_config=override_config or {},
         plugin_context=plugin_context or {},
-        training_mode=training_mode,
     )
     if result.get("ready"):
         return
@@ -861,7 +856,6 @@ def trigger_run_v1(
         plugin_context=merged_ctx,
         pipeline_version_id=payload.pipeline_version_id,
         use_latest_pipeline_version=use_latest_pv,
-        training_mode=payload.training_mode,
         override_config=merged_ov,
     )
     return run
@@ -957,7 +951,6 @@ def trigger_run_by_model_dataset_v1(
         pipeline_config=pipeline_cfg,
         override_config=override_cfg,
         plugin_context=plugin_ctx,
-        training_mode=payload.training_mode,
     )
 
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
@@ -973,7 +966,6 @@ def trigger_run_by_model_dataset_v1(
         plugin_context=plugin_ctx,
         pipeline_version_id=latest_pv,
         use_latest_pipeline_version=False,
-        training_mode=payload.training_mode,
         override_config=override_cfg,
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
@@ -1148,7 +1140,6 @@ def evaluate_pipeline_inputs_v1(
         pipeline_config=pipeline_cfg,
         override_config=merged_ov,
         plugin_context=merged_ctx,
-        training_mode=payload.training_mode,
     )
     return {"pipeline_id": pipeline_id, "pipeline_version_id": latest_pv, **result}
 
@@ -1191,7 +1182,6 @@ def check_pipeline_readiness_v1(
         priority="normal",
         max_parallel_tasks=1000,
         trace_id=get_trace_id(),
-        training_mode=payload.training_mode,
         plugin_context=merged_ctx or None,
         override_config=merged_ov,
         pipeline_version_id=latest.get("pipeline_version_id"),
@@ -1272,7 +1262,6 @@ def run_pipeline_with_gating_v1(
         pipeline_config=pipeline_cfg,
         override_config=merged_ov,
         plugin_context=merged_ctx,
-        training_mode=payload.training_mode,
     )
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
     run = create_run(
@@ -1288,7 +1277,6 @@ def run_pipeline_with_gating_v1(
         plugin_context=merged_ctx,
         pipeline_version_id=payload.pipeline_version_id,
         use_latest_pipeline_version=payload.use_latest_pipeline_version,
-        training_mode=payload.training_mode,
         override_config=merged_ov,
     )
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
@@ -1351,7 +1339,6 @@ def get_run_readiness_v1(
         "run_id": run_id,
         "tenant_id": tenant_id,
         "project_id": project_id,
-        "training_mode": run.get("training_mode") or "full",
         "ready": all(str(r.get("status")) == "READY" for r in rows),
         "details": rows,
         "blocking_datasets": [r for r in rows if str(r.get("status")) != "READY"],

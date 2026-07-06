@@ -245,7 +245,7 @@ def _cron_due(expr: str, now_utc: datetime) -> bool:
     )
 
 
-def _resolve_trigger_pipeline(tenant_id: str, project_id: str, model_id: str) -> tuple[str | None, str, dict]:
+def _resolve_trigger_pipeline(tenant_id: str, project_id: str, model_id: str) -> tuple[str | None, dict]:
     """Resolve pipeline for auto-trigger: model_pipeline_mapping first, else latest version run."""
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -259,12 +259,11 @@ def _resolve_trigger_pipeline(tenant_id: str, project_id: str, model_id: str) ->
             )
             mapped = cur.fetchone()
             if mapped and str(mapped[0] or "").strip():
-                return str(mapped[0]).strip(), "standard", {}
+                return str(mapped[0]).strip(), {}
 
             cur.execute(
                 """
                 SELECT r.pipeline_id,
-                       COALESCE(r.training_mode, 'standard'),
                        COALESCE(r.override_config, '{}'::jsonb)
                 FROM model_versions mv
                 JOIN runs r ON r.run_id = mv.run_id
@@ -278,14 +277,14 @@ def _resolve_trigger_pipeline(tenant_id: str, project_id: str, model_id: str) ->
             )
             row = cur.fetchone()
     if not row:
-        return None, "standard", {}
-    override = row[2]
+        return None, {}
+    override = row[1]
     if isinstance(override, str):
         try:
             override = json.loads(override)
         except Exception:
             override = {}
-    return str(row[0]), str(row[1] or "standard"), override if isinstance(override, dict) else {}
+    return str(row[0]), override if isinstance(override, dict) else {}
 
 
 def _load_trigger_policies() -> list[dict]:
@@ -307,7 +306,7 @@ def _load_trigger_policies() -> list[dict]:
         project_id = row[1]
         model_id = row[2]
         mode = str(row[3] or "unknown")
-        pipeline_id, training_mode, override_config = _resolve_trigger_pipeline(tenant_id, project_id, model_id)
+        pipeline_id, override_config = _resolve_trigger_pipeline(tenant_id, project_id, model_id)
         if not pipeline_id:
             TRIGGER_POLICY_SKIPPED_TOTAL.labels(mode=mode, reason="no_pipeline").inc()
             logger.info(
@@ -329,7 +328,6 @@ def _load_trigger_policies() -> list[dict]:
                 "dataset_version_id": row[7],
                 "training_policy_id": row[8],
                 "pipeline_id": pipeline_id,
-                "training_mode": training_mode,
                 "override_config": override_config,
             }
         )
@@ -429,9 +427,6 @@ def _trigger_policy_run(policy: dict, reason: str) -> tuple[bool, str]:
     project_id = policy["project_id"]
     pipeline_id = policy["pipeline_id"]
     model_id = policy["model_id"]
-    mode = str(policy.get("training_mode") or "standard").strip().lower()
-    if mode not in {"quick", "standard", "full"}:
-        mode = "standard"
     override_config = _merge_trigger_override_config(policy)
     context = {"auto_trigger": {"model_id": model_id, "reason": reason}, "mlair_model_id": model_id}
     if reason == "auto_ready":
@@ -444,7 +439,7 @@ def _trigger_policy_run(policy: dict, reason: str) -> tuple[bool, str]:
                 override_config.get("dataset_version_id"),
             )
             return False, "not_eligible"
-        check_body: dict = {"training_mode": mode, "override_config": override_config}
+        check_body: dict = {"override_config": override_config}
         vid = str(override_config.get("dataset_version_id") or "").strip()
         if vid:
             check_body["dataset_version_id"] = vid
@@ -461,7 +456,6 @@ def _trigger_policy_run(policy: dict, reason: str) -> tuple[bool, str]:
         "idempotency_key": idem,
         "priority": "normal",
         "max_parallel_tasks": 1,
-        "training_mode": mode,
         "override_config": override_config,
         "context": context,
     }

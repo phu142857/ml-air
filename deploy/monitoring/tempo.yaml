@@ -1,4 +1,4 @@
-# Minimal Tempo for MLAir quickstart (--profile traces).
+# Minimal Tempo for MLAir quickstart (optional --profile tempo).
 # OTLP gRPC :4317, query UI/API :3200
 
 server:

@@ -37,7 +37,6 @@ export async function assessMlairPolicyReadiness(args: {
   policies: DatasetTrainingPolicy[];
   policyId?: string;
   modelId?: string;
-  requiredSize?: number;
 }): Promise<{ ok: true; policyId: string; snapshot: MlairPolicyReadinessSnapshot } | { ok: false; block: MlairPolicyReadinessBlock }> {
   const policies = args.policies || [];
   if (!policies.length) {
@@ -75,9 +74,9 @@ export async function assessMlairPolicyReadiness(args: {
       args.projectId,
       args.datasetId,
       args.token,
-      args.requiredSize ?? 1000,
+      undefined,
       versionId,
-      policyId
+      policyId,
     );
     const ready = Boolean(snapshot.ready);
     const status = String(snapshot.eligibility_status || snapshot.status || "").toLowerCase();
@@ -113,7 +112,6 @@ export async function assessPipelineInputsReadiness(args: {
   pipelineId: string;
   token: string;
   datasetVersionId: string | undefined;
-  trainingMode: string;
   policyId?: string;
 }): Promise<{ ok: true } | { ok: false; block: PipelineInputsBlock }> {
   const pipelineId = String(args.pipelineId || "").trim();
@@ -135,7 +133,6 @@ export async function assessPipelineInputsReadiness(args: {
   }
   try {
     const result = await evaluatePipelineInputs(args.tenantId, args.projectId, pipelineId, args.token, {
-      training_mode: args.trainingMode,
       dataset_version_id: versionId,
       override_config: {
         dataset_version_id: versionId,

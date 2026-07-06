@@ -84,7 +84,6 @@ export function TriggerRunDialog({
           idempotency_key: null,
           priority: "normal",
           max_parallel_tasks: 4,
-          training_mode: "standard",
           use_latest_pipeline_version: true,
         })
       }
@@ -93,7 +92,6 @@ export function TriggerRunDialog({
         idempotency_key: null,
         priority: "normal",
         max_parallel_tasks: 4,
-        training_mode: "standard",
         use_latest_pipeline_version: true,
       })
     },

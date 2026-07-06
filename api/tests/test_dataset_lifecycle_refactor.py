@@ -198,7 +198,6 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         mock_load_run.return_value = {
             "tenant_id": "t",
             "project_id": "p",
-            "training_mode": "quick",
             "override_config": {
                 "dataset_version_id": "ver-pin-1",
                 "inputs": [{"dataset": "myds", "required_size": 50}],

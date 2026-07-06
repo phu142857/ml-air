@@ -47,6 +47,7 @@ import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
 import { mergeRunListRow } from "@/lib/execution-live-merge"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
+import { formatRuntimeSeconds } from "@/lib/usage-format"
 import { isScopePinned } from "@/lib/scope"
 import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
 import {
@@ -183,10 +184,7 @@ function runDuration(r: RunItem): string {
   const c = r.created_at ? Date.parse(r.created_at) : NaN
   const u = r.updated_at ? Date.parse(r.updated_at) : NaN
   if (!Number.isFinite(c) || !Number.isFinite(u) || u < c) return "—"
-  const s = Math.floor((u - c) / 1000)
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  return `${m}m ${s % 60}s`
+  return formatRuntimeSeconds((u - c) / 1000)
 }
 
 function pickTraceId(run: RunItem): string | null {
@@ -532,7 +530,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         mono: true,
       },
       { label: "Duration", value: runDuration(run) },
-      { label: "Training mode", value: run.training_mode ?? "—" },
       {
         label: "Trace",
         value: traceId ? (

@@ -11,7 +11,6 @@ export type TrainingIntentFromModelDataset = {
   datasetVersionId?: string;
   policyId?: string;
   pipelineIdOverride?: string;
-  trainingMode: string;
   idempotencyKey?: string | null;
   priority?: string;
   maxParallelTasks?: number;
@@ -22,7 +21,6 @@ export type TrainingIntentFromModelDataset = {
 export type TrainingIntentPipelineCompat = {
   kind: "pipeline_compat";
   pipelineId: string;
-  trainingMode: string;
   datasetId?: string;
   datasetVersionId?: string;
   overrideConfig?: Record<string, unknown>;
@@ -59,7 +57,6 @@ export async function executeTrainingIntent(
       idempotency_key: intent.idempotencyKey,
       priority: intent.priority ?? "normal",
       max_parallel_tasks: intent.maxParallelTasks ?? 1,
-      training_mode: intent.trainingMode,
       override_config: intent.overrideConfig,
       context: intent.context
     });
@@ -76,7 +73,6 @@ export async function executeTrainingIntent(
     idempotency_key: intent.idempotencyKey,
     priority: intent.priority ?? "normal",
     max_parallel_tasks: intent.maxParallelTasks ?? 1,
-    training_mode: intent.trainingMode,
     dataset_version_id: intent.datasetVersionId,
     override_config: intent.overrideConfig,
     pipeline_version_id: intent.pipelineVersionId,

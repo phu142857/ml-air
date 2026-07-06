@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Play, Clock, CheckCircle2, XCircle, Loader2, Ban, Bot } from "lucide-react"
+import { Play, Clock, CheckCircle2, XCircle, Loader2, Ban } from "lucide-react"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
@@ -10,6 +10,7 @@ import { JaegerLink } from "@/components/mlops/jaeger-link"
 import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
+import { formatRuntimeSeconds } from "@/lib/usage-format"
 import { useAppContext } from "@/lib/app-context"
 import { Button } from "@/components/ui/button"
 import type { RunItem } from "@/lib/api"
@@ -34,10 +35,7 @@ function runDuration(r: RunItem): string {
   const c = r.created_at ? Date.parse(r.created_at) : NaN
   const u = r.updated_at ? Date.parse(r.updated_at) : NaN
   if (!Number.isFinite(c) || !Number.isFinite(u) || u < c) return "—"
-  const s = Math.floor((u - c) / 1000)
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  return `${m}m ${s % 60}s`
+  return formatRuntimeSeconds((u - c) / 1000)
 }
 
 function pickTraceId(run: RunItem): string | null {
@@ -78,16 +76,6 @@ const runListColumns: DataTableColumn<RunItem>[] = [
         </div>
       )
     },
-  },
-  {
-    id: "mode",
-    header: "Mode",
-    cell: (run) => (
-      <div className="flex items-center gap-2">
-        <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">{run.training_mode || "—"}</span>
-      </div>
-    ),
   },
   {
     id: "started",

@@ -34,37 +34,34 @@ Default is **off** so local tests and quickstart do not require a collector.
 
 **UI flag:** `GET /v1/runtime-config` → `features.opentelemetry` mirrors `ML_AIR_OTEL_ENABLED` on the API. **`observability.jaeger_ui_url`** is set from **`ML_AIR_JAEGER_UI_URL`** when non-empty (for Lifecycle → Jaeger links).
 
-## Quickstart (optional collector)
+## Quickstart (Jaeger on by default)
 
-### Jaeger or Tempo in quickstart Compose
+[`deploy/docker-compose.quickstart.yml`](../deploy/docker-compose.quickstart.yml) starts **Jaeger** with the default stack — no extra profile or manual env wiring.
 
-[`deploy/docker-compose.quickstart.yml`](../deploy/docker-compose.quickstart.yml) defines optional **`jaeger`** and **`tempo`** services (profile **`traces`**):
+| Default | Value |
+|---------|--------|
+| `ML_AIR_OTEL_ENABLED` | `1` on api / scheduler / executor / realtime |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `jaeger:4317` |
+| `ML_AIR_JAEGER_UI_URL` | `http://localhost:16686` (Hub **Runs → Trace** link) |
 
 ```bash
-docker compose -f deploy/docker-compose.quickstart.yml --profile traces up -d
+mlair rebuild   # or: docker compose -f deploy/docker-compose.quickstart.yml up -d
 ```
 
-Then point OTLP at the collector on the Compose network, for example:
+Disable trace export only: `ML_AIR_OTEL_ENABLED=0` in `.env`.
 
-- **Jaeger:** `OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317` — UI `http://localhost:16686` (`ML_AIR_JAEGER_UI_PORT`); set `ML_AIR_JAEGER_UI_URL` on the API for Hub Lifecycle links.
-- **Tempo:** `OTEL_EXPORTER_OTLP_ENDPOINT=tempo:4317` — query API `http://localhost:3200` (`ML_AIR_TEMPO_HTTP_PORT`); host OTLP maps to **4327** (`ML_AIR_TEMPO_OTLP_GRPC_PORT`) so Jaeger and Tempo can run together.
-- `OTEL_EXPORTER_OTLP_INSECURE=true` (default for dev)
-
-Config: [`deploy/monitoring/tempo.yaml`](../deploy/monitoring/tempo.yaml).
+**Optional Tempo** (`--profile tempo`): point `OTEL_EXPORTER_OTLP_ENDPOINT=tempo:4317`; host OTLP **4327** (`ML_AIR_TEMPO_OTLP_GRPC_PORT`) so Jaeger and Tempo can coexist. Config: [`deploy/monitoring/tempo.yaml`](../deploy/monitoring/tempo.yaml).
 
 ### Any OTLP gRPC backend
 
 1. Run an OTLP gRPC collector reachable from Docker networks (for example Grafana Alloy or `otel/opentelemetry-collector` on port **4317**).
-2. Set on **api**, **scheduler**, **executor**, and **realtime**:
-   - `ML_AIR_OTEL_ENABLED=1`
+2. Override on **api**, **scheduler**, **executor**, and **realtime**:
    - `OTEL_EXPORTER_OTLP_ENDPOINT=<collector-host>:4317`
    - Distinct `OTEL_SERVICE_NAME` per deployment unit if useful.
 
-The quickstart compose file passes `ML_AIR_OTEL_ENABLED` (default `0`); enable **`traces`** profile and the env vars above for end-to-end traces to Jaeger.
-
 ## Hub (Lifecycle) trace link
 
-When the API has **`ML_AIR_OTEL_ENABLED=1`**, responses include W3C **`traceparent`** / **`tracestate`** headers (and CORS **`Access-Control-Expose-Headers`** so the Hub on another origin can read them). Set **`ML_AIR_JAEGER_UI_URL`** on the API to a **browser-reachable** Jaeger UI base (for example `http://localhost:16686` with quickstart `--profile traces`). `GET /v1/runtime-config` then includes **`observability.jaeger_ui_url`** for the Hub. The **Lifecycle** page shows **Open this request in Jaeger** after each successful audit timeline fetch when both are present.
+When the API has **`ML_AIR_OTEL_ENABLED=1`**, responses include W3C **`traceparent`** / **`tracestate`** headers (and CORS **`Access-Control-Expose-Headers`** so the Hub on another origin can read them). Quickstart sets **`ML_AIR_JAEGER_UI_URL=http://localhost:16686`** by default; `GET /v1/runtime-config` exposes **`observability.jaeger_ui_url`** for Hub **Runs** (Trace column) and **Lifecycle** (Open in Jaeger).
 
 ## Not in this MVP
 

@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Box, GitBranch, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
-import { TrainingGateFields } from "@/components/readiness/training-gate-fields";
+import { PolicyReadinessBlockDialog } from "@/components/mlops/policy-readiness-block-dialog";
 import { ScopePinnedInline } from "@/components/mlops/layout";
 import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
 import {
@@ -17,7 +17,6 @@ import {
   type DatasetTrainingPolicy,
   type DatasetVersionItem,
 } from "@/lib/api";
-import { PolicyReadinessBlockDialog } from "@/components/mlops/policy-readiness-block-dialog";
 import {
   assessMlairPolicyReadiness,
   assessPipelineInputsReadiness,
@@ -69,8 +68,6 @@ export function ExecutionIntentPanel({
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [selectedPipelineId, setSelectedPipelineId] = useState("");
-  const [trainingMode, setTrainingMode] = useState("standard");
-  const [requiredSize, setRequiredSize] = useState("1000");
   const [msg, setMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [readinessBlock, setReadinessBlock] = useState<TrainGateBlock | null>(null);
@@ -207,7 +204,6 @@ export function ExecutionIntentPanel({
       policies: trainingPolicies,
       policyId,
       modelId: mode === "model_dataset" ? selectedModelId : undefined,
-      requiredSize: Number.parseInt(requiredSize, 10) || 1000,
     });
     if (!assessment.ok) {
       setReadinessBlock(assessment.block);
@@ -223,7 +219,6 @@ export function ExecutionIntentPanel({
       pipelineId,
       token,
       datasetVersionId: selectedVersionId,
-      trainingMode,
       policyId: assessment.policyId,
     });
     if (!pipelineAssessment.ok) {
@@ -243,7 +238,6 @@ export function ExecutionIntentPanel({
           datasetVersionId: selectedVersionId,
           policyId: assessment.policyId,
           idempotencyKey: `hub-train-${Date.now()}`,
-          trainingMode,
           overrideConfig: policyPayload,
           context: buildRunContext(selectedModelId),
         });
@@ -255,7 +249,6 @@ export function ExecutionIntentPanel({
         pipelineId: selectedPipelineId,
         datasetId,
         datasetVersionId: selectedVersionId,
-        trainingMode,
         useLatestPipelineVersion: true,
         idempotencyKey: `hub-pipeline-run-${Date.now()}`,
         overrideConfig: policyPayload,
@@ -385,13 +378,6 @@ export function ExecutionIntentPanel({
           )}
         </div>
       )}
-
-      <TrainingGateFields
-        trainingMode={trainingMode}
-        onTrainingModeChange={setTrainingMode}
-        requiredSize={requiredSize}
-        onRequiredSizeChange={setRequiredSize}
-      />
 
       {msg ? <p className={feedbackMessageClass("failed")}>{msg}</p> : null}
 

@@ -58,7 +58,7 @@ def _row_to_run(row: tuple) -> dict:
             ovrd = json.loads(ovrd)
         except Exception:
             ovrd = None
-    env = row[19] if len(row) > 19 else None
+    env = row[18] if len(row) > 18 else None
     if isinstance(env, str):
         import json
         try:
@@ -83,7 +83,6 @@ def _row_to_run(row: tuple) -> dict:
         "plugin_context": pctx if isinstance(pctx, dict) else (pctx or {}),
         "created_at": row[15].isoformat(),
         "updated_at": row[16].isoformat(),
-        "training_mode": row[18] or "full",
         "override_config": ovrd if isinstance(ovrd, dict) else (ovrd or {}),
         "environment": env if isinstance(env, dict) else (env or None),
     }
@@ -93,7 +92,7 @@ def _select_run_columns() -> str:
     return """
         run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id,
         pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context,
-        created_at, updated_at, override_config, training_mode, environment
+        created_at, updated_at, override_config, environment
     """
 
 
@@ -112,7 +111,6 @@ def create_run(
     use_latest_pipeline_version: bool = False,
     replay_of_run_id: str | None = None,
     replay_from_task_id: str | None = None,
-    training_mode: str = "full",
     override_config: dict | None = None,
 ) -> dict:
     effective_max_parallel = max(1, min(1000, int(max_parallel_tasks)))
@@ -158,9 +156,6 @@ def create_run(
     if replay_of_run_id:
         pctx = {**pctx, "replay": {"from_run_id": replay_of_run_id, "from_task_id": replay_from_task_id}}
     ovrd_cfg: dict = dict(override_config or {})
-    mode = str(training_mode or "full").strip().lower()
-    if mode not in {"quick", "standard", "full"}:
-        mode = "full"
 
     run_environment: dict | None = None
     try:
@@ -170,6 +165,11 @@ def create_run(
     except Exception:
         logger.exception("run_environment_capture_failed")
         run_environment = None
+
+    trace_id = (trace_id or "").strip() or get_trace_id()
+    snap_base: dict[str, Any] = dict(cfg_snapshot) if isinstance(cfg_snapshot, dict) else {}
+    snap_base["trace_id"] = trace_id
+    cfg_snapshot = snap_base
 
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -199,9 +199,9 @@ def create_run(
                 INSERT INTO runs(
                     run_id, tenant_id, project_id, pipeline_id, status, idempotency_key, priority, max_parallel_tasks, experiment_id,
                     pipeline_version_id, config_snapshot, replay_of_run_id, replay_from_task_id, plugin_name, plugin_context,
-                    override_config, training_mode, environment
+                    override_config, environment
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING {_select_run_columns()}
                 """,
                 (
@@ -221,7 +221,6 @@ def create_run(
                     plugin_name_f,
                     Json(pctx) if pctx else None,
                     Json(ovrd_cfg) if ovrd_cfg else None,
-                    mode,
                     Json(run_environment) if run_environment else None,
                 ),
             )
@@ -243,7 +242,6 @@ def create_run(
             "config_snapshot": cfg_snapshot,
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
-            "training_mode": mode,
             "override_config": ovrd_cfg,
         }
     )
@@ -267,7 +265,6 @@ def create_run(
             "trace_id": trace_id,
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
-            "training_mode": mode,
         },
     )
     rt.emit_run_created(
