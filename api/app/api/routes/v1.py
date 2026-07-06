@@ -1459,6 +1459,7 @@ def get_task_logs_v1(
     offset: int = 0,
     limit: int = 200,
     cursor: str | None = Query(default=None),
+    tail: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1473,6 +1474,7 @@ def get_task_logs_v1(
         offset=offset,
         limit=limit,
         cursor=cursor,
+        tail=tail,
     )
     return page_response(
         page,
@@ -1506,6 +1508,7 @@ def get_run_logs_v1(
     offset: int = 0,
     limit: int = 200,
     cursor: str | None = Query(default=None),
+    tail: bool = Query(default=False),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1513,7 +1516,7 @@ def get_run_logs_v1(
     run = get_run(run_id)
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
-    page = guarded_page(read_run_logs_page, run_id=run_id, offset=offset, limit=limit, cursor=cursor)
+    page = guarded_page(read_run_logs_page, run_id=run_id, offset=offset, limit=limit, cursor=cursor, tail=tail)
     return page_response(page, extra={"run_id": run_id}, include_offset=offset > 0 and not cursor)
 
 

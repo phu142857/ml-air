@@ -1178,12 +1178,13 @@ export async function fetchRunLogsPage(
   projectId: string,
   runId: string,
   token: string,
-  opts?: { limit?: number; cursor?: string | null }
+  opts?: { limit?: number; cursor?: string | null; tail?: boolean }
 ): Promise<CursorPage<LogItem>> {
   const scopedProjectId = normalizeProjectId(projectId);
   const limit = opts?.limit ?? 200;
   const sp = new URLSearchParams({ limit: String(limit) });
   if (opts?.cursor) sp.set("cursor", opts.cursor);
+  if (opts?.tail) sp.set("tail", "true");
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/logs?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
@@ -1209,12 +1210,13 @@ export async function fetchTaskLogsPage(
   projectId: string,
   taskId: string,
   token: string,
-  opts?: { limit?: number; cursor?: string | null }
+  opts?: { limit?: number; cursor?: string | null; tail?: boolean }
 ): Promise<CursorPage<LogItem>> {
   const scopedProjectId = normalizeProjectId(projectId);
   const limit = opts?.limit ?? 200;
   const sp = new URLSearchParams({ limit: String(limit) });
   if (opts?.cursor) sp.set("cursor", opts.cursor);
+  if (opts?.tail) sp.set("tail", "true");
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskIdPathSegment(taskId)}/logs?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }

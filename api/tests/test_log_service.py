@@ -89,6 +89,45 @@ class TestLogService(unittest.TestCase):
         self.assertEqual(len(page.items), 1)
         self.assertEqual(page.items[0]["message"], "task finished")
 
+    @patch("app.domains.orchestration.log_service.redis_client")
+    def test_read_run_logs_page_tail_returns_newest_chunk(self, mock_redis: MagicMock) -> None:
+        client = MagicMock()
+        mock_redis.return_value = client
+        client.llen.return_value = 5
+        lines = [
+            json.dumps({"ts": f"t{i}", "level": "INFO", "message": f"line {i}", "payload": {}})
+            for i in range(5)
+        ]
+        client.lrange.return_value = [line.encode() for line in lines[2:]]
+
+        page = logs.read_run_logs_page("run-1", limit=3, tail=True)
+        client.lrange.assert_called_with("mlair:logs:run-1", 2, 4)
+        self.assertEqual(len(page.items), 3)
+        self.assertEqual(page.items[0]["message"], "line 2")
+        self.assertEqual(page.items[-1]["message"], "line 4")
+        self.assertTrue(page.has_more)
+        self.assertIsNotNone(page.next_cursor)
+
+    @patch("app.domains.orchestration.log_service.redis_client")
+    def test_read_run_logs_page_tail_cursor_loads_older(self, mock_redis: MagicMock) -> None:
+        from app.domains.shared.pagination import encode_cursor
+
+        client = MagicMock()
+        mock_redis.return_value = client
+        client.llen.return_value = 5
+        lines = [
+            json.dumps({"ts": f"t{i}", "level": "INFO", "message": f"line {i}", "payload": {}})
+            for i in range(2)
+        ]
+        client.lrange.return_value = [line.encode() for line in lines]
+
+        cursor = encode_cursor({"dir": "before", "index": 2})
+        page = logs.read_run_logs_page("run-1", limit=3, tail=True, cursor=cursor)
+        client.lrange.assert_called_with("mlair:logs:run-1", 0, 1)
+        self.assertEqual(len(page.items), 2)
+        self.assertEqual(page.items[0]["message"], "line 0")
+        self.assertFalse(page.has_more)
+
     def test_task_log_payload(self) -> None:
         pl = logs.task_log_payload(task_id="abc", plugin="p", worker_id="w")
         self.assertEqual(pl, {"task_id": "abc", "plugin": "p", "worker_id": "w"})

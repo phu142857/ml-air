@@ -42,6 +42,7 @@ import {
 } from "@/components/mlops/layout"
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
+import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
 import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
 import { mergeRunListRow } from "@/lib/execution-live-merge"
@@ -867,33 +868,25 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   ) : null}
                 </div>
               </div>
-              <div className="max-h-[min(520px,55vh)] space-y-1 overflow-auto bg-muted/30 p-4 font-mono text-xs leading-relaxed">
+              <div className="min-w-0">
                 {logsQuery.isError ? (
-                  <p className="text-red-300">{formatApiClientError(logsQuery.error)}</p>
-                ) : displayedLogs.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    {logTaskFilter === "all" ? "No log lines yet." : "No log lines for this task."}
-                  </p>
+                  <p className="text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>
                 ) : (
-                  <>
-                    {displayedLogs.map((log, index) => (
+                  <ExecutionLogStream
+                    items={displayedLogs}
+                    isLoading={logsQuery.isLoading}
+                    isRefreshing={logsQuery.isFetching && !logsQuery.isFetchingNextPage && displayedLogs.length > 0}
+                    hasMoreOlder={Boolean(logsQuery.hasNextPage)}
+                    isLoadingOlder={logsQuery.isFetchingNextPage}
+                    onLoadOlder={() => void logsQuery.fetchNextPage()}
+                    emptyMessage={
+                      logTaskFilter === "all" ? "No log lines yet." : "No log lines for this task."
+                    }
+                    className="max-h-[min(520px,55vh)] space-y-1"
+                    renderLine={(log, index) => (
                       <LogLineRow key={`${log.ts}-${log.payload?.task_id ?? ""}-${index}`} log={log} />
-                    ))}
-                    {logsQuery.hasNextPage ? (
-                      <div className="flex justify-center py-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 border-border bg-background/80 text-xs"
-                          disabled={logsQuery.isFetchingNextPage}
-                          onClick={() => void logsQuery.fetchNextPage()}
-                        >
-                          {logsQuery.isFetchingNextPage ? "Loading…" : "Load more logs"}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </>
+                    )}
+                  />
                 )}
               </div>
             </DetailSection>

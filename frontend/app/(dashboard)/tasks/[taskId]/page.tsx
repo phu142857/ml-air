@@ -29,6 +29,7 @@ import {
   SubpageBreadcrumb,
 } from "@/components/mlops/layout"
 import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
+import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
 import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
@@ -375,39 +376,18 @@ function TaskDetailContent() {
               ) : logsQuery.isError ? (
                 <p className="text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>
               ) : (
-                <div className="min-w-0 max-h-[min(420px,50vh)] space-y-2 overflow-x-hidden overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-4 font-mono text-xs leading-relaxed">
-                  {logsQuery.isLoading && logsQuery.items.length === 0 ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Loading logs…
-                    </div>
-                  ) : logsQuery.items.length === 0 ? (
-                    <p className="text-muted-foreground">No log lines yet.</p>
-                  ) : (
-                    <>
-                      {logsQuery.items.map((log, index) => (
-                        <TaskLogLine key={`${log.ts}-${index}`} log={log} />
-                      ))}
-                      {logsQuery.hasNextPage ? (
-                        <div className="flex justify-center py-3">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 border-border bg-background/80 text-xs"
-                            disabled={logsQuery.isFetchingNextPage}
-                            onClick={() => void logsQuery.fetchNextPage()}
-                          >
-                            {logsQuery.isFetchingNextPage ? "Loading…" : "Load more logs"}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </>
+                <ExecutionLogStream
+                  items={logsQuery.items}
+                  isLoading={logsQuery.isLoading}
+                  isRefreshing={logsQuery.isFetching && !logsQuery.isFetchingNextPage && logsQuery.items.length > 0}
+                  hasMoreOlder={Boolean(logsQuery.hasNextPage)}
+                  isLoadingOlder={logsQuery.isFetchingNextPage}
+                  onLoadOlder={() => void logsQuery.fetchNextPage()}
+                  className="max-h-[min(420px,50vh)]"
+                  renderLine={(log, index) => (
+                    <TaskLogLine key={`${log.ts}-${index}`} log={log} />
                   )}
-                  {logsQuery.isFetching && logsQuery.items.length > 0 ? (
-                    <p className="pt-2 text-[10px] text-muted-foreground">Refreshing…</p>
-                  ) : null}
-                </div>
+                />
               )}
             </DetailSection>
             <JsonPayloadPanel title="Task payload" data={payload} className="min-w-0 border-border/60 bg-card" />

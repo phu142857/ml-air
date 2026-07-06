@@ -8,6 +8,11 @@ import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 
 const TASK_LOGS_PAGE_SIZE = 200;
 
+function chronologicalLogItems(pages: Array<{ items: LogItem[] }> | undefined): LogItem[] {
+  if (!pages?.length) return [];
+  return [...pages].reverse().flatMap((p) => p.items);
+}
+
 export function useTaskLogsInfinite(
   tenantId: string,
   projectId: string,
@@ -24,6 +29,7 @@ export function useTaskLogsInfinite(
       fetchTaskLogsPage(tenantId, projectId, taskId, token, {
         limit: TASK_LOGS_PAGE_SIZE,
         cursor: (pageParam as string | null) ?? undefined,
+        tail: pageParam == null,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) =>
@@ -34,7 +40,7 @@ export function useTaskLogsInfinite(
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
 
-  const items: LogItem[] = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const items: LogItem[] = chronologicalLogItems(query.data?.pages);
 
   return {
     ...query,
