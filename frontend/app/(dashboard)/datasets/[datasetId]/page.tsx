@@ -710,7 +710,7 @@ export default function DatasetHubPage() {
         id: "dataset_version",
         header: "Version",
         cell: (row) => (
-          <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+          <span className="block max-w-[10rem] truncate font-mono text-xs text-muted-foreground" title={row.dataset_version_id || undefined}>
             {row.dataset_version_id || "—"}
           </span>
         ),
@@ -1499,19 +1499,15 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "readiness" ? (
+        <div className="flex min-w-0 max-w-[1400px] flex-col gap-4">
         <DetailSection
           title="Readiness policy evaluation"
           accentBorder={DATASET_SECTION_ACCENT}
+          className="min-w-0"
+          bodyClassName="min-w-0 flex flex-col gap-6"
           headerActions={<DomainChip kind="readiness" />}
         >
-            {readinessLegacyFallback ? (
-              <div className="mb-3 panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">readiness_allow_legacy_fallback</span> — API may infer latest
-                version if <code className="font-mono text-foreground">dataset_version_id</code> is omitted. Pin a version above
-                for reproducible audits.
-              </div>
-            ) : null}
-            <div className="mb-3 max-w-md">
+            <div className="min-w-0 max-w-md">
               <SelectDropdown
                 value={selectedVersionId}
                 onChange={setSelectedVersionId}
@@ -1533,7 +1529,7 @@ export default function DatasetHubPage() {
               onPolicyMutated={refetchPolicyReadiness}
             />
             {readinessQuery.data ? (
-              <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
+              <div className="min-w-0 rounded-xl border border-border bg-muted/40 p-4 text-sm">
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-foreground">
                   <DomainChip kind="readiness" />
                   <span className="text-muted-foreground">Status:</span>
@@ -1549,7 +1545,7 @@ export default function DatasetHubPage() {
                   </span>
                 </div>
                 <PolicyConfigSummary policy={selectedPolicy} versionCreatedAt={selectedVersionCreatedAt} />
-                <div className="mb-3 grid gap-x-4 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+                <div className="mb-3 grid min-w-0 gap-x-4 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
                   <div>
                     Current / required rows:{" "}
                     <span className="tabular-nums text-foreground">{readinessQuery.data.current_size}</span>
@@ -1567,11 +1563,11 @@ export default function DatasetHubPage() {
                       {readinessQuery.data.ready ? "yes" : "no"}
                     </span>
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="min-w-0 break-words sm:col-span-2">
                     Policy{" "}
-                    <span className="font-mono text-foreground">{readinessQuery.data.policy_id || "—"}</span>
+                    <span className="break-all font-mono text-foreground">{readinessQuery.data.policy_id || "—"}</span>
                     {" · Version "}
-                    <span className="font-mono text-foreground">{readinessQuery.data.dataset_version_id || "—"}</span>
+                    <span className="break-all font-mono text-foreground">{readinessQuery.data.dataset_version_id || "—"}</span>
                     {readinessQuery.data.evaluated_at ? (
                       <>
                         {" · Evaluated "}
@@ -1610,8 +1606,8 @@ export default function DatasetHubPage() {
                       <span>Criteria</span>
                     </div>
                     {(readinessQuery.data.eligibility_criteria || []).map((c) => (
-                      <div key={c.code} className="flex items-center justify-between inset-surface px-2 py-1 text-xs">
-                        <span className="text-muted-foreground">{c.label}</span>
+                      <div key={c.code} className="flex min-w-0 items-center justify-between gap-2 inset-surface px-2 py-1 text-xs">
+                        <span className="min-w-0 truncate text-muted-foreground">{c.label}</span>
                         <span
                           className={cn(
                             "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
@@ -1629,10 +1625,92 @@ export default function DatasetHubPage() {
               <p className="text-xs text-muted-foreground">{readinessQuery.isLoading ? "Loading…" : "—"}</p>
             )}
         </DetailSection>
+
+        <DetailSection
+          title="Readiness evaluations"
+          className="min-w-0"
+          bodyClassName="min-w-0"
+          accentBorder={DATASET_SECTION_ACCENT}
+          headerActions={
+            <FilterChips
+              options={[
+                { id: "all", label: "All" },
+                { id: "eligible", label: "Eligible", tone: "success" },
+                { id: "blocked", label: "Blocked", tone: "failed" },
+              ]}
+              value={evaluationStatusFilter}
+              onChange={(id) => {
+                setEvaluationStatusFilter(id);
+              }}
+            />
+          }
+        >
+          <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <span className="text-sm text-muted-foreground">
+              {evaluationItems.length} evaluation{evaluationItems.length === 1 ? "" : "s"}
+              {readinessEvaluationsQuery.hasNextPage ? " loaded" : ""}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <SelectDropdown
+                value={evaluationSourceFilter}
+                onChange={(v) => {
+                  setEvaluationSourceFilter(v);
+                }}
+                options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
+                buttonClassName="panel-surface px-2 py-1 text-xs"
+                className="min-w-[10rem]"
+                aria-label="Filter evaluations by source"
+              />
+              <SelectDropdown
+                value={evaluationPolicyFilter}
+                onChange={(v) => {
+                  setEvaluationPolicyFilter(v);
+                }}
+                options={evaluationPolicyFilterOptions}
+                buttonClassName="panel-surface px-2 py-1 text-xs"
+                className="min-w-[10rem]"
+                aria-label="Filter evaluations by policy"
+              />
+            </div>
+          </div>
+          {readinessEvaluationsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : evaluationItems.length === 0 ? (
+            <MlopsEmptyState
+              icon={Database}
+              title="No readiness evaluations yet"
+              description="Run evaluate from the Readiness tab controls above, or relax filters."
+            />
+          ) : (
+            <>
+              <MlopsDataTable
+                columns={evaluationColumns}
+                data={evaluationItems}
+                keyExtractor={(row) => row.evaluation_id}
+                emptyMessage="No evaluations."
+                className="min-w-0 text-sm"
+              />
+              {readinessEvaluationsQuery.hasNextPage ? (
+                <div className="flex justify-center border-t border-border/60 py-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={readinessEvaluationsQuery.isFetchingNextPage}
+                    onClick={() => void readinessEvaluationsQuery.fetchNextPage()}
+                  >
+                    {readinessEvaluationsQuery.isFetchingNextPage ? "Loading…" : "Load more evaluations"}
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </DetailSection>
+        </div>
       ) : null}
 
       {activeTab === "accumulation" ? (
-        <DetailSection title="Accumulation buffer" accentBorder={DATASET_SECTION_ACCENT}>
+        <DetailSection title="Accumulation buffer" accentBorder={DATASET_SECTION_ACCENT} className="min-w-0">
             {bufferQuery.isLoading && !bufferQuery.data ? (
               <p className="text-xs text-muted-foreground">Loading buffer…</p>
             ) : bufferQuery.data ? (
@@ -1893,88 +1971,6 @@ export default function DatasetHubPage() {
             policyId={selectedPolicyId || undefined}
             trainingPolicies={policiesQuery.data?.items || []}
           />
-        </DetailSection>
-      ) : null}
-
-      {activeTab === "readiness" ? (
-        <DetailSection
-          title="Readiness evaluations"
-          className="min-w-0"
-          accentBorder={DATASET_SECTION_ACCENT}
-          headerActions={
-            <FilterChips
-              options={[
-                { id: "all", label: "All" },
-                { id: "eligible", label: "Eligible", tone: "success" },
-                { id: "blocked", label: "Blocked", tone: "failed" },
-              ]}
-              value={evaluationStatusFilter}
-              onChange={(id) => {
-                setEvaluationStatusFilter(id);
-              }}
-            />
-          }
-        >
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">
-              {evaluationItems.length} evaluation{evaluationItems.length === 1 ? "" : "s"}
-              {readinessEvaluationsQuery.hasNextPage ? " loaded" : ""}
-            </span>
-            <div className="flex items-center gap-2">
-              <SelectDropdown
-                value={evaluationSourceFilter}
-                onChange={(v) => {
-                  setEvaluationSourceFilter(v);
-                }}
-                options={READINESS_EVAL_SOURCE_FILTER_OPTIONS}
-                buttonClassName="panel-surface px-2 py-1 text-xs"
-                className="min-w-[10rem]"
-                aria-label="Filter evaluations by source"
-              />
-              <SelectDropdown
-                value={evaluationPolicyFilter}
-                onChange={(v) => {
-                  setEvaluationPolicyFilter(v);
-                }}
-                options={evaluationPolicyFilterOptions}
-                buttonClassName="panel-surface px-2 py-1 text-xs"
-                className="min-w-[10rem]"
-                aria-label="Filter evaluations by policy"
-              />
-            </div>
-          </div>
-          {readinessEvaluationsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : evaluationItems.length === 0 ? (
-            <MlopsEmptyState
-              icon={Database}
-              title="No readiness evaluations yet"
-              description="Run evaluate from the Readiness tab controls above, or relax filters."
-            />
-          ) : (
-            <>
-              <MlopsDataTable
-                columns={evaluationColumns}
-                data={evaluationItems}
-                keyExtractor={(row) => row.evaluation_id}
-                emptyMessage="No evaluations."
-                className="text-sm"
-              />
-              {readinessEvaluationsQuery.hasNextPage ? (
-                <div className="flex justify-center border-t border-border/60 py-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={readinessEvaluationsQuery.isFetchingNextPage}
-                    onClick={() => void readinessEvaluationsQuery.fetchNextPage()}
-                  >
-                    {readinessEvaluationsQuery.isFetchingNextPage ? "Loading…" : "Load more evaluations"}
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          )}
         </DetailSection>
       ) : null}
         </>

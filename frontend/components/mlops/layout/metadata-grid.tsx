@@ -33,8 +33,8 @@ export function MetadataGrid({ items, columns = 2, className }: MetadataGridProp
           </dt>
           <dd
             className={cn(
-              "min-w-0 text-sm text-foreground",
-              item.mono && "font-mono text-xs tabular-nums",
+              "min-w-0 break-words text-sm text-foreground",
+              item.mono && "break-all font-mono text-xs tabular-nums",
             )}
           >
             {item.value}

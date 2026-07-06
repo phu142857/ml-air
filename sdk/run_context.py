@@ -23,6 +23,30 @@ def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
+def _maybe_persist_worker_environment(ctx: "RunContext") -> None:
+    if not ctx.run_id or not ctx.tenant_id or not ctx.project_id or not ctx.token:
+        return
+    try:
+        import json
+        import urllib.request
+
+        from sdk.environment import collect_environment
+
+        env = collect_environment(capturer="mlair-worker", include_pip_digest=False)
+        base = (ctx.base_url or "http://localhost:8080").rstrip("/")
+        url = (
+            f"{base}/v1/tenants/{ctx.tenant_id}/projects/{ctx.project_id}"
+            f"/runs/{ctx.run_id}/environment"
+        )
+        payload = json.dumps({"environment": env}).encode("utf-8")
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {ctx.token}"}
+        req = urllib.request.Request(url, data=payload, method="PUT", headers=headers)
+        with urllib.request.urlopen(req, timeout=10):  # noqa: S310
+            pass
+    except Exception:
+        pass
+
+
 def resolve_tracking_scope(
     *,
     run_id: str | None = None,
@@ -133,6 +157,7 @@ def start_run(
         token=scope.get("ML_AIR_TOKEN"),
     )
     ctx._apply_env(scope)
+    _maybe_persist_worker_environment(ctx)
 
     use_monitor = resource_monitor_enabled() if monitor is None else bool(monitor)
     if use_monitor:

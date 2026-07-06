@@ -32,6 +32,11 @@ class UsageSampleIn(BaseModel):
     memory_mb: float | None = None
     gpu_util_percent: float | None = None
     gpu_memory_mb: float | None = None
+    network_rx_bytes: int | None = None
+    network_tx_bytes: int | None = None
+    gpu_power_w: float | None = None
+    gpu_temp_c: float | None = None
+    device_id: int | None = Field(default=None, ge=0, le=63)
 
 
 class HeartbeatIn(BaseModel):

@@ -26,8 +26,8 @@ class ListRunUsageSamplesTests(unittest.TestCase):
     def test_lists_samples_for_run(self, _url: MagicMock, _enabled: MagicMock, mock_connect: MagicMock) -> None:
         cur = MagicMock()
         cur.fetchall.return_value = [
-            (1, "task-a", datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc), 12.5, 256.0, 80.0, 1024.0),
-            (2, "task-a", datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc), 20.0, 300.0, 90.0, 1100.0),
+            (1, "task-a", datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc), 12.5, 256.0, 80.0, 1024.0, None, None, None, None, 0),
+            (2, "task-a", datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc), 20.0, 300.0, 90.0, 1100.0, None, None, None, None, 1),
         ]
         conn = MagicMock()
         conn.cursor.return_value.__enter__.return_value = cur
@@ -38,6 +38,8 @@ class ListRunUsageSamplesTests(unittest.TestCase):
         self.assertEqual(out["count"], 2)
         self.assertEqual(out["samples"][0]["task_id"], "task-a")
         self.assertEqual(out["samples"][1]["gpu_util_percent"], 90.0)
+        self.assertEqual(out["samples"][0]["device_id"], 0)
+        self.assertEqual(out["samples"][1]["device_id"], 1)
         self.assertIsNone(out["next_cursor"])
 
     @patch("sdk.usage_cost.connect")
@@ -46,9 +48,9 @@ class ListRunUsageSamplesTests(unittest.TestCase):
     def test_pagination_cursor(self, _url: MagicMock, _enabled: MagicMock, mock_connect: MagicMock) -> None:
         cur = MagicMock()
         cur.fetchall.return_value = [
-            (10, "task-a", datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc), 1.0, 1.0, None, None),
-            (11, "task-a", datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc), 2.0, 2.0, None, None),
-            (12, "task-a", datetime(2026, 6, 1, 10, 0, 2, tzinfo=timezone.utc), 3.0, 3.0, None, None),
+            (10, "task-a", datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc), 1.0, 1.0, None, None, None, None, None, None, None),
+            (11, "task-a", datetime(2026, 6, 1, 10, 0, 1, tzinfo=timezone.utc), 2.0, 2.0, None, None, None, None, None, None, None),
+            (12, "task-a", datetime(2026, 6, 1, 10, 0, 2, tzinfo=timezone.utc), 3.0, 3.0, None, None, None, None, None, None, None),
         ]
         conn = MagicMock()
         conn.cursor.return_value.__enter__.return_value = cur

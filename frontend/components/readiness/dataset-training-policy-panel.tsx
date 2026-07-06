@@ -194,11 +194,11 @@ export function DatasetTrainingPolicyPanel({
   };
 
   return (
-    <details className="mb-3 inset-surface px-3 py-2" open>
-      <summary className="cursor-pointer select-none text-xs font-medium text-foreground hover:text-foreground/90">
+    <details className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20 px-4 py-3" open>
+      <summary className="cursor-pointer select-none text-xs font-semibold text-foreground hover:text-foreground/90">
         Training policy configuration
       </summary>
-      <div className="mt-3 space-y-4 border-t border-border/70 pt-3">
+      <div className="mt-4 min-w-0 space-y-4 border-t border-border/60 pt-4">
         <label className="block text-xs text-muted-foreground">
           Active policy
           <SelectDropdown
@@ -216,7 +216,7 @@ export function DatasetTrainingPolicyPanel({
           />
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-muted-foreground">
             <Label className="text-[11px] font-normal text-muted-foreground">Required rows (min)</Label>
             <input
@@ -330,7 +330,7 @@ export function PolicyConfigSummary({ policy, versionCreatedAt }: PolicyConfigSu
   const rulesCount = policy.validation_rules?.length ?? 0;
 
   return (
-    <div className="mb-3 grid gap-x-4 gap-y-1.5 border-b border-border/60 pb-3 text-xs text-muted-foreground sm:grid-cols-2">
+    <div className="mb-3 grid min-w-0 gap-x-4 gap-y-1.5 border-b border-border/60 pb-3 text-xs text-muted-foreground sm:grid-cols-2">
       <div>
         Required rows: <span className="tabular-nums font-medium text-foreground">{policy.required_size}</span>
       </div>
@@ -347,11 +347,11 @@ export function PolicyConfigSummary({ policy, versionCreatedAt }: PolicyConfigSu
       <div>
         Trigger mode: <span className="font-mono text-foreground">{policy.trigger_mode}</span>
       </div>
-      <div>
+      <div className="min-w-0">
         Model gate:{" "}
-        <span className="font-mono text-foreground">{policy.model_id ? String(policy.model_id) : "any"}</span>
+        <span className="break-all font-mono text-foreground">{policy.model_id ? String(policy.model_id) : "any"}</span>
       </div>
-      <div className="sm:col-span-2">
+      <div className="min-w-0 break-words sm:col-span-2">
         Validation rules: <span className="font-medium text-foreground">{rulesCount}</span>
         {rulesCount > 0 ? (
           <span className="ml-1 font-mono text-[10px] text-muted-foreground/90">

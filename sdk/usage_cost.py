@@ -123,6 +123,15 @@ def persist_usage_samples(*, task_id: str, samples: list[dict[str, Any]]) -> int
             except (TypeError, ValueError):
                 return None
 
+        def _d(key: str) -> int | None:
+            val = sample.get(key)
+            if val is None:
+                return None
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return None
+
         ts = parse_ts(sample.get("sampled_at"))
         rows.append(
             (
@@ -136,6 +145,7 @@ def persist_usage_samples(*, task_id: str, samples: list[dict[str, Any]]) -> int
                 _i("network_tx_bytes"),
                 _f("gpu_power_w"),
                 _f("gpu_temp_c"),
+                _d("device_id"),
             )
         )
 
@@ -148,9 +158,9 @@ def persist_usage_samples(*, task_id: str, samples: list[dict[str, Any]]) -> int
                 """
                 INSERT INTO task_usage_samples (
                     task_id, sampled_at, cpu_percent, memory_mb, gpu_util_percent, gpu_memory_mb,
-                    network_rx_bytes, network_tx_bytes, gpu_power_w, gpu_temp_c
+                    network_rx_bytes, network_tx_bytes, gpu_power_w, gpu_temp_c, device_id
                 )
-                VALUES (%s, COALESCE(%s, NOW()), %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, COALESCE(%s, NOW()), %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 rows,
             )
@@ -816,7 +826,7 @@ def list_run_usage_samples(
     sql = f"""
         SELECT s.id, s.task_id, s.sampled_at, s.cpu_percent, s.memory_mb,
                s.gpu_util_percent, s.gpu_memory_mb,
-               s.network_rx_bytes, s.network_tx_bytes, s.gpu_power_w, s.gpu_temp_c
+               s.network_rx_bytes, s.network_tx_bytes, s.gpu_power_w, s.gpu_temp_c, s.device_id
         FROM task_usage_samples s
         INNER JOIN tasks t ON t.task_id = s.task_id
         WHERE {" AND ".join(clauses)}
@@ -849,6 +859,7 @@ def list_run_usage_samples(
                 "network_tx_bytes": int(row[8]) if row[8] is not None else None,
                 "gpu_power_w": float(row[9]) if row[9] is not None else None,
                 "gpu_temp_c": float(row[10]) if row[10] is not None else None,
+                "device_id": int(row[11]) if row[11] is not None else None,
             }
         )
 

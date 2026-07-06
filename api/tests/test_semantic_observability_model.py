@@ -32,6 +32,17 @@ class TestSemanticObservabilityModel(unittest.TestCase):
             for et in surf.get("event_types") or ():
                 self.assertIn(et, allowed, f"surface={surf.get('id')} unknown event type {et!r}")
 
+    def test_all_event_types_covered_or_documented_gap(self) -> None:
+        from app.domains.observability.semantic_observability_model import (
+            SEMANTIC_OBSERVABILITY_DOCUMENTED_GAPS,
+        )
+
+        covered = set(SEMANTIC_OBSERVABILITY_DOCUMENTED_GAPS)
+        for surf in SEMANTIC_OBSERVABILITY_SURFACES:
+            covered.update(surf.get("event_types") or ())
+        for ev in EventType:
+            self.assertIn(ev.value, covered, f"missing coverage for {ev.value}")
+
     def test_surfaces_are_json_serializable(self) -> None:
         import json
 

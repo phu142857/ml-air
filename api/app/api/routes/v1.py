@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+from typing import Any
 
 from fastapi import APIRouter, Body, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 from prometheus_client import Counter
@@ -55,7 +56,10 @@ from app.domains.lifecycle import lineage_service
 from app.domains.lifecycle import readiness_service
 from app.domains.lifecycle import realtime_events as rt
 from app.domains.observability import semantic_metrics
-from app.domains.observability.semantic_observability_model import semantic_observability_surfaces_dict
+from app.domains.observability.semantic_observability_model import (
+    semantic_observability_index_dict,
+    semantic_observability_surfaces_dict,
+)
 from app.domains.observability import audit_timeline_service
 from app.domains.observability import event_outbox_service
 from app.domains.observability import event_sequence_service
@@ -76,6 +80,7 @@ from app.domains.orchestration.run_service import (
     list_runs_page,
     mark_run_running,
     set_run_status,
+    merge_run_worker_environment,
 )
 from app.domains.orchestration.task_service import get_task_by_id, list_tasks_by_run
 from app.domains.orchestration.tracking_service import (
@@ -313,6 +318,10 @@ class LogMetricIn(BaseModel):
     key: str = Field(min_length=1)
     value: float
     step: int = 0
+
+
+class RunEnvironmentPatchIn(BaseModel):
+    environment: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpdateRunStatusIn(BaseModel):
@@ -1457,7 +1466,14 @@ def get_task_logs_v1(
     task = get_task_by_id(tenant_id=tenant_id, project_id=project_id, task_id=task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task_not_found")
-    page = guarded_page(read_task_logs_page, task_id=task_id, offset=offset, limit=limit, cursor=cursor)
+    page = guarded_page(
+        read_task_logs_page,
+        task_id=task_id,
+        run_id=task.get("run_id"),
+        offset=offset,
+        limit=limit,
+        cursor=cursor,
+    )
     return page_response(
         page,
         extra={"task_id": task_id, "run_id": task["run_id"]},
@@ -1585,6 +1601,7 @@ def runtime_config_v1(request: Request) -> dict:
         "observability": {
             "jaeger_ui_url": jaeger_ui,
             "grafana_ui_url": grafana_ui,
+            "semantic_observability_index": semantic_observability_index_dict(),
             "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
         },
         "build": {
@@ -1751,6 +1768,26 @@ def list_experiments_v1(
         cursor=cursor,
     )
     return page_response(page, include_offset=offset > 0 and not cursor)
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/environment")
+def merge_run_environment_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    payload: RunEnvironmentPatchIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Merge worker/orchestrator environment metadata into ``runs.environment``."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    ok = merge_run_worker_environment(run_id, payload.environment, capturer="mlair-worker")
+    if not ok:
+        raise HTTPException(status_code=400, detail="environment_merge_failed")
+    return {"run_id": run_id, "merged": True}
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/params")

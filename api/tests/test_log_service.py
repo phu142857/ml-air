@@ -55,6 +55,40 @@ class TestLogService(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["payload"]["task_id"], "t1")
 
+    @patch("app.domains.orchestration.log_service.redis_client")
+    def test_read_task_logs_falls_back_to_run_stream(self, mock_redis: MagicMock) -> None:
+        client = MagicMock()
+        mock_redis.return_value = client
+        run_line = json.dumps(
+            {
+                "ts": "2026-01-01T00:00:00+00:00",
+                "level": "INFO",
+                "message": "task finished",
+                "payload": {"task_id": "t1"},
+            }
+        )
+        other_line = json.dumps(
+            {
+                "ts": "2026-01-01T00:00:01+00:00",
+                "level": "INFO",
+                "message": "other task",
+                "payload": {"task_id": "t2"},
+            }
+        )
+
+        def lrange_side_effect(key: str, start: int, end: int):
+            if key == "mlair:tasklogs:t1":
+                return []
+            if key == "mlair:logs:run-1":
+                return [run_line, other_line]
+            return []
+
+        client.lrange.side_effect = lrange_side_effect
+
+        page = logs.read_task_logs_page("t1", run_id="run-1", limit=10)
+        self.assertEqual(len(page.items), 1)
+        self.assertEqual(page.items[0]["message"], "task finished")
+
     def test_task_log_payload(self) -> None:
         pl = logs.task_log_payload(task_id="abc", plugin="p", worker_id="w")
         self.assertEqual(pl, {"task_id": "abc", "plugin": "p", "worker_id": "w"})

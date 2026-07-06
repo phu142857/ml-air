@@ -1,3 +1,5 @@
+import { taskIdPathSegment } from "@/lib/api"
+
 /** Query params for task detail scope resolution (`tenant`, `project`, `run`). */
 export type TaskScopeHint = {
   tenantId?: string
@@ -33,7 +35,7 @@ export function buildTaskDetailHref(
   taskId: string,
   scope?: { tenant_id?: string; project_id?: string; run_id?: string },
 ): string {
-  const base = `/tasks/${encodeURIComponent(taskId)}`
+  const base = `/tasks/${taskIdPathSegment(taskId)}`
   if (!scope) return base
   const sp = new URLSearchParams()
   const tid = scope.tenant_id?.trim()

@@ -30,7 +30,7 @@ import type {
   UsageSamplePoint,
   UsageSampleStats,
 } from "@/lib/api"
-import { formatMemMb, formatPct, taskUsageLabel } from "@/lib/usage-format"
+import { formatMemMb, formatPct, computeUsagePeaksFromSamples, taskUsageLabel } from "@/lib/usage-format"
 import { useChartTheme } from "@/hooks/use-chart-theme"
 import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
 
@@ -42,10 +42,17 @@ const CHART_COLORS = {
   temp: "#fb7185",
 } as const
 
+function hasMultiGpuDevice(samples: UsageSamplePoint[]) {
+  const ids = new Set(samples.map((s) => s.device_id).filter((id) => id != null))
+  return ids.size > 1
+}
+
 function buildChartSeries(samples: UsageSamplePoint[], mergeAllTasks = false) {
   if (!samples.length) return []
 
-  if (!mergeAllTasks) {
+  const bucketByElapsed = mergeAllTasks || hasMultiGpuDevice(samples)
+
+  if (!bucketByElapsed) {
     const t0 = new Date(samples[0].sampled_at).getTime()
     return samples.map((s) => {
       const elapsed = Math.max(0, Math.round((new Date(s.sampled_at).getTime() - t0) / 1000))
@@ -132,9 +139,10 @@ export function RunResourceTimeline({
   const showGpu = useMemo(() => hasGpuSeries(samples), [samples])
   const showPower = useMemo(() => hasPowerSeries(samples), [samples])
 
+  const samplePeaks = useMemo(() => computeUsagePeaksFromSamples(samples), [samples])
   const peakUsage: UsageSampleStats | undefined = isAll
-    ? runUsage ?? undefined
-    : usageByTaskId.get(selectedTaskId)
+    ? runUsage ?? samplePeaks
+    : usageByTaskId.get(selectedTaskId) ?? samplePeaks
 
   const grafanaHref = grafanaDashboardUrl(grafanaUiUrl, "mlair-overview.json")
 

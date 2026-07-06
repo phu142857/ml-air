@@ -5,8 +5,15 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { ListTodo, Loader2, Terminal } from "lucide-react"
-import { fetchTaskResolved, fetchTaskUsage, normalizeProjectId, type LogItem, type ResolvedTask } from "@/lib/api"
+import { ListTodo, Loader2 } from "lucide-react"
+import {
+  fetchRunUsageSamples,
+  fetchTaskResolved,
+  normalizeProjectId,
+  normalizeTaskId,
+  type LogItem,
+  type ResolvedTask,
+} from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useExecutionStore } from "@/lib/execution-store"
@@ -21,32 +28,35 @@ import {
   ScopePinnedInline,
   SubpageBreadcrumb,
 } from "@/components/mlops/layout"
-import { TaskUsageSummary } from "@/components/mlops/task-usage-summary"
+import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
 import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
 import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
 import { isScopePinned } from "@/lib/scope"
 import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
+import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
 
 const ACTIVE_TASK_REFETCH_MS = 4000
 
 function TaskLogLine({ log }: { log: LogItem }) {
   return (
-    <div className="flex gap-3">
-      <span className="w-[84px] shrink-0 tabular-nums text-muted-foreground/80">
-        {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
-      </span>
-      <span
-        className={cn(
-          "w-14 shrink-0",
-          String(log.level).toUpperCase() === "INFO" && "text-primary",
-          String(log.level).toUpperCase() === "WARN" && "text-[color:var(--status-pending-fg)]",
-          String(log.level).toUpperCase() === "ERROR" && "text-[color:var(--status-failed-fg)]",
-        )}
-      >
-        [{log.level}]
-      </span>
+    <div className="flex min-w-0 flex-col gap-1 border-b border-border/40 py-1.5 last:border-b-0 sm:flex-row sm:gap-3 sm:py-0 sm:last:border-b-0">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <span className="w-[5.25rem] shrink-0 tabular-nums text-muted-foreground/80">
+          {log.ts ? new Date(log.ts).toLocaleTimeString() : "—"}
+        </span>
+        <span
+          className={cn(
+            "w-14 shrink-0",
+            String(log.level).toUpperCase() === "INFO" && "text-primary",
+            String(log.level).toUpperCase() === "WARN" && "text-[color:var(--status-pending-fg)]",
+            String(log.level).toUpperCase() === "ERROR" && "text-[color:var(--status-failed-fg)]",
+          )}
+        >
+          [{log.level}]
+        </span>
+      </div>
       <span className="min-w-0 break-words text-foreground/90">{log.message}</span>
     </div>
   )
@@ -57,17 +67,20 @@ function taskPayloadRecord(data: unknown): Record<string, unknown> {
   return data as Record<string, unknown>
 }
 
+const EMPTY_USAGE_BY_TASK = new Map<string, never>()
+
 function TaskDetailContent() {
   const router = useRouter()
   const params = useParams<{ taskId: string }>()
   const searchParams = useSearchParams()
-  const taskId = params.taskId
+  const taskId = normalizeTaskId(params.taskId)
   const { tenantId, projectId, token } = useAppContext()
 
   const hint = useMemo(() => parseTaskScopeHint(searchParams), [searchParams])
   const scopeKey = taskScopeHintKey(hint)
 
   const poll = useRealtimeQueryPolling()
+  const grafanaUiUrl = useGrafanaUiUrl()
 
   const runIdHint = hint.runId
   const storeTask = useExecutionStore((s) => {
@@ -95,11 +108,19 @@ function TaskDetailContent() {
 
   const resolved = data?.resolved_scope
   const scopePinned = isScopePinned(tenantId, projectId)
-  const runId = data?.run_id ?? hint.runId
+  const taskRunId = data?.run_id ?? hint.runId
+
+  /** Scope from resolved task row (matches run timeline APIs). */
+  const taskApiScope = useMemo(() => {
+    const tid = String(data?.tenant_id || resolved?.tenant_id || "").trim()
+    const pid = normalizeProjectId(String(data?.project_id || resolved?.project_id || ""))
+    if (!tid || !pid) return null
+    return { tenantId: tid, projectId: pid }
+  }, [data?.tenant_id, data?.project_id, resolved?.tenant_id, resolved?.project_id])
 
   const storeTaskForRun = useExecutionStore((s) => {
-    if (!runId) return undefined
-    return s.tasksByRun[runId]?.[taskId]
+    if (!taskRunId) return undefined
+    return s.tasksByRun[taskRunId]?.[taskId]
   })
 
   const task = useMemo((): ResolvedTask | undefined => {
@@ -116,25 +137,17 @@ function TaskDetailContent() {
   }, [data, storeTask, storeTaskForRun])
   const payload = taskPayloadRecord(data)
 
-  const usageScope = useMemo(() => {
-    if (resolved?.tenant_id && resolved?.project_id) {
-      return { tenantId: resolved.tenant_id, projectId: resolved.project_id }
-    }
-    if (data?.tenant_id && data?.project_id) {
-      return { tenantId: data.tenant_id, projectId: data.project_id }
-    }
-    if (isScopePinned(tenantId, projectId)) {
-      return { tenantId, projectId }
-    }
-    return null
-  }, [resolved, data, tenantId, projectId])
-
-  const usageQuery = useQuery({
-    queryKey: usageScope
-      ? mlairKeys.task.usage(usageScope.tenantId, usageScope.projectId, taskId)
-      : ["task-usage", "pending", taskId],
-    queryFn: () => fetchTaskUsage(usageScope!.tenantId, usageScope!.projectId, taskId, token),
-    enabled: Boolean(taskId?.trim() && token?.trim() && usageScope && task),
+  const usageSamplesQuery = useQuery({
+    queryKey:
+      taskApiScope && taskRunId
+        ? mlairKeys.task.usageSamples(taskApiScope.tenantId, taskApiScope.projectId, taskRunId, taskId)
+        : ["task-usage-samples", "pending", taskId],
+    queryFn: () =>
+      fetchRunUsageSamples(taskApiScope!.tenantId, taskApiScope!.projectId, taskRunId!, token, {
+        taskId,
+        limit: 2000,
+      }),
+    enabled: Boolean(taskId?.trim() && token?.trim() && taskApiScope && taskRunId && task),
     refetchOnMount: "always",
     refetchInterval: () => {
       if (isActiveExecutionStatus(task?.status)) return ACTIVE_TASK_REFETCH_MS
@@ -143,7 +156,7 @@ function TaskDetailContent() {
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
-  const logsScope = usageScope
+  const logsScope = taskApiScope
   const logsRefetchMs = isActiveExecutionStatus(task?.status) ? ACTIVE_TASK_REFETCH_MS : poll.refetchInterval
   const logsQuery = useTaskLogsInfinite(
     logsScope?.tenantId ?? "",
@@ -191,7 +204,7 @@ function TaskDetailContent() {
       <ResourcePageHeader
         icon={ListTodo}
         accent="violet"
-        title={`Task · ${taskId}`}
+        title="Task"
         subtitle={
           isError
             ? "Could not load task"
@@ -199,15 +212,15 @@ function TaskDetailContent() {
               ? scopePinned
                 ? resolved.method === "fan-out"
                   ? "Resolved via cross-project fan-out"
-                  : undefined
+                  : taskId
                 : `${resolved.tenant_id} / ${resolved.project_id}${resolved.method === "fan-out" ? " · fan-out" : ""}`
               : isLoading
                 ? "Loading task…"
-                : undefined
+                : taskId
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {runId ? (
+            {taskRunId ? (
               <Button
                 type="button"
                 variant="outline"
@@ -215,7 +228,7 @@ function TaskDetailContent() {
                 className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
                 asChild
               >
-                <Link href={`/runs/${encodeURIComponent(runId)}`}>View run</Link>
+                <Link href={`/runs/${encodeURIComponent(taskRunId)}`}>View run</Link>
               </Button>
             ) : null}
             <Button
@@ -263,8 +276,8 @@ function TaskDetailContent() {
             </div>
           </div>
         ) : task ? (
-          <>
-            <div className="panel-surface p-4">
+          <div className="flex min-w-0 max-w-[1400px] flex-col gap-6">
+            <div className="panel-surface min-w-0 p-4">
               <h2 className="mb-4 text-sm font-medium text-foreground/90">Summary</h2>
               <MetadataGrid
                 columns={2}
@@ -277,14 +290,14 @@ function TaskDetailContent() {
                   { label: "Attempt", value: String(task.attempt ?? "—") },
                   {
                     label: "Run",
-                    value: runId ? (
-                      <Link href={`/runs/${encodeURIComponent(runId)}`} className="font-mono text-xs text-primary hover:text-primary/80">
-                        {runId}
+                    value: taskRunId ? (
+                      <Link href={`/runs/${encodeURIComponent(taskRunId)}`} className="font-mono text-xs text-primary hover:text-primary/80">
+                        {taskRunId}
                       </Link>
                     ) : (
                       "—"
                     ),
-                    mono: Boolean(runId),
+                    mono: Boolean(taskRunId),
                   },
                   {
                     label: "Created",
@@ -314,8 +327,10 @@ function TaskDetailContent() {
             <DetailSection
               title="Resource usage"
               accentBorder="violet"
+              className="min-w-0"
+              bodyClassName="min-w-0"
               headerActions={
-                runId ? (
+                taskRunId ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -323,24 +338,35 @@ function TaskDetailContent() {
                     className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
                     asChild
                   >
-                    <Link href={`/runs/${encodeURIComponent(runId)}`}>Run resources</Link>
+                    <Link href={`/runs/${encodeURIComponent(taskRunId)}`}>Run timeline</Link>
                   </Button>
                 ) : null
               }
             >
-              {usageQuery.isError ? (
-                <p className="text-sm text-muted-foreground">{formatApiClientError(usageQuery.error)}</p>
+              {!taskRunId ? (
+                <p className="text-sm text-muted-foreground">No run linked — open this task from a run to load resource samples.</p>
+              ) : usageSamplesQuery.isError ? (
+                <p className="text-sm text-destructive">{formatApiClientError(usageSamplesQuery.error)}</p>
               ) : (
-                <TaskUsageSummary
-                  usage={usageQuery.data?.usage}
-                  enabled={usageQuery.data?.enabled ?? true}
-                  loading={usageQuery.isLoading}
+                <RunResourceTimeline
+                  tasks={[]}
+                  samples={usageSamplesQuery.data?.samples ?? []}
+                  usageByTaskId={EMPTY_USAGE_BY_TASK}
+                  runUsage={null}
+                  selectedTaskId={taskId}
+                  onTaskChange={() => {}}
+                  loading={usageSamplesQuery.isLoading}
+                  enabled={usageSamplesQuery.data?.enabled ?? true}
+                  grafanaUiUrl={grafanaUiUrl}
+                  embedded
                 />
               )}
             </DetailSection>
             <DetailSection
               title="Task logs"
               accentBorder="violet"
+              className="min-w-0"
+              bodyClassName="min-w-0"
             >
               {!logsScope ? (
                 <p className="text-sm text-muted-foreground">
@@ -349,7 +375,7 @@ function TaskDetailContent() {
               ) : logsQuery.isError ? (
                 <p className="text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>
               ) : (
-                <div className="max-h-[min(420px,50vh)] space-y-1 overflow-auto rounded-md border border-border/60 bg-muted/30 p-4 font-mono text-xs leading-relaxed">
+                <div className="min-w-0 max-h-[min(420px,50vh)] space-y-2 overflow-x-hidden overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-4 font-mono text-xs leading-relaxed">
                   {logsQuery.isLoading && logsQuery.items.length === 0 ? (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -384,8 +410,8 @@ function TaskDetailContent() {
                 </div>
               )}
             </DetailSection>
-            <JsonPayloadPanel title="Task payload" data={payload} className="border-border/60 bg-card" />
-          </>
+            <JsonPayloadPanel title="Task payload" data={payload} className="min-w-0 border-border/60 bg-card" />
+          </div>
         ) : null}
       </PageScrollBody>
     </div>

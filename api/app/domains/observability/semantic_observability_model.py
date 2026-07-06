@@ -5,11 +5,25 @@ realtime ``EventType`` strings, and Grafana dashboard JSON filenames under
 ``deploy/monitoring/grafana/dashboards/``.
 
 Human-oriented queries and panels: ``docs/guides/view-metrics.md``.
+Gaps: ``docs/guides/semantic-observability-gaps.md``.
 """
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
+
+SEMANTIC_OBSERVABILITY_INDEX_VERSION = "2026.07.05"
+
+# Lifecycle events intentionally not mapped to a surface metric bundle (documented).
+SEMANTIC_OBSERVABILITY_DOCUMENTED_GAPS: tuple[str, ...] = (
+    "run.created",
+    "run.updated",
+    "run.tracking.updated",
+    "task.updated",
+    "dataset.updated",
+    "training.eligibility.updated",
+    "training.policy.updated",
+)
 
 
 class _MetricRef(TypedDict):
@@ -159,3 +173,11 @@ def all_semantic_observability_metric_names() -> frozenset[str]:
 def semantic_observability_surfaces_dict() -> list[dict[str, Any]]:
     """JSON-serializable list (included on ``GET /v1/runtime-config`` → ``observability.semantic_observability_surfaces``)."""
     return [dict(s) for s in SEMANTIC_OBSERVABILITY_SURFACES]
+
+
+def semantic_observability_index_dict() -> dict[str, Any]:
+    return {
+        "version": SEMANTIC_OBSERVABILITY_INDEX_VERSION,
+        "surface_count": len(SEMANTIC_OBSERVABILITY_SURFACES),
+        "documented_gap_count": len(SEMANTIC_OBSERVABILITY_DOCUMENTED_GAPS),
+    }

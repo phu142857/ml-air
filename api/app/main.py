@@ -192,9 +192,14 @@ async def permissive_cors_bridge(request: Request, call_next):  # type: ignore[n
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    from app.domains.observability.semantic_observability_model import SEMANTIC_OBSERVABILITY_INDEX_VERSION
+
     with HEALTH_REQUEST_DURATION_SECONDS.time():
         HEALTH_REQUESTS_TOTAL.inc()
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "semantic_observability_index_version": SEMANTIC_OBSERVABILITY_INDEX_VERSION,
+        }
 
 
 @app.get("/metrics")

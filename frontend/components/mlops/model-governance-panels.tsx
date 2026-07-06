@@ -2,13 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { ArrowRightLeft, Bell, Clock, ShieldCheck } from "lucide-react";
+import { ArrowRightLeft, Clock, ShieldCheck } from "lucide-react";
 
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import {
   fetchModelProvenance,
-  fetchSemanticEventOutbox,
   type ModelVersionItem,
 } from "@/lib/api";
 import { useAuditTimelineInfinite } from "@/hooks/use-audit-timeline-infinite";
@@ -305,87 +303,6 @@ export function ModelVersionComparePanel({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">Select two versions to highlight differences.</p>
-      )}
-    </div>
-  );
-}
-
-export function ModelPromoteWebhookLog({ tenantId, projectId, modelId, token }: Scope) {
-  const outboxQuery = useQuery({
-    queryKey: mlairKeys.semantic.outbox(tenantId, projectId, modelId),
-    queryFn: () =>
-      fetchSemanticEventOutbox(tenantId, projectId, token, {
-        limit: 50,
-        eventType: "model.promoted",
-      }),
-    enabled: Boolean(token?.trim()),
-  });
-
-  const rows = useMemo(() => {
-    const items = outboxQuery.data?.items ?? [];
-    return items
-      .filter((row) => {
-        const env = row.envelope || {};
-        const p = (env.payload as Record<string, unknown>) || {};
-        const mid = String(p.model_id || env.model_id || env.resource_id || "");
-        return mid === modelId;
-      })
-      .map((row) => {
-        const env = row.envelope || {};
-        const p = (env.payload as Record<string, unknown>) || {};
-        const at = row.created_at;
-        const atStr =
-          typeof at === "string"
-            ? at
-            : at && typeof at === "object" && "toISOString" in (at as object)
-              ? String((at as { toISOString: () => string }).toISOString())
-              : "";
-        return {
-          id: row.outbox_id,
-          at: atStr || String(p.updated_at || ""),
-          delivered: Boolean(row.redis_delivered_at),
-          version: p.version != null ? Number(p.version) : null,
-          stage: p.stage != null ? String(p.stage) : null,
-        };
-      })
-      .slice(0, 10);
-  }, [outboxQuery.data, modelId]);
-
-  return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <Bell className="h-4 w-4 text-muted-foreground" aria-hidden />
-        <span className="text-sm font-semibold text-foreground">Promote webhook delivery</span>
-      </div>
-      <p className="mb-3 text-xs text-muted-foreground">
-        Semantic <code className="font-mono">model.promoted</code> events from the durable outbox (
-        <code className="font-mono">ML_AIR_EVENT_OUTBOX=1</code>). Legacy{" "}
-        <code className="font-mono">ML_AIR_PROMOTE_WEBHOOK_URL</code> attempts are API logs only.
-      </p>
-      {outboxQuery.isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading delivery log…</p>
-      ) : rows.length ? (
-        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border text-xs">
-          {rows.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 bg-muted/20 px-3 py-2">
-              <span className="font-mono">
-                v{r.version ?? "?"} → {r.stage || "—"}
-              </span>
-              <span className={r.delivered ? "text-[color:var(--status-success-fg)]" : "text-[color:var(--status-pending-fg)]"}>
-                {r.delivered ? "delivered" : "pending"}
-              </span>
-              <span className="text-muted-foreground">{r.at ? formatDateTimeCompact(String(r.at)) : "—"}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          No outbox rows for this model. Enable the outbox or check{" "}
-          <Link href="/lifecycle" className="text-primary underline">
-            Lifecycle events
-          </Link>
-          .
-        </p>
       )}
     </div>
   );

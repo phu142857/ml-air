@@ -68,7 +68,6 @@ import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
 import { ModelProvenancePanel } from "@/components/mlops/model-provenance-panel";
 import {
   ModelApprovalHistory,
-  ModelPromoteWebhookLog,
   ModelStageTimeline,
   ModelVersionComparePanel,
 } from "@/components/mlops/model-governance-panels";
@@ -649,16 +648,6 @@ export default function ModelDetailPage() {
                   versions={versionsQuery.data.items}
                 />
               </div>
-            </div>
-          ) : null}
-          {scopePinned ? (
-            <div className="mt-4">
-              <ModelPromoteWebhookLog
-                tenantId={tenantId}
-                projectId={projectId}
-                modelId={modelId}
-                token={token}
-              />
             </div>
           ) : null}
       </DetailSection>

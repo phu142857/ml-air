@@ -1,4 +1,5 @@
 import type { AuditTimelineItem } from "@/lib/api"
+import { taskIdPathSegment } from "@/lib/api"
 
 export type AuditEvent = {
   id: string
@@ -63,7 +64,7 @@ export function auditResourceHref(item: AuditTimelineItem): string | null {
   const id = String(item.resource_id || "").trim()
   if (!id) return null
   const rt = String(item.resource_type || "").toLowerCase()
-  if (rt === "task") return `/tasks/${encodeURIComponent(id)}`
+  if (rt === "task") return `/tasks/${taskIdPathSegment(id)}`
   if (rt === "run") return `/runs/${encodeURIComponent(id)}`
   if (rt === "dataset" || rt === "dataset_version") return `/datasets/${encodeURIComponent(id)}`
   if (rt === "pipeline" || rt === "pipeline_version") return `/pipelines/${encodeURIComponent(id)}`

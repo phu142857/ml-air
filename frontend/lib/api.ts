@@ -302,6 +302,7 @@ export type UsageSamplePoint = {
   network_tx_bytes?: number | null;
   gpu_power_w?: number | null;
   gpu_temp_c?: number | null;
+  device_id?: number | null;
 };
 
 export type RunUsageSamplesBundle = {
@@ -445,6 +446,27 @@ export function normalizeProjectId(projectId: string): string {
   const raw = String(projectId || "").trim().toLowerCase();
   if (raw === "global") return "default_project";
   return String(projectId || "").trim();
+}
+
+/** Decode over-encoded task ids from routes (`uuid%253Aeval` → `uuid:eval`). */
+export function normalizeTaskId(taskId: string): string {
+  const raw = String(taskId || "").trim();
+  if (!raw) return raw;
+  try {
+    let cur = raw;
+    let prev = "";
+    for (let i = 0; i < 3 && cur !== prev; i += 1) {
+      prev = cur;
+      cur = decodeURIComponent(cur);
+    }
+    return cur;
+  } catch {
+    return raw;
+  }
+}
+
+export function taskIdPathSegment(taskId: string): string {
+  return encodeURIComponent(normalizeTaskId(taskId));
 }
 
 export type ModelApprovalStatus = "pending_manual_approval" | "approved" | "rejected";
@@ -1194,7 +1216,7 @@ export async function fetchTaskLogsPage(
   const sp = new URLSearchParams({ limit: String(limit) });
   if (opts?.cursor) sp.set("cursor", opts.cursor);
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${encodeURIComponent(taskId)}/logs?${sp.toString()}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskIdPathSegment(taskId)}/logs?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
   );
   const data = await res.json();
@@ -1486,7 +1508,7 @@ export async function triggerPipelineRunWithGating(
 
 export async function fetchTask(tenantId: string, projectId: string, taskId: string, token: string) {
   const scopedProjectId = normalizeProjectId(projectId);
-  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskId}`, {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskIdPathSegment(taskId)}`, {
     headers: authHeaders(token),
     cache: "no-store"
   });
@@ -1658,7 +1680,7 @@ export async function fetchTaskUsage(
 ) {
   const scopedProjectId = normalizeProjectId(projectId);
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskId}/usage`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskIdPathSegment(taskId)}/usage`,
     {
       headers: authHeaders(token),
       cache: "no-store",

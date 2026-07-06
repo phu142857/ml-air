@@ -54,7 +54,7 @@ export function TaskUsageSummary({ usage, enabled = true, loading }: TaskUsageSu
   }
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-6">
       <UsageGroup title="Resource attribution">
         <MetadataGrid
           columns={2}

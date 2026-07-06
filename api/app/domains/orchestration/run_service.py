@@ -391,6 +391,10 @@ def set_run_status(run_id: str, status: str) -> bool:
             )
             if normalized == "SUCCESS":
                 rt.maybe_emit_training_completed_from_run_row(row)
+            from app.domains.governance.lifecycle_webhook_service import maybe_notify_training_lifecycle_webhook
+
+            if normalized in {"SUCCESS", "FAILED"}:
+                maybe_notify_training_lifecycle_webhook(row)
     return bool(updated)
 
 
@@ -794,3 +798,29 @@ def get_latest_run_for_pipeline(tenant_id: str, project_id: str, pipeline_id: st
     if not row:
         return None
     return _row_to_run(row)
+
+
+def merge_run_worker_environment(run_id: str, patch: dict[str, Any], *, capturer: str = "mlair-worker") -> bool:
+    """Merge worker-side environment capture into ``runs.environment`` (best-effort)."""
+    rid = str(run_id or "").strip()
+    if not rid or not isinstance(patch, dict) or not patch:
+        return False
+    row = get_run(run_id)
+    if not row:
+        return False
+    current = row.get("environment")
+    if not isinstance(current, dict):
+        current = {}
+    merged = {**current, **patch}
+    merged["capturer"] = capturer
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE runs
+                SET environment = %s::jsonb, updated_at = NOW()
+                WHERE run_id = %s
+                """,
+                (Json(merged), rid),
+            )
+            return bool(cur.rowcount)

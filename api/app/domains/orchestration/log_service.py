@@ -72,6 +72,56 @@ def read_run_logs_page(
     limit: int = 200,
     cursor: str | None = None,
 ) -> PageResult:
+    return _read_log_list_page(
+        f"mlair:logs:{run_id}",
+        offset=offset,
+        limit=limit,
+        cursor=cursor,
+    )
+
+
+def read_run_logs(
+    run_id: str,
+    offset: int = 0,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> list[dict]:
+    page = read_run_logs_page(run_id, offset=offset, limit=limit, cursor=cursor)
+    return [{k: v for k, v in item.items() if k != "index"} for item in page.items]
+
+
+def _paginate_parsed_logs(
+    entries: list[dict[str, Any]],
+    *,
+    offset: int = 0,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
+    if params.mode == "cursor" and params.cursor:
+        start = max(0, int(params.cursor.get("index", -1))) + 1
+    elif params.mode == "offset":
+        start = params.offset
+    else:
+        start = 0
+    slice_items = entries[start : start + params.limit]
+    items = [{**entry, "index": start + i} for i, entry in enumerate(slice_items)]
+    has_more = start + params.limit < len(entries)
+    next_cursor = None
+    if has_more and items:
+        from app.domains.shared.pagination import encode_cursor
+
+        next_cursor = encode_cursor({"index": items[-1]["index"]})
+    return PageResult(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+    )
+
+
+def _read_log_list_page(redis_key: str, *, offset: int = 0, limit: int = 200, cursor: str | None = None) -> PageResult:
     params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
     if params.mode == "cursor" and params.cursor:
         start = max(0, int(params.cursor.get("index", -1))) + 1
@@ -81,7 +131,7 @@ def read_run_logs_page(
         start = 0
     client = redis_client()
     end = start + params.limit
-    raw_items = client.lrange(f"mlair:logs:{run_id}", start, end)
+    raw_items = client.lrange(redis_key, start, end)
     items = [{**entry, "index": start + i} for i, entry in enumerate(_parse_log_items(raw_items[: params.limit]))]
     has_more = len(raw_items) > params.limit
     next_cursor = None
@@ -98,46 +148,47 @@ def read_run_logs_page(
     )
 
 
-def read_run_logs(
+def _task_logs_from_run_filter(
     run_id: str,
-    offset: int = 0,
-    limit: int = 200,
-    cursor: str | None = None,
-) -> list[dict]:
-    page = read_run_logs_page(run_id, offset=offset, limit=limit, cursor=cursor)
-    return [{k: v for k, v in item.items() if k != "index"} for item in page.items]
-
-
-def read_task_logs_page(
     task_id: str,
     *,
     offset: int = 0,
     limit: int = 200,
     cursor: str | None = None,
 ) -> PageResult:
-    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
-    if params.mode == "cursor" and params.cursor:
-        start = max(0, int(params.cursor.get("index", -1))) + 1
-    elif params.mode == "offset":
-        start = params.offset
-    else:
-        start = 0
     client = redis_client()
-    end = start + params.limit
-    raw_items = client.lrange(f"mlair:tasklogs:{task_id}", start, end)
-    items = [{**entry, "index": start + i} for i, entry in enumerate(_parse_log_items(raw_items[: params.limit]))]
-    has_more = len(raw_items) > params.limit
-    next_cursor = None
-    if has_more and items:
-        from app.domains.shared.pagination import encode_cursor
+    raw_items = client.lrange(f"mlair:logs:{run_id}", 0, -1)
+    parsed = _parse_log_items(raw_items)
+    filtered = [
+        entry
+        for entry in parsed
+        if str((entry.get("payload") or {}).get("task_id") or "") == str(task_id)
+    ]
+    return _paginate_parsed_logs(filtered, offset=offset, limit=limit, cursor=cursor)
 
-        next_cursor = encode_cursor({"index": items[-1]["index"]})
-    return PageResult(
-        items=items,
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=params.limit,
-        offset=params.offset if params.mode == "offset" else None,
+
+def read_task_logs_page(
+    task_id: str,
+    *,
+    run_id: str | None = None,
+    offset: int = 0,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    page = _read_log_list_page(
+        f"mlair:tasklogs:{task_id}",
+        offset=offset,
+        limit=limit,
+        cursor=cursor,
+    )
+    if page.items or not str(run_id or "").strip():
+        return page
+    return _task_logs_from_run_filter(
+        str(run_id).strip(),
+        task_id,
+        offset=offset,
+        limit=limit,
+        cursor=cursor,
     )
 
 

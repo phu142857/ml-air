@@ -30,6 +30,8 @@ export const mlairKeys = {
     detail: (taskId: string, scopeKey = "") => ["task", taskId, scopeKey] as const,
     usage: (tenantId: string, projectId: string, taskId: string) =>
       ["task-usage", tenantId, projectId, taskId] as const,
+    usageSamples: (tenantId: string, projectId: string, runId: string, taskId: string) =>
+      ["task-usage-samples", tenantId, projectId, runId, taskId] as const,
     logsInfinite: (tenantId: string, projectId: string, taskId: string) =>
       ["task-logs", tenantId, projectId, taskId, "infinite"] as const,
   },

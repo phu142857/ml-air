@@ -202,15 +202,24 @@ class TaskResourceMonitor:
         while not self._stop.is_set():
             now = time.monotonic()
             if now >= next_sample_at:
-                sample = self._sample_once()
-                if sample is not None:
+                batch = self._sample_once()
+                if batch:
                     with self._lock:
-                        self._samples.append(sample)
-                        if sample.get("gpu_util_percent") is not None and float(sample["gpu_util_percent"]) > 0:
+                        for sample in batch:
+                            self._samples.append(sample)
+                        peak_gpu = max(
+                            (float(s["gpu_util_percent"]) for s in batch if s.get("gpu_util_percent") is not None),
+                            default=None,
+                        )
+                        if peak_gpu is not None and peak_gpu > 0:
                             self._gpu_seconds_acc += self.interval_seconds
-                        if sample.get("gpu_memory_mb") is not None:
-                            self._gpu_mem_mb_seconds_acc += float(sample["gpu_memory_mb"]) * self.interval_seconds
-                    last_sample = sample
+                        peak_mem = max(
+                            (float(s["gpu_memory_mb"]) for s in batch if s.get("gpu_memory_mb") is not None),
+                            default=None,
+                        )
+                        if peak_mem is not None:
+                            self._gpu_mem_mb_seconds_acc += peak_mem * self.interval_seconds
+                    last_sample = batch[-1]
                 next_sample_at = now + self.interval_seconds
 
             if last_sample is not None:
@@ -241,12 +250,12 @@ class TaskResourceMonitor:
         except Exception:
             logger.exception("resource_monitor_flush_failed task_id=%s", self.task_id)
 
-    def _sample_once(self) -> dict[str, Any] | None:
+    def _sample_once(self) -> list[dict[str, Any]]:
         if self._root_pid is None or psutil is None:
-            return None
+            return []
         procs = self._process_tree(self._root_pid)
         if not procs:
-            return None
+            return []
 
         mem_bytes = 0
         pids: set[int] = set()
@@ -273,12 +282,26 @@ class TaskResourceMonitor:
         self._last_cpu_ts = now
 
         gpu_util, gpu_mem_mb, gpu_power_w, gpu_temp_c = None, None, None, None
+        device_rows: list[dict[str, Any]] = []
         if self._gpu_backend is not None:
-            gpu_stats = self._gpu_backend.read_stats(pids)
-            gpu_util = gpu_stats.get("gpu_util_percent")
-            gpu_mem_mb = gpu_stats.get("gpu_memory_mb")
-            gpu_power_w = gpu_stats.get("gpu_power_w")
-            gpu_temp_c = gpu_stats.get("gpu_temp_c")
+            device_rows = self._gpu_backend.read_devices_stats(pids)
+            if device_rows:
+                gpu_util = max(
+                    (float(d["gpu_util_percent"]) for d in device_rows if d.get("gpu_util_percent") is not None),
+                    default=None,
+                )
+                gpu_mem_mb = max(
+                    (float(d["gpu_memory_mb"]) for d in device_rows if d.get("gpu_memory_mb") is not None),
+                    default=None,
+                )
+                gpu_power_w = max(
+                    (float(d["gpu_power_w"]) for d in device_rows if d.get("gpu_power_w") is not None),
+                    default=None,
+                )
+                gpu_temp_c = max(
+                    (float(d["gpu_temp_c"]) for d in device_rows if d.get("gpu_temp_c") is not None),
+                    default=None,
+                )
 
         from sdk.usage_cost_math import normalize_cpu_tree_percent
 
@@ -290,22 +313,38 @@ class TaskResourceMonitor:
             net_rx = max(0, net_end[0] - self._net_io0[0])
             net_tx = max(0, net_end[1] - self._net_io0[1])
 
-        sample: dict[str, Any] = {
+        base: dict[str, Any] = {
             "sampled_at": _iso_now(),
             "cpu_percent": cpu_pct,
             "memory_mb": mem_bytes / (1024.0 * 1024.0) if mem_bytes > 0 else 0.0,
+        }
+        if net_rx is not None:
+            base["network_rx_bytes"] = net_rx
+        if net_tx is not None:
+            base["network_tx_bytes"] = net_tx
+
+        if device_rows:
+            out: list[dict[str, Any]] = []
+            for dev in device_rows:
+                row = {**base}
+                for key in ("device_id", "gpu_util_percent", "gpu_memory_mb", "gpu_power_w", "gpu_temp_c"):
+                    if dev.get(key) is not None:
+                        row[key] = dev[key]
+                out.append(row)
+            return out
+
+        sample: dict[str, Any] = {
+            **base,
             "gpu_util_percent": gpu_util,
             "gpu_memory_mb": gpu_mem_mb,
         }
-        if net_rx is not None:
-            sample["network_rx_bytes"] = net_rx
-        if net_tx is not None:
-            sample["network_tx_bytes"] = net_tx
         if gpu_power_w is not None:
             sample["gpu_power_w"] = gpu_power_w
         if gpu_temp_c is not None:
             sample["gpu_temp_c"] = gpu_temp_c
-        return sample
+        if gpu_util is not None or gpu_mem_mb is not None:
+            sample["device_id"] = 0
+        return [sample]
 
     @staticmethod
     def _process_tree(root_pid: int) -> list[Any]:

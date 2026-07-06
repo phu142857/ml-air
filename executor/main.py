@@ -519,30 +519,28 @@ def main() -> None:
                 trace_id,
                 int(wall_seconds * 1000),
             )
-            client.rpush(
-                f'mlair:logs:{task["run_id"]}',
-                json.dumps(
-                    {
-                        "ts": finished_at,
-                        "level": "INFO" if status == "SUCCESS" else "ERROR",
-                        "message": f'task {task["task_id"]} finished with {status}',
-                        "payload": {
-                            "task_id": task["task_id"],
-                            "attempt": task["attempt"],
-                            "pipeline_id": pipeline_id,
-                            "priority": task.get("priority", "normal"),
-                            "tenant_id": tenant_id,
-                            "project_id": project_id,
-                            "trace_id": trace_id,
-                            "plugin_name": plugin_name,
-                            "task_type": task.get("task_type"),
-                            "plugin_exec": plugin_exec,
-                            "http_exec": http_exec,
-                            "queue": queue_name,
-                        },
-                    }
-                ),
-            )
+            finish_log = {
+                "ts": finished_at,
+                "level": "INFO" if status == "SUCCESS" else "ERROR",
+                "message": f'task {task["task_id"]} finished with {status}',
+                "payload": {
+                    "task_id": task["task_id"],
+                    "attempt": task["attempt"],
+                    "pipeline_id": pipeline_id,
+                    "priority": task.get("priority", "normal"),
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
+                    "trace_id": trace_id,
+                    "plugin_name": plugin_name,
+                    "task_type": task.get("task_type"),
+                    "plugin_exec": plugin_exec,
+                    "http_exec": http_exec,
+                    "queue": queue_name,
+                },
+            }
+            finish_raw = json.dumps(finish_log)
+            client.rpush(f'mlair:logs:{task["run_id"]}', finish_raw)
+            client.rpush(f'mlair:tasklogs:{task["task_id"]}', finish_raw)
             done_payload = {
                 "event_type": "task_finished",
                 "run_id": task["run_id"],

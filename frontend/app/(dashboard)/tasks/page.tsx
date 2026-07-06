@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { taskIdPathSegment } from "@/lib/api"
 import { ListTodo } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -119,7 +120,7 @@ export default function TasksPage() {
                   e.preventDefault()
                   const id = taskId.trim()
                   if (!id) return
-                  router.push(`/tasks/${encodeURIComponent(id)}`)
+                  router.push(`/tasks/${taskIdPathSegment(id)}`)
                 }}
               >
                 <Input
