@@ -38,7 +38,7 @@ class ReadinessEligibilityBlocked(ValueError):
 
 def _allow_legacy_readiness_fallback() -> bool:
     # Phase 6 default: strict version-centric readiness; rollback by setting env to 1/true.
-    return str(os.getenv("ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK", "0")).strip().lower() not in {"0", "false", "no", "off"}
+    return str(os.getenv("ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK", "1")).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def is_readiness_legacy_fallback_enabled() -> bool:
@@ -659,7 +659,7 @@ def evaluate_dataset_readiness(
             current_size = int(latest["record_count"])
             selected_version_status = str(latest.get("status") or "ready")
             selected_version_created_at = latest.get("created_at")
-            if _allow_legacy_readiness_fallback() and os.getenv("ML_AIR_WARN_IMPLICIT_DATASET_HEAD", "").strip() == "1":
+            if _allow_legacy_readiness_fallback() and os.getenv("ML_AIR_WARN_IMPLICIT_DATASET_HEAD", "1").strip() == "1":
                 logger.warning(
                     "implicit_dataset_version_head tenant_id=%s project_id=%s dataset_id=%s version_id=%s "
                     "(readiness/eligibility legacy latest-head; set ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK=0 — "

@@ -144,6 +144,10 @@ def _print_endpoints(cfg: dict) -> None:
         hub_port = os.getenv("MLAIR_PORT", "8080")
         print("[mlair] single-container stack starting")
         print(f"  MLAir:    http://localhost:{hub_port}")
+        print(f"  Jaeger:   http://localhost:{os.getenv('ML_AIR_JAEGER_UI_PORT', '16686')}")
+        print(f"  Grafana:  http://localhost:{os.getenv('ML_AIR_GRAFANA_PORT', '33000')}")
+        print(f"  Prom:     http://localhost:{os.getenv('ML_AIR_PROMETHEUS_PORT', '39090')}")
+        print(f"  MinIO:    http://localhost:{os.getenv('ML_AIR_MINIO_CONSOLE_PORT', '9001')}")
     else:
         api_port = os.getenv("ML_AIR_API_PORT", "8080")
         ui_port = os.getenv("ML_AIR_FRONTEND_PORT", "38080")

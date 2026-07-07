@@ -60,7 +60,7 @@ def _sha256_file_path_hex(path: str) -> str:
 
 def _validate_dataset_version_snapshot_if_enabled(uri: str | None, checksum: str | None) -> None:
     """Opt-in: re-hash ``file://`` artifact and compare to ``dataset_versions.checksum``."""
-    if os.getenv("ML_AIR_VALIDATE_DATASET_VERSION_CHECKSUM", "").strip() != "1":
+    if os.getenv("ML_AIR_VALIDATE_DATASET_VERSION_CHECKSUM", "1").strip() != "1":
         return
     ch = str(checksum or "").strip()
     if not ch:
@@ -850,7 +850,7 @@ def _lineage_snapshot_version_label(
     explicit = str(ver_raw).strip() if ver_raw is not None else ""
     if explicit:
         return explicit
-    if os.getenv("ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL", "").strip() == "1":
+    if os.getenv("ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL", "1").strip() == "1":
         return "default"
     if dataset_id not in batch_unpinned_cache:
         batch_unpinned_cache[dataset_id] = _allocate_next_monotonic_dataset_version_label(dataset_id)
@@ -2051,7 +2051,7 @@ def get_latest_materialized_dataset_version(tenant_id: str, project_id: str, dat
     ``ML_AIR_STRICT_DATASET_VERSION_REQUIRED=0`` and the client omits ``dataset_version_id``).
     Prefer passing an explicit ``dataset_version_id`` in all other integrations.
     """
-    if os.getenv("ML_AIR_WARN_IMPLICIT_DATASET_HEAD", "").strip() == "1":
+    if os.getenv("ML_AIR_WARN_IMPLICIT_DATASET_HEAD", "1").strip() == "1":
         logger.warning(
             "implicit_dataset_version_head tenant_id=%s project_id=%s dataset_id=%s "
             "(get_latest_materialized_dataset_version; prefer explicit dataset_version_id — "

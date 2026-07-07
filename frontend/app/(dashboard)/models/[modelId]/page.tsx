@@ -3,15 +3,16 @@
 import { Box, FolderUp, Play } from "lucide-react";
 import {
   DetailSection,
-  DetailTabBar,
+  DetailTabList,
   FilterChips,
   MetadataGrid,
   MlopsEmptyState,
-  PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  tabPanelScrollClassName,
 } from "@/components/mlops/layout";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -509,55 +510,62 @@ export default function ModelDetailPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBreadcrumb
-        segments={[
-          { label: "Models", href: "/models" },
-          { label: model?.name ?? modelId, mono: true },
-        ]}
-      />
-      <ResourcePageHeader
-        icon={Box}
-        accent="violet"
-        title={`Model · ${model?.name ?? modelId}`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-border bg-card text-foreground/90 hover:bg-muted"
-              onClick={() => router.push("/models")}
-            >
-              All models
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() =>
-                openConfirm(
-                  "Delete model",
-                  `Delete model "${model?.name || modelId}" and all of its versions?`,
-                  async () => {
-                    await deleteModelMutation.mutateAsync();
-                    setConfirmOpen(false);
-                  }
-                )
-              }
-              disabled={deleteModelMutation.isPending}
-            >
-              Delete model
-            </Button>
+      <div className="shrink-0 border-b border-border/70 bg-background/60 backdrop-blur-sm overflow-hidden">
+        <SubpageBreadcrumb
+          segments={[
+            { label: "Models", href: "/models" },
+            { label: model?.name ?? modelId, mono: true },
+          ]}
+        />
+        <ResourcePageHeader
+          icon={Box}
+          accent="violet"
+          title={`Model · ${model?.name ?? modelId}`}
+          className="border-b-0"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border bg-card text-foreground/90 hover:bg-muted"
+                onClick={() => router.push("/models")}
+              >
+                All models
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() =>
+                  openConfirm(
+                    "Delete model",
+                    `Delete model "${model?.name || modelId}" and all of its versions?`,
+                    async () => {
+                      await deleteModelMutation.mutateAsync();
+                      setConfirmOpen(false);
+                    }
+                  )
+                }
+                disabled={deleteModelMutation.isPending}
+              >
+                Delete model
+              </Button>
+            </div>
+          }
+        />
+      </div>
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
+        <DetailTabList accent="violet" tabs={[...MODEL_TABS]} />
+        {!scopePinned ? (
+          <div className="shrink-0 px-4 pt-3 sm:px-6">
+            <ScopePinnedInline message={SCOPE_AGGREGATE_MODEL_DETAIL} />
           </div>
-        }
-      />
-      <DetailTabBar accent="violet" tabs={[...MODEL_TABS]} value={tab} onValueChange={setTab} />
-      <PageScrollBody
-        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODEL_DETAIL} /> : null}
-      >
-        {isTabLoading ? (
-          <DetailTabSkeleton variant={MODEL_TAB_SKELETON[tab] ?? "grid"} />
+        ) : null}
+
+        <TabsContent value="overview" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "overview" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.overview} />
         ) : (
         <>
-        {tab === "overview" && (
       <DetailSection title="Registry status" description="Model registry health." accentBorder="violet">
           <MetadataGrid
             columns={2}
@@ -627,8 +635,58 @@ export default function ModelDetailPage() {
             </div>
           ) : null}
       </DetailSection>
+        {projectId !== "all" && servingSlotsUi ? (
+      <DetailSection title="Serving slots" description="Map registry versions to routing roles." accentBorder="violet">
+            <h3 className="mb-2 text-xs font-semibold text-foreground">Serving slots</h3>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Map a registry version to champion / candidate / challenger / canary for routing metadata.
+            </p>
+            <div className="grid gap-2 md:grid-cols-2">
+              {SERVING_SLOTS.map((slot) => {
+                const cur = servingQuery.data?.slots?.[slot];
+                return (
+                  <div
+                    key={slot}
+                    className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-2 text-xs"
+                  >
+                    <span className="font-medium capitalize text-foreground">{slot}</span>
+                    <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={servingSlotDraft[slot] ?? ""}
+                      onChange={(e) =>
+                        setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
+                      }
+                      placeholder="ver"
+                      className="w-20 rounded border border-border bg-muted px-2 py-1 text-foreground"
+                    />
+                    <button
+                      type="button"
+                      className="rounded-lg bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/40 disabled:opacity-60"
+                      disabled={servingAssignMutation.isPending}
+                      onClick={() => {
+                        const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
+                        if (!Number.isFinite(n) || n < 1) return;
+                        servingAssignMutation.mutate({ slot, version: n });
+                      }}
+                    >
+                      Set
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+      </DetailSection>
+        ) : null}
+        </>
         )}
-        {tab === "policy" && (
+        </TabsContent>
+
+        <TabsContent value="policy" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "policy" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.policy} />
+        ) : (
       <DetailSection title="Trigger policy" accentBorder="violet">
         <div className="mb-4 rounded-xl border border-border bg-muted/40 p-3">
           <h3 className="mb-2 text-xs font-semibold text-foreground">Auto Trigger Config</h3>
@@ -754,8 +812,12 @@ export default function ModelDetailPage() {
         </div>
       </DetailSection>
         )}
+        </TabsContent>
 
-        {tab === "runs" && (
+        <TabsContent value="runs" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "runs" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.runs} />
+        ) : (
       <DetailSection title="Recent runs" accentBorder="violet">
         {!(recentRunsQuery.data || []).length ? (
           <MlopsEmptyState icon={Play} title="No recent runs" description="No runs linked from model versions yet." />
@@ -776,53 +838,12 @@ export default function ModelDetailPage() {
         )}
       </DetailSection>
         )}
+        </TabsContent>
 
-        {tab === "overview" && projectId !== "all" && servingSlotsUi && (
-      <DetailSection title="Serving slots" description="Map registry versions to routing roles." accentBorder="violet">
-            <h3 className="mb-2 text-xs font-semibold text-foreground">Serving slots</h3>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Map a registry version to champion / candidate / challenger / canary for routing metadata.
-            </p>
-            <div className="grid gap-2 md:grid-cols-2">
-              {SERVING_SLOTS.map((slot) => {
-                const cur = servingQuery.data?.slots?.[slot];
-                return (
-                  <div
-                    key={slot}
-                    className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-2 text-xs"
-                  >
-                    <span className="font-medium capitalize text-foreground">{slot}</span>
-                    <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={servingSlotDraft[slot] ?? ""}
-                      onChange={(e) =>
-                        setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
-                      }
-                      placeholder="ver"
-                      className="w-20 rounded border border-border bg-muted px-2 py-1 text-foreground"
-                    />
-                    <button
-                      type="button"
-                      className="rounded-lg bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/40 disabled:opacity-60"
-                      disabled={servingAssignMutation.isPending}
-                      onClick={() => {
-                        const n = Number.parseInt(String(servingSlotDraft[slot] || "").trim(), 10);
-                        if (!Number.isFinite(n) || n < 1) return;
-                        servingAssignMutation.mutate({ slot, version: n });
-                      }}
-                    >
-                      Set
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-      </DetailSection>
-        )}
-
-        {tab === "versions" && (
+        <TabsContent value="versions" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "versions" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.versions} />
+        ) : (
       <DetailSection
         title="Versions"
         accentBorder="violet"
@@ -915,9 +936,8 @@ export default function ModelDetailPage() {
         )}
       </DetailSection>
         )}
-        </>
-        )}
-      </PageScrollBody>
+        </TabsContent>
+      </Tabs>
       <ImportModelDialog
         open={importVersionOpen}
         onOpenChange={setImportVersionOpen}

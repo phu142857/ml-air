@@ -1,6 +1,6 @@
 # MLAir configuration
 
-Single reference for installing and running MLAir with **sensible defaults**. The default runtime is **one container** (`ml-air:latest`) with API, Hub, scheduler, executor, realtime, PostgreSQL, and Redis.
+Single reference for installing and running MLAir with **sensible defaults**. The default runtime is an **all-in-one app container** (`ml-air:latest`) plus the supporting local services MLAir needs for a full developer experience: Jaeger, Prometheus, Grafana, and MinIO.
 
 ## Goal
 
@@ -16,11 +16,11 @@ mlair start               # start from images
 mlair health
 ```
 
-Open MLAir at `http://localhost:8080` (default). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin.
+Open MLAir at `http://localhost:8080` (default). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. The default stack also starts local observability/storage companions on their standard ports: Jaeger `:16686`, Grafana `:33000`, Prometheus `:39090`, and MinIO console `:9001`.
 
 No `mlair.yaml` required — profile **`development`** applies automatically.
 
-### Single public port (default)
+### Single public app port (default)
 
 The all-in-one image runs an internal nginx reverse proxy on **`:8080`**:
 
@@ -32,7 +32,7 @@ The all-in-one image runs an internal nginx reverse proxy on **`:8080`**:
 | `/health` | API health |
 | `/healthz` | Realtime health |
 
-Override the host mapping with `ports.hub` in `mlair.yaml` or `MLAIR_PORT` in the environment. API, Hub, and realtime are **not** published on separate host ports in this mode.
+Override the host mapping with `ports.hub` in `mlair.yaml` or `MLAIR_PORT` in the environment. API, Hub, and realtime are **not** published on separate host ports in this mode; observability/storage companions still expose their own local ports for direct access.
 
 ### Legacy multi-container layout
 
@@ -64,7 +64,7 @@ Bundled in `mlair/profiles/` (also shipped inside the `mlair` wheel).
 
 | Profile | Use case | Strict dataset pin | Promote approval |
 |---------|----------|----------------------|------------------|
-| `development` | Local single-container (`mlair start`) | off | skipped (dev) |
+| `development` | Local all-in-one app + observability stack (`mlair start`) | on | skipped (dev) |
 | `microservices` | Legacy multi-container compose | off | skipped (dev) |
 | `staging` | Pre-prod sign-off | on | enforced |
 | `production` | Lifecycle OS production | on | enforced |
@@ -104,7 +104,7 @@ profile: development
 ml_air_environment: development
 
 compose:
-  file: deploy/docker-compose.quickstart.yml
+  file: deploy/docker-compose.allinone.yml
 
 ports:
   hub: 8080
@@ -112,13 +112,14 @@ ports:
 features:
   usage_tracking: true
   resource_monitor: true
-  strict_dataset_version_required: false
-  strict_dataset_version_all_post_runs: false
+  strict_dataset_version_required: true
+  strict_dataset_version_all_post_runs: true
   readiness_allow_legacy_fallback: true
   skip_approval_for_promote: true
 
 observability:
   grafana_url: http://localhost:33000
+  jaeger_ui_url: http://localhost:16686
 
 auth:
   tracking_token: admin-token

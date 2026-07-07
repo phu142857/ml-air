@@ -1,6 +1,8 @@
 # Optional local overrides — copy to mlair.yaml and edit.
 # Sensible defaults apply when this file is absent (profile: development).
 # Full reference: docs/configuration.md
+#
+# All features default to ON in profiles and code. Set feature keys to false to disable.
 
 profile: development
 
@@ -11,7 +13,12 @@ profile: development
 #   hub: 8080
 
 # features:
-#   strict_dataset_version_required: false
+#   serving_slots_http: false
+#   event_outbox: false
+
+# observability:
+#   jaeger_ui_url: http://localhost:16686
+#   otel_enabled: true
 
 # auth:
 #   tracking_token: admin-token

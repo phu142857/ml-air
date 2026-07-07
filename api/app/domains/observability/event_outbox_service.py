@@ -29,11 +29,11 @@ def _database_url() -> str:
 
 
 def outbox_writes_enabled() -> bool:
-    return os.getenv("ML_AIR_EVENT_OUTBOX", "").strip() == "1"
+    return os.getenv("ML_AIR_EVENT_OUTBOX", "1").strip() == "1"
 
 
 def drain_interval_sec() -> int:
-    raw = os.getenv("ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC", "0").strip()
+    raw = os.getenv("ML_AIR_EVENT_OUTBOX_DRAIN_INTERVAL_SEC", "5").strip()
     try:
         n = int(raw)
     except ValueError:

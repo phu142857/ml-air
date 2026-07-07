@@ -30,7 +30,7 @@ class TenantQuotaExceeded(ValueError):
 
 
 def enforcement_enabled() -> bool:
-    return os.getenv("ML_AIR_TENANT_QUOTA_ENFORCE", "0").strip() == "1"
+    return os.getenv("ML_AIR_TENANT_QUOTA_ENFORCE", "1").strip() == "1"
 
 
 def _env_limit(name: str, default: int | None) -> int | None:

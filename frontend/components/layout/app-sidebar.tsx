@@ -24,7 +24,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarFooter,
 } from "@/components/ui/sidebar"
 import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
@@ -135,19 +134,6 @@ export function AppSidebar() {
         ) : null}
         <NavGroup label="Admin" items={settingsNav} />
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/70 p-3">
-        <div className="rounded-xl bg-muted/40 p-1 ring-1 ring-border/60">
-          <div className="flex items-center gap-2.5 rounded-lg bg-card px-3 py-2.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--status-success-fg)]" />
-            </span>
-            <span className="text-xs font-medium text-muted-foreground">
-              API connected
-            </span>
-          </div>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
 }

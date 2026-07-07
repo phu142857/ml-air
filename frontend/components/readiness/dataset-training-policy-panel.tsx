@@ -18,12 +18,6 @@ const POLICY_TRIGGER_MODE_OPTIONS = [
   { value: "schedule", label: "schedule" },
 ];
 
-const POLICY_PRESETS = [
-  { id: "small", label: "Small incremental", requiredSize: 100, freshnessHours: 168 },
-  { id: "daily", label: "Daily retrain", requiredSize: 1000, freshnessHours: 24 },
-  { id: "production", label: "Production gate", requiredSize: 5000, freshnessHours: 24 },
-] as const;
-
 function formatValidationRulesDraft(rules: DatasetTrainingPolicy["validation_rules"]): string {
   if (!rules?.length) return "[]";
   try {
@@ -169,30 +163,6 @@ export function DatasetTrainingPolicyPanel({
     }
   };
 
-  const applyPreset = async (preset: (typeof POLICY_PRESETS)[number]) => {
-    setRequiredSizeDraft(String(preset.requiredSize));
-    setFreshnessHoursDraft(String(preset.freshnessHours));
-    if (!selectedPolicy) return;
-    setSaving(true);
-    setPolicyMsg("");
-    try {
-      await upsertDatasetTrainingPolicy(tenantId, projectId, datasetId, token, {
-        policy_id: selectedPolicy.policy_id,
-        required_size: preset.requiredSize,
-        freshness_hours: preset.freshnessHours,
-        trigger_mode: triggerModeDraft,
-        model_id: modelIdDraft.trim() || undefined,
-        validation_rules: parseValidationRulesDraft(validationRulesDraft),
-      });
-      await onPolicyMutated?.();
-      setPolicyMsg(`Applied preset “${preset.label}”.`);
-    } catch (err) {
-      setPolicyMsg(`Preset failed: ${String((err as Error)?.message || err)}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <details className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20 px-4 py-3" open>
       <summary className="cursor-pointer select-none text-xs font-semibold text-foreground hover:text-foreground/90">
@@ -288,24 +258,6 @@ export function DatasetTrainingPolicyPanel({
             Create policy
           </Button>
           {policyMsg ? <span className="text-xs text-muted-foreground">{policyMsg}</span> : null}
-        </div>
-
-        <div>
-          <p className="mb-2 text-[11px] text-muted-foreground">Quick presets (rows + freshness)</p>
-          <div className="flex flex-wrap gap-2">
-            {POLICY_PRESETS.map((preset) => (
-              <Button
-                key={preset.id}
-                type="button"
-                variant="secondary"
-                className="px-2 py-1 text-xs"
-                disabled={!selectedPolicyId || saving}
-                onClick={() => void applyPreset(preset)}
-              >
-                {preset.label} ({preset.requiredSize} rows · {preset.freshnessHours}h)
-              </Button>
-            ))}
-          </div>
         </div>
       </div>
     </details>

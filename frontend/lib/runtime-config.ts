@@ -1,4 +1,5 @@
 import type { SemanticObservabilitySurface } from "./api";
+import { buildJaegerTraceUrl } from "./jaeger-trace-url";
 
 declare global {
   interface Window {
@@ -122,13 +123,30 @@ export function clearRuntimeConfigOverride(): void {
   writeRuntimeConfigOverride(null);
 }
 
+const JAEGER_UI_FALLBACK = "http://localhost:16686";
+
+/** Browser-reachable Jaeger UI base (deploy inject → session override → dev fallback). */
+export function getJaegerUiBaseUrl(): string {
+  const override = readRuntimeConfigOverride()?.jaegerBaseUrl?.trim();
+  if (override) return override.replace(/\/$/, "");
+
+  const config = getRuntimeConfig();
+  const raw = String(config?.jaegerBaseUrl || config?.observability?.jaeger_ui_url || "").trim();
+  if (raw) return raw.replace(/\/$/, "");
+
+  return JAEGER_UI_FALLBACK;
+}
+
+/** Whether Jaeger UI base came from deploy/settings (not the dev fallback). */
+export function isJaegerUiConfigured(): boolean {
+  const override = readRuntimeConfigOverride()?.jaegerBaseUrl?.trim();
+  if (override) return true;
+  const config = getRuntimeConfig();
+  return Boolean(String(config?.jaegerBaseUrl || config?.observability?.jaeger_ui_url || "").trim());
+}
+
 /** Deep link to a trace in Jaeger UI (supports v0-style `jaegerBaseUrl` and deploy `observability.jaeger_ui_url`). */
 export function getJaegerTraceUrl(traceId: string): string | null {
-  const config = getRuntimeConfig();
-  const camel = config?.jaegerBaseUrl;
-  const nested = config?.observability?.jaeger_ui_url;
-  const raw = String(camel || nested || "").trim();
-  if (!raw || !traceId) return null;
-  const base = raw.replace(/\/$/, "");
-  return `${base}/trace/${encodeURIComponent(traceId)}`;
+  if (!traceId?.trim()) return null;
+  return buildJaegerTraceUrl(getJaegerUiBaseUrl(), traceId);
 }

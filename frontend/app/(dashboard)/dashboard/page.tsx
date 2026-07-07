@@ -215,17 +215,6 @@ export default function DashboardPage() {
                   <Activity strokeWidth={1.75} className="h-4 w-4 text-primary" />
                   Resource usage
                 </h3>
-                {showProjectUsage ? (
-                  <UsageRollupPanel
-                    mode="project"
-                    tenantId={tenantId}
-                    projectId={projectId}
-                    token={token}
-                    days={30}
-                  />
-                ) : (
-                  <UsageRollupPanel mode="tenant" tenantId={tenantId} token={token} days={30} />
-                )}
               </Panel>
             ) : null}
 

@@ -10,7 +10,7 @@ from typing import Any
 
 
 def signing_enabled() -> bool:
-    return os.getenv("ML_AIR_SEMANTIC_EVENT_SIGNING", "0").strip() == "1"
+    return os.getenv("ML_AIR_SEMANTIC_EVENT_SIGNING", "1").strip() == "1"
 
 
 def _canonical_json(payload: dict[str, Any]) -> str:

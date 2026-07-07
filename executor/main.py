@@ -154,7 +154,7 @@ def _managed_keys_blob() -> dict:
 
 
 def _strict_key_lifecycle() -> bool:
-    return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "0") == "1"
+    return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "1") == "1"
 
 
 def _allowed_key_ids() -> set[str]:

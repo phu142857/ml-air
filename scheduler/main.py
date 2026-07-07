@@ -1085,7 +1085,7 @@ def _managed_keys_blob() -> dict:
 
 
 def _strict_key_lifecycle() -> bool:
-    return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "0") == "1"
+    return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "1") == "1"
 
 
 def _allowed_key_ids() -> set[str]:
@@ -1274,8 +1274,8 @@ def _init_replay_tasks_with_gating(
     Returns True when gating passes, False when at least one required upstream task is missing.
     """
     require_evidence = os.getenv("ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE", "1") != "0"
-    require_checksum = os.getenv("ML_AIR_REPLAY_REQUIRE_CHECKSUM", "0") == "1"
-    require_signed_manifest = os.getenv("ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST", "0") == "1"
+    require_checksum = os.getenv("ML_AIR_REPLAY_REQUIRE_CHECKSUM", "1") == "1"
+    require_signed_manifest = os.getenv("ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST", "1") == "1"
     parent_success = _load_parent_success_tasks(parent_run_id)
     gating_ok = True
     for key in sorted(plan.keys()):

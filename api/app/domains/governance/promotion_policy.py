@@ -18,7 +18,7 @@ def rollback_enabled() -> bool:
 
 
 def rollback_requires_approval() -> bool:
-    return str(os.getenv("ML_AIR_ROLLBACK_REQUIRES_APPROVAL", "0")).strip().lower() in (
+    return str(os.getenv("ML_AIR_ROLLBACK_REQUIRES_APPROVAL", "1")).strip().lower() in (
         "1",
         "true",
         "yes",
@@ -27,7 +27,7 @@ def rollback_requires_approval() -> bool:
 
 
 def allow_skip_forward_stages() -> bool:
-    return str(os.getenv("ML_AIR_PROMOTION_ALLOW_SKIP_STAGES", "0")).strip().lower() in (
+    return str(os.getenv("ML_AIR_PROMOTION_ALLOW_SKIP_STAGES", "1")).strip().lower() in (
         "1",
         "true",
         "yes",

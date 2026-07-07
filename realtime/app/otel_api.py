@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def otel_enabled() -> bool:
-    return os.getenv("ML_AIR_OTEL_ENABLED", "0").strip() == "1"
+    return os.getenv("ML_AIR_OTEL_ENABLED", "1").strip() == "1"
 
 
 def init_realtime_otel(app: "FastAPI") -> None:

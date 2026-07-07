@@ -197,12 +197,12 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
               )}
               
               {event.traceId && (
-                <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                  <div>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border/50">
+                  <div className="min-w-0 flex-1">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Trace ID</label>
-                    <p className="text-sm font-mono text-muted-foreground mt-0.5">{event.traceId}</p>
+                    <p className="mt-0.5 break-all font-mono text-sm text-muted-foreground">{event.traceId}</p>
                   </div>
-                  <JaegerLink traceId={event.traceId} />
+                  <JaegerLink traceId={event.traceId} className="shrink-0" />
                 </div>
               )}
             </div>

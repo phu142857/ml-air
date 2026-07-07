@@ -440,11 +440,11 @@ def _enforce_tenant_quota(tenant_id: str, resource: str, *, project_id: str | No
 
 
 def _serving_slots_http_enabled() -> bool:
-    return os.getenv("ML_AIR_ENABLE_SERVING_SLOTS_HTTP", "0").strip() == "1"
+    return os.getenv("ML_AIR_ENABLE_SERVING_SLOTS_HTTP", "1").strip() == "1"
 
 
 def _require_declared_dataset_inputs_enabled() -> bool:
-    return os.getenv("ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS", "0").strip() == "1"
+    return os.getenv("ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS", "1").strip() == "1"
 
 
 def _ensure_declared_readiness_inputs(merged_override: dict, pipeline_version_config: dict) -> None:
@@ -1560,15 +1560,15 @@ def runtime_config_v1(request: Request) -> dict:
         "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
         "strict_dataset_version_all_post_runs": _strict_dataset_version_all_post_runs(),
         "readiness_allow_legacy_fallback": readiness_service.is_readiness_legacy_fallback_enabled(),
-        "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "0") == "1",
+        "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "1") == "1",
         "serving_slots_http": _serving_slots_http_enabled(),
-        "semantic_event_outbox": os.getenv("ML_AIR_EVENT_OUTBOX", "0") == "1",
-        "semantic_event_stream": os.getenv("ML_AIR_EVENT_STREAM", "0") == "1",
-        "semantic_event_stream_global_fanout": os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "0") == "1",
-        "execution_projection": os.getenv("ML_AIR_EXECUTION_PROJECTION", "0") == "1",
+        "semantic_event_outbox": os.getenv("ML_AIR_EVENT_OUTBOX", "1") == "1",
+        "semantic_event_stream": os.getenv("ML_AIR_EVENT_STREAM", "1") == "1",
+        "semantic_event_stream_global_fanout": os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1") == "1",
+        "execution_projection": os.getenv("ML_AIR_EXECUTION_PROJECTION", "1") == "1",
         "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
         "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
-        "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "0") == "1",
+        "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "1") == "1",
         "dataset_retention_policies": os.getenv("ML_AIR_DATASET_RETENTION_POLICIES", "1") == "1",
         "tenant_quota_enforcement": tenant_quota_service.enforcement_enabled(),
         "http_pipeline_tasks": os.getenv("ML_AIR_HTTP_PIPELINE_TASKS", "1") == "1",
@@ -3465,7 +3465,7 @@ def create_pipeline_version_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    strict_exists = os.getenv("ML_AIR_VALIDATE_PLUGIN_EXISTS_ON_CREATE", "0") == "1"
+    strict_exists = os.getenv("ML_AIR_VALIDATE_PLUGIN_EXISTS_ON_CREATE", "1") == "1"
     _validate_pipeline_plugin_contract(payload.config, require_plugin_exists=strict_exists)
     return pipeline_version_service.create_pipeline_version(tenant_id, project_id, pipeline_id, payload.config)
 

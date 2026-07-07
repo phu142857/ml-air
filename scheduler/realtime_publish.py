@@ -76,8 +76,8 @@ def _assign_sequence_and_buffer(client: Redis, event: dict[str, Any]) -> dict[st
 
 
 def _append_event_streams(client: Redis, event: dict[str, Any]) -> None:
-    stream_on = os.getenv("ML_AIR_EVENT_STREAM", "").strip() == "1"
-    global_on = os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "").strip() == "1"
+    stream_on = os.getenv("ML_AIR_EVENT_STREAM", "1").strip() == "1"
+    global_on = os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1").strip() == "1"
     if not stream_on and not global_on:
         return
     tenant_id = str(event.get("tenant_id") or "").strip()

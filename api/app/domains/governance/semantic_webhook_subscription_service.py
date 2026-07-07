@@ -23,12 +23,12 @@ def _database_url() -> str:
 
 
 def delivery_enabled() -> bool:
-    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DELIVERY", "").strip() == "1"
+    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DELIVERY", "1").strip() == "1"
 
 
 def dedupe_enabled() -> bool:
     """When on, skip webhook POST if this ``(event_id, subscription_id)`` already succeeded once."""
-    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DEDUPE", "").strip() == "1"
+    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DEDUPE", "1").strip() == "1"
 
 
 def retry_max_attempts() -> int:

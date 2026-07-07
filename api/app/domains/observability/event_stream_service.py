@@ -15,11 +15,11 @@ DEFAULT_GLOBAL_MAXLEN = 200_000
 
 
 def stream_enabled() -> bool:
-    return os.getenv("ML_AIR_EVENT_STREAM", "").strip() == "1"
+    return os.getenv("ML_AIR_EVENT_STREAM", "1").strip() == "1"
 
 
 def global_fanout_enabled() -> bool:
-    return os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "").strip() == "1"
+    return os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1").strip() == "1"
 
 
 def stream_maxlen() -> int:

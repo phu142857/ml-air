@@ -34,7 +34,7 @@ VALID_SERVING_SLOTS = frozenset({"candidate", "challenger", "champion", "canary"
 
 def _require_approval_for_production_promote() -> bool:
     """When True, promote to gated stages requires approval_status=approved."""
-    skip = str(os.getenv("ML_AIR_SKIP_APPROVAL_FOR_PROMOTE", "")).strip().lower()
+    skip = str(os.getenv("ML_AIR_SKIP_APPROVAL_FOR_PROMOTE", "1")).strip().lower()
     return skip not in ("1", "true", "yes")
 
 

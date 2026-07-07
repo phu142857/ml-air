@@ -622,7 +622,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               {run ? (
                 <StatusBadge status={statusToMlopsBadge(run.status)} label={status.label} size="sm" />
               ) : null}
-              {traceId ? <JaegerLink traceId={traceId} /> : null}
+              {traceId ? <JaegerLink traceId={traceId} className="shrink-0" /> : null}
               {canScope ? (
                 <Button variant="outline" size="sm" asChild className="h-8 gap-2 border-border bg-card text-xs">
                   <Link href={`/lineage?run=${encodeURIComponent(runId)}`}>

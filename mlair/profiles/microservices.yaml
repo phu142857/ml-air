@@ -1,7 +1,6 @@
 profile: microservices
 ml_air_environment: development
 
-# Multi-container dev stack (API, scheduler, executor, … as separate containers).
 compose:
   file: deploy/docker-compose.quickstart.yml
 
@@ -14,10 +13,38 @@ ports:
 features:
   usage_tracking: true
   resource_monitor: true
-  strict_dataset_version_required: false
-  strict_dataset_version_all_post_runs: false
+  strict_dataset_version_required: true
+  strict_dataset_version_all_post_runs: true
   readiness_allow_legacy_fallback: true
   skip_approval_for_promote: true
+  warn_implicit_dataset_head: true
+  lineage_legacy_default_version_label: true
+  dataset_hub_v2: true
+  scope_debug_panel: true
+  serving_slots_http: true
+  otel_enabled: true
+  event_outbox: true
+  event_stream: true
+  event_stream_global_fanout: true
+  execution_projection: true
+  semantic_event_signing: true
+  semantic_event_validate: true
+  semantic_webhook_delivery: true
+  semantic_webhook_dedupe: true
+  readiness_async_queue: true
+  tenant_quota_enforce: true
+  dataset_retention_policies: true
+  http_pipeline_tasks: true
+  http_task_templates: true
+  validate_plugin_exists_on_create: true
+  require_declared_dataset_inputs: true
+  validate_dataset_version_checksum: true
+  rollback_enabled: true
+  rollback_requires_approval: true
+  promotion_allow_skip_stages: true
+  replay_require_checksum: true
+  replay_require_signed_manifest: true
+  manifest_strict_key_lifecycle: true
 
 observability:
   grafana_url: http://localhost:33000

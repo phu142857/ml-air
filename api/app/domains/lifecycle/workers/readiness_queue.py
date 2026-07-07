@@ -18,7 +18,7 @@ _drain_stop = threading.Event()
 
 
 def async_queue_enabled() -> bool:
-    return os.getenv("ML_AIR_READINESS_ASYNC_QUEUE", "").strip() == "1"
+    return os.getenv("ML_AIR_READINESS_ASYNC_QUEUE", "1").strip() == "1"
 
 
 def drain_interval_sec() -> int:

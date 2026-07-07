@@ -13,12 +13,12 @@ scrape_configs:
 
   - job_name: "mlair-scheduler"
     static_configs:
-      - targets: ["scheduler:9102"]
+      - targets: ["scheduler:9102", "api:9102"]
 
   - job_name: "mlair-executor"
     static_configs:
-      - targets: ["executor:9103"]
+      - targets: ["executor:9103", "api:9103"]
 
   - job_name: "mlair-realtime"
     static_configs:
-      - targets: ["realtime:9104"]
+      - targets: ["realtime:9104", "api:9104"]

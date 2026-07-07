@@ -102,31 +102,12 @@ const DATASET_TABS = [
   { id: "training", label: "Run / Train" },
 ] as const;
 
-function lifecycleDomainChip(kind: "readiness" | "eligibility"): { label: string; className: string } {
-  const shell = `${STATUS_CHIP_CLASS.running} backdrop-blur-sm`;
-  return {
-    label: kind === "readiness" ? "Dataset readiness" : "Training eligibility",
-    className: shell,
-  };
-}
-
 function accumulationFeedbackClass(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("saved") || m.includes("materialized") || m.includes("schedule tick")) {
     return feedbackMessageClass("success");
   }
   return feedbackMessageClass("failed");
-}
-
-function DomainChip({ kind }: { kind: "readiness" | "eligibility" }) {
-  const c = lifecycleDomainChip(kind);
-  return (
-    <span
-      className={`inline-flex max-w-full shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${c.className}`}
-    >
-      {c.label}
-    </span>
-  );
 }
 
 function formatEvaluationReasons(reasons: Array<string | Record<string, unknown>> | undefined): string {
@@ -1111,16 +1092,13 @@ export default function DatasetHubPage() {
       {
         label: "Readiness",
         value: (
-          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
-            <DomainChip kind="readiness" />
-            <span
-              className={cn(
-                "inline-flex shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
-                readinessStatusChipClass(readinessQuery.data?.status),
-              )}
-            >
-              {String(readinessQuery.data?.status || "pending")}
-            </span>
+          <span
+            className={cn(
+              "inline-flex shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+              readinessStatusChipClass(readinessQuery.data?.status),
+            )}
+          >
+            {String(readinessQuery.data?.status || "pending")}
           </span>
         ),
       },
@@ -1505,7 +1483,6 @@ export default function DatasetHubPage() {
           accentBorder={DATASET_SECTION_ACCENT}
           className="min-w-0"
           bodyClassName="min-w-0 flex flex-col gap-6"
-          headerActions={<DomainChip kind="readiness" />}
         >
             <div className="min-w-0 max-w-md">
               <SelectDropdown
@@ -1531,7 +1508,6 @@ export default function DatasetHubPage() {
             {readinessQuery.data ? (
               <div className="min-w-0 rounded-xl border border-border bg-muted/40 p-4 text-sm">
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-foreground">
-                  <DomainChip kind="readiness" />
                   <span className="text-muted-foreground">Status:</span>
                   <span
                     className={cn(
@@ -1601,8 +1577,7 @@ export default function DatasetHubPage() {
                 </div>
                 {(readinessQuery.data.eligibility_criteria || []).length ? (
                   <div className="mt-3 space-y-2 border-t border-border pt-3">
-                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <DomainChip kind="eligibility" />
+                    <div className="mb-1 text-xs text-muted-foreground">
                       <span>Criteria</span>
                     </div>
                     {(readinessQuery.data.eligibility_criteria || []).map((c) => (
