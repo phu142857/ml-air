@@ -66,7 +66,35 @@ class TestRuntimeUrlService(unittest.TestCase):
                 _request(proto="https"),
                 api_base_url="https://alb.example.com",
             )
-        self.assertEqual(ws, "wss://alb.example.com")
+        self.assertEqual(ws, "wss://alb.example.com/ws")
+
+    def test_realtime_rewrites_internal_loopback_port_for_browser(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ML_AIR_RUNTIME_REALTIME_BASE_URL": "ws://localhost:8001",
+            },
+            clear=False,
+        ):
+            ws = resolve_runtime_realtime_base_url(
+                _request(host="localhost:8080", proto="http"),
+                api_base_url="http://localhost:8080",
+            )
+        self.assertEqual(ws, "ws://localhost:8080/ws")
+
+    def test_realtime_keeps_explicit_when_not_internal_mismatch(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ML_AIR_RUNTIME_REALTIME_BASE_URL": "wss://realtime.example.com",
+            },
+            clear=False,
+        ):
+            ws = resolve_runtime_realtime_base_url(
+                _request(proto="https"),
+                api_base_url="https://alb.example.com",
+            )
+        self.assertEqual(ws, "wss://realtime.example.com")
 
 
 if __name__ == "__main__":

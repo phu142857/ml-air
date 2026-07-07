@@ -235,6 +235,16 @@ export default function ModelDetailPage() {
     if (stageFilter === "all") return allVersions;
     return allVersions.filter((v) => v.stage === stageFilter);
   }, [allVersions, stageFilter]);
+  const servingVersionOptions = useMemo(
+    () => [
+      { value: "", label: "Select version" },
+      ...allVersions.map((v) => ({
+        value: String(v.version),
+        label: `v${v.version}${v.stage ? ` · ${v.stage}` : ""}${v.approval_status ? ` · ${v.approval_status}` : ""}`,
+      })),
+    ],
+    [allVersions],
+  );
   const totalPages = Math.max(1, Math.ceil(filteredVersions.length / VERSIONS_PAGE_SIZE));
   const paginatedVersions = useMemo(
     () =>
@@ -636,11 +646,7 @@ export default function ModelDetailPage() {
           ) : null}
       </DetailSection>
         {projectId !== "all" && servingSlotsUi ? (
-      <DetailSection title="Serving slots" description="Map registry versions to routing roles." accentBorder="violet">
-            <h3 className="mb-2 text-xs font-semibold text-foreground">Serving slots</h3>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Map a registry version to champion / candidate / challenger / canary for routing metadata.
-            </p>
+      <DetailSection title="Serving slots" accentBorder="violet">
             <div className="grid gap-2 md:grid-cols-2">
               {SERVING_SLOTS.map((slot) => {
                 const cur = servingQuery.data?.slots?.[slot];
@@ -651,15 +657,13 @@ export default function ModelDetailPage() {
                   >
                     <span className="font-medium capitalize text-foreground">{slot}</span>
                     <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
-                    <input
-                      type="number"
-                      min={1}
+                    <SelectDropdown
                       value={servingSlotDraft[slot] ?? ""}
-                      onChange={(e) =>
-                        setServingSlotDraft((prev) => ({ ...prev, [slot]: e.target.value }))
-                      }
-                      placeholder="ver"
-                      className="w-20 rounded border border-border bg-muted px-2 py-1 text-foreground"
+                      onChange={(value) => setServingSlotDraft((prev) => ({ ...prev, [slot]: value }))}
+                      options={servingVersionOptions}
+                      className="min-w-[180px]"
+                      buttonClassName="h-8 min-w-[180px] bg-muted px-2 py-1 text-xs"
+                      aria-label={`${slot} serving slot version`}
                     />
                     <button
                       type="button"

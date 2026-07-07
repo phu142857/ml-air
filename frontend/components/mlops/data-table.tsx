@@ -44,8 +44,8 @@ export function DataTable<T>({
   }
 
   return (
-    <Panel className={cn("overflow-hidden", className)}>
-      <div className="overflow-hidden">
+    <Panel className={className}>
+      <div className="min-w-0 overflow-x-auto overscroll-x-contain">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <TableRow className="border-border/60 hover:bg-transparent">

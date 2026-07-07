@@ -32,13 +32,8 @@ export function DetailSection({
   accentBorder = "none",
 }: DetailSectionProps) {
   return (
-    <Panel className={cn("overflow-hidden", className)}>
-      <div
-        className={cn(
-          "overflow-hidden",
-          accentBorderClass[accentBorder],
-        )}
-      >
+    <Panel className={className}>
+      <div className={cn("min-w-0", accentBorderClass[accentBorder])}>
         <div className="flex items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold tracking-tight text-foreground">

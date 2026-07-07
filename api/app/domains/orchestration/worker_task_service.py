@@ -357,6 +357,85 @@ def _normalize_complete_artifacts(
     return out
 
 
+def _artifact_uri_for_model_version(artifacts: list[dict[str, Any]] | None) -> str | None:
+    if not isinstance(artifacts, list):
+        return None
+    for item in artifacts:
+        if not isinstance(item, dict):
+            continue
+        uri = str(item.get("uri") or "").strip()
+        if not uri:
+            continue
+        path = str(item.get("path") or "").strip().lower()
+        if (
+            path.endswith("/checkpoint")
+            or path.endswith("/best.pt")
+            or path == "model"
+            or path.startswith("weights/")
+            or "/weights/" in path
+        ):
+            return uri
+    return None
+
+
+def _auto_register_model_version(
+    *,
+    row: dict[str, Any],
+    task_id: str,
+    plugin_name: str,
+    artifacts: list[dict[str, Any]] | None,
+    worker_id: str | None,
+) -> dict[str, Any] | None:
+    ctx = row.get("plugin_context") if isinstance(row.get("plugin_context"), dict) else {}
+    model_id = str(ctx.get("model_id") or ctx.get("mlair_model_id") or "").strip()
+    run_id = str(row.get("run_id") or "").strip()
+    artifact_uri = _artifact_uri_for_model_version(artifacts)
+    if not model_id or not run_id or not artifact_uri:
+        return None
+
+    from app.domains.governance.model_registry_service import create_model_version, list_model_versions
+
+    existing = [
+        mv
+        for mv in list_model_versions(model_id)
+        if str(mv.get("run_id") or "").strip() == run_id
+        and str(mv.get("artifact_uri") or "").strip() == artifact_uri
+    ]
+    if existing:
+        return max(existing, key=lambda mv: int(mv.get("version") or 0))
+
+    try:
+        created = create_model_version(
+            model_id=model_id,
+            run_id=run_id,
+            artifact_uri=artifact_uri,
+            stage="staging",
+        )
+    except Exception as exc:  # noqa: BLE001
+        append_task_run_log(
+            run_id,
+            task_id=task_id,
+            level="WARNING",
+            message=f"model_version_auto_register_failed: {exc}",
+            plugin=plugin_name or None,
+            worker_id=worker_id,
+        )
+        return None
+
+    append_task_run_log(
+        run_id,
+        task_id=task_id,
+        level="INFO",
+        message=(
+            "Model version auto-registered "
+            f"model_id={model_id} version={created.get('version')} artifact_uri={artifact_uri}"
+        )[:500],
+        plugin=plugin_name or None,
+        worker_id=worker_id,
+    )
+    return created
+
+
 def _persist_run_plugin_tracking(
     *,
     run_id: str,
@@ -561,6 +640,24 @@ def complete_task(
         metrics=metrics,
         artifacts=artifact_list,
     )
+    registered_version = _auto_register_model_version(
+        row=row,
+        task_id=task_id,
+        plugin_name=plugin_name,
+        artifacts=artifact_list,
+        worker_id=wid or None,
+    )
+    if registered_version:
+        plugin_exec["result"]["model_version"] = registered_version
+        try:
+            log_metric(
+                run_id=str(row["run_id"]),
+                key=f"{plugin_name}.imported_version",
+                value=float(int(registered_version.get("version") or 0)),
+                step=0,
+            )
+        except Exception:
+            pass
 
     ctx = dict(row["plugin_context"])
     ctx.setdefault("run_id", row["run_id"])

@@ -35,6 +35,7 @@ const RECONCILE_MS = 60_000;
 const MAX_SEEN_IDS = 500;
 const BASE_BACKOFF_MS = 800;
 const MAX_BACKOFF_MS = 30_000;
+const CONNECT_TIMEOUT_MS = 10_000;
 
 let pendingSerializedKeys: Set<string> = new Set();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -776,8 +777,15 @@ export function useMlairRealtime() {
       const url = buildWsUrl(base, tenantId, projectId, token);
       const ws = new WebSocket(url);
       wsRef.current = ws;
+      const connectTimeout = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+          setMlairRealtimeUiStatus({ kind: "reconnecting" });
+        }
+      }, CONNECT_TIMEOUT_MS);
 
       ws.onopen = () => {
+        clearTimeout(connectTimeout);
         backoffRef.current = BASE_BACKOFF_MS;
         setMlairRealtimeUiStatus({ kind: "connected" });
         void replayMissedEvents();
@@ -799,6 +807,7 @@ export function useMlairRealtime() {
       };
 
       ws.onclose = (ev) => {
+        clearTimeout(connectTimeout);
         wsRef.current = null;
         stopReconcileTimer();
         if (shouldHaltRef.current) return;

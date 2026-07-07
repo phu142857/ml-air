@@ -12,6 +12,10 @@ if "redis" not in sys.modules:
     _redis_stub = types.ModuleType("redis")
     _redis_stub.Redis = MagicMock  # type: ignore[attr-defined]
     sys.modules["redis"] = _redis_stub
+if "psycopg" not in sys.modules:
+    _psycopg_stub = types.ModuleType("psycopg")
+    _psycopg_stub.connect = MagicMock  # type: ignore[attr-defined]
+    sys.modules["psycopg"] = _psycopg_stub
 
 from app.domains.orchestration import worker_task_service as wts
 

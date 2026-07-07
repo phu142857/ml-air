@@ -15,8 +15,8 @@ export function JsonPayloadPanel({ title = "Raw payload", data, className }: Jso
   const [open, setOpen] = useState(false)
 
   return (
-    <Panel className={cn("overflow-hidden", className)}>
-      <div className="overflow-hidden">
+    <Panel className={className}>
+      <div className="min-w-0">
         <button
           type="button"
           onClick={() => setOpen(!open)}

@@ -164,7 +164,7 @@ export function DatasetTrainingPolicyPanel({
   };
 
   return (
-    <details className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20 px-4 py-3" open>
+    <details className="min-w-0 rounded-xl border border-border/70 bg-muted/20 px-4 py-3" open>
       <summary className="cursor-pointer select-none text-xs font-semibold text-foreground hover:text-foreground/90">
         Training policy configuration
       </summary>

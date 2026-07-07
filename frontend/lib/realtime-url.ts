@@ -15,7 +15,38 @@ export function inferRealtimeWsBaseFromLocation(): string | null {
   if (!host) return null;
 
   const wsProto = protocol === "https:" ? "wss" : "ws";
-  return `${wsProto}://${host}`;
+  return `${wsProto}://${host}/ws`;
+}
+
+/**
+ * All-in-one runs realtime on loopback :8001 inside the container; browsers reach it via nginx `/ws`.
+ * Rewrite stale env values like `ws://localhost:8001` when the Hub is served on another port.
+ */
+export function sanitizeRealtimeWsBaseForBrowser(url: string): string {
+  const trimmed = String(url || "").trim();
+  if (!trimmed || typeof window === "undefined") return trimmed;
+
+  try {
+    const normalized = trimmed.startsWith("ws://") || trimmed.startsWith("wss://")
+      ? trimmed
+      : `ws://${trimmed}`;
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase();
+    const isLoopback = host === "localhost" || host === "127.0.0.1";
+    const isInternalPort = parsed.port === "8001" || (!parsed.port && isLoopback);
+    if (!isLoopback || !isInternalPort) return stripTrailingSlash(trimmed);
+
+    const pageHost = window.location.hostname.toLowerCase();
+    const pagePort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
+    const targetPort = parsed.port || "80";
+    if (pageHost === host && targetPort === pagePort) return stripTrailingSlash(trimmed);
+
+    const inferred = inferRealtimeWsBaseFromLocation();
+    if (inferred) return inferred;
+  } catch {
+    /* keep original */
+  }
+  return stripTrailingSlash(trimmed);
 }
 
 /**
@@ -27,10 +58,10 @@ export function resolveRealtimeWsBase(
   buildEnvUrl?: string | null,
 ): string {
   const explicit = String(runtimeUrl ?? "").trim() || String(buildEnvUrl ?? "").trim();
-  if (explicit) return stripTrailingSlash(explicit);
+  if (explicit) return sanitizeRealtimeWsBaseForBrowser(stripTrailingSlash(explicit));
   const inferred = inferRealtimeWsBaseFromLocation();
   if (inferred) return stripTrailingSlash(inferred);
-  return "ws://localhost:8080";
+  return "ws://localhost:8080/ws";
 }
 
 export function isRealtimeConfigured(
