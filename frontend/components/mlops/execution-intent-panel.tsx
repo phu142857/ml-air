@@ -29,6 +29,7 @@ import { feedbackMessageClass, STATUS_CHIP_TEXT } from "@/lib/status-style";
 import { mlairKeys } from "@/lib/query-keys";
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { cn } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 export type ExecutionIntentMode = "model_dataset" | "pipeline_compat";
 
@@ -117,7 +118,7 @@ export function ExecutionIntentPanel({
       { value: "", label: versionsLoading ? "Loading versions…" : "Select dataset version…" },
       ...versions.map((v) => ({
         value: v.version_id,
-        label: `v${v.version} · ${v.status || "—"}`,
+        label: `${formatVersionLabel(v.version)} · ${v.status || "—"}`,
       })),
     ],
     [versions, versionsLoading],
@@ -379,7 +380,7 @@ export function ExecutionIntentPanel({
             <span>
               Active config:{" "}
               <span className="font-mono text-foreground">
-                v{pickLatestPipelineVersion(runPipelineVersionsQuery.data?.items ?? [])?.version ?? "—"}
+                {formatVersionLabel(pickLatestPipelineVersion(runPipelineVersionsQuery.data?.items ?? [])?.version)}
               </span>
             </span>
           ) : (

@@ -57,6 +57,8 @@ class TestTraceUnifiedService(unittest.TestCase):
         self.assertEqual(wf["step_count"], 2)
         self.assertEqual(wf["mlair_count"], 1)
         self.assertEqual(wf["otel_count"], 1)
+        self.assertEqual(wf["steps"][0]["source"], "mlair")
+        self.assertEqual(wf["steps"][1]["source"], "otel")
 
     def test_trace_is_live_from_run_status(self) -> None:
         live = trace_is_live(

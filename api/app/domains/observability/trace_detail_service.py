@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from app.domains.observability.trace_service import canonical_trace_id, trace_id_lookup_candidates
-from app.domains.observability.trace_tempo_service import fetch_tempo_trace, search_tempo_traces
+from app.domains.observability.trace_span_service import fetch_stored_trace, search_stored_traces
 from app.domains.observability.trace_unified_service import build_unified_waterfall, trace_is_live
 from app.domains.shared.db_service import db_conn
 
@@ -384,7 +384,7 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
     audit_events = _fetch_audit_for_runs(tenant_id=tenant_id, project_id=project_id, run_ids=run_ids)
     logs = _fetch_logs_for_runs(run_ids)
     waterfall = _build_waterfall(primary_run_id)
-    otel_trace = fetch_tempo_trace(trace_id=canonical or trace_id.strip())
+    otel_trace = fetch_stored_trace(trace_id=canonical or trace_id.strip())
     unified_waterfall = build_unified_waterfall(
         trace_id=canonical or trace_id.strip(),
         waterfall=waterfall,
@@ -493,19 +493,19 @@ def _search_traces_db(*, tenant_id: str, project_id: str, query: str, limit: int
 
 
 def search_traces(*, tenant_id: str, project_id: str, query: str, limit: int = 20) -> dict[str, Any]:
-    """Search traces in MLAir DB and Tempo."""
+    """Search traces in MLAir DB and native span store."""
     lim = max(1, min(int(limit), 50))
     db_rows = _search_traces_db(tenant_id=tenant_id, project_id=project_id, query=query, limit=lim)
-    tempo_rows = search_tempo_traces(query=query, limit=lim)
+    span_rows = search_stored_traces(query=query, limit=lim)
 
     merged: dict[str, dict[str, Any]] = {}
     for row in db_rows:
         merged[row["trace_id"]] = row
-    for row in tempo_rows:
+    for row in span_rows:
         tid = row["trace_id"]
         if tid in merged:
             merged[tid] = {**merged[tid], **{k: v for k, v in row.items() if v}}
-            merged[tid]["source"] = "mlair+tempo"
+            merged[tid]["source"] = "mlair+spans"
         else:
             merged[tid] = row
 

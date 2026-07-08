@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Copy, Download, GitBranch, Link2, Loader2, Route, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download, GitBranch, Link2, Loader2, Route } from "lucide-react";
 
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph";
 import { StatusBadge } from "@/components/mlops/status-badge";
@@ -22,8 +22,6 @@ import type {
   TraceDetailAuditEvent,
   TraceDetailEvent,
   TraceDetailLog,
-  TraceLogFilter,
-  TraceWaterfallStep,
 } from "@/lib/api";
 import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
@@ -241,14 +239,9 @@ function AuditEventCard({ ev }: { ev: TraceDetailAuditEvent }) {
   );
 }
 
-function LogLine({ entry, highlighted }: { entry: TraceDetailLog; highlighted?: boolean }) {
+function LogLine({ entry }: { entry: TraceDetailLog }) {
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-border/50 py-1.5 font-mono text-xs last:border-b-0",
-        highlighted && "bg-primary/10",
-      )}
-    >
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-border/50 py-1.5 font-mono text-xs last:border-b-0">
       <span className="shrink-0 text-[10px] text-muted-foreground">{formatDateTimeCompact(entry.ts)}</span>
       <span className={cn("w-12 shrink-0 font-semibold", logLevelClass(entry.level))}>{entry.level}</span>
       <span className="min-w-0 flex-1 break-words text-foreground">{entry.message}</span>
@@ -257,13 +250,6 @@ function LogLine({ entry, highlighted }: { entry: TraceDetailLog; highlighted?: 
       ) : null}
     </div>
   );
-}
-
-function logMatchesFilter(entry: TraceDetailLog, filter: TraceLogFilter | null): boolean {
-  if (!filter) return true;
-  if (filter.task_id && String(entry.task_id || "") !== filter.task_id) return false;
-  if (filter.run_id && String(entry.run_id || "") !== filter.run_id) return false;
-  return true;
 }
 
 export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplorerDialogProps) {
@@ -278,8 +264,6 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
   );
 
   const [activeTab, setActiveTab] = useState("timeline");
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [logFilter, setLogFilter] = useState<TraceLogFilter | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const timelineRows = useMemo<TimelineRow[]>(() => {
@@ -298,22 +282,6 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
     }));
     return [...semantic, ...audit].sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   }, [data]);
-
-  const filteredLogs = useMemo(() => {
-    if (!data?.logs?.length) return [];
-    if (!logFilter) return data.logs;
-    return data.logs.filter((entry) => logMatchesFilter(entry, logFilter));
-  }, [data?.logs, logFilter]);
-
-  const handleStepSelect = (step: TraceWaterfallStep) => {
-    setSelectedStepId(step.id);
-    setLogFilter({
-      task_id: step.task_id || (step.kind === "task" ? step.id : null),
-      run_id: step.run_id || (step.kind === "run" ? step.id : null),
-      span_id: step.span_id || (step.kind === "span" ? step.id : null),
-      label: step.label,
-    });
-  };
 
   const copyTraceId = () =>
     void copyWithToast(normalized, {
@@ -419,9 +387,7 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
                 <TabsTrigger value="waterfall">
                   Waterfall ({data.unified_step_count ?? waterfall?.steps.length ?? 0})
                 </TabsTrigger>
-                <TabsTrigger value="logs">
-                  Logs ({logFilter ? filteredLogs.length : data.log_count ?? data.logs?.length ?? 0})
-                </TabsTrigger>
+                <TabsTrigger value="logs">Logs ({data.log_count ?? data.logs?.length ?? 0})</TabsTrigger>
                 <TabsTrigger value="runs">Runs ({data.run_count})</TabsTrigger>
                 {data.primary_run_id ? <TabsTrigger value="graph">Execution graph</TabsTrigger> : null}
               </TabsList>
@@ -442,58 +408,19 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
 
               <TabsContent value="waterfall" className="min-h-0 space-y-3">
                 {waterfall ? (
-                  <>
-                    <TraceWaterfallView
-                      waterfall={waterfall}
-                      variant={waterfallVariant}
-                      selectedStepId={selectedStepId}
-                      onStepSelect={handleStepSelect}
-                    />
-                    {selectedStepId && logFilter ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => setActiveTab("logs")}>
-                          View logs for {logFilter.label}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setLogFilter(null);
-                            setSelectedStepId(null);
-                          }}
-                        >
-                          <X className="mr-1 h-3.5 w-3.5" />
-                          Clear selection
-                        </Button>
-                      </div>
-                    ) : null}
-                  </>
+                  <TraceWaterfallView waterfall={waterfall} variant={waterfallVariant} />
                 ) : (
                   <p className="text-sm text-muted-foreground">No timing data for this trace.</p>
                 )}
               </TabsContent>
 
               <TabsContent value="logs" className="space-y-2">
-                {logFilter ? (
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">Filtered:</span>
-                    <span className="font-medium text-foreground">{logFilter.label}</span>
-                    <Button type="button" size="sm" variant="ghost" className="h-7" onClick={() => setLogFilter(null)}>
-                      Clear filter
-                    </Button>
-                  </div>
-                ) : null}
-                {!filteredLogs.length ? (
+                {!data.logs?.length ? (
                   <p className="text-sm text-muted-foreground">No run logs found for this trace.</p>
                 ) : (
                   <div className="panel-surface rounded-lg border border-border p-3">
-                    {filteredLogs.map((entry, i) => (
-                      <LogLine
-                        key={`${entry.ts}-${entry.message}-${i}`}
-                        entry={entry}
-                        highlighted={Boolean(logFilter && logMatchesFilter(entry, logFilter))}
-                      />
+                    {data.logs.map((entry, i) => (
+                      <LogLine key={`${entry.ts}-${entry.message}-${i}`} entry={entry} />
                     ))}
                   </div>
                 )}

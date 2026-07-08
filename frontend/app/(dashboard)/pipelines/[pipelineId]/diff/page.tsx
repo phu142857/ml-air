@@ -21,6 +21,7 @@ import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { cn } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 const sectionClass = "max-w-[1400px]";
 
@@ -51,7 +52,7 @@ function DiffPageInner() {
     () =>
       items.map((v) => ({
         value: v.version_id,
-        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`,
+        label: `${formatVersionLabel(v.version)} · ${v.version_id.slice(0, 8)}…`,
       })),
     [items],
   );

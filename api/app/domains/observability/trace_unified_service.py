@@ -144,7 +144,10 @@ def build_unified_waterfall(
         step["end_offset_ms"] = end_offset_ms
         total_ms = max(total_ms, end_offset_ms)
 
-    raw.sort(key=lambda row: (row.get("offset_ms", 0), row.get("source") == "otel", str(row.get("label") or "")))
+    mlair_steps = [s for s in raw if s.get("source") == "mlair"]
+    otel_steps = [s for s in raw if s.get("source") == "otel"]
+    mlair_steps.sort(key=lambda row: (row.get("offset_ms", 0), str(row.get("label") or "")))
+    raw = mlair_steps + otel_steps
 
     mlair_count = sum(1 for s in raw if s.get("source") == "mlair")
     otel_count = sum(1 for s in raw if s.get("source") == "otel")

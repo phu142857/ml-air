@@ -8,6 +8,7 @@ import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { fetchDatasetVersionDiff, type DatasetVersionItem } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 type Props = {
   tenantId: string;
@@ -30,7 +31,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
 
   const options = versions.map((v) => ({
     value: v.version_id,
-    label: `v${v.version} · ${v.record_count ?? 0} rows`,
+    label: `${formatVersionLabel(v.version)} · ${v.record_count ?? 0} rows`,
   }));
 
   const diffQuery = useQuery({
@@ -97,7 +98,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
       {compare && diffQuery.data ? (
         <div className="mt-4 grid gap-3 text-xs md:grid-cols-2">
           <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-            <p className="mb-1 font-semibold text-foreground">From v{diffQuery.data.from.version}</p>
+            <p className="mb-1 font-semibold text-foreground">From {formatVersionLabel(diffQuery.data.from.version)}</p>
             <p className="text-muted-foreground">{diffQuery.data.from.record_count} rows</p>
             <p className="truncate font-mono text-[10px] text-muted-foreground" title={diffQuery.data.from.checksum || ""}>
               {diffQuery.data.from.checksum || "—"}
@@ -105,7 +106,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
             <p className="text-muted-foreground">{formatDateTimeCompact(diffQuery.data.from.created_at)}</p>
           </div>
           <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-            <p className="mb-1 font-semibold text-foreground">To v{diffQuery.data.to.version}</p>
+            <p className="mb-1 font-semibold text-foreground">To {formatVersionLabel(diffQuery.data.to.version)}</p>
             <p className="text-muted-foreground">{diffQuery.data.to.record_count} rows</p>
             <p className="truncate font-mono text-[10px] text-muted-foreground" title={diffQuery.data.to.checksum || ""}>
               {diffQuery.data.to.checksum || "—"}

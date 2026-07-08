@@ -20,6 +20,7 @@ import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { mlairKeys } from "@/lib/query-keys";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 type Props = {
   open: boolean;
@@ -109,7 +110,7 @@ export function PipelineConfigEditorDialog({
     },
     onSuccess: async (created) => {
       setSaveErr("");
-      toastSuccess("Pipeline version published", created?.version != null ? `v${created.version}` : undefined);
+      toastSuccess("Pipeline version published", created?.version != null ? formatVersionLabel(created.version) : undefined);
       await qc.invalidateQueries({ queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId) });
       onOpenChange(false);
     },
@@ -130,13 +131,13 @@ export function PipelineConfigEditorDialog({
             {allowCreateVersion ? (
               <span>New immutable version from the JSON below.</span>
             ) : activeVersion ? (
-              `Version v${activeVersion.version} · ${formatDateTimeCompact(activeVersion.created_at)} · ${activeVersion.version_id}`
+              `Version ${formatVersionLabel(activeVersion.version)} · ${formatDateTimeCompact(activeVersion.created_at)} · ${activeVersion.version_id}`
             ) : (
               "Loading versions…"
             )}
             {latest ? (
               <span className="mt-1 block text-[11px]">
-                Runs use the <strong>latest</strong> config version (v{latest.version}) unless a run pins an older version.
+                Runs use the <strong>latest</strong> config version ({formatVersionLabel(latest.version)}) unless a run pins an older version.
               </span>
             ) : null}
           </DialogDescription>
@@ -156,7 +157,7 @@ export function PipelineConfigEditorDialog({
               {allowCreateVersion ? <option value="">— new draft —</option> : null}
               {items.map((v) => (
                 <option key={v.version_id} value={v.version_id}>
-                  v{v.version}
+                  {formatVersionLabel(v.version)}
                   {v.version_id === latest?.version_id ? " (latest)" : ""}
                 </option>
               ))}

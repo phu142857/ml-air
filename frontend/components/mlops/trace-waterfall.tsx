@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
@@ -22,19 +23,6 @@ export function formatWaterfallDuration(ms: number | null | undefined): string {
     return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(2)}s`;
   }
   return formatRuntimeSeconds(sec);
-}
-
-function formatStartedClock(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).format(new Date(iso));
-  } catch {
-    return formatDateTimeCompact(iso);
-  }
 }
 
 function niceGridInterval(totalMs: number): number {
@@ -144,121 +132,17 @@ type RowModel = TraceWaterfallStep & {
   isRun: boolean;
 };
 
+type SectionModel = {
+  id: string;
+  title: string;
+  count: number;
+  rows: RowModel[];
+};
+
 function sourceBadge(source?: string): string | null {
   if (source === "mlair") return "MLAir";
   if (source === "otel") return "OTLP";
   return null;
-}
-
-function SpanDetailPanel({ step }: { step: TraceWaterfallStep }) {
-  const attrs = step.attributes && Object.keys(step.attributes).length > 0 ? step.attributes : null;
-  const badge = sourceBadge(step.source);
-  return (
-    <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">{step.label}</p>
-          <p className="font-mono text-[10px] text-muted-foreground">{step.id}</p>
-        </div>
-        {badge ? (
-          <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {badge}
-          </span>
-        ) : null}
-      </div>
-      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-        <div>
-          <dt className="text-muted-foreground">Status</dt>
-          <dd className="font-medium uppercase">{normalizeStatus(step.status)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Duration</dt>
-          <dd className="font-mono">{formatWaterfallDuration(step.duration_ms ?? step.width_ms)}</dd>
-        </div>
-        {step.service ? (
-          <div>
-            <dt className="text-muted-foreground">Service</dt>
-            <dd className="font-mono">{step.service}</dd>
-          </div>
-        ) : null}
-        {step.run_id ? (
-          <div>
-            <dt className="text-muted-foreground">Run</dt>
-            <dd>
-              <Link href={`/runs/${encodeURIComponent(step.run_id)}`} className="link-primary font-mono">
-                {step.run_id.slice(0, 12)}…
-              </Link>
-            </dd>
-          </div>
-        ) : null}
-        {step.task_id ? (
-          <div>
-            <dt className="text-muted-foreground">Task</dt>
-            <dd>
-              <Link href={`/tasks/${encodeURIComponent(step.task_id)}`} className="link-primary font-mono">
-                {String(step.task_id).slice(0, 12)}…
-              </Link>
-            </dd>
-          </div>
-        ) : null}
-      </dl>
-      {attrs ? (
-        <pre className="mt-3 max-h-40 overflow-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-[10px] text-foreground">
-          {JSON.stringify(attrs, null, 2)}
-        </pre>
-      ) : null}
-    </div>
-  );
-}
-
-function WaterfallSummaryCard({
-  waterfall,
-  variant = "run",
-}: {
-  waterfall: TraceWaterfall;
-  variant?: "run" | "otel" | "unified";
-}) {
-  return (
-    <div className="rounded-xl border border-border/70 bg-muted/15 px-4 py-3">
-      <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-        {variant === "otel" ? (
-          waterfall.pipeline_id ? (
-            <div className="flex min-w-0 gap-2 sm:col-span-2">
-              <dt className="shrink-0 text-muted-foreground">Services</dt>
-              <dd className="truncate font-mono text-foreground">{waterfall.pipeline_id}</dd>
-            </div>
-          ) : null
-        ) : waterfall.pipeline_id ? (
-          <div className="flex min-w-0 gap-2">
-            <dt className="shrink-0 text-muted-foreground">Pipeline</dt>
-            <dd className="truncate font-mono text-foreground">{waterfall.pipeline_id}</dd>
-          </div>
-        ) : null}
-        {variant === "unified" ? (
-          <div className="flex min-w-0 gap-2 sm:col-span-2">
-            <dt className="shrink-0 text-muted-foreground">Layers</dt>
-            <dd className="font-mono text-foreground">
-              {waterfall.mlair_count ?? 0} MLAir · {waterfall.otel_count ?? 0} OTLP
-            </dd>
-          </div>
-        ) : null}
-        <div className="flex min-w-0 gap-2">
-          <dt className="shrink-0 text-muted-foreground">
-            {variant === "otel" ? "Trace" : variant === "unified" ? "Trace" : "Run"}
-          </dt>
-          <dd className="min-w-0 truncate font-mono text-foreground">{waterfall.run_id.slice(0, 12)}…</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="shrink-0 text-muted-foreground">Started</dt>
-          <dd className="font-mono tabular-nums text-foreground">{formatStartedClock(waterfall.anchor_ts)}</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="shrink-0 text-muted-foreground">Duration</dt>
-          <dd className="font-mono tabular-nums text-foreground">{formatWaterfallDuration(waterfall.total_ms)}</dd>
-        </div>
-      </dl>
-    </div>
-  );
 }
 
 function TimelineGridOverlay({ ticks, scaleMs }: { ticks: number[]; scaleMs: number }) {
@@ -426,14 +310,11 @@ function WaterfallRow({
 export function TraceWaterfallView({
   waterfall,
   variant = "run",
-  selectedStepId = null,
-  onStepSelect,
 }: {
   waterfall: TraceWaterfall;
   variant?: "run" | "otel" | "unified";
-  selectedStepId?: string | null;
-  onStepSelect?: (step: TraceWaterfallStep) => void;
 }) {
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const scaleMs = Math.max(waterfall.total_ms, 1);
   const gridTicks = useMemo(() => buildGridTicks(scaleMs), [scaleMs]);
 
@@ -474,10 +355,41 @@ export function TraceWaterfallView({
     return out;
   }, [variant, waterfall.steps]);
 
-  const selectedStep = useMemo(
-    () => waterfall.steps.find((s) => s.id === selectedStepId) ?? null,
-    [selectedStepId, waterfall.steps],
-  );
+  const handleStepSelect = (step: TraceWaterfallStep) => {
+    setSelectedStepId((prev) => (prev === step.id ? null : step.id));
+  };
+
+  const sections = useMemo<SectionModel[]>(() => {
+    if (variant !== "unified") {
+      return [{ id: "all", title: "", count: rows.length, rows }];
+    }
+    const mlairRows = rows.filter((row) => row.source === "mlair");
+    const otelRows = rows.filter((row) => row.source === "otel");
+    const out: SectionModel[] = [];
+    if (mlairRows.length) {
+      out.push({
+        id: "mlair",
+        title: "Orchestration (MLAir)",
+        count: mlairRows.length,
+        rows: mlairRows,
+      });
+    }
+    if (otelRows.length) {
+      out.push({
+        id: "otel",
+        title: "Technical spans (OTLP)",
+        count: otelRows.length,
+        rows: otelRows,
+      });
+    }
+    return out.length ? out : [{ id: "all", title: "", count: rows.length, rows }];
+  }, [rows, variant]);
+
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -489,8 +401,6 @@ export function TraceWaterfallView({
       `}</style>
 
       <div className="space-y-3">
-        <WaterfallSummaryCard waterfall={waterfall} variant={variant} />
-
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div
             className={cn(
@@ -515,20 +425,43 @@ export function TraceWaterfallView({
             {rows.length === 0 ? (
               <p className="px-3 py-6 text-sm text-muted-foreground">No spans recorded for this trace.</p>
             ) : (
-              rows.map((step) => (
-                <WaterfallRow
-                  key={`${step.source || "x"}-${step.id}`}
-                  step={step}
-                  scaleMs={scaleMs}
-                  selected={selectedStepId === step.id}
-                  onSelect={onStepSelect}
-                />
-              ))
+              sections.map((section) => {
+                const collapsed = Boolean(collapsedSections[section.id]);
+                const showHeader = variant === "unified" && section.title;
+                return (
+                  <div key={section.id}>
+                    {showHeader ? (
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 border-b border-border/60 bg-muted/25 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/40"
+                        onClick={() => toggleSection(section.id)}
+                      >
+                        <ChevronDown
+                          className={cn("h-3.5 w-3.5 shrink-0 transition-transform", collapsed && "-rotate-90")}
+                        />
+                        <span>{section.title}</span>
+                        <span className="font-mono text-[10px] font-normal normal-case text-muted-foreground/80">
+                          {section.count}
+                        </span>
+                      </button>
+                    ) : null}
+                    {!collapsed
+                      ? section.rows.map((step) => (
+                          <WaterfallRow
+                            key={`${step.source || "x"}-${step.id}`}
+                            step={step}
+                            scaleMs={scaleMs}
+                            selected={selectedStepId === step.id}
+                            onSelect={handleStepSelect}
+                          />
+                        ))
+                      : null}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
-
-        {selectedStep && onStepSelect ? <SpanDetailPanel step={selectedStep} /> : null}
 
         {rows.length <= 1 ? (
           <p className="text-xs text-muted-foreground">No tasks recorded for this run yet.</p>

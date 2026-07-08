@@ -1,18 +1,19 @@
 "use client"
 
-import { useMemo } from "react"
+import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   CartesianGrid,
   Legend,
   Line,
   LineChart,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts"
-import { ExternalLink, Activity, Cpu } from "lucide-react"
+import { ExternalLink, Activity, Cpu, Search } from "lucide-react"
 
 import { MetadataGrid, MlopsEmptyState } from "@/components/mlops/layout"
 import { Button } from "@/components/ui/button"
@@ -139,6 +140,40 @@ export function RunResourceTimeline({
   const showGpu = useMemo(() => hasGpuSeries(samples), [samples])
   const showPower = useMemo(() => hasPowerSeries(samples), [samples])
 
+  // Box zoom (drag to zoom) on the elapsed-time X axis, like Grafana.
+  const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null)
+  const [refAreaRight, setRefAreaRight] = useState<number | null>(null)
+  const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null)
+
+  const handleZoomMouseDown = useCallback((e: { activeLabel?: string | number } | null) => {
+    if (e?.activeLabel == null) return
+    setRefAreaLeft(Number(e.activeLabel))
+    setRefAreaRight(null)
+  }, [])
+
+  const handleZoomMouseMove = useCallback(
+    (e: { activeLabel?: string | number } | null) => {
+      if (refAreaLeft == null || e?.activeLabel == null) return
+      setRefAreaRight(Number(e.activeLabel))
+    },
+    [refAreaLeft],
+  )
+
+  const handleZoomMouseUp = useCallback(() => {
+    if (refAreaLeft == null || refAreaRight == null || refAreaLeft === refAreaRight) {
+      setRefAreaLeft(null)
+      setRefAreaRight(null)
+      return
+    }
+    const left = Math.min(refAreaLeft, refAreaRight)
+    const right = Math.max(refAreaLeft, refAreaRight)
+    setZoomDomain([left, right])
+    setRefAreaLeft(null)
+    setRefAreaRight(null)
+  }, [refAreaLeft, refAreaRight])
+
+  const resetZoom = useCallback(() => setZoomDomain(null), [])
+
   const samplePeaks = useMemo(() => computeUsagePeaksFromSamples(samples), [samples])
   const peakUsage: UsageSampleStats | undefined = isAll
     ? runUsage ?? samplePeaks
@@ -210,12 +245,33 @@ export function RunResourceTimeline({
           description="Samples appear while tasks run (heartbeat flush) and after task complete. Run a training job for 10+ seconds to populate the chart."
         />
       ) : (
-        <div className="h-[min(360px,45vh)] w-full rounded-lg border border-border/70 bg-card/40 p-2">
+        <div className="relative h-[min(360px,45vh)] w-full select-none rounded-lg border border-border/70 bg-card/40 p-2">
+          {zoomDomain ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={resetZoom}
+              className="absolute bottom-3 right-3 z-10 h-7 border-border bg-card/90 px-2 text-xs backdrop-blur"
+            >
+              <Search className="mr-1 h-3.5 w-3.5" />
+              Reset zoom
+            </Button>
+          ) : null}
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+              onMouseDown={handleZoomMouseDown}
+              onMouseMove={handleZoomMouseMove}
+              onMouseUp={handleZoomMouseUp}
+              onMouseLeave={handleZoomMouseUp}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
               <XAxis
                 dataKey="elapsed"
+                type="number"
+                domain={zoomDomain ?? ["dataMin", "dataMax"]}
+                allowDataOverflow
                 stroke={chartTheme.axisStroke}
                 tick={{ fontSize: 11 }}
                 label={{ value: "Elapsed (s)", position: "insideBottom", offset: -2, fontSize: 11 }}
@@ -250,6 +306,16 @@ export function RunResourceTimeline({
                   <Line yAxisId="left" type="monotone" dataKey="power" name="GPU power W" stroke={CHART_COLORS.power} dot={false} strokeWidth={2} isAnimationActive={false} />
                   <Line yAxisId="right" type="monotone" dataKey="temp" name="GPU temp °C" stroke={CHART_COLORS.temp} dot={false} strokeWidth={2} isAnimationActive={false} />
                 </>
+              ) : null}
+              {refAreaLeft != null && refAreaRight != null ? (
+                <ReferenceArea
+                  yAxisId="left"
+                  x1={refAreaLeft}
+                  x2={refAreaRight}
+                  strokeOpacity={0.3}
+                  fill={chartTheme.axisStroke}
+                  fillOpacity={0.12}
+                />
               ) : null}
             </LineChart>
           </ResponsiveContainer>

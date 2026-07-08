@@ -28,6 +28,7 @@ import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { useAppContext } from "@/lib/app-context";
 import { formatRelativeTime } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 export default function PipelineDetailPage() {
   const params = useParams<{ pipelineId: string }>();
@@ -88,7 +89,7 @@ export default function PipelineDetailPage() {
     () =>
       versionItems.map((v) => ({
         value: v.version_id,
-        label: `v${v.version}${v.version_id === latestConfigVersion?.version_id ? " (latest)" : ""}`,
+        label: `${formatVersionLabel(v.version)}${v.version_id === latestConfigVersion?.version_id ? " (latest)" : ""}`,
       })),
     [versionItems, latestConfigVersion?.version_id],
   );
@@ -122,7 +123,7 @@ export default function PipelineDetailPage() {
 
   const pageSubtitle = [
     pipelineId,
-    selectedConfigVersion ? `config v${selectedConfigVersion.version}` : null,
+    selectedConfigVersion ? `config ${formatVersionLabel(selectedConfigVersion.version)}` : null,
     headerSubtitle,
   ]
     .filter(Boolean)

@@ -1,6 +1,7 @@
 import { apiDagToMockPipeline, mapNodeStatus, type ApiPipelineDag } from "./adapt-pipeline-dag";
 import type { Pipeline } from "./pipeline-types";
 import type { RunExecutionGraph, PipelineTopology } from "./execution-graph-types";
+import { formatVersionLabel } from "./version-label";
 
 /** Static topology → Pipeline with all stages idle (observability pages). */
 export function topologyToPipeline(topology: PipelineTopology): Pipeline {
@@ -14,7 +15,7 @@ export function topologyToPipeline(topology: PipelineTopology): Pipeline {
     edges: topology.edges || [],
   };
   const version =
-    topology.version != null ? `v${topology.version}` : topology.pipeline_version_id?.slice(0, 8) ?? "config";
+    topology.version != null ? formatVersionLabel(topology.version) : topology.pipeline_version_id?.slice(0, 8) ?? "config";
   const p = apiDagToMockPipeline(topology.pipeline_id, dag);
   return { ...p, version, status: "idle" };
 }

@@ -984,13 +984,6 @@ export type TraceSearchResponse = {
   count: number;
 };
 
-export type TraceLogFilter = {
-  task_id?: string | null;
-  run_id?: string | null;
-  span_id?: string | null;
-  label?: string | null;
-};
-
 export type TraceDetailResponse = {
   trace_id: string;
   runs: TraceDetailRun[];

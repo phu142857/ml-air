@@ -20,6 +20,7 @@ import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/
 import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { formatRelativeTime, formatApiClientError } from "@/lib/utils"
+import { formatVersionLabel } from "@/lib/version-label"
 import { useAppContext } from "@/lib/app-context"
 import { createModel, type ModelItem } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
@@ -43,7 +44,7 @@ const modelColumns: DataTableColumn<ModelItem>[] = [
         <span className="text-muted-foreground">{m.model_id}</span>
         {m.production_version != null ? (
           <span className="rounded-full border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-1.5 py-0.5 text-[color:var(--status-success-fg)]">
-            v{m.production_version}
+            {formatVersionLabel(m.production_version)}
           </span>
         ) : null}
       </span>

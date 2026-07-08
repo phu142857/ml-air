@@ -32,6 +32,7 @@ import { fetchTenantQuotas, fetchTenantQuotaUsage, upsertTenantQuotas } from "@/
 import { switchScopeWithRetry } from "@/lib/scope-switch"
 import { useToast } from "@/hooks/use-toast"
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions"
+import { formatVersionLabel } from "@/lib/version-label"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_TABS = ["runtime", "api", "scope", "governance", "plugins", "design-tokens"] as const
@@ -268,7 +269,7 @@ function SettingsPageContent() {
                     {tenantId} <span className="text-muted-foreground/80">/</span> {projectId}
                   </div>
                   <div className="mt-1 text-[10px] text-muted-foreground">
-                    mapping v{mappingVersion} · <span className="font-mono">{bootstrapSource}</span>
+                    mapping {formatVersionLabel(mappingVersion)} · <span className="font-mono">{bootstrapSource}</span>
                     {!isBootstrapped ? " · resolving…" : null}
                   </div>
                   <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/80">

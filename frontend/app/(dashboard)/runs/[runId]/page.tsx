@@ -500,51 +500,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     return map
   }, [usageQuery.data?.live])
 
-  const runOverviewMetadataItems = useMemo(() => {
-    if (!run) return []
-    const scopeMatches =
-      canScope &&
-      String(run.tenant_id || "").trim() === String(tenantId || "").trim() &&
-      normalizeProjectId(String(run.project_id || "")) === normalizeProjectId(String(projectId || ""))
-    const items: Array<{ label: string; value: ReactNode; mono?: boolean }> = [
-      { label: "Run ID", value: run.run_id, mono: true },
-      { label: "Pipeline", value: run.pipeline_id, mono: true },
-    ]
-    if (!scopeMatches) {
-      items.push({
-        label: "Tenant / project",
-        value: `${run.tenant_id} / ${run.project_id}`,
-        mono: true,
-      })
-    }
-    items.push(
-      {
-        label: "Status",
-        value: <StatusBadge status={statusToMlopsBadge(run.status)} label={status.label} />,
-      },
-      {
-        label: "Created",
-        value: run.created_at ? formatDateTimeCompact(run.created_at) : "—",
-        mono: true,
-      },
-      {
-        label: "Updated",
-        value: run.updated_at ? formatDateTimeCompact(run.updated_at) : "—",
-        mono: true,
-      },
-      { label: "Duration", value: runDuration(run) },
-      {
-        label: "Trace",
-        value: traceId ? (
-          <TraceLink traceId={traceId} variant="link" />
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-      },
-    )
-    return items
-  }, [run, canScope, tenantId, projectId, status.label, traceId])
-
   const runEnvironmentMetadataItems = useMemo(() => {
     const env = run?.environment
     if (!env || typeof env !== "object") return []
@@ -726,13 +681,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               </div>
             ) : run ? (
               <>
-                <DetailSection
-                  title="Run metadata"
-                  accentBorder="sky"
-                >
-                  <MetadataGrid columns={2} items={runOverviewMetadataItems} />
-                </DetailSection>
-
                 {runEnvironmentMetadataItems.length > 0 ? (
                   <DetailSection title="Environment" accentBorder="sky">
                     <MetadataGrid columns={2} items={runEnvironmentMetadataItems} />

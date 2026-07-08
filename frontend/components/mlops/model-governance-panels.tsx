@@ -12,6 +12,7 @@ import {
 import { useAuditTimelineInfinite } from "@/hooks/use-audit-timeline-infinite";
 import { mlairKeys } from "@/lib/query-keys";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 type Scope = {
   tenantId: string;
@@ -22,13 +23,13 @@ type Scope = {
 
 function governanceEventLabel(kind: string, payload: Record<string, unknown>): string {
   if (kind === "model.version.stage_updated") {
-    return `Stage → ${String(payload.stage || "—")} (v${payload.version ?? "?"})`;
+    return `Stage → ${String(payload.stage || "—")} (${formatVersionLabel(payload.version as string | number | null | undefined, "?")})`;
   }
   if (kind === "model.version.approval_updated") {
-    return `Approval ${String(payload.approval_status || "—")} (v${payload.version ?? "?"})`;
+    return `Approval ${String(payload.approval_status || "—")} (${formatVersionLabel(payload.version as string | number | null | undefined, "?")})`;
   }
   if (kind === "model.version.created") {
-    return `Version created v${payload.version ?? "?"} in ${String(payload.stage || "staging")}`;
+    return `Version created ${formatVersionLabel(payload.version as string | number | null | undefined, "?")} in ${String(payload.stage || "staging")}`;
   }
   return kind.replace(/\./g, " · ");
 }
@@ -71,7 +72,7 @@ export function ModelStageTimeline({
         {
           id: `created-${v.version_id}`,
           at: v.created_at,
-          label: `Registered v${v.version} (${v.stage})`,
+          label: `Registered ${formatVersionLabel(v.version)} (${v.stage})`,
           source: "version",
         },
       ];
@@ -79,7 +80,7 @@ export function ModelStageTimeline({
         items.push({
           id: `stage-${v.version_id}`,
           at: v.stage_updated_at,
-          label: `Stage → ${v.stage} (v${v.version})`,
+          label: `Stage → ${v.stage} (${formatVersionLabel(v.version)})`,
           source: "version",
         });
       }
@@ -179,7 +180,7 @@ export function ModelApprovalHistory({
         <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 bg-muted/20 px-3 py-2 text-xs">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-            <span className="font-mono">v{r.version}</span>
+            <span className="font-mono">{formatVersionLabel(r.version)}</span>
             <span className="rounded-full border border-border px-1.5 py-0.5 font-medium capitalize">{r.status}</span>
           </div>
           <div className="text-right text-muted-foreground">
@@ -207,7 +208,7 @@ export function ModelVersionComparePanel({
 
   const options = versions.map((v) => ({
     value: String(v.version),
-    label: `v${v.version} · ${v.stage}`,
+    label: `${formatVersionLabel(v.version)} · ${v.stage}`,
   }));
 
   const left = versions.find((v) => v.version === leftVer) ?? null;
@@ -279,8 +280,8 @@ export function ModelVersionComparePanel({
             <thead>
               <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
                 <th className="px-3 py-2 font-medium">Field</th>
-                <th className="px-3 py-2 font-medium">v{left.version}</th>
-                <th className="px-3 py-2 font-medium">v{right.version}</th>
+                <th className="px-3 py-2 font-medium">{formatVersionLabel(left.version)}</th>
+                <th className="px-3 py-2 font-medium">{formatVersionLabel(right.version)}</th>
               </tr>
             </thead>
             <tbody>

@@ -25,13 +25,14 @@ def ensure_worker_tracing(*, service_name: str) -> None:
     from opentelemetry.sdk.resources import SERVICE_NAME, Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
+    from sdk.mlair_trace.db_exporter import DbSpanExporter
 
     set_global_textmap(TraceContextTextMapPropagator())
     resource = Resource.create({SERVICE_NAME: service_name})
     provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    provider.add_span_processor(BatchSpanProcessor(DbSpanExporter()))
     trace.set_tracer_provider(provider)
     _provider_set = True
     logger.info("otel_worker_tracing_started service=%s", service_name)

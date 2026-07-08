@@ -228,8 +228,6 @@ def to_env_mapping(cfg: dict[str, Any]) -> dict[str, str]:
         env["ML_AIR_RUNTIME_REALTIME_BASE_URL"] = str(observability["realtime_ws"])
     if observability.get("otel_enabled") is not None:
         env["ML_AIR_OTEL_ENABLED"] = _bool_env(observability["otel_enabled"])
-    if observability.get("otel_exporter_otlp_endpoint"):
-        env["OTEL_EXPORTER_OTLP_ENDPOINT"] = str(observability["otel_exporter_otlp_endpoint"])
 
     auth = cfg.get("auth") if isinstance(cfg.get("auth"), dict) else {}
     if auth.get("tracking_token"):

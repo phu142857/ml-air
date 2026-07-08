@@ -7,6 +7,7 @@ import { GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchModelProvenance } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
+import { formatVersionLabel } from "@/lib/version-label";
 
 type Props = {
   tenantId: string;
@@ -53,7 +54,7 @@ export function ModelProvenancePanel({ tenantId, projectId, modelId, token, vers
             <li className="rounded-lg border border-border/60 bg-background/60 p-2">
               <span className="font-semibold text-foreground">Version</span>
               <div className="text-muted-foreground">
-                v{provQuery.data.model_version.version} · {provQuery.data.model_version.stage || "none"}
+                {formatVersionLabel(provQuery.data.model_version.version)} · {provQuery.data.model_version.stage || "none"}
               </div>
             </li>
           ) : (

@@ -34,7 +34,6 @@ class TestRuntimeConfigObservability(unittest.TestCase):
         obs = out.get("observability", {})
         allowed = {
             "grafana_ui_url",
-            "tempo_query_enabled",
             "semantic_observability_index",
             "semantic_observability_surfaces",
         }

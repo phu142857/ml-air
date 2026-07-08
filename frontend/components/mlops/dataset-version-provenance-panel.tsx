@@ -8,6 +8,7 @@ import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { fetchDatasetVersionProvenance, type DatasetVersionItem } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 
 type Props = {
   tenantId: string;
@@ -23,7 +24,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
 
   const options = versions.map((v) => ({
     value: v.version_id,
-    label: `v${v.version} · ${v.record_count ?? 0} rows`,
+    label: `${formatVersionLabel(v.version)} · ${v.record_count ?? 0} rows`,
   }));
 
   const provQuery = useQuery({
@@ -64,7 +65,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
           <div className="rounded-lg border border-border/60 bg-background/60 p-2">
             <span className="font-semibold text-foreground">Snapshot</span>
             <div className="text-muted-foreground">
-              v{provQuery.data.version.version} · {provQuery.data.version.record_count ?? 0} rows ·{" "}
+              {formatVersionLabel(provQuery.data.version.version)} · {provQuery.data.version.record_count ?? 0} rows ·{" "}
               {formatDateTimeCompact(provQuery.data.version.created_at)}
             </div>
             <div className="font-mono text-[10px] text-muted-foreground">
@@ -116,7 +117,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
               <ul className="mt-1 space-y-1 text-muted-foreground">
                 {provQuery.data.input_versions.map((v) => (
                   <li key={v.version_id}>
-                    {v.dataset_name || "dataset"} v{v.version} ({v.record_count} rows)
+                    {v.dataset_name || "dataset"} {formatVersionLabel(v.version)} ({v.record_count} rows)
                   </li>
                 ))}
               </ul>

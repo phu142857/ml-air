@@ -11,6 +11,7 @@ import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/
 import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
+import { formatVersionLabel } from "@/lib/version-label"
 import { useAppContext } from "@/lib/app-context"
 import { fetchPipelineVersions } from "@/lib/api"
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config"
@@ -259,7 +260,7 @@ export default function PipelinesPage() {
                             className="shrink-0 border-amber-500/30 font-mono text-[10px] text-[color:var(--status-pending-fg)]"
                             title="Latest published config version (used for new runs)"
                           >
-                            v{configVer}
+                            {formatVersionLabel(configVer)}
                           </Badge>
                         ) : versionQueries[index]?.isLoading ? (
                           <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
@@ -318,7 +319,7 @@ export default function PipelinesPage() {
                         {selected?.pipeline_id || displayPipeline.id}
                         {selectedId && latestConfigVersionByPipeline.get(selectedId) != null ? (
                           <span className="ml-2 font-mono text-sm font-normal text-[color:var(--status-pending-fg)]">
-                            · config v{latestConfigVersionByPipeline.get(selectedId)}
+                            · config {formatVersionLabel(latestConfigVersionByPipeline.get(selectedId))}
                           </span>
                         ) : null}
                       </h2>

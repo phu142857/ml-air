@@ -23,7 +23,7 @@ class TestTraceIdNormalization(unittest.TestCase):
 
 
 class TestTraceDetailService(unittest.TestCase):
-    @patch("app.domains.observability.trace_detail_service.fetch_tempo_trace")
+    @patch("app.domains.observability.trace_detail_service.fetch_stored_trace")
     @patch("app.domains.observability.trace_detail_service._build_waterfall")
     @patch("app.domains.observability.trace_detail_service._fetch_logs_for_runs")
     @patch("app.domains.observability.trace_detail_service._fetch_audit_for_runs")
@@ -36,7 +36,7 @@ class TestTraceDetailService(unittest.TestCase):
         mock_audit: MagicMock,
         mock_logs: MagicMock,
         mock_waterfall: MagicMock,
-        mock_tempo: MagicMock,
+        mock_stored: MagicMock,
     ) -> None:
         mock_runs.return_value = [
             {
@@ -102,7 +102,7 @@ class TestTraceDetailService(unittest.TestCase):
             ],
         }
 
-        mock_tempo.return_value = {
+        mock_stored.return_value = {
             "trace_id": "abc123",
             "anchor_ts": "2026-01-01T00:00:00+00:00",
             "total_ms": 100,
@@ -126,7 +126,7 @@ class TestTraceDetailService(unittest.TestCase):
         self.assertEqual(detail["otel_span_count"], 1)
         self.assertIsNotNone(detail.get("unified_waterfall"))
         self.assertFalse(detail.get("is_live"))
-        mock_tempo.assert_called_once()
+        mock_stored.assert_called_once()
         mock_audit.assert_called_once_with(tenant_id="t1", project_id="p1", run_ids=["run-1"])
         mock_logs.assert_called_once_with(["run-1"])
         mock_waterfall.assert_called_once_with("run-1")
@@ -237,12 +237,12 @@ class TestTraceDetailService(unittest.TestCase):
         mock_page.assert_called_once_with("run-1", limit=500, tail=True)
 
 
-    @patch("app.domains.observability.trace_detail_service.search_tempo_traces")
+    @patch("app.domains.observability.trace_detail_service.search_stored_traces")
     @patch("app.domains.observability.trace_detail_service._search_traces_db")
-    def test_search_traces_merges_db_and_tempo(
+    def test_search_traces_merges_db_and_spans(
         self,
         mock_db: MagicMock,
-        mock_tempo: MagicMock,
+        mock_spans: MagicMock,
     ) -> None:
         mock_db.return_value = [
             {
@@ -254,20 +254,20 @@ class TestTraceDetailService(unittest.TestCase):
                 "duration_ms": None,
             }
         ]
-        mock_tempo.return_value = [
+        mock_spans.return_value = [
             {
                 "trace_id": "abc123def456",
                 "root_service": "mlair-api",
                 "root_name": "GET /runs",
                 "duration_ms": 42,
-                "source": "tempo",
+                "source": "spans",
             },
             {
                 "trace_id": "othertrace9999",
                 "root_service": "mlair-scheduler",
                 "root_name": "consume",
                 "duration_ms": 10,
-                "source": "tempo",
+                "source": "spans",
             },
         ]
 
@@ -280,7 +280,7 @@ class TestTraceDetailService(unittest.TestCase):
 
         self.assertEqual(out["count"], 2)
         by_id = {row["trace_id"]: row for row in out["items"]}
-        self.assertEqual(by_id["abc123def456"]["source"], "mlair+tempo")
+        self.assertEqual(by_id["abc123def456"]["source"], "mlair+spans")
         self.assertEqual(by_id["abc123def456"]["root_service"], "mlair-api")
         self.assertIn("othertrace9999", by_id)
 

@@ -63,6 +63,7 @@ import {
 } from "@/lib/model-governance-ui";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
@@ -215,7 +216,7 @@ export default function ModelDetailPage() {
       { value: "", label: "Select version" },
       ...items.map((v) => ({
         value: v.version_id,
-        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`,
+        label: `${formatVersionLabel(v.version)} · ${v.version_id.slice(0, 8)}…`,
       })),
     ];
   }, [triggerVersionsQuery.data?.items]);
@@ -241,7 +242,7 @@ export default function ModelDetailPage() {
       { value: "", label: "Select version" },
       ...allVersions.map((v) => ({
         value: String(v.version),
-        label: `v${v.version}${v.stage ? ` · ${v.stage}` : ""}${v.approval_status ? ` · ${v.approval_status}` : ""}`,
+        label: `${formatVersionLabel(v.version)}${v.stage ? ` · ${v.stage}` : ""}${v.approval_status ? ` · ${v.approval_status}` : ""}`,
       })),
     ],
     [allVersions],
@@ -264,7 +265,7 @@ export default function ModelDetailPage() {
       promoteModelVersion(tenantId, projectId, modelId, token, { version, stage }),
     onSuccess: async (_data, { version, stage }) => {
       setVersionBanner("");
-      toastSuccess(`Promoted to ${stage}`, `Version v${version}`);
+      toastSuccess(`Promoted to ${stage}`, `Version ${formatVersionLabel(version)}`);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
     onError: (e: unknown) => {
@@ -291,7 +292,7 @@ export default function ModelDetailPage() {
       setVersionBanner("");
       toastSuccess(
         approval_status === "approved" ? "Version approved" : "Version rejected",
-        `v${version}`,
+        formatVersionLabel(version),
       );
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
@@ -307,7 +308,7 @@ export default function ModelDetailPage() {
       setModelServingSlot(tenantId, projectId, modelId, p.slot, token, { version: p.version }),
     onSuccess: async (_data, { slot, version }) => {
       setVersionBanner("");
-      toastSuccess("Serving slot updated", `${slot} → v${version}`);
+      toastSuccess("Serving slot updated", `${slot} → ${formatVersionLabel(version)}`);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.serving(tenantId, projectId, modelId) });
     },
     onError: (e: unknown) => {
@@ -354,7 +355,7 @@ export default function ModelDetailPage() {
   const deleteVersionMutation = useMutation({
     mutationFn: (version: number) => deleteModelVersion(tenantId, projectId, modelId, version, token),
     onSuccess: async (_data, version) => {
-      toastSuccess("Version deleted", `v${version}`);
+      toastSuccess("Version deleted", formatVersionLabel(version));
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
     onError: (e: unknown) => toastError("Delete failed", formatApiClientError(e)),
@@ -402,7 +403,7 @@ export default function ModelDetailPage() {
       {
         id: "version",
         header: "Version",
-        cell: (v) => <span className="font-mono text-sm">v{v.version}</span>,
+        cell: (v) => <span className="font-mono text-sm">{formatVersionLabel(v.version)}</span>,
       },
       {
         id: "stage",
@@ -513,7 +514,7 @@ export default function ModelDetailPage() {
               onClick={() =>
                 openConfirm(
                   "Delete version",
-                  `Delete version v${v.version} of model "${model?.name || modelId}"?`,
+                  `Delete version ${formatVersionLabel(v.version)} of model "${model?.name || modelId}"?`,
                   async () => {
                     await deleteVersionMutation.mutateAsync(v.version);
                     setConfirmOpen(false);
@@ -626,7 +627,7 @@ export default function ModelDetailPage() {
                     <span className="font-mono text-xs">{modelId}</span>
                     {productionVersion != null ? (
                       <span className="rounded-full border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-1.5 py-0.5 text-[color:var(--status-success-fg)]">
-                        v{productionVersion}
+                        {formatVersionLabel(productionVersion)}
                       </span>
                     ) : null}
                   </span>
@@ -681,7 +682,7 @@ export default function ModelDetailPage() {
                     className="flex flex-wrap items-center gap-2 rounded border border-border px-2 py-2 text-xs"
                   >
                     <span className="font-medium capitalize text-foreground">{slot}</span>
-                    <span className="text-muted-foreground">{cur ? `v${cur.version}` : "—"}</span>
+                    <span className="text-muted-foreground">{cur ? formatVersionLabel(cur.version) : "—"}</span>
                     <SelectDropdown
                       value={servingSlotDraft[slot] ?? ""}
                       onChange={(value) => setServingSlotDraft((prev) => ({ ...prev, [slot]: value }))}

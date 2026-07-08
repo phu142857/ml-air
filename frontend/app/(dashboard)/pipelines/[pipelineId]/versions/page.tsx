@@ -7,6 +7,7 @@ import { GitBranch } from "lucide-react";
 import { usePipelineVersionsList } from "@/hooks/use-pipeline-versions-list";
 import { useAppContext } from "@/lib/app-context";
 import { formatDateTimeCompact } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 import {
   DetailSection,
   MlopsEmptyState,
@@ -49,7 +50,7 @@ export default function PipelineVersionsPage() {
       { value: "", label: "—" },
       ...items.map((v) => ({
         value: v.version_id,
-        label: `v${v.version} · ${v.version_id.slice(0, 8)}…`,
+        label: `${formatVersionLabel(v.version)} · ${v.version_id.slice(0, 8)}…`,
       })),
     ],
     [items],

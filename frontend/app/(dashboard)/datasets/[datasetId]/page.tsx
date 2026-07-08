@@ -90,6 +90,7 @@ import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
 import { cn, formatApiClientError, formatDateTimeCompact, formatRelativeTime } from "@/lib/utils";
+import { formatVersionLabel } from "@/lib/version-label";
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 
 /** Single accent for all dataset hub sections (matches list page + header). */
@@ -598,10 +599,10 @@ export default function DatasetHubPage() {
         ? []
         : items.slice(1).map((v) => ({
             value: v.version_id,
-            label: `v${v.version}`
+            label: formatVersionLabel(v.version),
           }));
     return [
-      { value: head.version_id, label: `Head snapshot (v${head.version})` },
+      { value: head.version_id, label: `Head snapshot (${formatVersionLabel(head.version)})` },
       ...older
     ];
   }, [versionsQuery.data?.items]);
@@ -659,7 +660,7 @@ export default function DatasetHubPage() {
     const lastVersionLabel = (() => {
       if (!lastVid) return "";
       const v = (versionsQuery.data?.items || []).find((x) => x.version_id === lastVid);
-      return v ? `v${v.version}` : `${lastVid.slice(0, 8)}…`;
+      return v ? formatVersionLabel(v.version) : `${lastVid.slice(0, 8)}…`;
     })();
     return { strat, cur, tgt, rowsToThreshold, lastVid, lastAt, lastVersionLabel };
   }, [bufferQuery.data, versionsQuery.data?.items]);
@@ -866,7 +867,7 @@ export default function DatasetHubPage() {
       {
         id: "version",
         header: "Version",
-        cell: (v) => <span className="whitespace-nowrap font-mono text-xs">{v.version}</span>,
+        cell: (v) => <span className="whitespace-nowrap font-mono text-xs">{formatVersionLabel(v.version)}</span>,
       },
       {
         id: "status",
@@ -1195,14 +1196,14 @@ export default function DatasetHubPage() {
               className="h-8 gap-1.5 border-border bg-card text-xs disabled:opacity-40"
               title={
                 lineageVersionRow
-                  ? `Open lineage for v${lineageVersionRow.version} (pinned dataset_version_id)`
+                  ? `Open lineage for ${formatVersionLabel(lineageVersionRow.version)} (pinned dataset_version_id)`
                   : undefined
               }
             >
               {selectedVersionForReadiness ? (
                 <Link href={`/lineage?datasetVersion=${encodeURIComponent(selectedVersionForReadiness)}`}>
                   <GitBranch className="h-3.5 w-3.5" />
-                  {lineageVersionRow ? `Lineage (v${lineageVersionRow.version})` : "Lineage"}
+                  {lineageVersionRow ? `Lineage (${formatVersionLabel(lineageVersionRow.version)})` : "Lineage"}
                 </Link>
               ) : (
                 <>
@@ -2050,7 +2051,7 @@ export default function DatasetHubPage() {
             </div>
             <DialogTitle>Dataset version preview</DialogTitle>
             <DialogDescription>
-              <span className="font-mono text-foreground">v{versionEditorLabel}</span>
+              <span className="font-mono text-foreground">{formatVersionLabel(versionEditorLabel)}</span>
               <span className="text-muted-foreground"> — scroll to load more; edit cells inline</span>
             </DialogDescription>
           </DialogHeader>
@@ -2115,7 +2116,7 @@ export default function DatasetHubPage() {
           <DialogHeader>
             <DialogTitle>Add version metadata</DialogTitle>
             <DialogDescription>
-              Append-only merge for <span className="font-mono text-foreground">v{versionMetaLabel}</span> (
+              Append-only merge for <span className="font-mono text-foreground">{formatVersionLabel(versionMetaLabel)}</span> (
               <span className="font-mono text-[10px] text-muted-foreground">{versionMetaId.slice(0, 8)}…</span>). Empty
               submit is rejected.
             </DialogDescription>
