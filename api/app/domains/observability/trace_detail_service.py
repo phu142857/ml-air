@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from app.domains.observability.trace_service import canonical_trace_id, trace_id_lookup_candidates
+from app.domains.observability.trace_tempo_service import fetch_tempo_trace
 from app.domains.shared.db_service import db_conn
 
 logger = logging.getLogger("mlair.api.trace_detail")
@@ -382,8 +383,9 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
     audit_events = _fetch_audit_for_runs(tenant_id=tenant_id, project_id=project_id, run_ids=run_ids)
     logs = _fetch_logs_for_runs(run_ids)
     waterfall = _build_waterfall(primary_run_id)
+    otel_trace = fetch_tempo_trace(trace_id=canonical or trace_id.strip())
 
-    if not runs and not events and not audit_events and not logs:
+    if not runs and not events and not audit_events and not logs and not otel_trace:
         return None
 
     return {
@@ -393,9 +395,11 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
         "audit_events": audit_events,
         "logs": logs,
         "waterfall": waterfall,
+        "otel_trace": otel_trace,
         "primary_run_id": primary_run_id,
         "event_count": len(events),
         "run_count": len(runs),
         "audit_count": len(audit_events),
         "log_count": len(logs),
+        "otel_span_count": int((otel_trace or {}).get("span_count") or 0),
     }

@@ -1570,6 +1570,7 @@ def runtime_config_v1(request: Request) -> dict:
         "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
         "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
         "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "1") == "1",
+        "trace_otel_spans": os.getenv("ML_AIR_TRACE_OTEL_SPANS", "1") == "1",
         "dataset_retention_policies": os.getenv("ML_AIR_DATASET_RETENTION_POLICIES", "1") == "1",
         "tenant_quota_enforcement": tenant_quota_service.enforcement_enabled(),
         "http_pipeline_tasks": os.getenv("ML_AIR_HTTP_PIPELINE_TASKS", "1") == "1",
@@ -1590,6 +1591,10 @@ def runtime_config_v1(request: Request) -> dict:
         "features": features,
         "observability": {
             "grafana_ui_url": grafana_ui,
+            "tempo_query_enabled": os.getenv("ML_AIR_TRACE_OTEL_SPANS", "1") == "1"
+            and bool(os.getenv("ML_AIR_TEMPO_QUERY_URL", "http://tempo:3200").strip())
+            and os.getenv("ML_AIR_TEMPO_QUERY_URL", "http://tempo:3200").strip().lower()
+            not in {"0", "false", "off", "no", "none"},
             "semantic_observability_index": semantic_observability_index_dict(),
             "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
         },

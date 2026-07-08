@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
+import type { TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
 import { normalizeStatus, statusChipKey, STATUS_CHIP_TEXT, statusToMlopsBadge } from "@/lib/status-style";
 import { formatRuntimeSeconds } from "@/lib/usage-format";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
@@ -71,9 +71,37 @@ function stepHref(step: TraceWaterfallStep): string | null {
   return null;
 }
 
+export function otelTraceToWaterfall(otel: TraceOtelTrace): TraceWaterfall {
+  return {
+    run_id: otel.trace_id,
+    pipeline_id: otel.services.length ? otel.services.join(", ") : undefined,
+    anchor_ts: otel.anchor_ts,
+    total_ms: otel.total_ms,
+    steps: otel.spans.map((span) => ({
+      kind: "span",
+      id: span.span_id,
+      label: span.name,
+      status: span.status,
+      start_ts: span.start_ts,
+      end_ts: span.end_ts,
+      duration_ms: span.duration_ms,
+      plugin: span.service,
+      service: span.service,
+      depth: span.depth,
+      tree_prefix: span.tree_prefix,
+      offset_ms: span.offset_ms,
+      width_ms: span.width_ms,
+      end_offset_ms: span.end_offset_ms,
+      is_instant: span.is_instant,
+    })),
+  };
+}
+
 function spanIconClass(step: TraceWaterfallStep): string {
   if (step.kind === "run") return "bg-violet-500 shadow-[0_0_0_2px_rgba(139,92,246,0.25)]";
-  if (step.plugin) return "bg-orange-500 shadow-[0_0_0_2px_rgba(249,115,22,0.25)]";
+  const svc = String(step.service || step.plugin || "").toLowerCase();
+  if (svc.includes("dataset")) return "bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]";
+  if (step.plugin || step.kind === "span") return "bg-orange-500 shadow-[0_0_0_2px_rgba(249,115,22,0.25)]";
   const label = step.label.toLowerCase();
   if (label.includes("dataset")) return "bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]";
   return "bg-sky-500 shadow-[0_0_0_2px_rgba(14,165,233,0.25)]";
@@ -116,26 +144,26 @@ type RowModel = TraceWaterfallStep & {
   isRun: boolean;
 };
 
-function WaterfallSummaryCard({ waterfall }: { waterfall: TraceWaterfall }) {
+function WaterfallSummaryCard({ waterfall, variant = "run" }: { waterfall: TraceWaterfall; variant?: "run" | "otel" }) {
   return (
     <div className="rounded-xl border border-border/70 bg-muted/15 px-4 py-3">
       <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-        {waterfall.pipeline_id ? (
+        {variant === "otel" ? (
+          waterfall.pipeline_id ? (
+            <div className="flex min-w-0 gap-2 sm:col-span-2">
+              <dt className="shrink-0 text-muted-foreground">Services</dt>
+              <dd className="truncate font-mono text-foreground">{waterfall.pipeline_id}</dd>
+            </div>
+          ) : null
+        ) : waterfall.pipeline_id ? (
           <div className="flex min-w-0 gap-2">
             <dt className="shrink-0 text-muted-foreground">Pipeline</dt>
             <dd className="truncate font-mono text-foreground">{waterfall.pipeline_id}</dd>
           </div>
         ) : null}
         <div className="flex min-w-0 gap-2">
-          <dt className="shrink-0 text-muted-foreground">Run</dt>
-          <dd className="min-w-0 truncate">
-            <Link
-              href={`/runs/${encodeURIComponent(waterfall.run_id)}`}
-              className="link-primary font-mono text-foreground"
-            >
-              {waterfall.run_id.slice(0, 8)}…
-            </Link>
-          </dd>
+          <dt className="shrink-0 text-muted-foreground">{variant === "otel" ? "Trace" : "Run"}</dt>
+          <dd className="min-w-0 truncate font-mono text-foreground">{waterfall.run_id.slice(0, 12)}…</dd>
         </div>
         <div className="flex gap-2">
           <dt className="shrink-0 text-muted-foreground">Started</dt>
@@ -259,8 +287,10 @@ function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
             ) : (
               <p className="truncate text-sm font-medium text-foreground">{step.label}</p>
             )}
-            {!step.isRun ? (
+            {!step.isRun && step.kind !== "span" ? (
               <p className="truncate font-mono text-[10px] text-muted-foreground">{step.id}</p>
+            ) : step.kind === "span" && step.service ? (
+              <p className="truncate text-[10px] text-muted-foreground">{step.service}</p>
             ) : null}
           </div>
         </div>
@@ -279,11 +309,27 @@ function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
   );
 }
 
-export function TraceWaterfallView({ waterfall }: { waterfall: TraceWaterfall }) {
+export function TraceWaterfallView({
+  waterfall,
+  variant = "run",
+}: {
+  waterfall: TraceWaterfall;
+  variant?: "run" | "otel";
+}) {
   const scaleMs = Math.max(waterfall.total_ms, 1);
   const gridTicks = useMemo(() => buildGridTicks(scaleMs), [scaleMs]);
 
   const rows = useMemo<RowModel[]>(() => {
+    const otelMode = variant === "otel" || waterfall.steps.some((s) => s.kind === "span");
+    if (otelMode) {
+      return waterfall.steps.map((step) => ({
+        ...step,
+        treePrefix: step.tree_prefix || "",
+        paddingLeft: 8 + (step.depth ?? 0) * 20,
+        isRun: (step.depth ?? 0) === 0,
+      }));
+    }
+
     const runStep = waterfall.steps.find((s) => s.kind === "run");
     const taskSteps = waterfall.steps.filter((s) => s.kind === "task");
     const out: RowModel[] = [];
@@ -307,7 +353,7 @@ export function TraceWaterfallView({ waterfall }: { waterfall: TraceWaterfall })
     });
 
     return out;
-  }, [waterfall.steps]);
+  }, [variant, waterfall.steps]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -319,7 +365,7 @@ export function TraceWaterfallView({ waterfall }: { waterfall: TraceWaterfall })
       `}</style>
 
       <div className="space-y-3">
-        <WaterfallSummaryCard waterfall={waterfall} />
+        <WaterfallSummaryCard waterfall={waterfall} variant={variant} />
 
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div

@@ -22,7 +22,7 @@ features:
   dataset_hub_v2: true
   scope_debug_panel: true
   serving_slots_http: true
-  otel_enabled: false
+  otel_enabled: true
   event_outbox: true
   event_stream: true
   event_stream_global_fanout: true
@@ -49,7 +49,7 @@ features:
 observability:
   grafana_url: http://localhost:33000
   realtime_ws: ws://localhost:8001
-  otel_enabled: false
+  otel_enabled: true
 
 auth:
   tracking_token: admin-token

@@ -74,7 +74,11 @@ services:
       ML_AIR_SEMANTIC_WEBHOOK_MAX_ATTEMPTS: ${ML_AIR_SEMANTIC_WEBHOOK_MAX_ATTEMPTS:-3}
       ML_AIR_SEMANTIC_WEBHOOK_RETRY_BACKOFF_MS: ${ML_AIR_SEMANTIC_WEBHOOK_RETRY_BACKOFF_MS:-250}
       ML_AIR_SEMANTIC_WEBHOOK_DEDUPE: ${ML_AIR_SEMANTIC_WEBHOOK_DEDUPE:-1}
-      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-0}
+      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-tempo:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      ML_AIR_TEMPO_QUERY_URL: ${ML_AIR_TEMPO_QUERY_URL:-http://tempo:3200}
+      ML_AIR_TRACE_OTEL_SPANS: ${ML_AIR_TRACE_OTEL_SPANS:-1}
       ML_AIR_GRAFANA_URL: ${ML_AIR_GRAFANA_URL:-http://localhost:33000}
       ML_AIR_RUNTIME_REALTIME_BASE_URL: ${ML_AIR_RUNTIME_REALTIME_BASE_URL:-ws://localhost:8001}
       # Run environment capture (runs.environment) — zero-config defaults; see docs/guides/run-environment.md
@@ -88,6 +92,8 @@ services:
       redis:
         condition: service_started
       postgres:
+        condition: service_started
+      tempo:
         condition: service_started
     healthcheck:
       test:
@@ -118,7 +124,11 @@ services:
       ML_AIR_JWT_ISSUER: ${ML_AIR_JWT_ISSUER:-}
       ML_AIR_JWT_AUDIENCE: ${ML_AIR_JWT_AUDIENCE:-}
       ML_AIR_JWT_JWKS_URL: ${ML_AIR_JWT_JWKS_URL:-}
-      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-0}
+      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-tempo:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      ML_AIR_TEMPO_QUERY_URL: ${ML_AIR_TEMPO_QUERY_URL:-http://tempo:3200}
+      ML_AIR_TRACE_OTEL_SPANS: ${ML_AIR_TRACE_OTEL_SPANS:-1}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_REALTIME:-mlair-realtime}
     ports:
       - "${MLAIR_REALTIME_PORT:-8001}:8001"
@@ -161,7 +171,11 @@ services:
       ML_AIR_RESOURCE_SAMPLE_INTERVAL: ${ML_AIR_RESOURCE_SAMPLE_INTERVAL:-1}
       ML_AIR_RESOURCE_FLUSH_INTERVAL: ${ML_AIR_RESOURCE_FLUSH_INTERVAL:-1}
       ML_AIR_LEASE_REAP_INTERVAL_SECONDS: ${ML_AIR_LEASE_REAP_INTERVAL_SECONDS:-5}
-      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-0}
+      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-tempo:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      ML_AIR_TEMPO_QUERY_URL: ${ML_AIR_TEMPO_QUERY_URL:-http://tempo:3200}
+      ML_AIR_TRACE_OTEL_SPANS: ${ML_AIR_TRACE_OTEL_SPANS:-1}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_SCHEDULER:-mlair-scheduler}
     ports:
       - "${ML_AIR_SCHEDULER_METRICS_PORT:-9102}:9102"
@@ -200,7 +214,11 @@ services:
       ML_AIR_MANIFEST_SIGNING_ALGORITHM: ${ML_AIR_MANIFEST_SIGNING_ALGORITHM:-hmac-sha256}
       ML_AIR_MANIFEST_ED25519_PRIVATE_KEY: ${ML_AIR_MANIFEST_ED25519_PRIVATE_KEY:-}
       ML_AIR_MANIFEST_ED25519_PRIVATE_KEYS_JSON: ${ML_AIR_MANIFEST_ED25519_PRIVATE_KEYS_JSON:-}
-      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-0}
+      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-tempo:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      ML_AIR_TEMPO_QUERY_URL: ${ML_AIR_TEMPO_QUERY_URL:-http://tempo:3200}
+      ML_AIR_TRACE_OTEL_SPANS: ${ML_AIR_TRACE_OTEL_SPANS:-1}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_EXECUTOR:-mlair-executor}
     ports:
       - "${ML_AIR_EXECUTOR_METRICS_PORT:-9103}:9103"
@@ -211,13 +229,9 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # Grafana Tempo (optional OTLP backend). Use tempo:4317 on the Compose network.
-  # docker compose --profile tempo up -d
   tempo:
     image: grafana/tempo:2.7.2
     container_name: ml-air-tempo
-    profiles:
-      - tempo
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./monitoring/tempo.yaml:/etc/tempo.yaml:ro
@@ -293,6 +307,7 @@ services:
       - "${ML_AIR_GRAFANA_PORT:-33000}:3000"
     depends_on:
       - prometheus
+      - tempo
     restart: unless-stopped
 
 volumes:

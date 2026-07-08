@@ -6,7 +6,7 @@ import { ChevronDown, Copy, GitBranch, Loader2, Route } from "lucide-react";
 
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph";
 import { StatusBadge } from "@/components/mlops/status-badge";
-import { TraceWaterfallView } from "@/components/mlops/trace-waterfall";
+import { TraceWaterfallView, otelTraceToWaterfall } from "@/components/mlops/trace-waterfall";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -172,6 +172,11 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
     return [...semantic, ...audit].sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   }, [data]);
 
+  const otelWaterfall = useMemo(
+    () => (data?.otel_trace ? otelTraceToWaterfall(data.otel_trace) : null),
+    [data?.otel_trace],
+  );
+
   const copyTraceId = async () => {
     try {
       await navigator.clipboard.writeText(normalized);
@@ -225,6 +230,9 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
                 <TabsTrigger value="timeline">Timeline ({timelineRows.length})</TabsTrigger>
                 <TabsTrigger value="logs">Logs ({data.log_count ?? data.logs?.length ?? 0})</TabsTrigger>
                 {data.waterfall ? <TabsTrigger value="waterfall">Waterfall</TabsTrigger> : null}
+                {otelWaterfall ? (
+                  <TabsTrigger value="spans">Spans ({data.otel_span_count ?? data.otel_trace?.span_count ?? 0})</TabsTrigger>
+                ) : null}
                 <TabsTrigger value="runs">Runs ({data.run_count})</TabsTrigger>
                 {data.primary_run_id ? <TabsTrigger value="graph">Execution graph</TabsTrigger> : null}
               </TabsList>
@@ -257,7 +265,13 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
 
               {data.waterfall ? (
                 <TabsContent value="waterfall" className="min-h-0">
-                  <TraceWaterfallView waterfall={data.waterfall} />
+                  <TraceWaterfallView waterfall={data.waterfall} variant="run" />
+                </TabsContent>
+              ) : null}
+
+              {otelWaterfall ? (
+                <TabsContent value="spans" className="min-h-0">
+                  <TraceWaterfallView waterfall={otelWaterfall} variant="otel" />
                 </TabsContent>
               ) : null}
 

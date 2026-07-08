@@ -10,9 +10,13 @@ from app import otel_api
 
 
 class TestOtelFlags(unittest.TestCase):
-    def test_otel_off_by_default(self) -> None:
+    def test_otel_on_by_default(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ML_AIR_OTEL_ENABLED", None)
+            self.assertTrue(otel_api.otel_enabled())
+
+    def test_otel_off_when_zero(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_OTEL_ENABLED": "0"}, clear=False):
             self.assertFalse(otel_api.otel_enabled())
 
     def test_otel_on(self) -> None:

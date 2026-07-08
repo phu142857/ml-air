@@ -119,7 +119,7 @@ features:
 
 observability:
   grafana_url: http://localhost:33000
-  otel_enabled: false
+  otel_enabled: true
 
 auth:
   tracking_token: admin-token

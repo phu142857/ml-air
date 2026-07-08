@@ -906,7 +906,7 @@ export type TraceDetailLog = {
 };
 
 export type TraceWaterfallStep = {
-  kind: "run" | "task" | string;
+  kind: "run" | "task" | "span" | string;
   id: string;
   label: string;
   status: string;
@@ -914,10 +914,41 @@ export type TraceWaterfallStep = {
   end_ts: string | null;
   duration_ms: number | null;
   plugin?: string | null;
+  service?: string | null;
+  depth?: number;
+  tree_prefix?: string;
   offset_ms: number;
   width_ms: number;
   end_offset_ms: number;
   is_instant?: boolean;
+};
+
+export type TraceOtelSpan = {
+  span_id: string;
+  parent_span_id: string | null;
+  name: string;
+  service: string;
+  kind: string;
+  status: string;
+  start_ts: string | null;
+  end_ts: string | null;
+  duration_ms: number | null;
+  depth: number;
+  tree_prefix: string;
+  offset_ms: number;
+  width_ms: number;
+  end_offset_ms: number;
+  is_instant: boolean;
+  attributes: Record<string, unknown>;
+};
+
+export type TraceOtelTrace = {
+  trace_id: string;
+  anchor_ts: string | null;
+  total_ms: number;
+  services: string[];
+  spans: TraceOtelSpan[];
+  span_count: number;
 };
 
 export type TraceWaterfall = {
@@ -935,11 +966,13 @@ export type TraceDetailResponse = {
   audit_events: TraceDetailAuditEvent[];
   logs: TraceDetailLog[];
   waterfall: TraceWaterfall | null;
+  otel_trace: TraceOtelTrace | null;
   primary_run_id: string | null;
   event_count: number;
   run_count: number;
   audit_count: number;
   log_count: number;
+  otel_span_count: number;
 };
 
 export async function fetchTraceDetail(

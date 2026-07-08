@@ -28,7 +28,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "dataset_hub_v2": True,
         "scope_debug_panel": True,
         "serving_slots_http": True,
-        "otel_enabled": False,
+        "otel_enabled": True,
         "event_outbox": True,
         "event_stream": True,
         "event_stream_global_fanout": True,
@@ -54,7 +54,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
     },
     "observability": {
         "grafana_url": "http://localhost:33000",
-        "otel_enabled": False,
+        "otel_enabled": True,
         "realtime_ws": "ws://localhost:8080/ws",
     },
     "auth": {"tracking_token": "admin-token"},
