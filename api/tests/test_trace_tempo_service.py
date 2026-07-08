@@ -95,6 +95,38 @@ class TestTraceTempoService(unittest.TestCase):
         self.assertEqual(out["span_count"], 1)
         self.assertEqual(out["spans"][0]["name"], "GET /health")
 
+    @patch("app.domains.observability.trace_tempo_service.urllib.request.urlopen")
+    def test_search_tempo_traces_parses_results(self, mock_urlopen: MagicMock) -> None:
+        payload = {
+            "traces": [
+                {
+                    "traceID": "abc123abc123abc123abc123abc123",
+                    "rootServiceName": "mlair-api",
+                    "rootTraceName": "GET /runs",
+                    "durationMs": 120,
+                }
+            ]
+        }
+        resp = MagicMock()
+        resp.read.return_value = json.dumps(payload).encode("utf-8")
+        resp.__enter__.return_value = resp
+        mock_urlopen.return_value = resp
+
+        with patch.dict(
+            "os.environ",
+            {
+                "ML_AIR_TRACE_OTEL_SPANS": "1",
+                "ML_AIR_TEMPO_QUERY_URL": "http://tempo:3200",
+            },
+            clear=False,
+        ):
+            out = tempo.search_tempo_traces(query="abc123", limit=10)
+
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["source"], "tempo")
+        self.assertEqual(out[0]["root_service"], "mlair-api")
+        self.assertEqual(out[0]["duration_ms"], 120)
+
 
 if __name__ == "__main__":
     unittest.main()

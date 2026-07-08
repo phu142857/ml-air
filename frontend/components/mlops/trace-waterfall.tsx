@@ -144,7 +144,80 @@ type RowModel = TraceWaterfallStep & {
   isRun: boolean;
 };
 
-function WaterfallSummaryCard({ waterfall, variant = "run" }: { waterfall: TraceWaterfall; variant?: "run" | "otel" }) {
+function sourceBadge(source?: string): string | null {
+  if (source === "mlair") return "MLAir";
+  if (source === "otel") return "OTLP";
+  return null;
+}
+
+function SpanDetailPanel({ step }: { step: TraceWaterfallStep }) {
+  const attrs = step.attributes && Object.keys(step.attributes).length > 0 ? step.attributes : null;
+  const badge = sourceBadge(step.source);
+  return (
+    <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">{step.label}</p>
+          <p className="font-mono text-[10px] text-muted-foreground">{step.id}</p>
+        </div>
+        {badge ? (
+          <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">Status</dt>
+          <dd className="font-medium uppercase">{normalizeStatus(step.status)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Duration</dt>
+          <dd className="font-mono">{formatWaterfallDuration(step.duration_ms ?? step.width_ms)}</dd>
+        </div>
+        {step.service ? (
+          <div>
+            <dt className="text-muted-foreground">Service</dt>
+            <dd className="font-mono">{step.service}</dd>
+          </div>
+        ) : null}
+        {step.run_id ? (
+          <div>
+            <dt className="text-muted-foreground">Run</dt>
+            <dd>
+              <Link href={`/runs/${encodeURIComponent(step.run_id)}`} className="link-primary font-mono">
+                {step.run_id.slice(0, 12)}…
+              </Link>
+            </dd>
+          </div>
+        ) : null}
+        {step.task_id ? (
+          <div>
+            <dt className="text-muted-foreground">Task</dt>
+            <dd>
+              <Link href={`/tasks/${encodeURIComponent(step.task_id)}`} className="link-primary font-mono">
+                {String(step.task_id).slice(0, 12)}…
+              </Link>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+      {attrs ? (
+        <pre className="mt-3 max-h-40 overflow-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-[10px] text-foreground">
+          {JSON.stringify(attrs, null, 2)}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+function WaterfallSummaryCard({
+  waterfall,
+  variant = "run",
+}: {
+  waterfall: TraceWaterfall;
+  variant?: "run" | "otel" | "unified";
+}) {
   return (
     <div className="rounded-xl border border-border/70 bg-muted/15 px-4 py-3">
       <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
@@ -161,8 +234,18 @@ function WaterfallSummaryCard({ waterfall, variant = "run" }: { waterfall: Trace
             <dd className="truncate font-mono text-foreground">{waterfall.pipeline_id}</dd>
           </div>
         ) : null}
+        {variant === "unified" ? (
+          <div className="flex min-w-0 gap-2 sm:col-span-2">
+            <dt className="shrink-0 text-muted-foreground">Layers</dt>
+            <dd className="font-mono text-foreground">
+              {waterfall.mlair_count ?? 0} MLAir · {waterfall.otel_count ?? 0} OTLP
+            </dd>
+          </div>
+        ) : null}
         <div className="flex min-w-0 gap-2">
-          <dt className="shrink-0 text-muted-foreground">{variant === "otel" ? "Trace" : "Run"}</dt>
+          <dt className="shrink-0 text-muted-foreground">
+            {variant === "otel" ? "Trace" : variant === "unified" ? "Trace" : "Run"}
+          </dt>
           <dd className="min-w-0 truncate font-mono text-foreground">{waterfall.run_id.slice(0, 12)}…</dd>
         </div>
         <div className="flex gap-2">
@@ -195,9 +278,13 @@ function TimelineGridOverlay({ ticks, scaleMs }: { ticks: number[]; scaleMs: num
 function WaterfallBar({
   step,
   scaleMs,
+  selected,
+  onSelect,
 }: {
   step: TraceWaterfallStep;
   scaleMs: number;
+  selected?: boolean;
+  onSelect?: (step: TraceWaterfallStep) => void;
 }) {
   const leftPct = (step.offset_ms / scaleMs) * 100;
   const widthPct = step.is_instant ? 0 : Math.max((step.width_ms / scaleMs) * 100, 0.35);
@@ -224,8 +311,10 @@ function WaterfallBar({
               "transition-all duration-200",
               "hover:z-20 hover:scale-y-110 hover:shadow-xl hover:brightness-110",
               step.is_instant ? "w-1 -translate-x-1/2 p-0" : "min-w-[4px]",
+              selected && "ring-2 ring-primary",
               fill,
             )}
+            onClick={() => onSelect?.(step)}
             style={
               step.is_instant
                 ? { left: `${leftPct}%` }
@@ -258,7 +347,17 @@ function WaterfallBar({
   );
 }
 
-function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
+function WaterfallRow({
+  step,
+  scaleMs,
+  selected,
+  onSelect,
+}: {
+  step: RowModel;
+  scaleMs: number;
+  selected?: boolean;
+  onSelect?: (step: TraceWaterfallStep) => void;
+}) {
   const href = stepHref(step);
   const duration = step.is_instant ? null : (step.duration_ms ?? (step.width_ms > 0 ? step.width_ms : null));
   const statusText = normalizeStatus(step.status);
@@ -267,9 +366,19 @@ function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
     <div
       className={cn(
         GRID_COLS,
-        "group items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/30",
+        "group cursor-pointer items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/30",
         step.isRun && "border-l-2 border-l-primary/30 bg-primary/5 hover:bg-primary/[0.08]",
+        selected && "bg-primary/10 ring-1 ring-inset ring-primary/30",
       )}
+      onClick={() => onSelect?.(step)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect?.(step);
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       <div className="min-w-0" style={{ paddingLeft: step.paddingLeft }}>
         <div className="flex min-w-0 items-center gap-2">
@@ -279,6 +388,11 @@ function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
             </span>
           ) : null}
           <span className={cn("h-2 w-2 shrink-0 rounded-full", spanIconClass(step))} aria-hidden />
+          {sourceBadge(step.source) ? (
+            <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] uppercase text-muted-foreground">
+              {sourceBadge(step.source)}
+            </span>
+          ) : null}
           <div className="min-w-0 flex-1">
             {href ? (
               <Link href={href} className="link-primary block truncate text-sm font-medium">
@@ -296,7 +410,7 @@ function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
         </div>
       </div>
 
-      <WaterfallBar step={step} scaleMs={scaleMs} />
+      <WaterfallBar step={step} scaleMs={scaleMs} selected={selected} onSelect={onSelect} />
 
       <div className="text-right font-mono text-[11px] tabular-nums text-foreground">
         {step.is_instant ? <span className="text-muted-foreground">queued</span> : formatWaterfallDuration(duration)}
@@ -312,21 +426,26 @@ function WaterfallRow({ step, scaleMs }: { step: RowModel; scaleMs: number }) {
 export function TraceWaterfallView({
   waterfall,
   variant = "run",
+  selectedStepId = null,
+  onStepSelect,
 }: {
   waterfall: TraceWaterfall;
-  variant?: "run" | "otel";
+  variant?: "run" | "otel" | "unified";
+  selectedStepId?: string | null;
+  onStepSelect?: (step: TraceWaterfallStep) => void;
 }) {
   const scaleMs = Math.max(waterfall.total_ms, 1);
   const gridTicks = useMemo(() => buildGridTicks(scaleMs), [scaleMs]);
 
   const rows = useMemo<RowModel[]>(() => {
+    const unifiedMode = variant === "unified";
     const otelMode = variant === "otel" || waterfall.steps.some((s) => s.kind === "span");
-    if (otelMode) {
+    if (unifiedMode || otelMode) {
       return waterfall.steps.map((step) => ({
         ...step,
         treePrefix: step.tree_prefix || "",
         paddingLeft: 8 + (step.depth ?? 0) * 20,
-        isRun: (step.depth ?? 0) === 0,
+        isRun: (step.depth ?? 0) === 0 && step.kind === "run",
       }));
     }
 
@@ -354,6 +473,11 @@ export function TraceWaterfallView({
 
     return out;
   }, [variant, waterfall.steps]);
+
+  const selectedStep = useMemo(
+    () => waterfall.steps.find((s) => s.id === selectedStepId) ?? null,
+    [selectedStepId, waterfall.steps],
+  );
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -391,10 +515,20 @@ export function TraceWaterfallView({
             {rows.length === 0 ? (
               <p className="px-3 py-6 text-sm text-muted-foreground">No spans recorded for this trace.</p>
             ) : (
-              rows.map((step) => <WaterfallRow key={step.id} step={step} scaleMs={scaleMs} />)
+              rows.map((step) => (
+                <WaterfallRow
+                  key={`${step.source || "x"}-${step.id}`}
+                  step={step}
+                  scaleMs={scaleMs}
+                  selected={selectedStepId === step.id}
+                  onSelect={onStepSelect}
+                />
+              ))
             )}
           </div>
         </div>
+
+        {selectedStep && onStepSelect ? <SpanDetailPanel step={selectedStep} /> : null}
 
         {rows.length <= 1 ? (
           <p className="text-xs text-muted-foreground">No tasks recorded for this run yet.</p>

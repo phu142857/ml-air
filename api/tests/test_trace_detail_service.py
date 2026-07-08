@@ -124,6 +124,8 @@ class TestTraceDetailService(unittest.TestCase):
         self.assertEqual(detail["log_count"], 1)
         self.assertIsNotNone(detail["waterfall"])
         self.assertEqual(detail["otel_span_count"], 1)
+        self.assertIsNotNone(detail.get("unified_waterfall"))
+        self.assertFalse(detail.get("is_live"))
         mock_tempo.assert_called_once()
         mock_audit.assert_called_once_with(tenant_id="t1", project_id="p1", run_ids=["run-1"])
         mock_logs.assert_called_once_with(["run-1"])
@@ -233,6 +235,54 @@ class TestTraceDetailService(unittest.TestCase):
         self.assertEqual(len(logs), 1)
         self.assertEqual(logs[0]["task_id"], "t1")
         mock_page.assert_called_once_with("run-1", limit=500, tail=True)
+
+
+    @patch("app.domains.observability.trace_detail_service.search_tempo_traces")
+    @patch("app.domains.observability.trace_detail_service._search_traces_db")
+    def test_search_traces_merges_db_and_tempo(
+        self,
+        mock_db: MagicMock,
+        mock_tempo: MagicMock,
+    ) -> None:
+        mock_db.return_value = [
+            {
+                "trace_id": "abc123def456",
+                "last_seen": "2026-01-01T00:00:00+00:00",
+                "source": "run",
+                "root_service": None,
+                "root_name": None,
+                "duration_ms": None,
+            }
+        ]
+        mock_tempo.return_value = [
+            {
+                "trace_id": "abc123def456",
+                "root_service": "mlair-api",
+                "root_name": "GET /runs",
+                "duration_ms": 42,
+                "source": "tempo",
+            },
+            {
+                "trace_id": "othertrace9999",
+                "root_service": "mlair-scheduler",
+                "root_name": "consume",
+                "duration_ms": 10,
+                "source": "tempo",
+            },
+        ]
+
+        out = trace_detail_service.search_traces(
+            tenant_id="t1",
+            project_id="p1",
+            query="abc123",
+            limit=20,
+        )
+
+        self.assertEqual(out["count"], 2)
+        by_id = {row["trace_id"]: row for row in out["items"]}
+        self.assertEqual(by_id["abc123def456"]["source"], "mlair+tempo")
+        self.assertEqual(by_id["abc123def456"]["root_service"], "mlair-api")
+        self.assertIn("othertrace9999", by_id)
 
 
 if __name__ == "__main__":

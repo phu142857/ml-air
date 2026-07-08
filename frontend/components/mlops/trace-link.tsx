@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, Copy, GitBranch, Loader2, Route } from "lucide-react";
+import { ChevronDown, Copy, Download, GitBranch, Link2, Loader2, Route, X } from "lucide-react";
 
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph";
 import { StatusBadge } from "@/components/mlops/status-badge";
-import { TraceWaterfallView, otelTraceToWaterfall } from "@/components/mlops/trace-waterfall";
+import { TraceWaterfallView } from "@/components/mlops/trace-waterfall";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -19,7 +19,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTraceDetail } from "@/hooks/use-trace-detail";
 import { useAppContext } from "@/lib/app-context";
-import type { TraceDetailAuditEvent, TraceDetailEvent, TraceDetailLog } from "@/lib/api";
+import type {
+  TraceDetailAuditEvent,
+  TraceDetailEvent,
+  TraceDetailLog,
+  TraceLogFilter,
+  TraceWaterfallStep,
+} from "@/lib/api";
+import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
 import { normalizeTraceId } from "@/lib/trace-id";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
 
@@ -131,9 +138,14 @@ function AuditEventCard({ ev }: { ev: TraceDetailAuditEvent }) {
   );
 }
 
-function LogLine({ entry }: { entry: TraceDetailLog }) {
+function LogLine({ entry, highlighted }: { entry: TraceDetailLog; highlighted?: boolean }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-border/50 py-1.5 font-mono text-xs last:border-b-0">
+    <div
+      className={cn(
+        "flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-border/50 py-1.5 font-mono text-xs last:border-b-0",
+        highlighted && "bg-primary/10",
+      )}
+    >
       <span className="shrink-0 text-[10px] text-muted-foreground">{formatDateTimeCompact(entry.ts)}</span>
       <span className={cn("w-12 shrink-0 font-semibold", logLevelClass(entry.level))}>{entry.level}</span>
       <span className="min-w-0 flex-1 break-words text-foreground">{entry.message}</span>
@@ -142,6 +154,13 @@ function LogLine({ entry }: { entry: TraceDetailLog }) {
       ) : null}
     </div>
   );
+}
+
+function logMatchesFilter(entry: TraceDetailLog, filter: TraceLogFilter | null): boolean {
+  if (!filter) return true;
+  if (filter.task_id && String(entry.task_id || "") !== filter.task_id) return false;
+  if (filter.run_id && String(entry.run_id || "") !== filter.run_id) return false;
+  return true;
 }
 
 export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplorerDialogProps) {
@@ -154,6 +173,11 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
     normalized,
     open,
   );
+
+  const [activeTab, setActiveTab] = useState("timeline");
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [logFilter, setLogFilter] = useState<TraceLogFilter | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const timelineRows = useMemo<TimelineRow[]>(() => {
     if (!data) return [];
@@ -172,10 +196,21 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
     return [...semantic, ...audit].sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   }, [data]);
 
-  const otelWaterfall = useMemo(
-    () => (data?.otel_trace ? otelTraceToWaterfall(data.otel_trace) : null),
-    [data?.otel_trace],
-  );
+  const filteredLogs = useMemo(() => {
+    if (!data?.logs?.length) return [];
+    if (!logFilter) return data.logs;
+    return data.logs.filter((entry) => logMatchesFilter(entry, logFilter));
+  }, [data?.logs, logFilter]);
+
+  const handleStepSelect = (step: TraceWaterfallStep) => {
+    setSelectedStepId(step.id);
+    setLogFilter({
+      task_id: step.task_id || (step.kind === "task" ? step.id : null),
+      run_id: step.run_id || (step.kind === "run" ? step.id : null),
+      span_id: step.span_id || (step.kind === "span" ? step.id : null),
+      label: step.label,
+    });
+  };
 
   const copyTraceId = async () => {
     try {
@@ -185,6 +220,27 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
     }
   };
 
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(buildTraceShareUrl(normalized));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleExport = async () => {
+    if (tenantId === "all" || projectId === "all") return;
+    setExporting(true);
+    try {
+      await downloadTraceExport(tenantId, projectId, token, normalized);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const waterfall = data?.unified_waterfall ?? data?.waterfall ?? null;
+  const waterfallVariant = data?.unified_waterfall ? "unified" : "run";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(92vh,56rem)] w-[min(96vw,80rem)] max-w-[min(96vw,80rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,80rem)]">
@@ -192,12 +248,33 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
           <DialogTitle className="flex items-center gap-2 text-base">
             <Route className="h-4 w-4 text-primary" />
             Trace explorer
+            {data?.is_live ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Live
+              </span>
+            ) : null}
           </DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-2 pt-1">
             <code className="break-all font-mono text-xs text-foreground">{normalized}</code>
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => void copyTraceId()}>
               <Copy className="h-3.5 w-3.5" />
-              Copy
+              Copy ID
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => void copyShareLink()}>
+              <Link2 className="h-3.5 w-3.5" />
+              Share
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => void handleExport()}
+              disabled={exporting || !data}
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export
             </Button>
             <Button
               type="button"
@@ -225,14 +302,15 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
           ) : !data ? (
             <p className="text-sm text-muted-foreground">No trace data found.</p>
           ) : (
-            <Tabs defaultValue="timeline" className="flex min-h-0 flex-1 flex-col gap-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col gap-4">
               <TabsList className="h-auto flex-wrap">
                 <TabsTrigger value="timeline">Timeline ({timelineRows.length})</TabsTrigger>
-                <TabsTrigger value="logs">Logs ({data.log_count ?? data.logs?.length ?? 0})</TabsTrigger>
-                {data.waterfall ? <TabsTrigger value="waterfall">Waterfall</TabsTrigger> : null}
-                {otelWaterfall ? (
-                  <TabsTrigger value="spans">Spans ({data.otel_span_count ?? data.otel_trace?.span_count ?? 0})</TabsTrigger>
-                ) : null}
+                <TabsTrigger value="waterfall">
+                  Waterfall ({data.unified_step_count ?? waterfall?.steps.length ?? 0})
+                </TabsTrigger>
+                <TabsTrigger value="logs">
+                  Logs ({logFilter ? filteredLogs.length : data.log_count ?? data.logs?.length ?? 0})
+                </TabsTrigger>
                 <TabsTrigger value="runs">Runs ({data.run_count})</TabsTrigger>
                 {data.primary_run_id ? <TabsTrigger value="graph">Execution graph</TabsTrigger> : null}
               </TabsList>
@@ -251,29 +329,64 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
                 )}
               </TabsContent>
 
+              <TabsContent value="waterfall" className="min-h-0 space-y-3">
+                {waterfall ? (
+                  <>
+                    <TraceWaterfallView
+                      waterfall={waterfall}
+                      variant={waterfallVariant}
+                      selectedStepId={selectedStepId}
+                      onStepSelect={handleStepSelect}
+                    />
+                    {selectedStepId && logFilter ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => setActiveTab("logs")}>
+                          View logs for {logFilter.label}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setLogFilter(null);
+                            setSelectedStepId(null);
+                          }}
+                        >
+                          <X className="mr-1 h-3.5 w-3.5" />
+                          Clear selection
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No timing data for this trace.</p>
+                )}
+              </TabsContent>
+
               <TabsContent value="logs" className="space-y-2">
-                {!data.logs?.length ? (
-                  <p className="text-sm text-muted-foreground">No run logs found for linked runs.</p>
+                {logFilter ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">Filtered:</span>
+                    <span className="font-medium text-foreground">{logFilter.label}</span>
+                    <Button type="button" size="sm" variant="ghost" className="h-7" onClick={() => setLogFilter(null)}>
+                      Clear filter
+                    </Button>
+                  </div>
+                ) : null}
+                {!filteredLogs.length ? (
+                  <p className="text-sm text-muted-foreground">No run logs found for this trace.</p>
                 ) : (
                   <div className="panel-surface rounded-lg border border-border p-3">
-                    {data.logs.map((entry, i) => (
-                      <LogLine key={`${entry.ts}-${entry.message}-${i}`} entry={entry} />
+                    {filteredLogs.map((entry, i) => (
+                      <LogLine
+                        key={`${entry.ts}-${entry.message}-${i}`}
+                        entry={entry}
+                        highlighted={Boolean(logFilter && logMatchesFilter(entry, logFilter))}
+                      />
                     ))}
                   </div>
                 )}
               </TabsContent>
-
-              {data.waterfall ? (
-                <TabsContent value="waterfall" className="min-h-0">
-                  <TraceWaterfallView waterfall={data.waterfall} variant="run" />
-                </TabsContent>
-              ) : null}
-
-              {otelWaterfall ? (
-                <TabsContent value="spans" className="min-h-0">
-                  <TraceWaterfallView waterfall={otelWaterfall} variant="otel" />
-                </TabsContent>
-              ) : null}
 
               <TabsContent value="runs" className="space-y-3">
                 {data.runs.length === 0 ? (

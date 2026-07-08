@@ -4,7 +4,7 @@
 
 Export **distributed traces** from MLAir processes to any **OTLP**-compatible backend (Grafana Tempo, Alloy, Honeycomb, Datadog agent OTLP ingest, etc.) using standard **OpenTelemetry** SDKs.
 
-Default is **on** (`ML_AIR_OTEL_ENABLED=1`). Spans export to Tempo when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (default `tempo:4317` in Compose). The Hub **Trace explorer** loads MLAir DB context plus **OTLP spans** from Tempo (`ML_AIR_TEMPO_QUERY_URL`, tab **Spans**).
+Default is **on** (`ML_AIR_OTEL_ENABLED=1`). Spans export to Tempo when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (default `tempo:4317` in Compose). The Hub **Trace explorer** loads MLAir DB context plus **OTLP spans** from Tempo (`ML_AIR_TEMPO_QUERY_URL`) in a **unified waterfall** (MLAir run/task steps + OTLP spans on one timeline).
 
 ## When traces are emitted
 
@@ -23,14 +23,23 @@ Default is **on** (`ML_AIR_OTEL_ENABLED=1`). Spans export to Tempo when `OTEL_EX
 | `OTEL_SERVICE_NAME` | Logical service name in the backend (defaults: `mlair-api`, `mlair-scheduler`, `mlair-executor`, `mlair-realtime` — set explicitly in compose if you run multiple replicas). |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP **gRPC** endpoint (host:port), e.g. `otel-collector:4317`. Passed to `OTLPSpanExporter()`. |
 | `ML_AIR_TEMPO_QUERY_URL` | Tempo HTTP query base for the Hub trace explorer (default `http://tempo:3200`). Set `0` to disable span lookup. |
-| `ML_AIR_TRACE_OTEL_SPANS` | `1` (default) merges Tempo OTLP spans into `GET .../traces/{trace_id}`. |
+| `ML_AIR_TRACE_OTEL_SPANS` | `1` (default) merges Tempo OTLP spans into `GET .../traces/{trace_id}` (`unified_waterfall`). |
+| `ML_AIR_TRACE_SEARCH` | `1` (default) enables `GET .../traces/search?q=` (MLAir DB + Tempo TraceQL). |
 | `ML_AIR_GRAFANA_URL` | Optional **browser** base URL for Grafana (e.g. `http://localhost:33000`). Exposed as `GET /v1/runtime-config` → `observability.grafana_ui_url`. |
 
 **W3C Trace Context:** incoming `traceparent` / `tracestate` headers are honored on FastAPI services when OTel is enabled.
 
 **Redis propagation (API → scheduler → executor):** `publish_run_event` / `publish_task_finished` always set **`trace_id`** on the JSON payload from the active correlation id (`get_trace_id()`). When OTel is enabled on the API, the same call also injects W3C **`traceparent`** / **`tracestate`** from the current span.
 
-**UI:** `GET /v1/runtime-config` → `features.opentelemetry` and `features.trace_otel_spans`. Hub **View trace** opens the in-app Trace explorer (timeline, logs, waterfall, **Spans** from Tempo, execution graph).
+**UI:** `GET /v1/runtime-config` → `features.opentelemetry`, `features.trace_otel_spans`, and `features.trace_search`. Hub **View trace** opens the in-app Trace explorer (timeline, unified waterfall, logs with span→log filtering, live polling for active runs, export/share, execution graph). Share links use `?trace=<trace_id>` on any dashboard page.
+
+### Trace explorer API (Phase 4)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET .../traces/{trace_id}` | Full trace detail: runs, events, audit, logs, `waterfall`, `otel_trace`, `unified_waterfall`, `is_live`. |
+| `GET .../traces/search?q=` | Search by trace ID fragment (MLAir DB + Tempo). |
+| `GET .../traces/{trace_id}/export` | Download full JSON payload. |
 
 ## Enable OTLP export
 

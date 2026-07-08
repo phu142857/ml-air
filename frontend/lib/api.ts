@@ -915,8 +915,13 @@ export type TraceWaterfallStep = {
   duration_ms: number | null;
   plugin?: string | null;
   service?: string | null;
+  source?: "mlair" | "otel" | string;
   depth?: number;
   tree_prefix?: string;
+  run_id?: string | null;
+  task_id?: string | null;
+  span_id?: string | null;
+  attributes?: Record<string, unknown>;
   offset_ms: number;
   width_ms: number;
   end_offset_ms: number;
@@ -952,11 +957,38 @@ export type TraceOtelTrace = {
 };
 
 export type TraceWaterfall = {
+  trace_id?: string;
   run_id: string;
   pipeline_id?: string;
   anchor_ts: string | null;
   total_ms: number;
   steps: TraceWaterfallStep[];
+  step_count?: number;
+  mlair_count?: number;
+  otel_count?: number;
+};
+
+export type TraceSearchHit = {
+  trace_id: string;
+  last_seen?: string | null;
+  source: string;
+  root_service?: string | null;
+  root_name?: string | null;
+  duration_ms?: number | null;
+  start_ts?: string | null;
+};
+
+export type TraceSearchResponse = {
+  query: string;
+  items: TraceSearchHit[];
+  count: number;
+};
+
+export type TraceLogFilter = {
+  task_id?: string | null;
+  run_id?: string | null;
+  span_id?: string | null;
+  label?: string | null;
 };
 
 export type TraceDetailResponse = {
@@ -967,12 +999,15 @@ export type TraceDetailResponse = {
   logs: TraceDetailLog[];
   waterfall: TraceWaterfall | null;
   otel_trace: TraceOtelTrace | null;
+  unified_waterfall: TraceWaterfall | null;
+  is_live: boolean;
   primary_run_id: string | null;
   event_count: number;
   run_count: number;
   audit_count: number;
   log_count: number;
   otel_span_count: number;
+  unified_step_count: number;
 };
 
 export async function fetchTraceDetail(
@@ -995,6 +1030,67 @@ export async function fetchTraceDetail(
     throw new Error(msg || `trace fetch failed (${res.status})`);
   }
   return (await res.json()) as TraceDetailResponse;
+}
+
+export async function fetchTraceSearch(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  query: string,
+  limit = 20,
+): Promise<TraceSearchResponse> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = encodeURIComponent(query.trim());
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/traces/search?q=${q}&limit=${limit}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `trace search failed (${res.status})`);
+  }
+  return (await res.json()) as TraceSearchResponse;
+}
+
+export async function downloadTraceExport(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  traceId: string,
+): Promise<void> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const tid = encodeURIComponent(traceId.trim());
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/traces/${tid}/export`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `trace export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const dispo = res.headers.get("Content-Disposition") || "";
+  const match = dispo.match(/filename="?([^";]+)"?/i);
+  const filename = match?.[1] || `mlair-trace-${traceId.slice(0, 16)}.json`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function buildTraceShareUrl(traceId: string): string {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.href);
+  url.searchParams.set("trace", traceId.trim());
+  return url.toString();
 }
 
 async function fetchAuditTimelineForScope(

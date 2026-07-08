@@ -282,3 +282,70 @@ def fetch_tempo_trace(*, trace_id: str) -> dict[str, Any] | None:
         if result and result.get("spans"):
             return result
     return None
+
+
+def _nano_to_ms(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(int(value) / 1_000_000)
+    except (TypeError, ValueError):
+        return None
+
+
+def search_tempo_traces(*, query: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Search Tempo traces via TraceQL (partial or full trace ID)."""
+    if not trace_otel_spans_enabled():
+        return []
+    base = tempo_query_base_url()
+    if not base:
+        return []
+    q = str(query or "").strip()
+    if len(q) < 4:
+        return []
+
+    hex_q = q.replace("-", "").lower()
+    if len(hex_q) >= 32:
+        traceql = f'{{ traceID = "{hex_q}" }}'
+    else:
+        safe = "".join(ch for ch in hex_q if ch.isalnum())
+        if len(safe) < 4:
+            return []
+        traceql = f'{{ traceID =~ ".*{safe}.*" }}'
+
+    from urllib.parse import quote
+
+    url = f"{base}/api/search?q={quote(traceql)}&limit={max(1, min(limit, 50))}"
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=4.0) as resp:  # noqa: S310
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("tempo_search_failed q=%s err=%s", q[:16], exc)
+        return []
+
+    traces = payload.get("traces") if isinstance(payload, dict) else []
+    if not isinstance(traces, list):
+        return []
+
+    out: list[dict[str, Any]] = []
+    for row in traces:
+        if not isinstance(row, dict):
+            continue
+        tid = str(row.get("traceID") or row.get("traceId") or "").strip()
+        if not tid:
+            continue
+        out.append(
+            {
+                "trace_id": canonical_trace_id(tid) or tid,
+                "root_service": str(row.get("rootServiceName") or row.get("rootService") or ""),
+                "root_name": str(row.get("rootTraceName") or row.get("name") or ""),
+                "start_ts": _nano_to_iso(row.get("startTimeUnixNano")),
+                "duration_ms": row.get("durationMs") if row.get("durationMs") is not None else _nano_to_ms(
+                    row.get("durationNanos")
+                ),
+                "source": "tempo",
+            }
+        )
+    return out[:limit]
+

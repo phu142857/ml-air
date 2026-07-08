@@ -23,7 +23,7 @@ import {
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
 import { EventFilters, type EventType, type Severity, type TimeRange } from "@/components/mlops/event-filters"
-import { TraceLink, TraceExplorerDialog } from "@/components/mlops/trace-link"
+import { TraceLink } from "@/components/mlops/trace-link"
 import { ErrorBoundary, ErrorDisplay } from "@/components/error-boundary"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -50,7 +50,6 @@ function LifecycleContent() {
   const grafanaUiUrl = useGrafanaUiUrl()
   const [metricsIndexOpen, setMetricsIndexOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
 
   const [eventType, setEventType] = useState<EventType>("all")
   const [severity, setSeverity] = useState<Severity>("all")
@@ -61,7 +60,6 @@ function LifecycleContent() {
     const trace = (searchParams.get("trace") || "").trim()
     if (trace) {
       setSearchQuery(trace)
-      setTraceDialogId(trace)
     }
   }, [searchParams])
 
@@ -649,15 +647,6 @@ function LifecycleContent() {
           </div>
         </div>
       </div>
-      {traceDialogId ? (
-        <TraceExplorerDialog
-          traceId={traceDialogId}
-          open={Boolean(traceDialogId)}
-          onOpenChange={(next) => {
-            if (!next) setTraceDialogId(null)
-          }}
-        />
-      ) : null}
     </div>
   )
 }

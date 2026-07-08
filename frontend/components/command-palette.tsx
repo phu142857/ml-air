@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge"
 import { fetchRuns, fetchRunsPage, searchApi, searchApiPage, fetchAuditTimelinePage, type SearchResultItem } from "@/lib/api"
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
+import { useTraceSearch } from "@/hooks/use-trace-detail"
 import { useAppContext } from "@/lib/app-context"
 import { TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { formatRelativeTime } from "@/lib/utils"
@@ -154,6 +155,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     enabled: open && scopePinned && Boolean(token?.trim()) && traceMode,
   })
 
+  const traceSearchQuery = useTraceSearch(
+    tenantId,
+    projectId,
+    token,
+    trimmedQuery,
+    open && scopePinned && traceMode && trimmedQuery.length >= 4,
+  )
+
   const recentRuns = useMemo(() => {
     const items = recentRunsQuery.data?.items ?? []
     return [...items]
@@ -163,6 +172,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const searchItems = searchQuery.data?.items ?? []
   const traceEvents = auditForTraceQuery.data ?? []
+  const traceHits = traceSearchQuery.data?.items ?? []
 
   const handleSelect = (href: string) => {
     router.push(href)
@@ -272,6 +282,34 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 </div>
               </CommandItem>
             </CommandGroup>
+            {traceSearchQuery.isLoading ? (
+              <CommandGroup heading="Trace search">
+                <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Searching Tempo + MLAir…
+                </div>
+              </CommandGroup>
+            ) : null}
+            {traceHits.length > 0 ? (
+              <CommandGroup heading="Matching traces">
+                {traceHits.slice(0, 8).map((hit) => (
+                  <CommandItem
+                    key={hit.trace_id}
+                    onSelect={() => openTraceExplorer(hit.trace_id)}
+                    className="flex items-center gap-3 py-2"
+                  >
+                    <Hash className="h-4 w-4 text-primary" />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="font-mono text-sm">{hit.trace_id.slice(0, 20)}…</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {hit.root_service || hit.source}
+                        {hit.duration_ms != null ? ` · ${hit.duration_ms}ms` : ""}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
           </>
         ) : null}
 

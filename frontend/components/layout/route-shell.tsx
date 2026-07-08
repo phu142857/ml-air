@@ -5,6 +5,9 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "./app-sidebar"
 import { Topbar } from "./topbar"
 import { CommandPalette } from "@/components/command-palette"
+import { TraceExplorerDialog } from "@/components/mlops/trace-link"
+import { TraceUrlSync } from "@/components/mlops/trace-url-sync"
+import { useAppContext } from "@/lib/app-context"
 
 interface RouteShellProps {
   children: React.ReactNode
@@ -12,6 +15,13 @@ interface RouteShellProps {
 
 export function RouteShell({ children }: RouteShellProps) {
   const [commandOpen, setCommandOpen] = useState(false)
+  const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
+  const { tenantId, projectId } = useAppContext()
+  const scopePinned = tenantId !== "all" && projectId !== "all"
+
+  const handleOpenTraceFromUrl = useCallback((traceId: string) => {
+    setTraceDialogId(traceId)
+  }, [])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -39,6 +49,16 @@ export function RouteShell({ children }: RouteShellProps) {
         </div>
       </SidebarInset>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      <TraceUrlSync enabled={scopePinned} onOpen={handleOpenTraceFromUrl} />
+      {traceDialogId ? (
+        <TraceExplorerDialog
+          traceId={traceDialogId}
+          open={Boolean(traceDialogId)}
+          onOpenChange={(next) => {
+            if (!next) setTraceDialogId(null)
+          }}
+        />
+      ) : null}
     </SidebarProvider>
   )
 }

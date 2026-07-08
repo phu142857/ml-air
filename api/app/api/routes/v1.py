@@ -1571,6 +1571,7 @@ def runtime_config_v1(request: Request) -> dict:
         "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
         "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "1") == "1",
         "trace_otel_spans": os.getenv("ML_AIR_TRACE_OTEL_SPANS", "1") == "1",
+        "trace_search": os.getenv("ML_AIR_TRACE_SEARCH", "1") == "1",
         "dataset_retention_policies": os.getenv("ML_AIR_DATASET_RETENTION_POLICIES", "1") == "1",
         "tenant_quota_enforcement": tenant_quota_service.enforcement_enabled(),
         "http_pipeline_tasks": os.getenv("ML_AIR_HTTP_PIPELINE_TASKS", "1") == "1",
@@ -2569,6 +2570,51 @@ def list_audit_timeline_v1(
         readiness_status=readiness_status,
     )
     return page_response(page, include_offset=offset > 0 and not cursor)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/traces/search")
+def search_traces_v1(
+    tenant_id: str,
+    project_id: str,
+    q: str = Query(..., min_length=4, description="Trace ID prefix or fragment"),
+    limit: int = Query(default=20, ge=1, le=50),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Search traces in MLAir DB and Tempo."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return trace_detail_service.search_traces(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        query=q,
+        limit=limit,
+    )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/traces/{trace_id}/export")
+def export_trace_detail_v1(
+    tenant_id: str,
+    project_id: str,
+    trace_id: str,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    """Download full trace explorer payload as JSON."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    detail = trace_detail_service.get_trace_detail(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        trace_id=trace_id,
+    )
+    if not detail:
+        raise HTTPException(status_code=404, detail="trace_not_found")
+    safe_id = str(detail.get("trace_id") or trace_id).replace("/", "_")[:32]
+    body = json.dumps(detail, indent=2, default=str)
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="mlair-trace-{safe_id}.json"'},
+    )
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/traces/{trace_id}")

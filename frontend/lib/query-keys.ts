@@ -192,5 +192,7 @@ export const mlairKeys = {
   trace: {
     detail: (tenantId: string, projectId: string, traceId: string) =>
       ["trace-detail", tenantId, projectId, traceId] as const,
+    search: (tenantId: string, projectId: string, query: string) =>
+      ["trace-search", tenantId, projectId, query] as const,
   },
 };
