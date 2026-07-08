@@ -1,10 +1,8 @@
 import type { SemanticObservabilitySurface } from "./api";
-import { buildJaegerTraceUrl } from "./jaeger-trace-url";
 
 declare global {
   interface Window {
     __ML_AIR_RUNTIME_CONFIG__?: {
-      jaegerBaseUrl?: string;
       apiBaseUrl?: string;
       api_base_url?: string | null;
       realtime_base_url?: string | null;
@@ -12,7 +10,6 @@ declare global {
       environment?: string;
       features?: Record<string, boolean>;
       observability?: {
-        jaeger_ui_url?: string | null;
         grafana_ui_url?: string | null;
         semantic_observability_surfaces?: SemanticObservabilitySurface[];
       };
@@ -70,7 +67,6 @@ export function mergeRuntimeConfig(
 const OVERRIDE_STORAGE_KEY = "mlair.runtime-config.override";
 
 export type RuntimeConfigOverride = {
-  jaegerBaseUrl?: string;
   apiBaseUrl?: string;
 };
 
@@ -88,7 +84,7 @@ export function readRuntimeConfigOverride(): RuntimeConfigOverride | null {
 
 export function writeRuntimeConfigOverride(value: RuntimeConfigOverride | null): void {
   if (typeof window === "undefined") return;
-  if (!value || (!value.jaegerBaseUrl?.trim() && !value.apiBaseUrl?.trim())) {
+  if (!value || !value.apiBaseUrl?.trim()) {
     localStorage.removeItem(OVERRIDE_STORAGE_KEY);
     return;
   }
@@ -98,16 +94,9 @@ export function writeRuntimeConfigOverride(value: RuntimeConfigOverride | null):
 export function applyRuntimeConfigPatch(patch: RuntimeConfigOverride): void {
   if (typeof window === "undefined") return;
   const cur = window.__ML_AIR_RUNTIME_CONFIG__ ?? {};
-  const jaeger = String(patch.jaegerBaseUrl || "").trim();
   const api = String(patch.apiBaseUrl || "").trim();
   window.__ML_AIR_RUNTIME_CONFIG__ = {
     ...cur,
-    ...(jaeger
-      ? {
-          jaegerBaseUrl: jaeger,
-          observability: { ...(cur.observability ?? {}), jaeger_ui_url: jaeger },
-        }
-      : {}),
     ...(api ? { apiBaseUrl: api, api_base_url: api } : {}),
   };
   window.dispatchEvent(new Event("mlair-runtime-config-updated"));
@@ -121,32 +110,4 @@ export function hydrateRuntimeConfigOverride(): void {
 
 export function clearRuntimeConfigOverride(): void {
   writeRuntimeConfigOverride(null);
-}
-
-const JAEGER_UI_FALLBACK = "http://localhost:16686";
-
-/** Browser-reachable Jaeger UI base (deploy inject → session override → dev fallback). */
-export function getJaegerUiBaseUrl(): string {
-  const override = readRuntimeConfigOverride()?.jaegerBaseUrl?.trim();
-  if (override) return override.replace(/\/$/, "");
-
-  const config = getRuntimeConfig();
-  const raw = String(config?.jaegerBaseUrl || config?.observability?.jaeger_ui_url || "").trim();
-  if (raw) return raw.replace(/\/$/, "");
-
-  return JAEGER_UI_FALLBACK;
-}
-
-/** Whether Jaeger UI base came from deploy/settings (not the dev fallback). */
-export function isJaegerUiConfigured(): boolean {
-  const override = readRuntimeConfigOverride()?.jaegerBaseUrl?.trim();
-  if (override) return true;
-  const config = getRuntimeConfig();
-  return Boolean(String(config?.jaegerBaseUrl || config?.observability?.jaeger_ui_url || "").trim());
-}
-
-/** Deep link to a trace in Jaeger UI (supports v0-style `jaegerBaseUrl` and deploy `observability.jaeger_ui_url`). */
-export function getJaegerTraceUrl(traceId: string): string | null {
-  if (!traceId?.trim()) return null;
-  return buildJaegerTraceUrl(getJaegerUiBaseUrl(), traceId);
 }

@@ -57,6 +57,14 @@ class TestTraceService(unittest.TestCase):
             trace_service.ensure_event_trace_id(ev)
             self.assertEqual(ev["trace_id"], "evt-trace")
 
+    def test_canonical_trace_id_from_uuid(self) -> None:
+        uid = "746C3518-EDCA-421A-B600-FB20133E11AD"
+        self.assertEqual(trace_service.canonical_trace_id(uid), "746c3518edca421ab600fb20133e11ad")
+
+    def test_trace_id_lookup_candidates(self) -> None:
+        cands = trace_service.trace_id_lookup_candidates("746c3518-edca-421a-b600-fb20133e11ad")
+        self.assertIn("746c3518edca421ab600fb20133e11ad", cands)
+
 
 if __name__ == "__main__":
     unittest.main()

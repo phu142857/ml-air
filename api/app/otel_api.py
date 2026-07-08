@@ -173,7 +173,7 @@ def enrich_http_span_from_request(request: "Request") -> None:
 
 
 def attach_otel_w3c_response_headers(response: Any) -> None:
-    """Echo W3C trace context on HTTP responses so browsers (Hub) can link to Jaeger/Tempo."""
+    """Echo W3C trace context on HTTP responses for correlation and the Hub trace explorer."""
     if not otel_enabled():
         return
     try:

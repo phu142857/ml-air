@@ -215,7 +215,7 @@ export function ErrorDisplay({
             </li>
             <li className="flex items-start gap-2 text-xs text-muted-foreground">
               <span className="text-muted-foreground/80">3.</span>
-              Check the Jaeger service status
+              Check API connectivity and scope settings
             </li>
           </ul>
         </div>

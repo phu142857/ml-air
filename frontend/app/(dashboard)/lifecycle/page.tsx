@@ -23,27 +23,18 @@ import {
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
 import { EventFilters, type EventType, type Severity, type TimeRange } from "@/components/mlops/event-filters"
-import { JaegerLink } from "@/components/mlops/jaeger-link"
+import { TraceLink, TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { ErrorBoundary, ErrorDisplay } from "@/components/error-boundary"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useLifecycle } from "@/hooks/use-lifecycle"
 import { useToast } from "@/hooks/use-toast"
 import { exportAuditTimeline } from "@/lib/api"
 import { auditEventsToCsv } from "@/lib/audit-event"
 import { useAppContext } from "@/lib/app-context"
-import { useJaegerUiUrl } from "@/lib/use-jaeger-ui-url"
 import { useSemanticObservabilitySurfaces, shouldOpenLifecycleMetricsIndex } from "@/lib/use-semantic-observability-surfaces"
 import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
 import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
@@ -55,24 +46,23 @@ function LifecycleContent() {
   const { toast } = useToast()
   const { tenantId, projectId, token } = useAppContext()
   const searchParams = useSearchParams()
-  const runtimeJaegerUrl = useJaegerUiUrl()
   const semanticObservabilitySurfaces = useSemanticObservabilitySurfaces()
   const grafanaUiUrl = useGrafanaUiUrl()
   const [metricsIndexOpen, setMetricsIndexOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
 
   const [eventType, setEventType] = useState<EventType>("all")
   const [severity, setSeverity] = useState<Severity>("all")
   const [timeRange, setTimeRange] = useState<TimeRange>("24h")
   const [searchQuery, setSearchQuery] = useState("")
-  const [jaegerUrl, setJaegerUrl] = useState("http://localhost:16686")
-  useEffect(() => {
-    if (runtimeJaegerUrl) setJaegerUrl(runtimeJaegerUrl)
-  }, [runtimeJaegerUrl])
 
   useEffect(() => {
     const trace = (searchParams.get("trace") || "").trim()
-    if (trace) setSearchQuery(trace)
+    if (trace) {
+      setSearchQuery(trace)
+      setTraceDialogId(trace)
+    }
   }, [searchParams])
 
   useEffect(() => {
@@ -87,7 +77,6 @@ function LifecycleContent() {
   // Data fetching via custom hook
   const {
     events,
-    jaegerStatus,
     stats,
     recentTraces,
     activeRunsCount,
@@ -97,14 +86,12 @@ function LifecycleContent() {
     isLive,
     newEventIds,
     refresh,
-    refreshJaeger,
     toggleLive,
     scopePinned,
-    auditFetchJaegerUrl,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useLifecycle({ jaegerUrl })
+  } = useLifecycle()
 
   const handleExport = useCallback(async () => {
     if (!token.trim()) {
@@ -271,125 +258,6 @@ function LifecycleContent() {
               {isLive ? "Live" : "Paused"}
             </Button>
             
-            {/* Jaeger Integration Dialog */}
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-2 text-xs bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:text-primary/80 hover:border-primary/40">
-                  <Zap className="h-3.5 w-3.5" />
-                  Jaeger Integration
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-card border-border">
-                <DialogHeader>
-                  <DialogTitle className="text-foreground flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
-                      <Zap className="h-4 w-4 text-primary" />
-                    </div>
-                    Jaeger Tracing Integration
-                  </DialogTitle>
-                  <DialogDescription className="text-muted-foreground">
-                    Connect to your Jaeger instance to view distributed traces for ML pipeline executions.
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Jaeger UI Base URL
-                    </label>
-                    <Input
-                      value={jaegerUrl}
-                      onChange={(e) => setJaegerUrl(e.target.value)}
-                      placeholder="http://localhost:16686"
-                      className="border-border bg-background font-mono text-sm text-foreground"
-                    />
-                    <p className="text-[11px] text-muted-foreground/80">
-                      The base URL of your Jaeger UI instance. Traces will open at {jaegerUrl}/trace/[traceId]
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-3 rounded-lg border border-border bg-background p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Connection Status</span>
-                      <Badge variant="outline" className={cn(
-                        "text-[10px]",
-                        jaegerStatus?.connected
-                          ? "bg-[color:var(--status-success-bg)] border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]"
-                          : "bg-[color:var(--status-pending-bg)] border-[color:var(--status-pending-border)] text-[color:var(--status-pending-fg)]"
-                      )}>
-                        {jaegerStatus?.connected ? "Connected" : "Disconnected"}
-                      </Badge>
-                    </div>
-                    {jaegerStatus?.version && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Jaeger Version</span>
-                        <span className="text-sm font-mono text-muted-foreground">{jaegerStatus.version}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Events with Traces</span>
-                      <span className="text-sm font-medium text-foreground/90">{stats.withTraces} / {stats.total}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Trace Coverage</span>
-                      <span className="text-sm font-medium text-primary">{stats.tracePercent}%</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Quick Access - Recent Traces
-                    </label>
-                    <div className="space-y-1.5">
-                      {recentTraces.map((trace) => (
-                        <a
-                          key={trace.id}
-                          href={`${jaegerUrl}/trace/${trace.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={cn(
-                            "flex items-center justify-between rounded-md border border-border bg-background p-2 transition-colors hover:border-border hover:bg-muted/40 group",
-                            trace.isNew && "animate-highlight-pulse"
-                          )}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            {trace.status === "success" ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-[color:var(--status-success-fg)] shrink-0" />
-                            ) : trace.status === "failed" ? (
-                              <XCircle className="h-3.5 w-3.5 text-[color:var(--status-failed-fg)] shrink-0" />
-                            ) : (
-                              <Activity className="h-3.5 w-3.5 text-primary shrink-0" />
-                            )}
-                            <span className="text-xs text-foreground/90 truncate">{trace.title}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <code className="text-[10px] font-mono text-muted-foreground/80 group-hover:text-muted-foreground">
-                              {trace.id.slice(0, 8)}...
-                            </code>
-                            <ExternalLink className="h-3 w-3 text-muted-foreground/80 group-hover:text-primary" />
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="bg-card border-border text-muted-foreground hover:text-foreground"
-                    onClick={refreshJaeger}
-                  >
-                    Test Connection
-                  </Button>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
-                    Save Configuration
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-            
             <Button
               type="button"
               variant="outline"
@@ -441,16 +309,6 @@ function LifecycleContent() {
         {isAggregate ? (
           <div className="mb-4">
             <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} />
-          </div>
-        ) : null}
-        {auditFetchJaegerUrl ? (
-          <div className="mb-4 flex justify-end">
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
-              <a href={auditFetchJaegerUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3 w-3" />
-                Open last audit fetch in Jaeger
-              </a>
-            </Button>
           </div>
         ) : null}
         <div
@@ -658,7 +516,7 @@ function LifecycleContent() {
         </div>
       </div>
 
-      {/* Main: timeline + Jaeger sidebar */}
+      {/* Main: timeline + trace sidebar */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1">
           <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-6">
@@ -712,40 +570,6 @@ function LifecycleContent() {
             )}
           >
               <div className="space-y-4">
-                {/* Jaeger status card */}
-                <Card className="panel-surface">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-primary" />
-                        Jaeger Tracing
-                      </CardTitle>
-                      <Badge variant="outline" className={cn(
-                        "text-[10px]",
-                        jaegerStatus?.connected
-                          ? "bg-[color:var(--status-success-bg)] border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]"
-                          : "bg-[color:var(--status-pending-bg)] border-[color:var(--status-pending-border)] text-[color:var(--status-pending-fg)]"
-                      )}>
-                        {jaegerStatus?.connected ? "Connected" : "Disconnected"}
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-xs text-muted-foreground">
-                      Distributed tracing for ML pipelines
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="rounded-md border border-border bg-background p-2">
-                      <code className="text-[11px] font-mono text-muted-foreground break-all">{jaegerUrl}</code>
-                    </div>
-                    <Button variant="outline" size="sm" className="w-full h-8 gap-2 text-xs bg-primary/10 border-primary/30 text-primary hover:bg-primary/20" asChild>
-                      <a href={jaegerUrl} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Open Jaeger UI
-                      </a>
-                    </Button>
-                  </CardContent>
-                </Card>
-                
                 {/* Recent traces */}
                 <Card className="panel-surface">
                   <CardHeader className="pb-2">
@@ -787,7 +611,7 @@ function LifecycleContent() {
                           <code className="text-[10px] font-mono text-muted-foreground/80">
                             {trace.id.slice(0, 12)}...
                           </code>
-                          <JaegerLink traceId={trace.id} variant="link" size="sm" />
+                          <TraceLink traceId={trace.id} variant="link" size="sm" />
                         </div>
                       </div>
                     ))}
@@ -825,6 +649,15 @@ function LifecycleContent() {
           </div>
         </div>
       </div>
+      {traceDialogId ? (
+        <TraceExplorerDialog
+          traceId={traceDialogId}
+          open={Boolean(traceDialogId)}
+          onOpenChange={(next) => {
+            if (!next) setTraceDialogId(null)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

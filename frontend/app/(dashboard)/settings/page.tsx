@@ -67,7 +67,6 @@ function SettingsPageContent() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [draftToken, setDraftToken] = useState(token)
   const [copied, setCopied] = useState(false)
-  const [jaegerUrl, setJaegerUrl] = useState("https://jaeger.internal.acme.com")
   const [apiBaseUrl, setApiBaseUrl] = useState("/v1")
   const [scopeSwitching, setScopeSwitching] = useState(false)
   const hasLocalOverride = Boolean(readRuntimeConfigOverride())
@@ -131,9 +130,7 @@ function SettingsPageContent() {
     const apply = () => {
       const cfg = getRuntimeConfig()
       if (!cfg) return
-      const j = String(cfg.jaegerBaseUrl || cfg.observability?.jaeger_ui_url || "").trim()
       const a = String(cfg.apiBaseUrl || cfg.api_base_url || "").trim()
-      if (j) setJaegerUrl(j)
       if (a) setApiBaseUrl(a)
     }
     apply()
@@ -270,43 +267,6 @@ function SettingsPageContent() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="jaeger-url" className="text-sm text-muted-foreground">
-                      Jaeger Base URL
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="jaeger-url"
-                        value={jaegerUrl}
-                        onChange={(e) => setJaegerUrl(e.target.value)}
-                        placeholder="https://jaeger.example.com"
-                        className="bg-card border-border font-mono text-sm"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 gap-1.5 bg-card border-border"
-                        onClick={() => {
-                          const raw = jaegerUrl.trim().replace(/\/$/, "")
-                          if (!raw) {
-                            toast({
-                              variant: "destructive",
-                              title: "Empty URL",
-                              description: "Enter a Jaeger UI base URL first.",
-                            })
-                            return
-                          }
-                          window.open(raw, "_blank", "noopener,noreferrer")
-                        }}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Test
-                      </Button>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground/80">Used for deep-linking traces from audit events</p>
-                  </div>
-
-                  <div className="space-y-2">
                     <Label htmlFor="api-url" className="text-sm text-muted-foreground">
                       API Base URL
                     </Label>
@@ -329,7 +289,6 @@ function SettingsPageContent() {
                       className="gap-2 bg-primary hover:bg-primary/90"
                       onClick={() => {
                         const patch = {
-                          jaegerBaseUrl: jaegerUrl.trim(),
                           apiBaseUrl: apiBaseUrl.trim(),
                         }
                         writeRuntimeConfigOverride(patch)
@@ -337,7 +296,7 @@ function SettingsPageContent() {
                         toast({
                           title: "Saved in this browser",
                           description:
-                            "Jaeger and API base URLs apply for this session. Deploy config still wins after reset.",
+                            "API base URL applies for this session. Deploy config still wins after reset.",
                         })
                       }}
                     >

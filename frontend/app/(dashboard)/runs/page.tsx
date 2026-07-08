@@ -6,7 +6,7 @@ import { Play, Clock, CheckCircle2, XCircle, Loader2, Ban } from "lucide-react"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { JaegerLink } from "@/components/mlops/jaeger-link"
+import { TraceLink } from "@/components/mlops/trace-link"
 import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
@@ -105,7 +105,7 @@ const runListColumns: DataTableColumn<RunItem>[] = [
       return (
         <span onClick={(e) => e.stopPropagation()} className="inline-block">
           {traceId ? (
-            <JaegerLink traceId={traceId} variant="link" />
+            <TraceLink traceId={traceId} variant="link" />
           ) : (
             <span className="text-xs text-muted-foreground/80">—</span>
           )}

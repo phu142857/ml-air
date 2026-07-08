@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import os
+import re
 from contextvars import ContextVar
 from uuid import uuid4
 
 _trace_id_ctx: ContextVar[str] = ContextVar("mlair_trace_id", default="")
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+_HEX32_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
 
 
 def otel_enabled() -> bool:
@@ -102,3 +109,37 @@ def bind_request_trace_id(header_value: str | None) -> None:
             clear_trace_id()
         return
     set_trace_id(normalize_trace_id(header_value))
+
+
+def canonical_trace_id(trace_id: str | None) -> str | None:
+    """Normalize trace ids (traceparent, UUID, 32-hex) to lowercase 32-hex when possible."""
+    raw = (trace_id or "").strip()
+    if not raw:
+        return None
+    from_tp = trace_id_from_traceparent(raw)
+    if from_tp:
+        return from_tp
+    if _UUID_RE.match(raw):
+        return raw.replace("-", "").lower()
+    if _HEX32_RE.match(raw):
+        return raw.lower()
+    return raw[:128]
+
+
+def trace_id_lookup_candidates(trace_id: str | None) -> list[str]:
+    """Distinct values to match persisted ``trace_id`` fields."""
+    raw = (trace_id or "").strip()
+    if not raw:
+        return []
+    out: set[str] = set()
+    canonical = canonical_trace_id(raw)
+    if canonical:
+        out.add(canonical)
+        if len(canonical) == 32 and _HEX32_RE.match(canonical):
+            out.add(
+                f"{canonical[0:8]}-{canonical[8:12]}-{canonical[12:16]}-"
+                f"{canonical[16:20]}-{canonical[20:32]}"
+            )
+    out.add(raw)
+    out.add(raw.lower())
+    return [v for v in out if v]

@@ -84,10 +84,7 @@ services:
       ML_AIR_DEFAULT_MODEL_ARTIFACT_ROOT: ${ML_AIR_DEFAULT_MODEL_ARTIFACT_ROOT:-file:///mlair/artifacts/models}
       ML_AIR_DATASET_ARTIFACT_ROOT: ${ML_AIR_DATASET_ARTIFACT_ROOT:-file:///mlair/artifacts/datasets}
       ML_AIR_ENVIRONMENT: ${ML_AIR_ENVIRONMENT:-development}
-      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-1}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4317}
-      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
-      ML_AIR_JAEGER_UI_URL: ${ML_AIR_JAEGER_UI_URL:-http://localhost:16686}
+      ML_AIR_OTEL_ENABLED: ${ML_AIR_OTEL_ENABLED:-0}
       ML_AIR_GRAFANA_URL: ${ML_AIR_GRAFANA_URL:-http://localhost:33000}
       ML_AIR_RUNTIME_REALTIME_BASE_URL: ${ML_AIR_RUNTIME_REALTIME_BASE_URL:-ws://localhost:8080/ws}
       ML_AIR_RUNTIME_REALTIME_DEFAULT_URL: ${ML_AIR_RUNTIME_REALTIME_DEFAULT_URL:-ws://localhost:8080/ws}
@@ -109,20 +106,8 @@ services:
       - "9103"
       - "9104"
     depends_on:
-      jaeger:
-        condition: service_started
       minio:
         condition: service_started
-    restart: unless-stopped
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.76.0
-    container_name: ml-air-jaeger
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-    ports:
-      - "${ML_AIR_JAEGER_UI_PORT:-16686}:16686"
-      - "${ML_AIR_JAEGER_OTLP_GRPC_PORT:-4317}:4317"
     restart: unless-stopped
 
   minio:

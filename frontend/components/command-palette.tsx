@@ -38,11 +38,12 @@ import { fetchRuns, fetchRunsPage, searchApi, searchApiPage, fetchAuditTimelineP
 import { mapAuditTimelineItems } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
-import { useJaegerUiUrl } from "@/lib/use-jaeger-ui-url"
+import { TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { formatRelativeTime } from "@/lib/utils"
 import { normalizeStatus } from "@/lib/status-style"
 import { normalizeSearchHref } from "@/lib/search-href"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
+import { isTraceIdFormat } from "@/lib/trace-id"
 
 interface CommandPaletteProps {
   open: boolean
@@ -79,10 +80,6 @@ const quickActions = [
   { name: "Search page", href: "/search", icon: Search, description: "Full search results" },
 ]
 
-function isTraceIdFormat(query: string): boolean {
-  return /^[a-f0-9]{16,64}$/i.test(query.trim())
-}
-
 function runStatusKey(status: string): string {
   const t = normalizeStatus(status)
   if (t === "SUCCESS") return "success"
@@ -107,11 +104,11 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter()
-  const jaegerUiUrl = useJaegerUiUrl()
   const { tenantId, projectId, token } = useAppContext()
   const showExecutionNav = useCanSeeExecutionNav()
   const scopePinned = tenantId !== "all" && projectId !== "all"
   const [query, setQuery] = useState("")
+  const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
   const trimmedQuery = query.trim()
   const searchEnabled = open && Boolean(token?.trim()) && trimmedQuery.length >= 2
 
@@ -184,17 +181,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   }
 
   const handleTraceSelect = (traceId: string) => {
-    router.push(`/lifecycle?trace=${encodeURIComponent(traceId)}`)
+    setTraceDialogId(traceId)
     onOpenChange(false)
   }
 
-  const openJaegerTrace = (traceId: string) => {
-    const base = (jaegerUiUrl || "http://localhost:16686").replace(/\/$/, "")
-    window.open(`${base}/trace/${encodeURIComponent(traceId)}`, "_blank", "noopener,noreferrer")
+  const openTraceExplorer = (traceId: string) => {
+    setTraceDialogId(traceId)
     onOpenChange(false)
   }
 
   return (
+    <>
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
@@ -220,7 +217,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         {!scopePinned && trimmedQuery.length >= 2 && traceMode ? (
           <CommandGroup heading="Trace lookup">
             <div className="px-2 py-2 text-xs text-[color:var(--status-pending-fg)]">
-              Pin a workspace to load audit rows for this trace. Jaeger links below still work.
+              Pin a workspace to load audit rows for this trace.
             </div>
           </CommandGroup>
         ) : null}
@@ -264,18 +261,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 ))}
               </CommandGroup>
             ) : null}
-            <CommandGroup heading="Jaeger">
-              <CommandItem onSelect={() => openJaegerTrace(trimmedQuery)} className="flex items-center gap-3 py-2">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)]">
-                  <ExternalLink className="h-3.5 w-3.5 text-[color:var(--status-pending-fg)]" />
+            <CommandGroup heading="Trace explorer">
+              <CommandItem onSelect={() => openTraceExplorer(trimmedQuery)} className="flex items-center gap-3 py-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
+                  <Hash className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm">Open trace in Jaeger</span>
+                  <span className="text-sm">Open trace explorer</span>
                   <span className="font-mono text-xs text-muted-foreground">{trimmedQuery.slice(0, 24)}…</span>
                 </div>
-                <Badge variant="outline" className="h-5 border-[color:var(--status-pending-border)] text-[10px] text-[color:var(--status-pending-fg)]">
-                  External
-                </Badge>
               </CommandItem>
             </CommandGroup>
           </>
@@ -466,7 +460,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <div className="flex items-center gap-2">
                   <Hash className="h-3.5 w-3.5 text-primary" />
                   <span>
-                    Paste a <span className="font-mono text-primary">trace ID</span> (hex) for Jaeger + audit
+                    Paste a <span className="font-mono text-primary">trace ID</span> (hex) to open the trace explorer
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -481,5 +475,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         ) : null}
       </CommandList>
     </CommandDialog>
+    {traceDialogId ? (
+      <TraceExplorerDialog
+        traceId={traceDialogId}
+        open={Boolean(traceDialogId)}
+        onOpenChange={(next) => {
+          if (!next) setTraceDialogId(null)
+        }}
+      />
+    ) : null}
+    </>
   )
 }

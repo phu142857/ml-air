@@ -17,7 +17,7 @@ profile: development
 #   event_outbox: false
 
 # observability:
-#   jaeger_ui_url: http://localhost:16686
+#   otel_enabled: false
 #   otel_enabled: true
 
 # auth:

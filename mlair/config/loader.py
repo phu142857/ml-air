@@ -28,7 +28,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "dataset_hub_v2": True,
         "scope_debug_panel": True,
         "serving_slots_http": True,
-        "otel_enabled": True,
+        "otel_enabled": False,
         "event_outbox": True,
         "event_stream": True,
         "event_stream_global_fanout": True,
@@ -54,10 +54,8 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
     },
     "observability": {
         "grafana_url": "http://localhost:33000",
-        "jaeger_ui_url": "http://localhost:16686",
-        "otel_enabled": True,
-        "otel_exporter_otlp_endpoint": "jaeger:4317",
-        "realtime_ws": "ws://localhost:8001",
+        "otel_enabled": False,
+        "realtime_ws": "ws://localhost:8080/ws",
     },
     "auth": {"tracking_token": "admin-token"},
 }
@@ -230,8 +228,6 @@ def to_env_mapping(cfg: dict[str, Any]) -> dict[str, str]:
         env["ML_AIR_RUNTIME_REALTIME_BASE_URL"] = str(observability["realtime_ws"])
     if observability.get("otel_enabled") is not None:
         env["ML_AIR_OTEL_ENABLED"] = _bool_env(observability["otel_enabled"])
-    if observability.get("jaeger_ui_url"):
-        env["ML_AIR_JAEGER_UI_URL"] = str(observability["jaeger_ui_url"])
     if observability.get("otel_exporter_otlp_endpoint"):
         env["OTEL_EXPORTER_OTLP_ENDPOINT"] = str(observability["otel_exporter_otlp_endpoint"])
 

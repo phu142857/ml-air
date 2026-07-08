@@ -62,6 +62,7 @@ from app.domains.observability.semantic_observability_model import (
 )
 from app.domains.observability import audit_timeline_service
 from app.domains.observability import event_outbox_service
+from app.domains.observability import trace_detail_service
 from app.domains.observability import event_sequence_service
 from app.domains.observability import execution_projection_service
 from app.domains.observability import event_signing_service
@@ -1576,7 +1577,6 @@ def runtime_config_v1(request: Request) -> dict:
         "plugin_version_enforcement": plugin_version_enforcement_enabled(),
         **promotion_governance_runtime(),
     }
-    jaeger_ui = os.getenv("ML_AIR_JAEGER_UI_URL", "").strip() or None
     grafana_ui = os.getenv("ML_AIR_GRAFANA_URL", "").strip() or None
     api_base_url = resolve_runtime_api_base_url(request)
     realtime_base_url = resolve_runtime_realtime_base_url(request, api_base_url=api_base_url)
@@ -1589,7 +1589,6 @@ def runtime_config_v1(request: Request) -> dict:
         "hub_default_route": _hub_default_route(),
         "features": features,
         "observability": {
-            "jaeger_ui_url": jaeger_ui,
             "grafana_ui_url": grafana_ui,
             "semantic_observability_index": semantic_observability_index_dict(),
             "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
@@ -2565,6 +2564,26 @@ def list_audit_timeline_v1(
         readiness_status=readiness_status,
     )
     return page_response(page, include_offset=offset > 0 and not cursor)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/traces/{trace_id}")
+def get_trace_detail_v1(
+    tenant_id: str,
+    project_id: str,
+    trace_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """MLAir-native trace explorer: runs + semantic events correlated by ``trace_id``."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    detail = trace_detail_service.get_trace_detail(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        trace_id=trace_id,
+    )
+    if not detail:
+        raise HTTPException(status_code=404, detail="trace_not_found")
+    return detail
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/audit/timeline/export")

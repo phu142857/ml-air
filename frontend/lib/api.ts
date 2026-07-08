@@ -389,7 +389,6 @@ export type SemanticObservabilitySurface = {
 };
 
 export type RuntimeConfigObservability = {
-  jaeger_ui_url?: string | null;
   grafana_ui_url?: string | null;
   semantic_observability_surfaces?: SemanticObservabilitySurface[];
 };
@@ -863,6 +862,107 @@ export type AuditTimelineItem = {
   source: string | null;
   payload: Record<string, unknown>;
 };
+
+export type TraceDetailRun = {
+  run_id: string;
+  pipeline_id: string;
+  status: string;
+  created_at: string | null;
+  updated_at: string | null;
+  trace_id?: string | null;
+};
+
+export type TraceDetailEvent = {
+  event_id: string;
+  type: string;
+  ts: string;
+  trace_id?: string | null;
+  run_id?: string | null;
+  task_id?: string | null;
+  dataset_id?: string | null;
+  model_id?: string | null;
+  status?: string | null;
+  payload: Record<string, unknown>;
+};
+
+export type TraceDetailAuditEvent = {
+  ts: string | null;
+  kind: string;
+  resource_type: string;
+  resource_id: string;
+  source: string | null;
+  payload: Record<string, unknown>;
+};
+
+export type TraceDetailLog = {
+  ts: string | null;
+  level: string;
+  message: string;
+  trace_id?: string | null;
+  run_id: string;
+  task_id?: string | null;
+  plugin?: string | null;
+  payload: Record<string, unknown>;
+};
+
+export type TraceWaterfallStep = {
+  kind: "run" | "task" | string;
+  id: string;
+  label: string;
+  status: string;
+  start_ts: string | null;
+  end_ts: string | null;
+  duration_ms: number | null;
+  plugin?: string | null;
+  offset_ms: number;
+  width_ms: number;
+  end_offset_ms: number;
+  is_instant?: boolean;
+};
+
+export type TraceWaterfall = {
+  run_id: string;
+  pipeline_id?: string;
+  anchor_ts: string | null;
+  total_ms: number;
+  steps: TraceWaterfallStep[];
+};
+
+export type TraceDetailResponse = {
+  trace_id: string;
+  runs: TraceDetailRun[];
+  events: TraceDetailEvent[];
+  audit_events: TraceDetailAuditEvent[];
+  logs: TraceDetailLog[];
+  waterfall: TraceWaterfall | null;
+  primary_run_id: string | null;
+  event_count: number;
+  run_count: number;
+  audit_count: number;
+  log_count: number;
+};
+
+export async function fetchTraceDetail(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  traceId: string,
+): Promise<TraceDetailResponse> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const tid = encodeURIComponent(traceId.trim());
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/traces/${tid}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `trace fetch failed (${res.status})`);
+  }
+  return (await res.json()) as TraceDetailResponse;
+}
 
 async function fetchAuditTimelineForScope(
   tenantId: string,

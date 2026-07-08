@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchAuditTimeline, fetchAuditTimelinePage, fetchRuns } from "@/lib/api"
 import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
-import { jaegerTraceDeepLink } from "@/lib/jaeger-trace-url"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
@@ -17,11 +16,6 @@ export interface FetchState {
   status: LoadingState
   errorType: ErrorType
   error: Error | null
-}
-
-export interface JaegerStatus {
-  connected: boolean
-  version: string
 }
 
 export interface LifecycleStats {
@@ -52,13 +46,12 @@ function parseApiErrorStatus(err: unknown): number | undefined {
 }
 
 interface UseLifecycleOptions {
-  jaegerUrl?: string
   /** Poll interval when live mode is on (ms). */
   livePollMs?: number
 }
 
 export function useLifecycle(options: UseLifecycleOptions = {}) {
-  const { jaegerUrl = "", livePollMs = 15_000 } = options
+  const { livePollMs = 15_000 } = options
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { tenantId, projectId, token } = useAppContext()
@@ -82,13 +75,11 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
       return {
         events: mapAuditTimelineItems(page.items),
         traceparent: page.traceparent,
-        has_more: page.has_more,
         next_cursor: page.next_cursor,
       }
     },
     initialPageParam: null as string | null,
-    getNextPageParam: (last) =>
-      last.has_more && last.next_cursor ? last.next_cursor : undefined,
+    getNextPageParam: (last) => (last.next_cursor ? last.next_cursor : undefined),
     enabled: enabled && scopePinned,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
@@ -99,12 +90,11 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   const aggregateLifecycleQuery = useQuery({
     queryKey: mlairKeys.audit.timeline(tenantId, projectId),
     queryFn: async () => {
-      const { items, traceparent } = await fetchAuditTimeline(tenantId, projectId, token, {
+      const { items } = await fetchAuditTimeline(tenantId, projectId, token, {
         limit: AUDIT_PAGE_SIZE,
       })
       return {
         events: mapAuditTimelineItems(items),
-        traceparent,
       }
     },
     enabled: enabled && !scopePinned,
@@ -121,17 +111,6 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     staleTime: 20_000,
   })
 
-  const jaegerQuery = useQuery({
-    queryKey: mlairKeys.jaegerStatus(jaegerUrl || "default"),
-    queryFn: async (): Promise<JaegerStatus> => {
-      const url = jaegerUrl.trim()
-      if (!url) return { connected: false, version: "" }
-      return { connected: true, version: "" }
-    },
-    staleTime: 60_000,
-    retry: 0,
-  })
-
   const events: AuditEvent[] = useMemo(() => {
     if (scopePinned) {
       return infiniteLifecycleQuery.data?.pages.flatMap((p) => p.events) ?? []
@@ -140,15 +119,6 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
       ? aggregateLifecycleQuery.data.events
       : []
   }, [scopePinned, infiniteLifecycleQuery.data?.pages, aggregateLifecycleQuery.data?.events])
-
-  const traceparent = scopePinned
-    ? (infiniteLifecycleQuery.data?.pages[0]?.traceparent ?? null)
-    : (aggregateLifecycleQuery.data?.traceparent ?? null)
-
-  const auditFetchJaegerUrl = useMemo(
-    () => jaegerTraceDeepLink(jaegerUrl, traceparent),
-    [jaegerUrl, traceparent],
-  )
 
   const isLoading =
     scopePinned
@@ -179,24 +149,22 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     const first = data.find((e) => fresh.has(e.id))
     if (first && isLive) {
       toast({
-        title: "New update",
+        title: "New lifecycle event",
         description: first.title,
         className: "bg-card border-border text-foreground",
       })
     }
-    const t = setTimeout(() => {
-      setNewEventIds((prev) => {
-        const next = new Set(prev)
-        for (const id of fresh) next.delete(id)
-        return next
-      })
-    }, 2500)
-    return () => clearTimeout(t)
   }, [events, isLive, toast])
 
   const errorType: ErrorType = useMemo(() => {
+    if (scopePinned) {
+      const err = infiniteLifecycleQuery.error
+      if (!err) return null
+    } else {
+      const err = aggregateLifecycleQuery.error
+      if (!err) return null
+    }
     const err = scopePinned ? infiniteLifecycleQuery.error : aggregateLifecycleQuery.error
-    if (!err) return null
     const status = parseApiErrorStatus(err)
     if (status === 404) return "not-found"
     const msg = String((err as Error)?.message || "")
@@ -267,14 +235,7 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["audit-timeline", tenantId, projectId] })
     queryClient.invalidateQueries({ queryKey: mlairKeys.runs.list(tenantId, projectId), exact: false })
-    if (jaegerUrl.trim()) {
-      queryClient.invalidateQueries({ queryKey: mlairKeys.jaegerStatus(jaegerUrl) })
-    }
-  }, [queryClient, tenantId, projectId, jaegerUrl])
-
-  const refreshJaeger = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: mlairKeys.jaegerStatus(jaegerUrl || "default") })
-  }, [queryClient, jaegerUrl])
+  }, [queryClient, tenantId, projectId])
 
   const toggleLive = useCallback(() => {
     setIsLive((prev) => {
@@ -292,7 +253,6 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
 
   return {
     events,
-    jaegerStatus: jaegerQuery.data ?? null,
     stats,
     recentTraces,
     activeRunsCount,
@@ -301,12 +261,9 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     isRefreshing,
     isLive,
     newEventIds,
-    jaegerUrl,
     scopePinned,
     refresh,
-    refreshJaeger,
     toggleLive,
-    auditFetchJaegerUrl,
     fetchNextPage: scopePinned ? infiniteLifecycleQuery.fetchNextPage : undefined,
     hasNextPage: scopePinned ? infiniteLifecycleQuery.hasNextPage : false,
     isFetchingNextPage: scopePinned ? infiniteLifecycleQuery.isFetchingNextPage : false,

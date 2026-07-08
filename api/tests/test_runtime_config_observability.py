@@ -25,24 +25,19 @@ def _runtime_config_request() -> Request:
 
 
 class TestRuntimeConfigObservability(unittest.TestCase):
-    def test_observability_jaeger_url_from_env(self) -> None:
+    def test_observability_surface_keys(self) -> None:
         try:
             from app.api.routes import v1
         except ImportError:
             self.skipTest("API dependencies (fastapi) not installed")
-        with patch.dict(os.environ, {"ML_AIR_JAEGER_UI_URL": "http://localhost:16686"}, clear=False):
-            out = v1.runtime_config_v1(_runtime_config_request())
-        self.assertEqual(out.get("observability", {}).get("jaeger_ui_url"), "http://localhost:16686")
-
-    def test_observability_omitted_when_unset(self) -> None:
-        try:
-            from app.api.routes import v1
-        except ImportError:
-            self.skipTest("API dependencies (fastapi) not installed")
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("ML_AIR_JAEGER_UI_URL", None)
-            out = v1.runtime_config_v1(_runtime_config_request())
-        self.assertIsNone(out.get("observability", {}).get("jaeger_ui_url"))
+        out = v1.runtime_config_v1(_runtime_config_request())
+        obs = out.get("observability", {})
+        allowed = {
+            "grafana_ui_url",
+            "semantic_observability_index",
+            "semantic_observability_surfaces",
+        }
+        self.assertTrue(set(obs.keys()).issubset(allowed))
 
     def test_observability_includes_semantic_surfaces(self) -> None:
         try:

@@ -5,7 +5,7 @@ Lifecycle realtime events that are **not** mapped to a `SEMANTIC_OBSERVABILITY_S
 | Event type | Rationale |
 |------------|-----------|
 | `run.created` | Covered indirectly via run/task UIs; no dedicated counter in Phase 4 |
-| `run.updated` | High-volume status fan-out; use run detail + Jaeger |
+| `run.updated` | High-volume status fan-out; use run detail + Trace explorer |
 | `run.tracking.updated` | Tracking params/metrics; use run tracking API |
 | `task.updated` | Task scheduler events; use Tasks tab + execution graph |
 | `dataset.updated` | Dataset metadata edits; use Dataset Hub |

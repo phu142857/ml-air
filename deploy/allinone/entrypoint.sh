@@ -5,9 +5,7 @@ export PGDATA="${PGDATA:-/var/lib/postgresql/data}"
 export PGCLIENTENCODING="${PGCLIENTENCODING:-UTF8}"
 export ML_AIR_DATABASE_URL="${ML_AIR_DATABASE_URL:-postgresql://mlair:mlair@127.0.0.1:5432/mlair?client_encoding=utf8}"
 export ML_AIR_REDIS_URL="${ML_AIR_REDIS_URL:-redis://127.0.0.1:6379/0}"
-export ML_AIR_OTEL_ENABLED="${ML_AIR_OTEL_ENABLED:-1}"
-export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4317}"
-export OTEL_EXPORTER_OTLP_INSECURE="${OTEL_EXPORTER_OTLP_INSECURE:-true}"
+export ML_AIR_OTEL_ENABLED="${ML_AIR_OTEL_ENABLED:-0}"
 
 mkdir -p /var/log/supervisor /mlair/artifacts/datasets /mlair/artifacts/models
 chown -R appuser:appuser /mlair/artifacts

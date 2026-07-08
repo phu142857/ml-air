@@ -1,6 +1,6 @@
 # MLAir configuration
 
-Single reference for installing and running MLAir with **sensible defaults**. The default runtime is an **all-in-one app container** (`ml-air:latest`) plus the supporting local services MLAir needs for a full developer experience: Jaeger, Prometheus, Grafana, and MinIO.
+Single reference for installing and running MLAir with **sensible defaults**. The default runtime is an **all-in-one app container** (`ml-air:latest`) plus the supporting local services MLAir needs for a full developer experience: Prometheus, Grafana, and MinIO.
 
 ## Goal
 
@@ -16,7 +16,7 @@ mlair start               # start from images
 mlair health
 ```
 
-Open MLAir at `http://localhost:8080` (default). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. The default stack also starts local observability/storage companions on their standard ports: Jaeger `:16686`, Grafana `:33000`, Prometheus `:39090`, and MinIO console `:9001`.
+Open MLAir at `http://localhost:8080` (default). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. The default stack also starts local observability/storage companions on their standard ports: Grafana `:33000`, Prometheus `:39090`, and MinIO console `:9001`. Distributed traces are viewed in the Hub **Trace explorer** (popup from Runs, Lifecycle, or Command palette).
 
 No `mlair.yaml` required — profile **`development`** applies automatically.
 
@@ -119,7 +119,7 @@ features:
 
 observability:
   grafana_url: http://localhost:33000
-  jaeger_ui_url: http://localhost:16686
+  otel_enabled: false
 
 auth:
   tracking_token: admin-token

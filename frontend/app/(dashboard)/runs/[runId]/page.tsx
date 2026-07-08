@@ -24,7 +24,7 @@ import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContai
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { JaegerLink } from "@/components/mlops/jaeger-link"
+import { TraceLink } from "@/components/mlops/trace-link"
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { RunTasksUsageTable } from "@/components/mlops/run-tasks-usage-table"
@@ -533,7 +533,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       {
         label: "Trace",
         value: traceId ? (
-          <JaegerLink traceId={traceId} variant="link" />
+          <TraceLink traceId={traceId} variant="link" />
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -622,7 +622,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               {run ? (
                 <StatusBadge status={statusToMlopsBadge(run.status)} label={status.label} size="sm" />
               ) : null}
-              {traceId ? <JaegerLink traceId={traceId} className="shrink-0" /> : null}
+              {traceId ? <TraceLink traceId={traceId} className="shrink-0" /> : null}
               {canScope ? (
                 <Button variant="outline" size="sm" asChild className="h-8 gap-2 border-border bg-card text-xs">
                   <Link href={`/lineage?run=${encodeURIComponent(runId)}`}>

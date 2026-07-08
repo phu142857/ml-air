@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { StatusBadge } from "./status-badge"
-import { JaegerLink } from "./jaeger-link"
+import { TraceLink } from "./trace-link"
 import type { AuditEvent } from "@/lib/audit-event"
 import { formatDateTimeCompact, formatRelativeTime } from "@/lib/utils"
 
@@ -202,7 +202,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
                     <label className="text-[10px] font-bold uppercase text-muted-foreground/80 tracking-wider">Trace ID</label>
                     <p className="mt-0.5 break-all font-mono text-sm text-muted-foreground">{event.traceId}</p>
                   </div>
-                  <JaegerLink traceId={event.traceId} className="shrink-0" />
+                  <TraceLink traceId={event.traceId} className="shrink-0" />
                 </div>
               )}
             </div>

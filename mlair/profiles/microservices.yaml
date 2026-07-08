@@ -22,7 +22,7 @@ features:
   dataset_hub_v2: true
   scope_debug_panel: true
   serving_slots_http: true
-  otel_enabled: true
+  otel_enabled: false
   event_outbox: true
   event_stream: true
   event_stream_global_fanout: true
@@ -49,9 +49,7 @@ features:
 observability:
   grafana_url: http://localhost:33000
   realtime_ws: ws://localhost:8001
-  otel_enabled: true
-  jaeger_ui_url: http://localhost:16686
-  otel_exporter_otlp_endpoint: jaeger:4317
+  otel_enabled: false
 
 auth:
   tracking_token: admin-token
