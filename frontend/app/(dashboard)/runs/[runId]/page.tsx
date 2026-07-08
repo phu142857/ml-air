@@ -47,6 +47,7 @@ import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
 import { mergeRunListRow } from "@/lib/execution-live-merge"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
+import { toastError, toastSuccess } from "@/lib/toast-actions"
 import { formatRuntimeSeconds } from "@/lib/usage-format"
 import { isScopePinned } from "@/lib/scope"
 import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
@@ -257,6 +258,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const cancelMutation = useMutation({
     mutationFn: () => cancelRun(tenantId, projectId, runId, token),
     onSuccess: async () => {
+      toastSuccess("Run cancellation requested", runId)
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.detail(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.tasks(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.logs(runId) })
@@ -267,6 +269,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.executionGraph(tenantId, projectId, runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.runs.list(tenantId, projectId), exact: false })
     },
+    onError: (e) => toastError("Cancel failed", formatApiClientError(e)),
   })
 
   const poll = useRealtimeQueryPolling()

@@ -90,6 +90,7 @@ import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_DATASET_DETAIL } from "@/lib/scope-messages";
 import { cn, formatApiClientError, formatDateTimeCompact, formatRelativeTime } from "@/lib/utils";
+import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 
 /** Single accent for all dataset hub sections (matches list page + header). */
 const DATASET_SECTION_ACCENT = "emerald" as const;
@@ -267,13 +268,17 @@ export default function DatasetHubPage() {
         protect_referenced: retentionProtectReferenced
       }),
     onSuccess: async () => {
-      setRetentionMsg("Policy saved");
+      setRetentionMsg("");
+      toastSuccess("Retention policy saved");
       await queryClient.invalidateQueries({
         queryKey: mlairKeys.datasets.retentionPolicy(tenantId, projectId, datasetId)
       });
-      window.setTimeout(() => setRetentionMsg(""), 2000);
     },
-    onError: (e: unknown) => setRetentionMsg(String((e as Error)?.message || e))
+    onError: (e: unknown) => {
+      const msg = String((e as Error)?.message || e);
+      setRetentionMsg(msg);
+      toastError("Save failed", msg);
+    }
   });
 
   const retentionPreviewMutation = useMutation({
@@ -283,23 +288,34 @@ export default function DatasetHubPage() {
     },
     onSuccess: (data) => {
       setRetentionPreview({ eligible_count: data.eligible_count, candidates: data.candidates || [] });
-      setRetentionMsg(
-        data.eligible_count
-          ? `Preview: ${data.eligible_count} version(s) eligible for purge`
-          : "Preview: nothing to purge"
-      );
+      const msg = data.eligible_count
+        ? `Preview: ${data.eligible_count} version(s) eligible for purge`
+        : "Preview: nothing to purge";
+      setRetentionMsg(msg);
+      toastSuccess("Retention preview ready", msg);
     },
-    onError: (e: unknown) => setRetentionMsg(String((e as Error)?.message || e))
+    onError: (e: unknown) => {
+      const msg = String((e as Error)?.message || e);
+      setRetentionMsg(msg);
+      toastError("Preview failed", msg);
+    }
   });
 
   const retentionApplyMutation = useMutation({
     mutationFn: () => applyDatasetRetention(tenantId, projectId, datasetId, token, false),
     onSuccess: async (data) => {
-      setRetentionMsg(`Deleted ${(data.deleted || []).length} version(s)`);
+      const count = (data.deleted || []).length;
+      const msg = `Deleted ${count} version(s)`;
+      setRetentionMsg(msg);
+      toastSuccess("Retention applied", msg);
       setRetentionPreview(null);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) });
     },
-    onError: (e: unknown) => setRetentionMsg(String((e as Error)?.message || e))
+    onError: (e: unknown) => {
+      const msg = String((e as Error)?.message || e);
+      setRetentionMsg(msg);
+      toastError("Apply failed", msg);
+    }
   });
 
   useEffect(() => {
@@ -396,7 +412,8 @@ export default function DatasetHubPage() {
       });
     },
     onSuccess: async () => {
-      setAccumulationMsg("Materialization target saved.");
+      setAccumulationMsg("");
+      toastSuccess("Materialization target saved");
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) });
       await queryClient.invalidateQueries({
         queryKey: mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId),
@@ -404,13 +421,17 @@ export default function DatasetHubPage() {
       });
     },
     onError: (err: unknown) => {
-      setAccumulationMsg(describeTrainError(err));
+      const msg = describeTrainError(err);
+      setAccumulationMsg(msg);
+      toastError("Save failed", msg);
     }
   });
   const materializeBufferMutation = useMutation({
     mutationFn: async () => materializeDatasetBuffer(tenantId, projectId, datasetId, token),
     onSuccess: async (out) => {
-      setAccumulationMsg(`Materialized ${out.version} (${out.dataset_version_id.slice(0, 8)}…).`);
+      const msg = `Materialized ${out.version} (${out.dataset_version_id.slice(0, 8)}…).`;
+      setAccumulationMsg(msg);
+      toastSuccess("Buffer materialized", msg);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
@@ -421,14 +442,20 @@ export default function DatasetHubPage() {
         })
       ]);
     },
-    onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
+    onError: (err: unknown) => {
+      const msg = describeTrainError(err);
+      setAccumulationMsg(msg);
+      toastError("Materialize failed", msg);
+    }
   });
   const materializeScheduledMutation = useMutation({
     mutationFn: async () =>
       materializeScheduledDatasetBuffers(tenantId, projectId, token, Number.parseInt(scheduleTickLimit, 10) || 50),
     onSuccess: async (out) => {
       setScheduleTickResult(out);
-      setAccumulationMsg(`Schedule tick checked=${out.checked}, materialized=${out.materialized_count}.`);
+      const msg = `Schedule tick checked=${out.checked}, materialized=${out.materialized_count}.`;
+      setAccumulationMsg(msg);
+      toastSuccess("Schedule tick complete", msg);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId) }),
         queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) }),
@@ -439,7 +466,11 @@ export default function DatasetHubPage() {
         })
       ]);
     },
-    onError: (err: unknown) => setAccumulationMsg(describeTrainError(err))
+    onError: (err: unknown) => {
+      const msg = describeTrainError(err);
+      setAccumulationMsg(msg);
+      toastError("Schedule tick failed", msg);
+    }
   });
   const readinessEvaluationFilters = useMemo(
     () => ({
@@ -468,7 +499,9 @@ export default function DatasetHubPage() {
       });
     },
     onSuccess: async (out) => {
-      setEvaluatePersistMsg(`Recorded evaluation ${String(out.evaluation_id || "").slice(0, 8)}…`);
+      const msg = `Recorded evaluation ${String(out.evaluation_id || "").slice(0, 8)}…`;
+      setEvaluatePersistMsg(msg);
+      toastSuccess("Evaluation recorded", msg);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId),
@@ -481,7 +514,9 @@ export default function DatasetHubPage() {
       ]);
     },
     onError: (err: unknown) => {
-      setEvaluatePersistMsg(describeTrainError(err));
+      const msg = describeTrainError(err);
+      setEvaluatePersistMsg(msg);
+      toastError("Evaluation failed", msg);
     }
   });
   const patchVersionMetadataMutation = useMutation({
@@ -505,6 +540,7 @@ export default function DatasetHubPage() {
     },
     onSuccess: async () => {
       setVersionMetaMsg("");
+      toastSuccess("Version metadata updated");
       setVersionMetaTagInput("");
       setVersionMetaRefUrl("");
       setVersionMetaRefLabel("");
@@ -512,7 +548,9 @@ export default function DatasetHubPage() {
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId) });
     },
     onError: (err: unknown) => {
-      setVersionMetaMsg(describeTrainError(err));
+      const msg = describeTrainError(err);
+      setVersionMetaMsg(msg);
+      toastError("Metadata update failed", msg);
     }
   });
   const policiesQuery = useQuery({
@@ -758,6 +796,7 @@ export default function DatasetHubPage() {
     const ok = (await versionEditorRef.current?.save()) ?? false;
     setVersionEditorSaving(false);
     if (ok) {
+      toastSuccess("Version saved");
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
@@ -775,6 +814,7 @@ export default function DatasetHubPage() {
       setVersionEditorDirty(false);
     } else {
       setVersionEditorMsg("Save failed — check edits above.");
+      toastError("Save failed", "Check edits above.");
     }
     return ok;
   }, [datasetId, projectId, queryClient, tenantId]);
@@ -791,10 +831,15 @@ export default function DatasetHubPage() {
     mutationFn: () => deleteDataset(tenantId, projectId, datasetId, token),
     onSuccess: async () => {
       setDeleteDatasetOpen(false);
+      toastSuccess("Dataset deleted", datasetId);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.list(tenantId, projectId) });
       router.push("/datasets");
     },
-    onError: (err) => setDeleteMsg(String((err as Error)?.message || err)),
+    onError: (err) => {
+      const msg = String((err as Error)?.message || err);
+      setDeleteMsg(msg);
+      toastError("Delete failed", msg);
+    },
   });
 
   const deleteVersionMutation = useMutation({
@@ -803,12 +848,17 @@ export default function DatasetHubPage() {
     onSuccess: async () => {
       setDeleteVersionId(null);
       setDeleteMsg("");
+      toastSuccess("Version deleted");
       await queryClient.invalidateQueries({
         queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
       });
       await queryClient.invalidateQueries({ queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId) });
     },
-    onError: (err) => setDeleteMsg(String((err as Error)?.message || err)),
+    onError: (err) => {
+      const msg = String((err as Error)?.message || err);
+      setDeleteMsg(msg);
+      toastError("Delete failed", msg);
+    },
   });
 
   const versionColumns: DataTableColumn<DatasetVersionItem>[] = useMemo(() => {
@@ -875,7 +925,10 @@ export default function DatasetHubPage() {
               title={`Copy checksum: ${cs}`}
               onClick={(e) => {
                 e.stopPropagation();
-                void navigator.clipboard.writeText(cs);
+                void copyWithToast(cs, {
+                  successTitle: "Checksum copied",
+                  successDescription: `${cs.slice(0, 16)}…`,
+                });
               }}
             >
               <Copy className="h-3 w-3 shrink-0" aria-hidden />
@@ -1015,15 +1068,19 @@ export default function DatasetHubPage() {
                   setDownloadingVersionId(v.version_id);
                   try {
                     const base = (dataset?.name || "dataset").replace(/[^\w.-]+/g, "_");
+                    const filename = `${base}_${v.version}.csv`;
                     await downloadDatasetVersion(
                       tenantId,
                       projectId,
                       v.version_id,
                       token,
-                      `${base}_${v.version}.csv`
+                      filename
                     );
+                    toastSuccess("Download started", filename);
                   } catch (err) {
-                    setDownloadMsg(`Download failed: ${String((err as Error)?.message || err)}`);
+                    const msg = `Download failed: ${String((err as Error)?.message || err)}`;
+                    setDownloadMsg(msg);
+                    toastError("Download failed", String((err as Error)?.message || err));
                   } finally {
                     setDownloadingVersionId(null);
                   }

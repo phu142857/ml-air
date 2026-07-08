@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, Copy, Download, GitBranch, Link2, Loader2, Route, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download, GitBranch, Link2, Loader2, Route, X } from "lucide-react";
 
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph";
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { TraceWaterfallView } from "@/components/mlops/trace-waterfall";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +26,7 @@ import type {
   TraceWaterfallStep,
 } from "@/lib/api";
 import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
+import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 import { normalizeTraceId } from "@/lib/trace-id";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
 
@@ -57,83 +57,186 @@ function logLevelClass(level: string): string {
   return "text-foreground";
 }
 
-function PayloadCollapsible({ payload }: { payload: Record<string, unknown> }) {
-  const [open, setOpen] = useState(false);
+function filteredPayload(payload: Record<string, unknown>, omitKeys: string[]): Record<string, unknown> {
+  const out = { ...payload };
+  for (const key of omitKeys) {
+    delete out[key];
+  }
+  return out;
+}
+
+function payloadOmitKeysForSemantic(ev: TraceDetailEvent): string[] {
+  const omit = ["task_id", "taskId"];
+  if (ev.run_id) omit.push("run_id", "runId");
+  if (ev.dataset_id) omit.push("dataset_id", "datasetId");
+  if (ev.model_id) omit.push("model_id", "modelId");
+  return omit;
+}
+
+function payloadOmitKeysForAudit(ev: TraceDetailAuditEvent): string[] {
+  const rt = ev.resource_type.toLowerCase();
+  const omit: string[] = [];
+  if (rt === "task") omit.push("task_id", "taskId");
+  if (rt === "run") omit.push("run_id", "runId");
+  if (rt === "dataset" || rt === "dataset_version") omit.push("dataset_id", "datasetId", "dataset_version_id");
+  if (rt === "model" || rt === "model_version") omit.push("model_id", "modelId", "model_version_id");
+  return omit;
+}
+
+function hasPayload(payload: Record<string, unknown>): boolean {
   const text = JSON.stringify(payload, null, 2);
+  return Boolean(text && text !== "{}");
+}
+
+function PayloadBlock({
+  payload,
+  omitKeys = [],
+}: {
+  payload: Record<string, unknown>;
+  omitKeys?: string[];
+}) {
+  const filtered = filteredPayload(payload, omitKeys);
+  const text = JSON.stringify(filtered, null, 2);
   if (!text || text === "{}") return null;
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mt-2">
-      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
-        Payload
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-[10px] text-foreground">
-          {text}
-        </pre>
-      </CollapsibleContent>
-    </Collapsible>
+    <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-2 font-mono text-[10px] text-foreground">
+      {text}
+    </pre>
+  );
+}
+
+function semanticExpandedContent(ev: TraceDetailEvent): boolean {
+  const omit = payloadOmitKeysForSemantic(ev);
+  return (
+    Boolean(ev.run_id || ev.dataset_id || ev.model_id) || hasPayload(filteredPayload(ev.payload, omit))
   );
 }
 
 function SemanticEventCard({ ev }: { ev: TraceDetailEvent }) {
+  const [expanded, setExpanded] = useState(false);
+  const omitKeys = payloadOmitKeysForSemantic(ev);
+  const expandable = semanticExpandedContent(ev);
+
   return (
-    <div className="panel-surface rounded-lg border border-border p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-          semantic
-        </span>
-        <span className="text-sm font-medium text-foreground">{ev.type || "event"}</span>
-        <StatusBadge status={statusFromValue(ev.status)} size="sm" />
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">{formatDateTimeCompact(ev.ts)}</span>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-        {ev.run_id ? (
-          <Link href={`/runs/${encodeURIComponent(ev.run_id)}`} className="link-primary font-mono">
-            run {ev.run_id.slice(0, 8)}…
-          </Link>
+    <div
+      className={cn(
+        "panel-surface overflow-hidden rounded-lg border border-border transition-all duration-200",
+        expanded && "border-border bg-card shadow-lg shadow-black/20",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => expandable && setExpanded((v) => !v)}
+        className={cn(
+          "flex w-full items-start gap-2 p-3 text-left transition-colors",
+          expandable && "cursor-pointer hover:bg-muted/50",
+        )}
+        disabled={!expandable}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+              semantic
+            </span>
+            <span className="text-sm font-medium text-foreground">{ev.type || "event"}</span>
+            <StatusBadge status={statusFromValue(ev.status)} size="sm" />
+            <span className="ml-auto font-mono text-[10px] text-muted-foreground sm:ml-0">
+              {formatDateTimeCompact(ev.ts)}
+            </span>
+          </div>
+        </div>
+        {expandable ? (
+          expanded ? (
+            <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          )
         ) : null}
-        {ev.task_id ? <span className="font-mono">task {String(ev.task_id).slice(0, 8)}…</span> : null}
-        {ev.dataset_id ? (
-          <Link href={`/datasets/${encodeURIComponent(ev.dataset_id)}`} className="link-primary font-mono">
-            dataset {ev.dataset_id.slice(0, 8)}…
-          </Link>
-        ) : null}
-        {ev.model_id ? (
-          <Link href={`/models/${encodeURIComponent(ev.model_id)}`} className="link-primary font-mono">
-            model {ev.model_id.slice(0, 8)}…
-          </Link>
-        ) : null}
-      </div>
-      <PayloadCollapsible payload={ev.payload} />
+      </button>
+      {expanded ? (
+        <div className="animate-in zoom-in-95 space-y-3 border-t border-border p-3 duration-200">
+          {ev.run_id || ev.dataset_id || ev.model_id ? (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {ev.run_id ? (
+                <Link href={`/runs/${encodeURIComponent(ev.run_id)}`} className="link-primary font-mono">
+                  run {ev.run_id.slice(0, 8)}…
+                </Link>
+              ) : null}
+              {ev.dataset_id ? (
+                <Link href={`/datasets/${encodeURIComponent(ev.dataset_id)}`} className="link-primary font-mono">
+                  dataset {ev.dataset_id.slice(0, 8)}…
+                </Link>
+              ) : null}
+              {ev.model_id ? (
+                <Link href={`/models/${encodeURIComponent(ev.model_id)}`} className="link-primary font-mono">
+                  model {ev.model_id.slice(0, 8)}…
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+          <PayloadBlock payload={ev.payload} omitKeys={omitKeys} />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function AuditEventCard({ ev }: { ev: TraceDetailAuditEvent }) {
+  const [expanded, setExpanded] = useState(false);
+  const omitKeys = payloadOmitKeysForAudit(ev);
+  const expandable = hasPayload(filteredPayload(ev.payload, omitKeys));
   const status =
     typeof ev.payload?.status === "string"
       ? ev.payload.status
       : typeof ev.payload?.new_status === "string"
         ? ev.payload.new_status
         : null;
+
   return (
-    <div className="panel-surface rounded-lg border border-border p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
-          audit
-        </span>
-        <span className="text-sm font-medium text-foreground">{ev.kind}</span>
-        {status ? <StatusBadge status={statusFromValue(status)} size="sm" /> : null}
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-          {formatDateTimeCompact(ev.ts)}
-        </span>
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {ev.resource_type} · <span className="font-mono">{ev.resource_id}</span>
-        {ev.source ? ` · ${ev.source}` : null}
-      </p>
-      <PayloadCollapsible payload={ev.payload} />
+    <div
+      className={cn(
+        "panel-surface overflow-hidden rounded-lg border border-border transition-all duration-200",
+        expanded && "border-border bg-card shadow-lg shadow-black/20",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => expandable && setExpanded((v) => !v)}
+        className={cn(
+          "flex w-full items-start gap-2 p-3 text-left transition-colors",
+          expandable && "cursor-pointer hover:bg-muted/50",
+        )}
+        disabled={!expandable}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              audit
+            </span>
+            <span className="text-sm font-medium text-foreground">{ev.kind}</span>
+            {status ? <StatusBadge status={statusFromValue(status)} size="sm" /> : null}
+            <span className="ml-auto font-mono text-[10px] text-muted-foreground sm:ml-0">
+              {formatDateTimeCompact(ev.ts)}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+            {ev.resource_type} · <span className="font-mono">{ev.resource_id}</span>
+            {ev.source ? ` · ${ev.source}` : null}
+          </p>
+        </div>
+        {expandable ? (
+          expanded ? (
+            <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          )
+        ) : null}
+      </button>
+      {expanded ? (
+        <div className="animate-in zoom-in-95 border-t border-border p-3 duration-200">
+          <PayloadBlock payload={ev.payload} omitKeys={omitKeys} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -212,30 +315,38 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
     });
   };
 
-  const copyTraceId = async () => {
-    try {
-      await navigator.clipboard.writeText(normalized);
-    } catch {
-      /* ignore */
-    }
-  };
+  const copyTraceId = () =>
+    void copyWithToast(normalized, {
+      successTitle: "Trace ID copied",
+      successDescription: normalized.slice(0, 24) + (normalized.length > 24 ? "…" : ""),
+    });
 
-  const copyShareLink = async () => {
-    try {
-      await navigator.clipboard.writeText(buildTraceShareUrl(normalized));
-    } catch {
-      /* ignore */
-    }
-  };
+  const copyShareLink = () =>
+    void copyWithToast(buildTraceShareUrl(normalized), {
+      successTitle: "Share link copied",
+      successDescription: "Paste in chat or bookmark — opens Trace explorer on any Hub page.",
+    });
 
   const handleExport = async () => {
     if (tenantId === "all" || projectId === "all") return;
     setExporting(true);
     try {
       await downloadTraceExport(tenantId, projectId, token, normalized);
+      toastSuccess("Trace exported", `mlair-trace-${normalized.slice(0, 16)}.json`);
+    } catch (err) {
+      toastError("Export failed", String((err as Error)?.message || err));
     } finally {
       setExporting(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    const result = await refetch();
+    if (result.isError) {
+      toastError("Refresh failed", String((result.error as Error)?.message || result.error));
+      return;
+    }
+    toastSuccess("Trace refreshed");
   };
 
   const waterfall = data?.unified_waterfall ?? data?.waterfall ?? null;
@@ -281,7 +392,7 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
               variant="ghost"
               size="sm"
               className="h-7 px-2"
-              onClick={() => void refetch()}
+              onClick={() => void handleRefresh()}
               disabled={isFetching}
             >
               {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}

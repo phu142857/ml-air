@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
 import { mlairKeys } from "@/lib/query-keys";
+import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { formatDateTimeCompact } from "@/lib/utils";
 
 type Props = {
@@ -106,12 +107,16 @@ export function PipelineConfigEditorDialog({
       }
       return createPipelineVersionApi(tenantId, projectId, pipelineId, token, config);
     },
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       setSaveErr("");
+      toastSuccess("Pipeline version published", created?.version != null ? `v${created.version}` : undefined);
       await qc.invalidateQueries({ queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId) });
       onOpenChange(false);
     },
-    onError: (e: Error) => setSaveErr(e.message),
+    onError: (e: Error) => {
+      setSaveErr(e.message);
+      toastError("Publish failed", e.message);
+    },
   });
 
   return (

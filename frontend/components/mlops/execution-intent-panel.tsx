@@ -24,6 +24,7 @@ import {
 } from "@/lib/mlair-policy-readiness";
 import { executeTrainingIntent } from "@/lib/training-intent";
 import { describeTrainError } from "@/lib/describe-train-error";
+import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { feedbackMessageClass, STATUS_CHIP_TEXT } from "@/lib/status-style";
 import { mlairKeys } from "@/lib/query-keys";
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
@@ -241,7 +242,10 @@ export function ExecutionIntentPanel({
           overrideConfig: policyPayload,
           context: buildRunContext(selectedModelId),
         });
-        if (res.run_id) router.push(`/runs/${encodeURIComponent(res.run_id)}`);
+        if (res.run_id) {
+          toastSuccess("Run started", res.run_id);
+          router.push(`/runs/${encodeURIComponent(res.run_id)}`);
+        }
         return;
       }
       const res = await executeTrainingIntent(tenantId, projectId, token, {
@@ -254,9 +258,14 @@ export function ExecutionIntentPanel({
         overrideConfig: policyPayload,
         context: buildRunContext(),
       });
-      if (res.run_id) router.push(`/runs/${encodeURIComponent(res.run_id)}`);
+      if (res.run_id) {
+        toastSuccess("Run started", res.run_id);
+        router.push(`/runs/${encodeURIComponent(res.run_id)}`);
+      }
     } catch (err) {
-      setMsg(describeTrainError(err));
+      const msg = describeTrainError(err);
+      setMsg(msg);
+      toastError("Run failed", msg);
     } finally {
       setSubmitting(false);
     }

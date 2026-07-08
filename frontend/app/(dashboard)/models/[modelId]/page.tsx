@@ -63,6 +63,7 @@ import {
 } from "@/lib/model-governance-ui";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
+import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
 import { ModelProvenancePanel } from "@/components/mlops/model-provenance-panel";
@@ -261,11 +262,16 @@ export default function ModelDetailPage() {
   const promoteMutation = useMutation({
     mutationFn: ({ version, stage }: { version: number; stage: string }) =>
       promoteModelVersion(tenantId, projectId, modelId, token, { version, stage }),
-    onSuccess: async () => {
+    onSuccess: async (_data, { version, stage }) => {
       setVersionBanner("");
+      toastSuccess(`Promoted to ${stage}`, `Version v${version}`);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
-    onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
+    onError: (e: unknown) => {
+      const msg = formatApiClientError(e);
+      setVersionBanner(msg);
+      toastError("Promotion failed", msg);
+    }
   });
 
   const servingQuery = useQuery({
@@ -281,21 +287,34 @@ export default function ModelDetailPage() {
         approval_status: p.approval_status,
         reason: p.approval_status === "rejected" ? "rejected via UI" : null
       }),
-    onSuccess: async () => {
+    onSuccess: async (_data, { version, approval_status }) => {
       setVersionBanner("");
+      toastSuccess(
+        approval_status === "approved" ? "Version approved" : "Version rejected",
+        `v${version}`,
+      );
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
     },
-    onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
+    onError: (e: unknown) => {
+      const msg = formatApiClientError(e);
+      setVersionBanner(msg);
+      toastError("Approval update failed", msg);
+    }
   });
 
   const servingAssignMutation = useMutation({
     mutationFn: (p: { slot: string; version: number }) =>
       setModelServingSlot(tenantId, projectId, modelId, p.slot, token, { version: p.version }),
-    onSuccess: async () => {
+    onSuccess: async (_data, { slot, version }) => {
       setVersionBanner("");
+      toastSuccess("Serving slot updated", `${slot} → v${version}`);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.serving(tenantId, projectId, modelId) });
     },
-    onError: (e: unknown) => setVersionBanner(formatApiClientError(e))
+    onError: (e: unknown) => {
+      const msg = formatApiClientError(e);
+      setVersionBanner(msg);
+      toastError("Serving update failed", msg);
+    }
   });
   const triggerPolicyMutation = useMutation({
     mutationFn: () =>
@@ -308,31 +327,37 @@ export default function ModelDetailPage() {
         training_policy_id: null,
       }),
     onSuccess: async (saved) => {
-      setPolicyMsg("Saved");
+      setPolicyMsg("");
+      toastSuccess("Trigger policy saved");
       setTriggerMode(saved.trigger_mode);
       setDebounceMinutes(String(saved.debounce_minutes || 10));
       setScheduleCron(saved.schedule_cron || "0 */6 * * *");
       setTriggerDatasetId(saved.dataset_id || "");
       setTriggerDatasetVersionId(saved.dataset_version_id || "");
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.triggerPolicy(tenantId, projectId, modelId) });
-      window.setTimeout(() => setPolicyMsg(""), 1500);
     },
-    onError: (e: any) => {
-      setPolicyMsg(`Save failed: ${String(e?.message || e)}`);
+    onError: (e: unknown) => {
+      const msg = formatApiClientError(e);
+      setPolicyMsg(`Save failed: ${msg}`);
+      toastError("Save failed", msg);
     }
   });
   const deleteModelMutation = useMutation({
     mutationFn: () => deleteModel(tenantId, projectId, modelId, token),
     onSuccess: async () => {
+      toastSuccess("Model deleted", modelId);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.list(tenantId, projectId) });
       router.push("/models");
-    }
+    },
+    onError: (e: unknown) => toastError("Delete failed", formatApiClientError(e)),
   });
   const deleteVersionMutation = useMutation({
     mutationFn: (version: number) => deleteModelVersion(tenantId, projectId, modelId, version, token),
-    onSuccess: async () => {
+    onSuccess: async (_data, version) => {
+      toastSuccess("Version deleted", `v${version}`);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.versions(tenantId, projectId, modelId) });
-    }
+    },
+    onError: (e: unknown) => toastError("Delete failed", formatApiClientError(e)),
   });
  
   const openConfirm = (title: string, body: string, action: () => Promise<void>) => {

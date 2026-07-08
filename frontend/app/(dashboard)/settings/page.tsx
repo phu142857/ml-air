@@ -31,6 +31,7 @@ import { useAppContext, type AccessibleScopeRow } from "@/lib/app-context"
 import { fetchTenantQuotas, fetchTenantQuotaUsage, upsertTenantQuotas } from "@/lib/api"
 import { switchScopeWithRetry } from "@/lib/scope-switch"
 import { useToast } from "@/hooks/use-toast"
+import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_TABS = ["runtime", "api", "scope", "governance", "plugins", "design-tokens"] as const
@@ -114,12 +115,16 @@ function SettingsPageContent() {
           : null,
       }),
     onSuccess: async () => {
-      setQuotaMsg("Quotas saved")
+      setQuotaMsg("")
+      toastSuccess("Quotas saved")
       await queryClient.invalidateQueries({ queryKey: ["tenant-quotas", tenantId] })
       await queryClient.invalidateQueries({ queryKey: ["tenant-quota-usage", tenantId] })
-      window.setTimeout(() => setQuotaMsg(""), 2000)
     },
-    onError: (e: unknown) => setQuotaMsg(String((e as Error)?.message || e)),
+    onError: (e: unknown) => {
+      const msg = String((e as Error)?.message || e)
+      setQuotaMsg(msg)
+      toastError("Save failed", msg)
+    },
   })
 
   useEffect(() => {
@@ -172,9 +177,15 @@ function SettingsPageContent() {
   const handleCopy = () => {
     const t = draftToken.trim()
     if (!t) return
-    void navigator.clipboard.writeText(t)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    void copyWithToast(t, {
+      successTitle: "Token copied",
+      successDescription: "Paste into Authorization headers or CLI tools.",
+    }).then((ok) => {
+      if (ok) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
+    })
   }
 
   const scopeTableColumns: DataTableColumn<AccessibleScopeRow>[] = useMemo(
@@ -444,7 +455,14 @@ function SettingsPageContent() {
                     size="sm"
                     className="shrink-0 gap-2 border-border bg-card"
                     disabled={!token.trim() || isScopeLoading}
-                    onClick={() => void refreshBootstrap()}
+                    onClick={async () => {
+                      try {
+                        await refreshBootstrap()
+                        toastSuccess("Access list refreshed")
+                      } catch (e) {
+                        toastError("Refresh failed", String((e as Error)?.message || e))
+                      }
+                    }}
                   >
                     {isScopeLoading ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />

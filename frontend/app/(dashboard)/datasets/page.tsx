@@ -31,6 +31,7 @@ import { useDatasetsList } from "@/hooks/use-datasets-list"
 import { SCOPE_AGGREGATE_DATASETS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { useToast } from "@/hooks/use-toast"
+import { toastSuccess } from "@/lib/toast-actions"
 
 const datasetTableColumns: DataTableColumn<DatasetItem>[] = [
   {
@@ -127,8 +128,14 @@ export default function DatasetsPage() {
 
   const previewMutation = useMutation({
     mutationFn: (f: File) => previewDatasetUpload(tenantId, projectId, token, f),
-    onSuccess: (data) => setPreviewRows(data.row_count),
-    onError: () => setPreviewRows(null),
+    onSuccess: (data) => {
+      setPreviewRows(data.row_count)
+      toastSuccess("Preview ready", `${data.row_count.toLocaleString()} rows detected`)
+    },
+    onError: () => {
+      setPreviewRows(null)
+      toast({ variant: "destructive", title: "Preview failed", description: "Could not parse the selected file." })
+    },
   })
 
   const filtered = useMemo(() => {

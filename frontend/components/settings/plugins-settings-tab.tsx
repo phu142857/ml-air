@@ -14,6 +14,7 @@ import { STATUS_CHIP_CLASS } from "@/lib/status-style";
 import { MlopsEmptyState, DetailSection } from "@/components/mlops/layout";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import type { PluginItem } from "@/lib/api";
+import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 
 export function PluginsSettingsTab() {
@@ -36,15 +37,19 @@ export function PluginsSettingsTab() {
   const reloadMutation = useMutation({
     mutationFn: () => reloadPlugins(token),
     onSuccess: async () => {
+      toastSuccess("Plugins reloaded");
       await queryClient.invalidateQueries({ queryKey: mlairKeys.plugins.all(), exact: false });
-    }
+    },
+    onError: (e) => toastError("Reload failed", String((e as Error)?.message || e)),
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => togglePlugin(name, enabled, token),
-    onSuccess: async () => {
+    onSuccess: async (_data, { name, enabled }) => {
+      toastSuccess(enabled ? "Plugin enabled" : "Plugin disabled", name);
       await queryClient.invalidateQueries({ queryKey: mlairKeys.plugins.all(), exact: false });
-    }
+    },
+    onError: (e) => toastError("Toggle failed", String((e as Error)?.message || e)),
   });
 
   const pluginOptions = useMemo(

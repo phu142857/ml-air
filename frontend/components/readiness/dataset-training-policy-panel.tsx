@@ -11,6 +11,7 @@ import {
   upsertDatasetTrainingPolicy,
   type DatasetTrainingPolicy,
 } from "@/lib/api";
+import { toastError, toastSuccess } from "@/lib/toast-actions";
 
 const POLICY_TRIGGER_MODE_OPTIONS = [
   { value: "manual", label: "manual" },
@@ -138,9 +139,12 @@ export function DatasetTrainingPolicyPanel({
         ...payload,
       });
       await onPolicyMutated?.();
-      setPolicyMsg("Policy saved and readiness re-evaluated.");
+      setPolicyMsg("");
+      toastSuccess("Policy saved", "Readiness re-evaluated.");
     } catch (err) {
-      setPolicyMsg(`Policy update failed: ${String((err as Error)?.message || err)}`);
+      const msg = `Policy update failed: ${String((err as Error)?.message || err)}`;
+      setPolicyMsg(msg);
+      toastError("Policy update failed", msg);
     } finally {
       setSaving(false);
     }
@@ -155,9 +159,12 @@ export function DatasetTrainingPolicyPanel({
       onSelectedPolicyIdChange(created.policy_id);
       syncDraftsFromPolicy(created);
       await onPolicyMutated?.();
-      setPolicyMsg("Policy created and selected.");
+      setPolicyMsg("");
+      toastSuccess("Policy created", created.policy_id);
     } catch (err) {
-      setPolicyMsg(`Create policy failed: ${String((err as Error)?.message || err)}`);
+      const msg = `Create policy failed: ${String((err as Error)?.message || err)}`;
+      setPolicyMsg(msg);
+      toastError("Create policy failed", msg);
     } finally {
       setSaving(false);
     }

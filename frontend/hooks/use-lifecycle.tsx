@@ -246,6 +246,12 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
           description: "Timeline refreshes from the audit API on an interval.",
           className: "bg-card border-border text-foreground",
         })
+      } else {
+        toast({
+          title: "Live updates disabled",
+          description: "Timeline will no longer auto-refresh.",
+          className: "bg-card border-border text-foreground",
+        })
       }
       return next
     })

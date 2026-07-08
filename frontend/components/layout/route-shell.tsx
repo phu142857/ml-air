@@ -7,6 +7,7 @@ import { Topbar } from "./topbar"
 import { CommandPalette } from "@/components/command-palette"
 import { TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { TraceUrlSync } from "@/components/mlops/trace-url-sync"
+import { useRealtimeStatusToasts } from "@/hooks/use-realtime-status-toasts"
 import { useAppContext } from "@/lib/app-context"
 
 interface RouteShellProps {
@@ -18,6 +19,8 @@ export function RouteShell({ children }: RouteShellProps) {
   const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
   const { tenantId, projectId } = useAppContext()
   const scopePinned = tenantId !== "all" && projectId !== "all"
+
+  useRealtimeStatusToasts(scopePinned)
 
   const handleOpenTraceFromUrl = useCallback((traceId: string) => {
     setTraceDialogId(traceId)
