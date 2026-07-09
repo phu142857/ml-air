@@ -194,5 +194,7 @@ export const mlairKeys = {
       ["trace-detail", tenantId, projectId, traceId] as const,
     search: (tenantId: string, projectId: string, query: string) =>
       ["trace-search", tenantId, projectId, query] as const,
+    list: (tenantId: string, projectId: string, offset: number) =>
+      ["trace-list", tenantId, projectId, offset] as const,
   },
 };

@@ -118,48 +118,43 @@ def _row_from_readable(span: Any) -> dict[str, Any] | None:
     }
 
 
-def persist_readable_spans(spans: Sequence[Any]) -> int:
-    """Insert or update spans from an OTEL export batch."""
-    rows: list[dict[str, Any]] = []
-    for span in spans:
-        row = _row_from_readable(span)
-        if row:
-            rows.append(row)
+_INSERT_SQL = """
+INSERT INTO trace_spans (
+  trace_id, span_id, parent_span_id, tenant_id, project_id,
+  service_name, name, kind, status, start_ts, end_ts, duration_ms, attributes
+) VALUES (
+  %(trace_id)s, %(span_id)s, %(parent_span_id)s, %(tenant_id)s, %(project_id)s,
+  %(service_name)s, %(name)s, %(kind)s, %(status)s, %(start_ts)s, %(end_ts)s, %(duration_ms)s,
+  %(attributes)s::jsonb
+)
+ON CONFLICT (trace_id, span_id) DO UPDATE SET
+  parent_span_id = EXCLUDED.parent_span_id,
+  tenant_id = COALESCE(EXCLUDED.tenant_id, trace_spans.tenant_id),
+  project_id = COALESCE(EXCLUDED.project_id, trace_spans.project_id),
+  service_name = EXCLUDED.service_name,
+  name = EXCLUDED.name,
+  kind = EXCLUDED.kind,
+  status = EXCLUDED.status,
+  start_ts = EXCLUDED.start_ts,
+  end_ts = EXCLUDED.end_ts,
+  duration_ms = EXCLUDED.duration_ms,
+  attributes = EXCLUDED.attributes
+"""
+
+
+def persist_span_rows(rows: Sequence[dict[str, Any]]) -> int:
     if not rows:
         return 0
-
-    sql = """
-    INSERT INTO trace_spans (
-      trace_id, span_id, parent_span_id, tenant_id, project_id,
-      service_name, name, kind, status, start_ts, end_ts, duration_ms, attributes
-    ) VALUES (
-      %(trace_id)s, %(span_id)s, %(parent_span_id)s, %(tenant_id)s, %(project_id)s,
-      %(service_name)s, %(name)s, %(kind)s, %(status)s, %(start_ts)s, %(end_ts)s, %(duration_ms)s,
-      %(attributes)s::jsonb
-    )
-    ON CONFLICT (trace_id, span_id) DO UPDATE SET
-      parent_span_id = EXCLUDED.parent_span_id,
-      tenant_id = COALESCE(EXCLUDED.tenant_id, trace_spans.tenant_id),
-      project_id = COALESCE(EXCLUDED.project_id, trace_spans.project_id),
-      service_name = EXCLUDED.service_name,
-      name = EXCLUDED.name,
-      kind = EXCLUDED.kind,
-      status = EXCLUDED.status,
-      start_ts = EXCLUDED.start_ts,
-      end_ts = EXCLUDED.end_ts,
-      duration_ms = EXCLUDED.duration_ms,
-      attributes = EXCLUDED.attributes
-    """
     written = 0
     try:
         with _db_conn() as conn:
             with conn.cursor() as cur:
                 for row in rows:
                     cur.execute(
-                        sql,
+                        _INSERT_SQL,
                         {
                             **row,
-                            "attributes": json.dumps(row["attributes"], default=str),
+                            "attributes": json.dumps(row.get("attributes") or {}, default=str),
                         },
                     )
                     written += 1
@@ -167,3 +162,13 @@ def persist_readable_spans(spans: Sequence[Any]) -> int:
         logger.warning("trace_span_persist_failed count=%s err=%s", len(rows), exc)
         raise
     return written
+
+
+def persist_readable_spans(spans: Sequence[Any]) -> int:
+    """Insert or update spans from an OTEL export batch."""
+    rows: list[dict[str, Any]] = []
+    for span in spans:
+        row = _row_from_readable(span)
+        if row:
+            rows.append(row)
+    return persist_span_rows(rows)

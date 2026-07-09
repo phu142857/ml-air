@@ -28,10 +28,11 @@ def ensure_worker_tracing(*, service_name: str) -> None:
     from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
     from sdk.mlair_trace.db_exporter import DbSpanExporter
+    from sdk.mlair_trace.sampling import build_trace_sampler
 
     set_global_textmap(TraceContextTextMapPropagator())
     resource = Resource.create({SERVICE_NAME: service_name})
-    provider = TracerProvider(resource=resource)
+    provider = TracerProvider(resource=resource, sampler=build_trace_sampler())
     provider.add_span_processor(BatchSpanProcessor(DbSpanExporter()))
     trace.set_tracer_provider(provider)
     _provider_set = True

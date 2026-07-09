@@ -7,8 +7,13 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from app.domains.observability.trace_dependency_service import build_service_dependency_graph
 from app.domains.observability.trace_service import canonical_trace_id, trace_id_lookup_candidates
-from app.domains.observability.trace_span_service import fetch_stored_trace, search_stored_traces
+from app.domains.observability.trace_span_service import (
+    fetch_stored_trace,
+    list_project_traces,
+    search_stored_traces,
+)
 from app.domains.observability.trace_unified_service import build_unified_waterfall, trace_is_live
 from app.domains.shared.db_service import db_conn
 
@@ -384,12 +389,24 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
     audit_events = _fetch_audit_for_runs(tenant_id=tenant_id, project_id=project_id, run_ids=run_ids)
     logs = _fetch_logs_for_runs(run_ids)
     waterfall = _build_waterfall(primary_run_id)
-    otel_trace = fetch_stored_trace(trace_id=canonical or trace_id.strip())
+    otel_trace = fetch_stored_trace(
+        trace_id=canonical or trace_id.strip(),
+        tenant_id=tenant_id,
+        project_id=project_id,
+    )
     unified_waterfall = build_unified_waterfall(
         trace_id=canonical or trace_id.strip(),
         waterfall=waterfall,
         otel_trace=otel_trace,
         primary_run_id=primary_run_id,
+    )
+    service_graph = build_service_dependency_graph(
+        trace_id=canonical or trace_id.strip(),
+        tenant_id=tenant_id,
+        project_id=project_id,
+        unified_waterfall=unified_waterfall,
+        otel_trace=otel_trace,
+        waterfall=waterfall,
     )
     is_live = trace_is_live(
         runs=runs,
@@ -410,6 +427,7 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
         "waterfall": waterfall,
         "otel_trace": otel_trace,
         "unified_waterfall": unified_waterfall,
+        "service_graph": service_graph,
         "is_live": is_live,
         "primary_run_id": primary_run_id,
         "event_count": len(events),
@@ -419,6 +437,59 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
         "otel_span_count": int((otel_trace or {}).get("span_count") or 0),
         "unified_step_count": int((unified_waterfall or {}).get("step_count") or 0),
     }
+
+
+def _list_traces_db(*, tenant_id: str, project_id: str, limit: int) -> list[dict[str, Any]]:
+    sql = """
+    (
+      SELECT DISTINCT config_snapshot->>'trace_id' AS trace_id, MAX(created_at) AS last_seen, 'run' AS source
+      FROM runs
+      WHERE tenant_id = %(tenant_id)s AND project_id = %(project_id)s
+        AND config_snapshot IS NOT NULL
+        AND config_snapshot->>'trace_id' IS NOT NULL
+      GROUP BY config_snapshot->>'trace_id'
+    )
+    UNION ALL
+    (
+      SELECT DISTINCT envelope->>'trace_id' AS trace_id, MAX(created_at) AS last_seen, 'semantic' AS source
+      FROM semantic_event_outbox
+      WHERE tenant_id = %(tenant_id)s AND project_id = %(project_id)s
+        AND envelope->>'trace_id' IS NOT NULL
+      GROUP BY envelope->>'trace_id'
+    )
+    ORDER BY last_seen DESC
+    LIMIT %(limit)s
+    """
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql,
+                    {"tenant_id": tenant_id, "project_id": project_id, "limit": max(1, min(limit, 100))},
+                )
+                rows = cur.fetchall()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("trace_list_db_failed err=%s", exc)
+        return []
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for trace_id, last_seen, source in rows:
+        tid = canonical_trace_id(str(trace_id or "")) or str(trace_id or "").strip()
+        if not tid or tid in seen:
+            continue
+        seen.add(tid)
+        out.append(
+            {
+                "trace_id": tid,
+                "last_seen": _iso(last_seen),
+                "source": str(source),
+                "root_service": None,
+                "root_name": None,
+                "duration_ms": None,
+            }
+        )
+    return out
 
 
 def _search_traces_db(*, tenant_id: str, project_id: str, query: str, limit: int) -> list[dict[str, Any]]:
@@ -492,11 +563,33 @@ def _search_traces_db(*, tenant_id: str, project_id: str, query: str, limit: int
     return out
 
 
-def search_traces(*, tenant_id: str, project_id: str, query: str, limit: int = 20) -> dict[str, Any]:
+def search_traces(
+    *,
+    tenant_id: str,
+    project_id: str,
+    query: str | None = None,
+    limit: int = 20,
+    service: str | None = None,
+    status: str | None = None,
+    tag: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
     """Search traces in MLAir DB and native span store."""
     lim = max(1, min(int(limit), 50))
-    db_rows = _search_traces_db(tenant_id=tenant_id, project_id=project_id, query=query, limit=lim)
-    span_rows = search_stored_traces(query=query, limit=lim)
+    q = str(query or "").strip()
+    db_rows: list[dict[str, Any]] = []
+    if q and len(q) >= 4:
+        db_rows = _search_traces_db(tenant_id=tenant_id, project_id=project_id, query=q, limit=lim)
+    span_rows = search_stored_traces(
+        query=q or None,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        service=service,
+        status=status,
+        tag=tag,
+        run_id=run_id,
+        limit=lim,
+    )
 
     merged: dict[str, dict[str, Any]] = {}
     for row in db_rows:
@@ -510,4 +603,36 @@ def search_traces(*, tenant_id: str, project_id: str, query: str, limit: int = 2
             merged[tid] = row
 
     items = list(merged.values())[:lim]
-    return {"query": query.strip(), "items": items, "count": len(items)}
+    return {"query": q, "items": items, "count": len(items)}
+
+
+def list_traces(
+    *,
+    tenant_id: str,
+    project_id: str,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Browse recent traces for a project (runs DB + span store)."""
+    lim = max(1, min(int(limit), 100))
+    off = max(0, int(offset))
+    db_rows = _list_traces_db(tenant_id=tenant_id, project_id=project_id, limit=lim)
+    span_rows = list_project_traces(tenant_id=tenant_id, project_id=project_id, limit=lim, offset=off)
+
+    merged: dict[str, dict[str, Any]] = {}
+    for row in db_rows:
+        merged[row["trace_id"]] = row
+    for row in span_rows:
+        tid = row["trace_id"]
+        if tid in merged:
+            merged[tid] = {**merged[tid], **{k: v for k, v in row.items() if v}}
+            merged[tid]["source"] = "mlair+spans"
+        else:
+            merged[tid] = row
+
+    items = sorted(
+        merged.values(),
+        key=lambda row: str(row.get("last_seen") or row.get("start_ts") or ""),
+        reverse=True,
+    )[:lim]
+    return {"items": items, "count": len(items), "limit": lim, "offset": off}

@@ -968,6 +968,11 @@ export type TraceWaterfall = {
   otel_count?: number;
 };
 
+export type TraceServiceGraph = {
+  nodes: Array<{ id: string; label: string }>;
+  edges: Array<{ from: string; to: string; count: number }>;
+};
+
 export type TraceSearchHit = {
   trace_id: string;
   last_seen?: string | null;
@@ -984,6 +989,13 @@ export type TraceSearchResponse = {
   count: number;
 };
 
+export type TraceListResponse = {
+  items: TraceSearchHit[];
+  count: number;
+  limit: number;
+  offset: number;
+};
+
 export type TraceDetailResponse = {
   trace_id: string;
   runs: TraceDetailRun[];
@@ -993,6 +1005,7 @@ export type TraceDetailResponse = {
   waterfall: TraceWaterfall | null;
   otel_trace: TraceOtelTrace | null;
   unified_waterfall: TraceWaterfall | null;
+  service_graph?: TraceServiceGraph | null;
   is_live: boolean;
   primary_run_id: string | null;
   event_count: number;
@@ -1031,11 +1044,24 @@ export async function fetchTraceSearch(
   token: string,
   query: string,
   limit = 20,
+  filters?: {
+    service?: string;
+    status?: string;
+    tag?: string;
+    runId?: string;
+  },
 ): Promise<TraceSearchResponse> {
   const scopedProjectId = normalizeProjectId(projectId);
-  const q = encodeURIComponent(query.trim());
+  const params = new URLSearchParams();
+  const q = query.trim();
+  if (q) params.set("q", q);
+  if (filters?.service) params.set("service", filters.service);
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.tag) params.set("tag", filters.tag);
+  if (filters?.runId) params.set("run_id", filters.runId);
+  params.set("limit", String(limit));
   const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/traces/search?q=${q}&limit=${limit}`,
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/traces/search?${params}`,
     {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       cache: "no-store",
@@ -1046,6 +1072,30 @@ export async function fetchTraceSearch(
     throw new Error(msg || `trace search failed (${res.status})`);
   }
   return (await res.json()) as TraceSearchResponse;
+}
+
+export async function fetchTraceList(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<TraceListResponse> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const params = new URLSearchParams();
+  params.set("limit", String(opts?.limit ?? 50));
+  params.set("offset", String(opts?.offset ?? 0));
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/traces?${params}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `trace list failed (${res.status})`);
+  }
+  return (await res.json()) as TraceListResponse;
 }
 
 export async function downloadTraceExport(

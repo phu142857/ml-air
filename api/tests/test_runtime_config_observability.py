@@ -36,6 +36,8 @@ class TestRuntimeConfigObservability(unittest.TestCase):
             "grafana_ui_url",
             "semantic_observability_index",
             "semantic_observability_surfaces",
+            "trace_span_retention_days",
+            "trace_sample_ratio",
         }
         self.assertTrue(set(obs.keys()).issubset(allowed))
 

@@ -23,6 +23,7 @@ class TestTraceIdNormalization(unittest.TestCase):
 
 
 class TestTraceDetailService(unittest.TestCase):
+    @patch("app.domains.observability.trace_detail_service.build_service_dependency_graph")
     @patch("app.domains.observability.trace_detail_service.fetch_stored_trace")
     @patch("app.domains.observability.trace_detail_service._build_waterfall")
     @patch("app.domains.observability.trace_detail_service._fetch_logs_for_runs")
@@ -37,6 +38,7 @@ class TestTraceDetailService(unittest.TestCase):
         mock_logs: MagicMock,
         mock_waterfall: MagicMock,
         mock_stored: MagicMock,
+        mock_graph: MagicMock,
     ) -> None:
         mock_runs.return_value = [
             {
@@ -110,6 +112,7 @@ class TestTraceDetailService(unittest.TestCase):
             "span_count": 1,
             "spans": [],
         }
+        mock_graph.return_value = {"nodes": [{"id": "mlair-api", "label": "mlair-api"}], "edges": []}
 
         detail = trace_detail_service.get_trace_detail(
             tenant_id="t1",
@@ -125,8 +128,13 @@ class TestTraceDetailService(unittest.TestCase):
         self.assertIsNotNone(detail["waterfall"])
         self.assertEqual(detail["otel_span_count"], 1)
         self.assertIsNotNone(detail.get("unified_waterfall"))
+        self.assertIsNotNone(detail.get("service_graph"))
         self.assertFalse(detail.get("is_live"))
-        mock_stored.assert_called_once()
+        mock_stored.assert_called_once_with(
+            trace_id="abc123",
+            tenant_id="t1",
+            project_id="p1",
+        )
         mock_audit.assert_called_once_with(tenant_id="t1", project_id="p1", run_ids=["run-1"])
         mock_logs.assert_called_once_with(["run-1"])
         mock_waterfall.assert_called_once_with("run-1")

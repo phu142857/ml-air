@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, Copy, Download, GitBranch, Link2, Loader2, R
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph";
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { TraceWaterfallView } from "@/components/mlops/trace-waterfall";
+import { TraceServiceGraphView } from "@/components/mlops/trace-service-graph";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -388,6 +389,9 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
                   Waterfall ({data.unified_step_count ?? waterfall?.steps.length ?? 0})
                 </TabsTrigger>
                 <TabsTrigger value="logs">Logs ({data.log_count ?? data.logs?.length ?? 0})</TabsTrigger>
+                <TabsTrigger value="services">
+                  Services ({data.service_graph?.nodes?.length ?? 0})
+                </TabsTrigger>
                 <TabsTrigger value="runs">Runs ({data.run_count})</TabsTrigger>
                 {data.primary_run_id ? <TabsTrigger value="graph">Execution graph</TabsTrigger> : null}
               </TabsList>
@@ -424,6 +428,10 @@ export function TraceExplorerDialog({ traceId, open, onOpenChange }: TraceExplor
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="services" className="space-y-3">
+                <TraceServiceGraphView graph={data.service_graph} />
               </TabsContent>
 
               <TabsContent value="runs" className="space-y-3">

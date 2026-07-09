@@ -275,6 +275,11 @@ class ReplayRunIn(BaseModel):
     from_task_id: str = Field(min_length=1)
     idempotency_key: str | None = None
     plugin_name: str | None = None
+
+
+class TraceSpanIngestIn(BaseModel):
+    resource: dict = Field(default_factory=dict)
+    spans: list[dict] = Field(default_factory=list)
     context: dict = Field(default_factory=dict)
 
 
@@ -1592,6 +1597,8 @@ def runtime_config_v1(request: Request) -> dict:
             "grafana_ui_url": grafana_ui,
             "semantic_observability_index": semantic_observability_index_dict(),
             "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
+            "trace_span_retention_days": int(os.getenv("ML_AIR_TRACE_SPAN_RETENTION_DAYS", "30") or "30"),
+            "trace_sample_ratio": float(os.getenv("ML_AIR_OTEL_TRACE_SAMPLE_RATIO", "1") or "1"),
         },
         "build": {
             "frontend_version": os.getenv("ML_AIR_FRONTEND_VERSION", "").strip() or None,
@@ -2566,23 +2573,76 @@ def list_audit_timeline_v1(
     return page_response(page, include_offset=offset > 0 and not cursor)
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/traces")
+def list_traces_v1(
+    tenant_id: str,
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Browse recent traces for a project."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return trace_detail_service.list_traces(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/traces/search")
 def search_traces_v1(
     tenant_id: str,
     project_id: str,
-    q: str = Query(..., min_length=4, description="Trace ID prefix or fragment"),
+    q: str | None = Query(default=None, description="Trace ID prefix or fragment"),
+    service: str | None = Query(default=None, description="Filter by service name"),
+    status: str | None = Query(default=None, description="Filter by span status (FAILED, SUCCESS, …)"),
+    tag: str | None = Query(default=None, description="Attribute filter key:value"),
+    run_id: str | None = Query(default=None, description="Filter by mlair.run_id attribute"),
     limit: int = Query(default=20, ge=1, le=50),
     authorization: str | None = Header(default=None),
 ) -> dict:
     """Search traces in MLAir DB and the native span store."""
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    query = str(q or "").strip()
+    if len(query) < 4 and not any([service, status, tag, run_id]):
+        raise HTTPException(
+            status_code=422,
+            detail="trace_search_requires_query_or_filter",
+        )
     return trace_detail_service.search_traces(
         tenant_id=tenant_id,
         project_id=project_id,
-        query=q,
+        query=query or None,
         limit=limit,
+        service=service,
+        status=status,
+        tag=tag,
+        run_id=run_id,
     )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/traces/ingest")
+def ingest_trace_spans_v1(
+    tenant_id: str,
+    project_id: str,
+    payload: TraceSpanIngestIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Ingest OTLP-style span batches from external workers or collectors."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="editor")
+    from sdk.mlair_trace.ingest import ingest_span_batch
+
+    written = ingest_span_batch(
+        payload.model_dump(),
+        tenant_id=tenant_id,
+        project_id=project_id,
+    )
+    return {"ok": True, "spans_written": written}
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/traces/{trace_id}/export")

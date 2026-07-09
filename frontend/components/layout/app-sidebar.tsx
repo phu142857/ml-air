@@ -13,6 +13,7 @@ import {
   Network,
   Settings,
   LayoutDashboard,
+  Route,
 } from "lucide-react"
 import {
   Sidebar,
@@ -38,6 +39,7 @@ type NavItem = {
 const lifecycleNav: NavItem[] = [
   { title: "Datasets", href: "/datasets", icon: Database },
   { title: "Lifecycle", href: "/lifecycle", icon: History },
+  { title: "Traces", href: "/traces", icon: Route },
   { title: "Models", href: "/models", icon: Box },
   { title: "Lineage", href: "/lineage", icon: Network },
 ]

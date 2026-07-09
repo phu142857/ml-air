@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, Search } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+
+import { Button } from "@/components/ui/button";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
@@ -145,14 +147,22 @@ function sourceBadge(source?: string): string | null {
   return null;
 }
 
-function TimelineGridOverlay({ ticks, scaleMs }: { ticks: number[]; scaleMs: number }) {
+function TimelineGridOverlay({
+  ticks,
+  scaleMs,
+  zoomMin = 0,
+}: {
+  ticks: number[];
+  scaleMs: number;
+  zoomMin?: number;
+}) {
   return (
     <div className="relative h-full min-h-[1px]">
       {ticks.map((tick) => (
         <div
           key={tick}
           className="absolute top-0 bottom-0 w-px bg-border/50"
-          style={{ left: `${(tick / scaleMs) * 100}%` }}
+          style={{ left: `${((tick - zoomMin) / scaleMs) * 100}%` }}
         />
       ))}
     </div>
@@ -162,15 +172,27 @@ function TimelineGridOverlay({ ticks, scaleMs }: { ticks: number[]; scaleMs: num
 function WaterfallBar({
   step,
   scaleMs,
+  zoomMin = 0,
   selected,
   onSelect,
+  onZoomMouseDown,
+  onZoomMouseMove,
+  onZoomMouseUp,
+  refAreaLeft,
+  refAreaRight,
 }: {
   step: TraceWaterfallStep;
   scaleMs: number;
+  zoomMin?: number;
   selected?: boolean;
   onSelect?: (step: TraceWaterfallStep) => void;
+  onZoomMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onZoomMouseMove?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onZoomMouseUp?: () => void;
+  refAreaLeft?: number | null;
+  refAreaRight?: number | null;
 }) {
-  const leftPct = (step.offset_ms / scaleMs) * 100;
+  const leftPct = ((step.offset_ms - zoomMin) / scaleMs) * 100;
   const widthPct = step.is_instant ? 0 : Math.max((step.width_ms / scaleMs) * 100, 0.35);
   const isRunning = statusToMlopsBadge(step.status) === "running";
   const fill = barToneClass(step.status, isRunning);
@@ -179,12 +201,25 @@ function WaterfallBar({
 
   return (
     <div
-      className="relative h-9 overflow-hidden rounded-lg border border-border/50 bg-muted/20"
+      className="relative h-9 cursor-crosshair overflow-hidden rounded-lg border border-border/50 bg-muted/20"
       style={{
         backgroundImage:
           "repeating-linear-gradient(to right, transparent 0px, transparent 79px, rgba(120,120,120,.12) 80px)",
       }}
+      onMouseDown={onZoomMouseDown}
+      onMouseMove={onZoomMouseMove}
+      onMouseUp={onZoomMouseUp}
+      onMouseLeave={onZoomMouseUp}
     >
+      {refAreaLeft != null && refAreaRight != null ? (
+        <div
+          className="pointer-events-none absolute top-1 bottom-1 z-0 rounded bg-primary/15 ring-1 ring-primary/30"
+          style={{
+            left: `${((Math.min(refAreaLeft, refAreaRight) - zoomMin) / scaleMs) * 100}%`,
+            width: `${(Math.abs(refAreaRight - refAreaLeft) / scaleMs) * 100}%`,
+          }}
+        />
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -198,7 +233,10 @@ function WaterfallBar({
               selected && "ring-2 ring-primary",
               fill,
             )}
-            onClick={() => onSelect?.(step)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect?.(step);
+            }}
             style={
               step.is_instant
                 ? { left: `${leftPct}%` }
@@ -234,13 +272,25 @@ function WaterfallBar({
 function WaterfallRow({
   step,
   scaleMs,
+  zoomMin = 0,
   selected,
   onSelect,
+  onZoomMouseDown,
+  onZoomMouseMove,
+  onZoomMouseUp,
+  refAreaLeft,
+  refAreaRight,
 }: {
   step: RowModel;
   scaleMs: number;
+  zoomMin?: number;
   selected?: boolean;
   onSelect?: (step: TraceWaterfallStep) => void;
+  onZoomMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onZoomMouseMove?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onZoomMouseUp?: () => void;
+  refAreaLeft?: number | null;
+  refAreaRight?: number | null;
 }) {
   const href = stepHref(step);
   const duration = step.is_instant ? null : (step.duration_ms ?? (step.width_ms > 0 ? step.width_ms : null));
@@ -294,7 +344,18 @@ function WaterfallRow({
         </div>
       </div>
 
-      <WaterfallBar step={step} scaleMs={scaleMs} selected={selected} onSelect={onSelect} />
+      <WaterfallBar
+        step={step}
+        scaleMs={scaleMs}
+        zoomMin={zoomMin}
+        selected={selected}
+        onSelect={onSelect}
+        onZoomMouseDown={onZoomMouseDown}
+        onZoomMouseMove={onZoomMouseMove}
+        onZoomMouseUp={onZoomMouseUp}
+        refAreaLeft={refAreaLeft}
+        refAreaRight={refAreaRight}
+      />
 
       <div className="text-right font-mono text-[11px] tabular-nums text-foreground">
         {step.is_instant ? <span className="text-muted-foreground">queued</span> : formatWaterfallDuration(duration)}
@@ -310,13 +371,63 @@ function WaterfallRow({
 export function TraceWaterfallView({
   waterfall,
   variant = "run",
+  onStepSelect,
 }: {
   waterfall: TraceWaterfall;
   variant?: "run" | "otel" | "unified";
+  onStepSelect?: (step: TraceWaterfallStep | null) => void;
 }) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const scaleMs = Math.max(waterfall.total_ms, 1);
-  const gridTicks = useMemo(() => buildGridTicks(scaleMs), [scaleMs]);
+  const totalMs = Math.max(waterfall.total_ms, 1);
+  const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null);
+  const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
+  const [refAreaRight, setRefAreaRight] = useState<number | null>(null);
+
+  const zoomMin = zoomDomain?.[0] ?? 0;
+  const zoomMax = zoomDomain?.[1] ?? totalMs;
+  const scaleMs = Math.max(zoomMax - zoomMin, 1);
+  const gridTicks = useMemo(() => buildGridTicks(scaleMs).map((t) => t + zoomMin), [scaleMs, zoomMin]);
+
+  const msFromClientX = useCallback(
+    (clientX: number, rect: DOMRect) => {
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(rect.width, 1)));
+      return zoomMin + ratio * scaleMs;
+    },
+    [scaleMs, zoomMin],
+  );
+
+  const handleZoomMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setRefAreaLeft(msFromClientX(e.clientX, rect));
+      setRefAreaRight(null);
+    },
+    [msFromClientX],
+  );
+
+  const handleZoomMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (refAreaLeft == null) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      setRefAreaRight(msFromClientX(e.clientX, rect));
+    },
+    [msFromClientX, refAreaLeft],
+  );
+
+  const handleZoomMouseUp = useCallback(() => {
+    if (refAreaLeft == null || refAreaRight == null || refAreaLeft === refAreaRight) {
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      return;
+    }
+    const left = Math.min(refAreaLeft, refAreaRight);
+    const right = Math.max(refAreaLeft, refAreaRight);
+    setZoomDomain([left, right]);
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  }, [refAreaLeft, refAreaRight]);
+
+  const resetZoom = useCallback(() => setZoomDomain(null), []);
 
   const rows = useMemo<RowModel[]>(() => {
     const unifiedMode = variant === "unified";
@@ -356,7 +467,11 @@ export function TraceWaterfallView({
   }, [variant, waterfall.steps]);
 
   const handleStepSelect = (step: TraceWaterfallStep) => {
-    setSelectedStepId((prev) => (prev === step.id ? null : step.id));
+    setSelectedStepId((prev) => {
+      const next = prev === step.id ? null : step.id;
+      onStepSelect?.(next ? step : null);
+      return next;
+    });
   };
 
   const sections = useMemo<SectionModel[]>(() => {
@@ -400,7 +515,18 @@ export function TraceWaterfallView({
         }
       `}</style>
 
-      <div className="space-y-3">
+      <div className="relative space-y-3 select-none">
+        {zoomDomain ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={resetZoom}
+            className="absolute bottom-3 right-3 z-20 h-7 border-border bg-card/90 px-2 text-xs backdrop-blur"
+          >
+            <Search className="mr-1 h-3.5 w-3.5" />
+            Reset zoom
+          </Button>
+        ) : null}
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div
             className={cn(
@@ -417,7 +543,7 @@ export function TraceWaterfallView({
           <div className="relative divide-y divide-border/70">
             <div className={cn(GRID_COLS, "pointer-events-none absolute inset-0 px-3")}>
               <div />
-              <TimelineGridOverlay ticks={gridTicks} scaleMs={scaleMs} />
+              <TimelineGridOverlay ticks={gridTicks} scaleMs={scaleMs} zoomMin={zoomMin} />
               <div />
               <div />
             </div>
@@ -451,8 +577,14 @@ export function TraceWaterfallView({
                             key={`${step.source || "x"}-${step.id}`}
                             step={step}
                             scaleMs={scaleMs}
+                            zoomMin={zoomMin}
                             selected={selectedStepId === step.id}
                             onSelect={handleStepSelect}
+                            onZoomMouseDown={handleZoomMouseDown}
+                            onZoomMouseMove={handleZoomMouseMove}
+                            onZoomMouseUp={handleZoomMouseUp}
+                            refAreaLeft={refAreaLeft}
+                            refAreaRight={refAreaRight}
                           />
                         ))
                       : null}

@@ -141,11 +141,12 @@ def init_fastapi_otel(app: "FastAPI") -> None:
     from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
     from sdk.mlair_trace.db_exporter import DbSpanExporter
+    from sdk.mlair_trace.sampling import build_trace_sampler
 
     service = os.getenv("OTEL_SERVICE_NAME", "mlair-api").strip() or "mlair-api"
     set_global_textmap(TraceContextTextMapPropagator())
     resource = Resource.create({SERVICE_NAME: service})
-    provider = TracerProvider(resource=resource)
+    provider = TracerProvider(resource=resource, sampler=build_trace_sampler())
     provider.add_span_processor(BatchSpanProcessor(DbSpanExporter()))
     trace.set_tracer_provider(provider)
     FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/metrics")
