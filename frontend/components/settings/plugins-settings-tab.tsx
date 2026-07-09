@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge"
-import { STATUS_CHIP_CLASS } from "@/lib/status-style";
+import { StatusBadge } from "@/components/mlops/status-badge";
 import { MlopsEmptyState, DetailSection } from "@/components/mlops/layout";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import type { PluginItem } from "@/lib/api";
@@ -86,13 +86,9 @@ export function PluginsSettingsTab() {
         header: "Compat",
         cell: (p) =>
           p.compatibility?.compatible === false ? (
-            <Badge variant="outline" className={`text-[10px] ${STATUS_CHIP_CLASS.failed}`}>
-              blocked
-            </Badge>
+            <StatusBadge status="failed" label="blocked" showIcon={false} />
           ) : (
-            <Badge variant="outline" className="border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)] text-[10px]">
-              ok
-            </Badge>
+            <StatusBadge status="success" label="ok" showIcon={false} />
           ),
       },
       {

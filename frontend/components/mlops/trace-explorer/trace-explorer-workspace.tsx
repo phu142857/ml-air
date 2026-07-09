@@ -1,0 +1,294 @@
+"use client";
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Copy, Download, Link2, Loader2, Route } from "lucide-react";
+
+import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
+import { TraceSpanDetailsPane } from "@/components/mlops/trace-explorer/trace-span-details";
+import {
+  findStepByFlatIndex,
+  useTraceExplorerKeyboard,
+} from "@/components/mlops/trace-explorer/use-trace-explorer-keyboard";
+import { TraceWaterfallView } from "@/components/mlops/trace-waterfall";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { useTraceDetail } from "@/hooks/use-trace-detail";
+import { useAppContext } from "@/lib/app-context";
+import type { TraceSearchHit, TraceWaterfallStep } from "@/lib/api";
+import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
+import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
+import { normalizeTraceId } from "@/lib/trace-id";
+
+export type TraceExplorerWorkspaceProps = {
+  traceList: TraceSearchHit[];
+  selectedTraceId: string | null;
+  onSelectTrace: (traceId: string) => void;
+  traceSearch: string;
+  onTraceSearchChange: (value: string) => void;
+  listLoading?: boolean;
+  className?: string;
+};
+
+export function TraceExplorerWorkspace({
+  traceList,
+  selectedTraceId,
+  onSelectTrace,
+  traceSearch,
+  onTraceSearchChange,
+  listLoading,
+}: TraceExplorerWorkspaceProps) {
+  const { tenantId, projectId, token } = useAppContext();
+  const normalized = selectedTraceId ? normalizeTraceId(selectedTraceId) || selectedTraceId.trim() : "";
+
+  const { data, isLoading, isFetching, refetch } = useTraceDetail(
+    tenantId,
+    projectId,
+    token,
+    normalized,
+    Boolean(normalized),
+  );
+
+  const [selectedStep, setSelectedStep] = useState<TraceWaterfallStep | null>(null);
+  const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
+  const [focusedFlatIndex, setFocusedFlatIndex] = useState<number | null>(null);
+  const [spanFilter, setSpanFilter] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [flatSteps, setFlatSteps] = useState<TraceWaterfallStep[]>([]);
+  const zoomHandlersRef = useRef<{
+    zoomIn: () => void;
+    zoomOut: () => void;
+    resetZoom: () => void;
+  } | null>(null);
+
+  const traceListSearchRef = useRef<HTMLInputElement>(null);
+  const spanFilterRef = useRef<HTMLInputElement>(null);
+
+  const waterfall = data?.unified_waterfall ?? data?.waterfall ?? null;
+  const waterfallVariant = data?.unified_waterfall ? "unified" : "run";
+
+  const selectedStepId = selectedStep?.id ?? null;
+
+  const handleTraceChange = useCallback(
+    (traceId: string) => {
+      setSelectedStep(null);
+      setFocusedFlatIndex(null);
+      onSelectTrace(traceId);
+    },
+    [onSelectTrace],
+  );
+
+  const moveSelection = useCallback(
+    (delta: number) => {
+      if (!flatSteps.length) return;
+      setFocusedFlatIndex((prev) => {
+        const current = prev ?? (selectedStep ? flatSteps.findIndex((s) => s.id === selectedStep.id) : -1);
+        const next = Math.min(flatSteps.length - 1, Math.max(0, current + delta));
+        const step = findStepByFlatIndex(flatSteps, next);
+        if (step) setSelectedStep(step);
+        return next;
+      });
+    },
+    [flatSteps, selectedStep],
+  );
+
+  useTraceExplorerKeyboard(Boolean(normalized), {
+    onFocusSearch: () => traceListSearchRef.current?.focus(),
+    onMoveSelection: moveSelection,
+    onToggleExpand: () => {
+      if (focusedFlatIndex != null) {
+        const step = findStepByFlatIndex(flatSteps, focusedFlatIndex);
+        setSelectedStep(step);
+      }
+    },
+    onClearSelection: () => {
+      setSelectedStep(null);
+      setFocusedFlatIndex(null);
+    },
+    onZoomIn: () => zoomHandlersRef.current?.zoomIn(),
+    onZoomOut: () => zoomHandlersRef.current?.zoomOut(),
+    onResetZoom: () => zoomHandlersRef.current?.resetZoom(),
+  });
+
+  const copyTraceId = () =>
+    void copyWithToast(normalized, {
+      successTitle: "Trace ID copied",
+    });
+
+  const copyShareLink = () =>
+    void copyWithToast(buildTraceShareUrl(normalized), {
+      successTitle: "Share link copied",
+    });
+
+  const handleExport = async () => {
+    if (!normalized || tenantId === "all" || projectId === "all") return;
+    setExporting(true);
+    try {
+      await downloadTraceExport(tenantId, projectId, token, normalized);
+      toastSuccess("Trace exported", `mlair-trace-${normalized.slice(0, 16)}.json`);
+    } catch (err) {
+      toastError("Export failed", String((err as Error)?.message || err));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const toolbar = useMemo(
+    () => (
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2">
+        <Route className="h-4 w-4 text-primary" aria-hidden />
+        <code className="max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
+          {normalized || "Select a trace"}
+        </code>
+        {data?.is_live ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--status-running-border)] bg-[color:var(--status-running-bg)] px-2 py-0.5 text-xs font-medium text-[color:var(--status-running-fg)]">
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+            Live
+          </span>
+        ) : null}
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={!normalized}
+            onClick={() => void copyTraceId()}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            ID
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={!normalized}
+            onClick={() => void copyShareLink()}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Share
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={exporting || !data}
+            onClick={() => void handleExport()}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            Export
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={!normalized || isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
+          </Button>
+        </div>
+      </div>
+    ),
+    [data, exporting, isFetching, normalized, refetch],
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {selectedStep
+          ? `Selected span ${selectedStep.label}, status ${selectedStep.status}`
+          : ""}
+      </div>
+      {toolbar}
+
+      <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
+        <ResizablePanel defaultSize={22} minSize={16} maxSize={35}>
+          <TraceListPane
+            items={traceList}
+            selectedTraceId={selectedTraceId}
+            onSelectTrace={handleTraceChange}
+            search={traceSearch}
+            onSearchChange={onTraceSearchChange}
+            isLoading={listLoading}
+            searchInputRef={traceListSearchRef}
+          />
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize={53} minSize={35}>
+          <div className="flex h-full min-h-0 flex-col border-x border-border">
+            <div className="shrink-0 border-b border-border px-3 py-2">
+              <label htmlFor="span-filter" className="sr-only">
+                Filter spans
+              </label>
+              <Input
+                id="span-filter"
+                ref={spanFilterRef}
+                value={spanFilter}
+                onChange={(e) => setSpanFilter(e.target.value)}
+                placeholder="Filter spans…"
+                className="h-8 text-xs"
+                disabled={!waterfall}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {!normalized ? (
+                <p className="px-4 py-8 text-sm text-muted-foreground">
+                  Select a trace from the list to view the waterfall timeline.
+                </p>
+              ) : isLoading ? (
+                <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading waterfall…
+                </div>
+              ) : !waterfall ? (
+                <p className="px-4 py-8 text-sm text-muted-foreground">
+                  No timing data for this trace.
+                </p>
+              ) : (
+                <TraceWaterfallView
+                  waterfall={waterfall}
+                  variant={waterfallVariant}
+                  selectedStepId={selectedStepId}
+                  hoveredStepId={hoveredStepId}
+                  focusedFlatIndex={focusedFlatIndex}
+                  spanFilter={spanFilter}
+                  onStepSelect={setSelectedStep}
+                  onStepHover={(step) => setHoveredStepId(step?.id ?? null)}
+                  onFlatStepsChange={setFlatSteps}
+                  onZoomHandlersReady={(handlers) => {
+                    zoomHandlersRef.current = handlers;
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize={25} minSize={18} maxSize={40}>
+          <TraceSpanDetailsPane
+            traceId={normalized}
+            data={data}
+            selectedStep={selectedStep}
+            isLoading={isLoading}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
+  );
+}

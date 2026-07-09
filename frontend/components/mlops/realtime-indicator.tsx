@@ -102,7 +102,7 @@ export function RealtimeIndicator() {
           <button
             type="button"
             aria-label={config.label}
-            className="flex max-w-[10rem] items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-2.5 py-1.5 transition-premium hover:bg-muted/50 active:scale-[0.98] sm:max-w-none"
+            className="flex max-w-[10rem] items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-2.5 py-1.5 transition-default hover:bg-muted/50 sm:max-w-none"
           >
             <div className="relative shrink-0">
               <div className={cn("h-2 w-2 rounded-full", config.dotClass)} />

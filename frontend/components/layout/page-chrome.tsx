@@ -7,8 +7,8 @@ export function PageChrome({
   subtitle?: string
 }) {
   return (
-    <div className="border-b border-border/70 bg-background/60 px-4 py-5 backdrop-blur-sm sm:px-6">
-      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+    <div className="border-b border-border bg-background px-4 py-5 sm:px-6">
+      <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
         {title}
       </h1>
       {subtitle ? (

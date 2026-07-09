@@ -255,9 +255,9 @@ export default function DatasetsPage() {
               type="button"
               onClick={() => setViewMode("table")}
               className={cn(
-                "rounded-lg p-1.5 transition-premium",
+                "rounded-lg p-1.5 transition-default",
                 viewMode === "table"
-                  ? "bg-card text-foreground shadow-whisper"
+                  ? "bg-card text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -267,9 +267,9 @@ export default function DatasetsPage() {
               type="button"
               onClick={() => setViewMode("grid")}
               className={cn(
-                "rounded-lg p-1.5 transition-premium",
+                "rounded-lg p-1.5 transition-default",
                 viewMode === "grid"
-                  ? "bg-card text-foreground shadow-whisper"
+                  ? "bg-card text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -307,7 +307,7 @@ export default function DatasetsPage() {
               <Link
                 key={d.dataset_id}
                 href={`/datasets/${encodeURIComponent(d.dataset_id)}`}
-                className="group min-w-0 transition-premium hover:-translate-y-0.5"
+                className="group min-w-0 transition-default"
               >
                 <div className="h-full min-w-0 overflow-hidden rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
                   <div className="flex h-full min-w-0 flex-col rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6">

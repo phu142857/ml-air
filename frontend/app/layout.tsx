@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, JetBrains_Mono } from "next/font/google";
+import { Inter, Outfit, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { AppProviders } from "./providers";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -37,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="bg-background">
       <body
-        className={`${outfit.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+        className={`${inter.variable} ${outfit.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
         <Script src="/mlair-runtime-config.js" strategy="beforeInteractive" />
         <AppProviders>

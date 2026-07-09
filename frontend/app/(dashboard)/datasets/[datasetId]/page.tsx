@@ -2019,7 +2019,7 @@ export default function DatasetHubPage() {
       >
         <DialogContent
           showCloseButton={false}
-          className="flex h-[min(92vh,56rem)] w-[min(96vw,80rem)] max-w-[min(96vw,80rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,80rem)]"
+          className="dialog-viewport-90 flex flex-col gap-0 overflow-hidden p-0"
         >
           <DialogHeader
             className={cn(

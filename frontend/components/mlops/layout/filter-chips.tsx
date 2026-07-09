@@ -41,7 +41,7 @@ export function FilterChips({
       role="group"
       aria-label="Filter"
       className={cn(
-        "inline-flex flex-wrap gap-1 rounded-xl border border-border/60 bg-background/60 p-1 shadow-whisper",
+        "inline-flex flex-wrap gap-1 rounded-lg border border-border bg-background p-1",
         className,
       )}
     >
@@ -51,7 +51,7 @@ export function FilterChips({
           type="button"
           onClick={() => onChange(opt.id)}
           className={cn(
-            "rounded-lg border border-transparent px-3 py-1 text-xs font-medium transition-premium",
+            "rounded-lg border border-transparent px-3 py-1 text-xs font-medium transition-default",
             value === opt.id
               ? activeClassForTone(opt.tone ?? "default", variant)
               : opt.tone === "failed"

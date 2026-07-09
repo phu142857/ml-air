@@ -1,10 +1,13 @@
 import { cn } from "@/lib/utils"
 import { CheckCircle2, XCircle, Clock, Loader2, AlertCircle, Info } from "lucide-react"
+import { normalizeStatus, statusToMlopsBadge } from "@/lib/status-style"
 
 type StatusType = "success" | "failed" | "running" | "pending" | "cancelled" | "info" | "warning" | "error" | "critical"
 
 interface StatusBadgeProps {
-  status: StatusType
+  /** API status string — mapped via status-style helpers. Preferred over `status`. */
+  value?: string | null
+  status?: StatusType
   label?: string
   size?: "sm" | "md"
   showIcon?: boolean
@@ -88,15 +91,19 @@ const statusLabels: Record<StatusType, string> = {
 }
 
 export function StatusBadge({
+  value,
   status,
   label,
   size = "sm",
   showIcon = true,
   className,
 }: StatusBadgeProps) {
-  const config = statusConfig[status]
+  const resolvedStatus: StatusType = value != null
+    ? statusToMlopsBadge(value)
+    : (status ?? "pending")
+  const config = statusConfig[resolvedStatus]
   const Icon = config.icon
-  const displayLabel = label ?? statusLabels[status]
+  const displayLabel = label ?? (value != null ? normalizeStatus(value) : statusLabels[resolvedStatus])
 
   return (
     <span

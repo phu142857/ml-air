@@ -2,14 +2,15 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Play, Clock, CheckCircle2, XCircle, Loader2, Ban } from "lucide-react"
+import { Play } from "lucide-react"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { TraceLink } from "@/components/mlops/trace-link"
 import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
-import { cn, formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
+import { StatusBadge } from "@/components/mlops/status-badge"
+import { formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { formatRuntimeSeconds } from "@/lib/usage-format"
 import { useAppContext } from "@/lib/app-context"
 import { Button } from "@/components/ui/button"
@@ -17,20 +18,6 @@ import type { RunItem } from "@/lib/api"
 import { useRunsListLive } from "@/hooks/use-runs-list-live"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { statusChipKey, STATUS_CHIP_CLASS, type StatusChipKey } from "@/lib/status-style"
-
-const statusMeta: Record<
-  StatusChipKey,
-  { icon: typeof Clock; label: string; animate: boolean }
-> = {
-  queued: { icon: Clock, label: "Queued", animate: false },
-  pending: { icon: Clock, label: "Pending", animate: false },
-  running: { icon: Loader2, label: "Running", animate: true },
-  success: { icon: CheckCircle2, label: "Success", animate: false },
-  failed: { icon: XCircle, label: "Failed", animate: false },
-  cancelled: { icon: Ban, label: "Cancelled", animate: false },
-}
-
 function runDuration(r: RunItem): string {
   const c = r.created_at ? Date.parse(r.created_at) : NaN
   const u = r.updated_at ? Date.parse(r.updated_at) : NaN
@@ -60,22 +47,7 @@ const runListColumns: DataTableColumn<RunItem>[] = [
   {
     id: "status",
     header: "Status",
-    cell: (run) => {
-      const sk = statusChipKey(run.status)
-      const meta = statusMeta[sk]
-      const StatusIcon = meta.icon
-      return (
-        <div
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-            STATUS_CHIP_CLASS[sk],
-          )}
-        >
-          <StatusIcon className={cn("h-3 w-3", meta.animate && "animate-spin")} />
-          {meta.label}
-        </div>
-      )
-    },
+    cell: (run) => <StatusBadge value={run.status} size="sm" />,
   },
   {
     id: "started",

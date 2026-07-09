@@ -18,7 +18,7 @@ export function SubpageBreadcrumb({ segments, className }: SubpageBreadcrumbProp
     <nav
       aria-label="Breadcrumb"
       className={cn(
-        "flex min-w-0 shrink-0 items-center gap-1.5 overflow-hidden border-b border-border/70 bg-background/50 px-4 py-2.5 text-xs backdrop-blur-sm sm:px-6",
+        "flex min-w-0 shrink-0 items-center gap-1.5 overflow-hidden border-b border-border/70 bg-background/50 px-4 py-2.5 text-xs sm:px-6",
         className,
       )}
     >

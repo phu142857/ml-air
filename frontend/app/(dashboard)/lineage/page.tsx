@@ -80,7 +80,7 @@ function LineageNode({ data }: NodeProps<Node<LineageNodeData>>) {
   return (
     <>
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-border !bg-muted-foreground/50" />
-      <div className={cn("min-w-[140px] rounded-xl border px-4 py-3 shadow-whisper", config.border, config.bg)}>
+      <div className={cn("min-w-[140px] rounded-xl border px-4 py-3", config.border, config.bg)}>
         <div className="mb-1 flex items-center gap-2">
           <div className={cn("rounded-lg p-1.5", config.iconClass)}>
             <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />

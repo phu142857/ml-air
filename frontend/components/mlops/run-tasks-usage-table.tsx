@@ -190,7 +190,7 @@ export function RunTasksUsageTable({
       <Panel>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
+            <TableHeader className="sticky top-0 z-10 bg-card/95">
               <TableRow className="border-border/60 hover:bg-transparent">
                 <TableHead className="w-8" aria-hidden />
                 <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

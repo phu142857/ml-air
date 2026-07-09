@@ -437,7 +437,7 @@ export const DatasetVersionScrollEditor = forwardRef<
       >
         {format === "csv" ? (
           <table className="w-max min-w-full border-collapse text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
+            <thead className="sticky top-0 z-10 bg-muted/95">
               <tr className="border-b border-border">
                 {editable ? (
                   <th className="sticky left-0 z-20 w-16 border-r border-border bg-muted/95 px-1 py-1.5 text-center" />

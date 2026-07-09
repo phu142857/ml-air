@@ -555,7 +555,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border/70 bg-background/60 backdrop-blur-sm overflow-hidden">
+      <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
         <SubpageBreadcrumb
           className="border-b border-border/80"
           segments={[

@@ -37,7 +37,7 @@ import { auditEventTitle, auditResourceHref } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_DASHBOARD } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { normalizeStatus, STATUS_CHIP_CLASS, statusBadgeClass } from "@/lib/status-style"
+import { StatusBadge } from "@/components/mlops/status-badge"
 import { cn, formatApiClientError, formatRelativeTime } from "@/lib/utils"
 
 const statIcons = [Database, GitBranch, Play, Box]
@@ -119,7 +119,7 @@ export default function DashboardPage() {
                     key={stat.label}
                     href={stat.href}
                     className={cn(
-                      "group transition-premium hover:-translate-y-0.5",
+                      "group transition-default",
                       statSpans[i] ?? "md:col-span-6",
                     )}
                   >
@@ -127,14 +127,14 @@ export default function DashboardPage() {
                       <div className="flex h-full flex-col justify-between">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 ring-1 ring-primary/20 transition-premium group-hover:from-primary/30 group-hover:to-primary/15 group-hover:ring-primary/30">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 transition-default">
                               <Icon
                                 strokeWidth={1.75}
                                 className="h-4 w-4 text-primary"
                               />
                             </span>
                             <div>
-                              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-premium group-hover:text-foreground/70">
+                              <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-default group-hover:text-foreground/70">
                                 {stat.label}
                               </div>
                               <div
@@ -151,7 +151,7 @@ export default function DashboardPage() {
                           </div>
                           <TrendingUp
                             strokeWidth={1.75}
-                            className="h-4 w-4 shrink-0 text-[color:var(--status-success-fg)] opacity-0 transition-premium group-hover:opacity-100"
+                            className="h-4 w-4 shrink-0 text-[color:var(--status-success-fg)] opacity-0 transition-default group-hover:opacity-100"
                           />
                         </div>
 
@@ -169,7 +169,7 @@ export default function DashboardPage() {
                               <span
                                 className={cn(
                                   "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-medium",
-                                  STATUS_CHIP_CLASS.failed,
+                                  "border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] text-[color:var(--status-failed-fg)]",
                                 )}
                               >
                                 <AlertCircle className="h-3 w-3" />
@@ -238,15 +238,15 @@ export default function DashboardPage() {
                 ) : (
                   <ul className="space-y-2">
                     {runningPipelines.slice(0, 6).map((p) => (
-                      <li key={p.pipeline_id} className="group rounded-lg border border-border/50 bg-muted/20 p-3 transition-premium hover:border-primary/30 hover:bg-primary/5">
+                      <li key={p.pipeline_id} className="group rounded-lg border border-border bg-muted/20 p-3 transition-default hover:border-primary/30 hover:bg-primary/5">
                         <Link
                           href={`/pipelines/${encodeURIComponent(
                             p.pipeline_id,
                           )}`}
-                          className="flex items-center justify-between gap-3 transition-premium"
+                          className="flex items-center justify-between gap-3 transition-default"
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-foreground transition-premium group-hover:text-primary">{p.pipeline_id}</div>
+                            <div className="truncate text-sm font-medium text-foreground transition-default group-hover:text-primary">{p.pipeline_id}</div>
                             <div className="mt-0.5 text-[10px] text-muted-foreground">Pipeline running</div>
                           </div>
                           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[color:var(--status-running-bg)]">
@@ -283,11 +283,11 @@ export default function DashboardPage() {
                     {failedRuns.slice(0, 5).map((r) => (
                       <li
                         key={r.run_id}
-                        className="group rounded-lg border border-[color:var(--status-failed-border)]/50 bg-[color:var(--status-failed-bg)]/30 p-3 transition-premium hover:border-[color:var(--status-failed-border)] hover:bg-[color:var(--status-failed-bg)]/50"
+                        className="group rounded-lg border border-[color:var(--status-failed-border)]/50 bg-[color:var(--status-failed-bg)]/30 p-3 transition-default hover:border-[color:var(--status-failed-border)] hover:bg-[color:var(--status-failed-bg)]/50"
                       >
                         <Link
                           href={`/runs/${encodeURIComponent(r.run_id)}`}
-                          className="flex items-center justify-between gap-2 transition-premium"
+                          className="flex items-center justify-between gap-2 transition-default"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-[color:var(--status-failed-fg)] group-hover:underline">
@@ -374,7 +374,7 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <p className={cn("text-sm font-medium text-foreground", href && "transition-premium group-hover:text-primary")}>
+                              <p className={cn("text-sm font-medium text-foreground", href && "transition-default group-hover:text-primary")}>
                                 {auditEventTitle(event)}
                               </p>
                               <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
@@ -388,7 +388,7 @@ export default function DashboardPage() {
                           <Link
                             key={`${event.ts}-${event.resource_id}-${i}`}
                             href={href}
-                            className="group flex items-start gap-3 rounded-lg border border-border/40 bg-muted/20 p-3 transition-premium hover:border-primary/30 hover:bg-primary/5"
+                            className="group flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 transition-default hover:border-primary/30 hover:bg-primary/5"
                           >
                             {inner}
                           </Link>
@@ -439,7 +439,7 @@ export default function DashboardPage() {
                       <Link
                         key={run.run_id}
                         href={`/runs/${encodeURIComponent(run.run_id)}`}
-                        className="group flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3 transition-premium hover:border-border hover:bg-card hover:shadow-whisper active:scale-[0.995]"
+                        className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-3.5 py-3 transition-default hover:border-border hover:bg-card"
                       >
                         <div className="min-w-0">
                           <div className="truncate font-mono text-sm text-foreground">
@@ -451,14 +451,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-medium",
-                            statusBadgeClass(run.status),
-                          )}
-                        >
-                          {normalizeStatus(run.status)}
-                        </span>
+                        <StatusBadge value={run.status} size="sm" />
                       </Link>
                     ))}
                   </div>

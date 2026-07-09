@@ -26,7 +26,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
 
@@ -77,16 +76,16 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
                   <Link
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-premium",
+                      "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-default",
                       isActive
-                        ? "nav-active-rail bg-sidebar-accent text-foreground shadow-whisper"
+                        ? "nav-active-rail bg-sidebar-accent text-foreground"
                         : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
                     )}
                   >
                     <item.icon
                       strokeWidth={1.75}
                       className={cn(
-                        "h-4 w-4 shrink-0 transition-premium",
+                        "h-4 w-4 shrink-0 transition-default",
                         isActive
                           ? "text-primary"
                           : "text-muted-foreground group-hover:text-foreground",
@@ -107,19 +106,17 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
   return (
-    <Sidebar className="border-r border-sidebar-border/80 bg-sidebar">
-      <SidebarHeader className="border-b border-sidebar-border/70 px-3 py-4">
+    <Sidebar className="border-r border-sidebar-border bg-sidebar">
+      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
         <Link href="/datasets" className="group flex items-center gap-3">
-          <div className="rounded-xl bg-muted/40 p-1 ring-1 ring-border/60">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary shadow-whisper">
-              <Network
-                strokeWidth={1.75}
-                className="h-4 w-4 text-primary-foreground"
-              />
-            </div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+            <Network
+              strokeWidth={1.75}
+              className="h-4 w-4 text-primary-foreground"
+            />
           </div>
           <div className="flex min-w-0 flex-col">
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+            <span className="font-heading truncate text-sm font-semibold tracking-tight text-foreground">
               ML-Air Hub
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">

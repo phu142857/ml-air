@@ -137,7 +137,7 @@ export function LifecyclePageSkeleton() {
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
       {/* Page header skeleton */}
-      <div className="border-b border-border/70 bg-background/60 px-4 py-4 backdrop-blur-sm sm:px-6">
+      <div className="border-b border-border/70 bg-background/60 px-4 py-4 sm:px-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10 rounded-lg bg-muted" />

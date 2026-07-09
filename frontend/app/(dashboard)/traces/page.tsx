@@ -1,27 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Hash, Loader2, Route } from "lucide-react";
+import { Route } from "lucide-react";
 
-import { TraceExplorerDialog } from "@/components/mlops/trace-link";
-import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
+import { TraceExplorerShell } from "@/components/mlops/trace-explorer/trace-explorer-shell";
+import { ScopePinnedInline } from "@/components/mlops/layout";
 import { ScopedListContent } from "@/components/mlops/scoped-list-content";
-import { Input } from "@/components/ui/input";
-import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall";
 import { useAppContext } from "@/lib/app-context";
 import { fetchTraceList } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages";
 import { isScopePinned } from "@/lib/scope";
-import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
+import { formatApiClientError } from "@/lib/utils";
 
 export default function TracesPage() {
   const { tenantId, projectId, token } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
   const isAggregate = !scopePinned;
   const [search, setSearch] = useState("");
-  const [openTraceId, setOpenTraceId] = useState<string | null>(null);
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
 
   const listQuery = useQuery({
     queryKey: mlairKeys.trace.list(tenantId, projectId, 0),
@@ -31,89 +29,74 @@ export default function TracesPage() {
   });
 
   const items = listQuery.data?.items ?? [];
-  const filtered = search.trim()
-    ? items.filter((item) => item.trace_id.toLowerCase().includes(search.trim().toLowerCase()))
-    : items;
+  const filtered = useMemo(
+    () =>
+      search.trim()
+        ? items.filter((item) =>
+            item.trace_id.toLowerCase().includes(search.trim().toLowerCase()),
+          )
+        : items,
+    [items, search],
+  );
+
+  useEffect(() => {
+    if (!selectedTraceId && filtered.length > 0) {
+      setSelectedTraceId(filtered[0].trace_id);
+    }
+  }, [filtered, selectedTraceId]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader
-        className="shrink-0"
-        icon={Route}
-        accent="sky"
-        title="Traces"
-        subtitle={
-          isAggregate
-            ? "Pin tenant and project to browse traces"
-            : `${filtered.length} traces · distributed execution timeline`
-        }
-      />
+      <header className="shrink-0 border-b border-border bg-background px-4 py-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-primary/10">
+            <Route className="h-5 w-5 text-primary" aria-hidden />
+          </div>
+          <div>
+            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
+              Trace viewer
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {isAggregate
+                ? "Pin tenant and project to browse traces"
+                : "Distributed execution timeline · keyboard-first"}
+            </p>
+          </div>
+        </div>
+      </header>
 
-      <PageScrollBody header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} /> : null}>
-        {scopePinned ? (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter by trace ID…"
-              className="h-9 max-w-md font-mono text-xs"
+      {isAggregate ? (
+        <div className="shrink-0 px-4 py-3 sm:px-6">
+          <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} />
+        </div>
+      ) : null}
+
+      {scopePinned ? (
+        <ScopedListContent
+          isLoading={listQuery.isLoading}
+          isError={listQuery.isError}
+          errorMessage={listQuery.error ? formatApiClientError(listQuery.error) : undefined}
+          isEmpty={false}
+          emptyIcon={Route}
+          emptyTitle=""
+          emptyDescription=""
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <TraceExplorerShell
+              traceList={filtered}
+              selectedTraceId={selectedTraceId}
+              onSelectTrace={setSelectedTraceId}
+              traceSearch={search}
+              onTraceSearchChange={setSearch}
+              listLoading={listQuery.isLoading}
             />
           </div>
-        ) : null}
-
-        <ScopedListContent
-          isLoading={scopePinned && listQuery.isLoading}
-          isError={scopePinned && listQuery.isError}
-          errorMessage={listQuery.error ? formatApiClientError(listQuery.error) : undefined}
-          isEmpty={scopePinned && filtered.length === 0}
-          emptyIcon={Route}
-          emptyTitle="No traces in this scope"
-          emptyDescription="Run a pipeline to generate trace IDs and OTLP spans."
-        >
-          {scopePinned ? (
-            <div className="overflow-hidden rounded-xl border border-border">
-              <div className="grid grid-cols-[1fr_140px_120px_100px] border-b border-border bg-muted/20 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <span>Trace</span>
-                <span>Service</span>
-                <span>Last seen</span>
-                <span className="text-right">Duration</span>
-              </div>
-              {filtered.map((item) => (
-                <button
-                  key={item.trace_id}
-                  type="button"
-                  onClick={() => setOpenTraceId(item.trace_id)}
-                  className={cn(
-                    "grid w-full grid-cols-[1fr_140px_120px_100px] items-center gap-2 border-b border-border/60 px-3 py-3 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/30",
-                  )}
-                >
-                  <span className="flex min-w-0 items-center gap-2 font-mono text-xs">
-                    <Hash className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    <span className="truncate">{item.trace_id}</span>
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">{item.root_service || item.source}</span>
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {item.last_seen ? formatDateTimeCompact(item.last_seen) : "—"}
-                  </span>
-                  <span className="text-right font-mono text-[11px] tabular-nums text-foreground">
-                    {formatWaterfallDuration(item.duration_ms)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
         </ScopedListContent>
-      </PageScrollBody>
-
-      {openTraceId ? (
-        <TraceExplorerDialog
-          traceId={openTraceId}
-          open={Boolean(openTraceId)}
-          onOpenChange={(open) => {
-            if (!open) setOpenTraceId(null);
-          }}
-        />
-      ) : null}
+      ) : (
+        <p className="px-6 py-8 text-sm text-muted-foreground">
+          Pin a tenant and project in the header to open the trace viewer.
+        </p>
+      )}
     </div>
   );
 }

@@ -20,7 +20,7 @@ export function JsonPayloadPanel({ title = "Raw payload", data, className }: Jso
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="flex w-full items-center gap-2 px-1 py-2 text-left text-sm font-semibold tracking-tight text-foreground transition-premium hover:bg-muted/30"
+          className="flex w-full items-center gap-2 px-1 py-2 text-left text-sm font-semibold tracking-tight text-foreground transition-default hover:bg-muted/30"
           aria-expanded={open}
         >
           {open ? (

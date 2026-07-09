@@ -19,12 +19,13 @@ export interface DetailTab {
 
 interface DetailTabListProps {
   tabs: DetailTab[]
+  /** @deprecated Accent is ignored — flat primary active state is used. */
   accent?: DetailTabAccent
   className?: string
 }
 
 /** Tab strip only — must be rendered inside `<Tabs value={…} onValueChange={…}>`. */
-export function DetailTabList({ tabs, accent = "sky", className }: DetailTabListProps) {
+export function DetailTabList({ tabs, accent: _accent, className }: DetailTabListProps) {
   return (
     <div className={detailTabShellClassName(className)}>
       <div className={detailTabScrollClassName()}>
@@ -34,7 +35,7 @@ export function DetailTabList({ tabs, accent = "sky", className }: DetailTabList
               key={tab.id}
               value={tab.id}
               disabled={tab.disabled}
-              className={detailTabTriggerClassName(accent)}
+              className={detailTabTriggerClassName()}
             >
               {tab.icon}
               {tab.label}

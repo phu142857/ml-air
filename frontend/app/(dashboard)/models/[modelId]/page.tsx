@@ -546,7 +546,7 @@ export default function ModelDetailPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border/70 bg-background/60 backdrop-blur-sm overflow-hidden">
+      <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
         <SubpageBreadcrumb
           segments={[
             { label: "Models", href: "/models" },

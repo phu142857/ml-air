@@ -3,9 +3,10 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useQueries } from "@tanstack/react-query"
-import { GitBranch, Plus, Database, Clock, CheckCircle2, XCircle, Loader2, Calendar } from "lucide-react"
+import { GitBranch, Plus, Database, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/mlops/status-badge"
 import { PipelineDAG } from "@/components/mlops/pipeline-dag"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
@@ -23,24 +24,7 @@ import { isScopePinned } from "@/lib/scope"
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag"
 import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
 
-import {
-  STATUS_CHIP_CLASS,
-  statusChipKey,
-  type StatusChipKey,
-} from "@/lib/status-style"
-
-const stageStatusMeta: Record<
-  StatusChipKey | "idle",
-  { icon: typeof Clock; label: string; animate: boolean }
-> = {
-  idle: { icon: Clock, label: "Idle", animate: false },
-  queued: { icon: Clock, label: "Queued", animate: false },
-  pending: { icon: Clock, label: "Pending", animate: false },
-  running: { icon: Loader2, label: "Running", animate: true },
-  success: { icon: CheckCircle2, label: "Success", animate: false },
-  failed: { icon: XCircle, label: "Failed", animate: false },
-  cancelled: { icon: XCircle, label: "Cancelled", animate: false },
-}
+import type { StatusChipKey } from "@/lib/status-style"
 
 function mapStageStatus(raw: string): StatusChipKey | "idle" {
   const u = String(raw || "").toUpperCase()
@@ -70,23 +54,10 @@ const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
     header: "Status",
     cell: (stage) => {
       const sk = mapStageStatus(stage.status)
-      const meta = stageStatusMeta[sk]
-      const StatusIcon = meta.icon
-      const chipClass =
-        sk === "idle"
-          ? "border-border/60 bg-muted text-muted-foreground"
-          : STATUS_CHIP_CLASS[sk]
-      return (
-        <div
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-            chipClass,
-          )}
-        >
-          <StatusIcon className={cn("h-3 w-3", meta.animate && "animate-spin")} />
-          {meta.label}
-        </div>
-      )
+      if (sk === "idle") {
+        return <StatusBadge status="cancelled" label="Idle" size="sm" />
+      }
+      return <StatusBadge value={stage.status} size="sm" />
     },
   },
   {
@@ -226,9 +197,6 @@ export default function PipelinesPage() {
             <div className="space-y-3">
               <h2 className="px-1 text-sm font-medium capitalize text-muted-foreground">All pipelines</h2>
               {items.map((pipeline, index) => {
-                const sk = statusChipKey(pipeline.latest_status || "idle")
-                const meta = stageStatusMeta[sk]
-                const StatusIcon = meta.icon
                 const isSelected = selectedId === pipeline.pipeline_id
                 const configVer = latestConfigVersionByPipeline.get(pipeline.pipeline_id)
 
@@ -238,7 +206,7 @@ export default function PipelinesPage() {
                     type="button"
                     onClick={() => setSelectedId(pipeline.pipeline_id)}
                     className={cn(
-                      "w-full rounded-xl border p-4 text-left transition-premium",
+                      "w-full rounded-xl border p-4 text-left transition-default",
                       isSelected
                         ? "border-primary/30 bg-primary/5 ring-1 ring-primary/20"
                         : "panel-surface hover:border-border",
@@ -272,15 +240,11 @@ export default function PipelinesPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                          STATUS_CHIP_CLASS[sk],
-                        )}
-                      >
-                        <StatusIcon className={cn("h-3 w-3", meta.animate && "animate-spin")} />
-                        {meta.label}
-                      </div>
+                      {!pipeline.latest_status || String(pipeline.latest_status).toLowerCase() === "idle" ? (
+                        <StatusBadge status="cancelled" label="Idle" size="sm" />
+                      ) : (
+                        <StatusBadge value={pipeline.latest_status} size="sm" />
+                      )}
                       <span className="text-[10px] text-muted-foreground/80">
                         {formatRelativeTime(pipeline.updated_at)}
                       </span>
