@@ -108,7 +108,7 @@ export default function DashboardPage() {
         {isLoading ? (
           <ListTableSkeleton rows={4} />
         ) : (
-          <div className="mx-auto flex max-w-7xl flex-col gap-8">
+          <div className="flex w-full flex-col gap-8">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
               {stats.map((stat, i) => {
                 const Icon = statIcons[i] ?? Database

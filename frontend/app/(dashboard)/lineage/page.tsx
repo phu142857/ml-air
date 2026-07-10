@@ -430,7 +430,7 @@ function LineagePageInner() {
       />
 
       <div className="page-toolbar">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Run ID</Label>
             <div className="flex gap-2">

@@ -1259,7 +1259,7 @@ export default function DatasetHubPage() {
         ) : (
         <>
         {activeTab === "overview" ? (
-          <div className="grid min-w-0 max-w-[1400px] grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid min-w-0 w-full grid-cols-1 gap-4 lg:grid-cols-2">
             <DetailSection title="Lifecycle layers" accentBorder={DATASET_SECTION_ACCENT}>
               <div className="flex flex-wrap items-center gap-2">
                 {lifecycleStages.map((label, i) => (
@@ -1535,7 +1535,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "readiness" ? (
-        <div className="flex min-w-0 max-w-[1400px] flex-col gap-4">
+        <div className="flex min-w-0 w-full flex-col gap-4">
         <DetailSection
           title="Readiness policy evaluation"
           accentBorder={DATASET_SECTION_ACCENT}

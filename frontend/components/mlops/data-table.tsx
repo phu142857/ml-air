@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowDown,
   ArrowUp,
@@ -10,7 +10,6 @@ import {
   Columns3,
   Filter,
   LayoutTemplate,
-  Loader2,
   Pin,
   PinOff,
   Rows3,
@@ -20,7 +19,6 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -31,7 +29,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Panel } from "@/components/ui/panel"
 import {
   Select,
   SelectContent,
@@ -61,6 +58,7 @@ type DataTableSavedView = {
   pinned: string[]
   sorts: Array<{ id: string; direction: SortDirection }>
   filters: Record<string, string[]>
+  columnWidths?: Record<string, number>
 }
 
 type DataTableStoredState = {
@@ -89,6 +87,8 @@ export interface DataTableColumn<T> {
   getSearchValue?: (row: T) => string
   getFilterValue?: (row: T) => string | null | undefined
   filterOptions?: DataTableColumnFilterOption[]
+  canResize?: boolean
+  minWidth?: number
 }
 
 interface DataTableProps<T> {
@@ -112,6 +112,7 @@ interface DataTableProps<T> {
   defaultDensity?: Density
   defaultPageSize?: number
   pageSizeOptions?: number[]
+  columnResize?: boolean
 }
 
 const DENSITY_ROW_CLASS: Record<Density, string> = {
@@ -121,6 +122,8 @@ const DENSITY_ROW_CLASS: Record<Density, string> = {
 }
 
 const DEFAULT_PAGE_SIZES = [10, 25, 50, 100]
+const DEFAULT_COLUMN_WIDTH = 180
+const MIN_COLUMN_WIDTH = 72
 
 function normalizeSearchText(value: unknown): string {
   return String(value ?? "")
@@ -141,6 +144,10 @@ function storageKey(tableId: string) {
   return `mlair:data-table:${tableId}`
 }
 
+function widthsStorageKey(tableId: string) {
+  return `mlair:data-table-widths:${tableId}`
+}
+
 function readStoredViews(tableId: string): DataTableStoredState | null {
   try {
     const raw = window.localStorage.getItem(storageKey(tableId))
@@ -159,6 +166,24 @@ function writeStoredViews(tableId: string, value: DataTableStoredState) {
   }
 }
 
+function readStoredWidths(tableId: string): Record<string, number> | null {
+  try {
+    const raw = window.localStorage.getItem(widthsStorageKey(tableId))
+    if (!raw) return null
+    return JSON.parse(raw) as Record<string, number>
+  } catch {
+    return null
+  }
+}
+
+function writeStoredWidths(tableId: string, value: Record<string, number>) {
+  try {
+    window.localStorage.setItem(widthsStorageKey(tableId), JSON.stringify(value))
+  } catch {
+    // ignore storage failures
+  }
+}
+
 function headerLabel(header: React.ReactNode): string {
   return typeof header === "string" ? header : "Column"
 }
@@ -167,6 +192,45 @@ function alignClass(align?: DataTableColumn<unknown>["align"]): string {
   if (align === "center") return "text-center"
   if (align === "right") return "text-right"
   return "text-left"
+}
+
+function parseNumericWidth(width?: number | string): number | undefined {
+  if (typeof width === "number") return width
+  if (typeof width === "string") {
+    const match = /^(\d+(?:\.\d+)?)px$/.exec(width.trim())
+    if (match) return Number(match[1])
+  }
+  return undefined
+}
+
+function getEffectiveColumnWidth<T>(
+  column: DataTableColumn<T>,
+  resizedWidths: Record<string, number>,
+): number {
+  if (resizedWidths[column.id] != null) return resizedWidths[column.id]
+  return parseNumericWidth(column.width) ?? DEFAULT_COLUMN_WIDTH
+}
+
+function columnWidthStyle<T>(
+  column: DataTableColumn<T>,
+  resizedWidths: Record<string, number>,
+): { width: string; minWidth: string; maxWidth: string } {
+  const px = getEffectiveColumnWidth(column, resizedWidths)
+  return { width: `${px}px`, minWidth: `${px}px`, maxWidth: `${px}px` }
+}
+
+function getColumnSearchValue<T>(column: DataTableColumn<T>, row: T): string {
+  if (column.getSearchValue) return column.getSearchValue(row)
+  if (column.getSortValue) return String(column.getSortValue(row) ?? "")
+  if (column.getFilterValue) return String(column.getFilterValue(row) ?? "")
+  return ""
+}
+
+function getColumnSortValue<T>(column: DataTableColumn<T>, row: T): unknown {
+  if (column.getSortValue) return column.getSortValue(row)
+  if (column.getFilterValue) return column.getFilterValue(row)
+  if (column.getSearchValue) return column.getSearchValue(row)
+  return null
 }
 
 function renderLoadingTable(columnCount: number, rowCount: number, density: Density) {
@@ -219,9 +283,11 @@ export function DataTable<T>({
   defaultDensity = "default",
   defaultPageSize = 25,
   pageSizeOptions = DEFAULT_PAGE_SIZES,
+  columnResize = true,
 }: DataTableProps<T>) {
   const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({})
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([])
+  const resizedWidthsRef = useRef<Record<string, number>>({})
 
   const initialVisibility = useMemo(
     () =>
@@ -241,8 +307,12 @@ export function DataTable<T>({
   const [filters, setFilters] = useState<Record<string, string[]>>({})
   const [savedViews, setSavedViews] = useState<DataTableSavedView[]>([])
   const [activeViewId, setActiveViewId] = useState<string | null>(null)
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [resizedWidths, setResizedWidths] = useState<Record<string, number>>({})
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1)
+
+  useEffect(() => {
+    resizedWidthsRef.current = resizedWidths
+  }, [resizedWidths])
 
   useEffect(() => {
     setVisibility(initialVisibility)
@@ -251,6 +321,8 @@ export function DataTable<T>({
   useEffect(() => {
     if (!tableId) return
     const stored = readStoredViews(tableId)
+    const storedWidths = readStoredWidths(tableId)
+    if (storedWidths) setResizedWidths(storedWidths)
     if (!stored) return
     setSavedViews(stored.views || [])
     setActiveViewId(stored.activeViewId)
@@ -262,29 +334,13 @@ export function DataTable<T>({
     setPinned(active.pinned)
     setSorts(active.sorts)
     setFilters(active.filters)
+    if (active.columnWidths) setResizedWidths(active.columnWidths)
   }, [tableId])
 
   useEffect(() => {
     if (!tableId) return
     writeStoredViews(tableId, { views: savedViews, activeViewId })
   }, [activeViewId, savedViews, tableId])
-
-  useEffect(() => {
-    if (typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(() => {
-      const widths: Record<string, number> = {}
-      columns.forEach((column) => {
-        const el = headerRefs.current[column.id]
-        if (el) widths[column.id] = el.getBoundingClientRect().width
-      })
-      setColumnWidths(widths)
-    })
-    columns.forEach((column) => {
-      const el = headerRefs.current[column.id]
-      if (el) observer.observe(el)
-    })
-    return () => observer.disconnect()
-  }, [columns])
 
   const visibleColumns = useMemo(() => {
     const filtered = columns.filter((column) => visibility[column.id] !== false)
@@ -303,10 +359,11 @@ export function DataTable<T>({
     let left = 0
     pinnedColumns.forEach((id) => {
       offsets[id] = left
-      left += columnWidths[id] ?? 220
+      const column = columns.find((entry) => entry.id === id)
+      left += column ? getEffectiveColumnWidth(column, resizedWidths) : DEFAULT_COLUMN_WIDTH
     })
     return offsets
-  }, [columnWidths, pinnedColumns])
+  }, [columns, pinnedColumns, resizedWidths])
 
   const filterableColumns = useMemo(
     () => visibleColumns.filter((column) => (column.filterOptions?.length ?? 0) > 0),
@@ -318,7 +375,7 @@ export function DataTable<T>({
     const searched = data.filter((row) => {
       if (!normalizedQuery) return true
       return visibleColumns.some((column) => {
-        const value = column.getSearchValue?.(row)
+        const value = getColumnSearchValue(column, row)
         return normalizeSearchText(value).includes(normalizedQuery)
       })
     })
@@ -337,9 +394,9 @@ export function DataTable<T>({
       sorted.sort((a, b) => {
         for (const sort of sorts) {
           const column = columns.find((entry) => entry.id === sort.id)
-          if (!column?.getSortValue) continue
+          if (!column) continue
           const direction = sort.direction === "asc" ? 1 : -1
-          const result = compareValues(column.getSortValue(a), column.getSortValue(b))
+          const result = compareValues(getColumnSortValue(column, a), getColumnSortValue(column, b))
           if (result !== 0) return result * direction
         }
         return 0
@@ -361,11 +418,13 @@ export function DataTable<T>({
   }, [pageIndex, pageSize, processedRows])
 
   const activeFilterCount = Object.values(filters).reduce((sum, values) => sum + values.length, 0)
+  const hasCustomWidths = Object.keys(resizedWidths).length > 0
   const canResetView =
     searchQuery.length > 0 ||
     activeFilterCount > 0 ||
     sorts.length > 0 ||
     pinned.length > 0 ||
+    hasCustomWidths ||
     Object.keys(visibility).some((id) => visibility[id] === false) ||
     density !== defaultDensity ||
     pageSize !== defaultPageSize
@@ -380,6 +439,8 @@ export function DataTable<T>({
   }
 
   const toggleSort = (id: string, multi: boolean) => {
+    const column = columns.find((entry) => entry.id === id)
+    if (!column) return
     setSorts((current) => {
       const existing = current.find((entry) => entry.id === id)
       const rest = multi ? current.filter((entry) => entry.id !== id) : []
@@ -408,8 +469,52 @@ export function DataTable<T>({
     setPinned([])
     setSorts([])
     setFilters({})
+    setResizedWidths({})
     setActiveViewId(null)
+    if (tableId) writeStoredWidths(tableId, {})
   }
+
+  const resetColumnWidth = useCallback((columnId: string) => {
+    setResizedWidths((current) => {
+      const next = { ...current }
+      delete next[columnId]
+      if (tableId) writeStoredWidths(tableId, next)
+      return next
+    })
+  }, [tableId])
+
+  const beginColumnResize = useCallback(
+    (columnId: string, event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const column = columns.find((entry) => entry.id === columnId)
+      if (!column || column.canResize === false) return
+
+      const minWidth = column.minWidth ?? MIN_COLUMN_WIDTH
+      const startX = event.clientX
+      const startWidth = getEffectiveColumnWidth(column, resizedWidthsRef.current)
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX
+        const nextWidth = Math.max(minWidth, Math.round(startWidth + delta))
+        setResizedWidths((current) => ({ ...current, [columnId]: nextWidth }))
+      }
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove)
+        document.removeEventListener("mouseup", onMouseUp)
+        document.body.style.cursor = ""
+        document.body.style.userSelect = ""
+        if (tableId) writeStoredWidths(tableId, resizedWidthsRef.current)
+      }
+
+      document.body.style.cursor = "col-resize"
+      document.body.style.userSelect = "none"
+      document.addEventListener("mousemove", onMouseMove)
+      document.addEventListener("mouseup", onMouseUp)
+    },
+    [columns, tableId],
+  )
 
   const saveCurrentView = () => {
     if (!tableId || typeof window === "undefined") return
@@ -424,6 +529,7 @@ export function DataTable<T>({
       pinned,
       sorts,
       filters,
+      columnWidths: resizedWidths,
     }
     setSavedViews((current) => [...current.filter((entry) => entry.name !== view.name), view])
     setActiveViewId(view.id)
@@ -440,8 +546,10 @@ export function DataTable<T>({
     setPinned(view.pinned)
     setSorts(view.sorts)
     setFilters(view.filters)
+    setResizedWidths(view.columnWidths ?? {})
     setPageIndex(0)
     setActiveViewId(view.id)
+    if (tableId) writeStoredWidths(tableId, view.columnWidths ?? {})
   }
 
   const deleteActiveView = () => {
@@ -487,10 +595,19 @@ export function DataTable<T>({
   const currentViewLabel =
     savedViews.find((view) => view.id === activeViewId)?.name ?? (tableId ? "Default view" : "Local view")
 
+  const tableMinWidth = useMemo(
+    () =>
+      visibleColumns.reduce(
+        (sum, column) => sum + getEffectiveColumnWidth(column, resizedWidths),
+        0,
+      ),
+    [resizedWidths, visibleColumns],
+  )
+
   return (
-    <Panel className={cn("overflow-hidden", className)}>
-      <div className="flex flex-col gap-0">
-        <div className="border-b border-border px-4 py-3">
+    <div className={cn("panel-surface flex w-full min-w-0 flex-col overflow-hidden p-1", className)}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
+        <div className="shrink-0 border-b border-border p-1">
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-start gap-3">
               <div className="min-w-0 flex-1">
@@ -679,9 +796,11 @@ export function DataTable<T>({
         </div>
 
         {loading ? (
-          renderLoadingTable(Math.max(visibleColumns.length, 3), loadingRows, density)
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {renderLoadingTable(Math.max(visibleColumns.length, 3), loadingRows, density)}
+          </div>
         ) : processedRows.length === 0 ? (
-          <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+          <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-muted">
               {searchQuery || activeFilterCount ? (
                 <Search className="h-5 w-5 text-muted-foreground" />
@@ -704,9 +823,12 @@ export function DataTable<T>({
             ) : null}
           </div>
         ) : (
-          <>
-            <div className="min-w-0 overflow-x-auto overscroll-x-contain">
-              <Table className={cn("table-fixed min-w-full", DENSITY_ROW_CLASS[density])}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+              <Table
+                className={cn("table-fixed w-full", DENSITY_ROW_CLASS[density])}
+                style={{ minWidth: `${tableMinWidth}px` }}
+              >
                 <TableHeader className={cn(stickyHeader && "sticky top-0 z-20 bg-card")}>
                   <TableRow className="border-border/70 hover:bg-transparent">
                     {visibleColumns.map((column) => {
@@ -720,12 +842,11 @@ export function DataTable<T>({
                             headerRefs.current[column.id] = node
                           }}
                           style={{
-                            width: column.width,
-                            minWidth: column.width,
+                            ...columnWidthStyle(column, resizedWidths),
                             left: isPinned ? pinnedOffsets[column.id] : undefined,
                           }}
                           className={cn(
-                            "border-border/70 bg-card text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+                            "relative border-border/70 bg-card text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
                             alignClass(column.align),
                             stickyHeader && "top-0",
                             isPinned &&
@@ -734,25 +855,42 @@ export function DataTable<T>({
                             column.className,
                           )}
                         >
-                          <button
-                            type="button"
-                            className="inline-flex w-full items-center gap-1 truncate text-left"
-                            onClick={(e) => toggleSort(column.id, e.shiftKey)}
-                          >
-                            <span className="truncate">{column.header}</span>
-                            {sortEntry ? (
-                              sortEntry.direction === "asc" ? (
-                                <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+                          <div className="relative flex min-w-0 items-center pr-2">
+                            <button
+                              type="button"
+                              className="inline-flex min-w-0 flex-1 items-center gap-1 text-left"
+                              onClick={(e) => toggleSort(column.id, e.shiftKey)}
+                            >
+                              <span className="min-w-0 truncate">{column.header}</span>
+                              {sortEntry ? (
+                                sortEntry.direction === "asc" ? (
+                                  <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+                                ) : (
+                                  <ArrowDown className="h-3.5 w-3.5 shrink-0" />
+                                )
                               ) : (
-                                <ArrowDown className="h-3.5 w-3.5 shrink-0" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                            )}
-                            {sortIndex >= 0 && sorts.length > 1 ? (
-                              <span className="font-mono text-[10px]">{sortIndex + 1}</span>
+                                <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                              )}
+                              {sortIndex >= 0 && sorts.length > 1 ? (
+                                <span className="font-mono text-[10px]">{sortIndex + 1}</span>
+                              ) : null}
+                            </button>
+                            {columnResize && column.canResize !== false ? (
+                              <div
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label={`Resize ${headerLabel(column.header)} column`}
+                                title="Drag to resize · double-click to reset"
+                                className="absolute -right-1 top-0 z-40 h-full w-2 cursor-col-resize touch-none hover:bg-primary/25 active:bg-primary/40"
+                                onMouseDown={(event) => beginColumnResize(column.id, event)}
+                                onDoubleClick={(event) => {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  resetColumnWidth(column.id)
+                                }}
+                              />
                             ) : null}
-                          </button>
+                          </div>
                         </TableHead>
                       )
                     })}
@@ -782,12 +920,12 @@ export function DataTable<T>({
                           <TableCell
                             key={column.id}
                             style={{
-                              width: column.width,
-                              minWidth: column.width,
+                              ...columnWidthStyle(column, resizedWidths),
                               left: isPinned ? pinnedOffsets[column.id] : undefined,
                             }}
                             className={cn(
                               alignClass(column.align),
+                              "min-w-0",
                               !column.wrap && "whitespace-nowrap",
                               column.wrap && "whitespace-normal",
                               isPinned &&
@@ -805,7 +943,7 @@ export function DataTable<T>({
               </Table>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border p-1">
               <div className="text-xs text-muted-foreground">
                 Showing{" "}
                 <span className="font-medium text-foreground">
@@ -891,9 +1029,9 @@ export function DataTable<T>({
                 </div>
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
-    </Panel>
+    </div>
   )
 }

@@ -8,7 +8,7 @@ interface PageToolbarProps {
 export function PageToolbar({ children, className }: PageToolbarProps) {
   return (
     <div className={cn("page-toolbar", className)}>
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
+      <div className="flex w-full items-center justify-between gap-4">
         {children}
       </div>
     </div>

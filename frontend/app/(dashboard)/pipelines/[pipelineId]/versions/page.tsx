@@ -61,11 +61,18 @@ export default function PipelineVersionsPage() {
       {
         id: "version",
         header: "#",
+        width: 96,
+        canHide: false,
+        align: "right",
+        getSortValue: (row) => row.version,
         cell: (row) => <span className="font-mono text-sm">{row.version}</span>,
       },
       {
         id: "version_id",
         header: "version_id",
+        width: 280,
+        getSearchValue: (row) => row.version_id,
+        getSortValue: (row) => row.version_id,
         cell: (row) => (
           <span className="font-mono text-xs text-muted-foreground">{row.version_id}</span>
         ),
@@ -73,6 +80,8 @@ export default function PipelineVersionsPage() {
       {
         id: "created",
         header: "Created",
+        width: 180,
+        getSortValue: (row) => row.created_at,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">{formatDateTimeCompact(row.created_at)}</span>
         ),
@@ -80,6 +89,12 @@ export default function PipelineVersionsPage() {
       {
         id: "inputs",
         header: "inputs[]",
+        width: 320,
+        wrap: true,
+        getSearchValue: (row) =>
+          parsePipelineInputs(row.config as Record<string, unknown>)
+            .map((i) => `${i.dataset} ${i.required_size}`)
+            .join(" "),
         cell: (row) => {
           const inputs = parsePipelineInputs(row.config as Record<string, unknown>);
           if (!inputs.length) return <span className="text-xs text-muted-foreground">—</span>;
@@ -93,6 +108,8 @@ export default function PipelineVersionsPage() {
       {
         id: "config",
         header: "Config",
+        width: 110,
+        canHide: false,
         cell: (row) => (
           <Button
             type="button"
@@ -216,10 +233,14 @@ export default function PipelineVersionsPage() {
           ) : (
             <>
               <DataTable
+                tableId={`pipeline-versions:${pipelineId}`}
+                title="All versions"
+                description="Sortable, searchable snapshot history with saved operator views."
                 columns={versionColumns}
                 data={items}
                 keyExtractor={(row) => row.version_id}
                 emptyMessage="No versions yet."
+                loading={listQuery.isLoading}
               />
               {listQuery.hasNextPage ? (
                 <div className="flex justify-center border-t border-border/60 py-4">

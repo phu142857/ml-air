@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { Activity, ArrowUpRight, Loader2 } from "lucide-react"
 
-import { DataTable } from "@/components/mlops/data-table"
+import { DataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { MetadataGrid, MlopsEmptyState } from "@/components/mlops/layout"
 import {
   fetchProjectUsage,
@@ -70,46 +70,63 @@ function UsageTotals({ usage }: { usage: UsageSummaryRecord }) {
 
 function TopRunsTable({ runs }: { runs: RunUsageRollupItem[] }) {
   if (runs.length === 0) return null
+  const columns: DataTableColumn<RunUsageRollupItem>[] = [
+    {
+      id: "run",
+      header: "Run",
+      width: 260,
+      canHide: false,
+      getSearchValue: (row) => row.run_id,
+      getSortValue: (row) => row.run_id,
+      cell: (row) => (
+        <Link
+          href={`/runs/${encodeURIComponent(row.run_id)}`}
+          className="group inline-flex max-w-full items-center gap-1 font-mono text-xs text-primary hover:text-primary/80"
+        >
+          <span className="truncate">{row.run_id}</span>
+          <ArrowUpRight className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" />
+        </Link>
+      ),
+    },
+    {
+      id: "gpu",
+      header: "GPU",
+      width: 110,
+      align: "right",
+      getSortValue: (row) => row.gpu_seconds,
+      cell: (row) => (
+        <span className="text-xs tabular-nums">{formatRuntimeSeconds(row.gpu_seconds)}</span>
+      ),
+    },
+    {
+      id: "runtime",
+      header: "Runtime",
+      width: 120,
+      align: "right",
+      getSortValue: (row) => row.runtime_seconds,
+      cell: (row) => (
+        <span className="text-xs tabular-nums">{formatRuntimeSeconds(row.runtime_seconds)}</span>
+      ),
+    },
+    {
+      id: "tasks",
+      header: "Tasks",
+      width: 80,
+      align: "right",
+      getSortValue: (row) => row.task_count ?? 0,
+      cell: (row) => (
+        <span className="text-xs tabular-nums">{row.task_count ?? "—"}</span>
+      ),
+    },
+  ]
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Top runs by GPU time</p>
       <DataTable
-        columns={[
-          {
-            id: "run",
-            header: "Run",
-            cell: (row) => (
-              <Link
-                href={`/runs/${encodeURIComponent(row.run_id)}`}
-                className="group inline-flex max-w-full items-center gap-1 font-mono text-xs text-primary hover:text-primary/80"
-              >
-                <span className="truncate">{row.run_id}</span>
-                <ArrowUpRight className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" />
-              </Link>
-            ),
-          },
-          {
-            id: "gpu",
-            header: "GPU",
-            cell: (row) => (
-              <span className="text-xs tabular-nums">{formatRuntimeSeconds(row.gpu_seconds)}</span>
-            ),
-          },
-          {
-            id: "runtime",
-            header: "Runtime",
-            cell: (row) => (
-              <span className="text-xs tabular-nums">{formatRuntimeSeconds(row.runtime_seconds)}</span>
-            ),
-          },
-          {
-            id: "tasks",
-            header: "Tasks",
-            cell: (row) => (
-              <span className="text-xs tabular-nums">{row.task_count ?? "—"}</span>
-            ),
-          },
-        ]}
+        tableId="usage-top-runs"
+        title="Top runs"
+        description="Runs with highest GPU time in the window."
+        columns={columns}
         data={runs}
         keyExtractor={(row) => row.run_id}
       />
@@ -119,40 +136,57 @@ function TopRunsTable({ runs }: { runs: RunUsageRollupItem[] }) {
 
 function ProjectsTable({ projects }: { projects: ProjectUsageRollupItem[] }) {
   if (projects.length === 0) return null
+  const columns: DataTableColumn<ProjectUsageRollupItem>[] = [
+    {
+      id: "project",
+      header: "Project",
+      width: 220,
+      canHide: false,
+      getSearchValue: (row) => row.project_id,
+      getSortValue: (row) => row.project_id,
+      cell: (row) => <span className="font-mono text-xs">{row.project_id}</span>,
+    },
+    {
+      id: "runs",
+      header: "Runs",
+      width: 90,
+      align: "right",
+      getSortValue: (row) => row.run_count,
+      cell: (row) => <span className="text-xs tabular-nums">{row.run_count}</span>,
+    },
+    {
+      id: "gpu",
+      header: "GPU time",
+      width: 130,
+      align: "right",
+      getSortValue: (row) => row.usage?.gpu_seconds ?? 0,
+      cell: (row) => (
+        <span className="text-xs tabular-nums">
+          {formatRuntimeSeconds(row.usage?.gpu_seconds)}
+        </span>
+      ),
+    },
+    {
+      id: "runtime",
+      header: "Runtime",
+      width: 130,
+      align: "right",
+      getSortValue: (row) => row.usage?.runtime_seconds ?? 0,
+      cell: (row) => (
+        <span className="text-xs tabular-nums">
+          {formatRuntimeSeconds(row.usage?.runtime_seconds)}
+        </span>
+      ),
+    },
+  ]
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">By project</p>
       <DataTable
-        columns={[
-          {
-            id: "project",
-            header: "Project",
-            cell: (row) => <span className="font-mono text-xs">{row.project_id}</span>,
-          },
-          {
-            id: "runs",
-            header: "Runs",
-            cell: (row) => <span className="text-xs tabular-nums">{row.run_count}</span>,
-          },
-          {
-            id: "gpu",
-            header: "GPU time",
-            cell: (row) => (
-              <span className="text-xs tabular-nums">
-                {formatRuntimeSeconds(row.usage?.gpu_seconds)}
-              </span>
-            ),
-          },
-          {
-            id: "runtime",
-            header: "Runtime",
-            cell: (row) => (
-              <span className="text-xs tabular-nums">
-                {formatRuntimeSeconds(row.usage?.runtime_seconds)}
-              </span>
-            ),
-          },
-        ]}
+        tableId="usage-projects"
+        title="Projects"
+        description="Project-level usage breakdown."
+        columns={columns}
         data={projects}
         keyExtractor={(row) => row.project_id}
       />

@@ -451,11 +451,23 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       {
         id: "gate",
         header: "Gate",
+        width: 260,
+        canHide: false,
+        getSearchValue: (row) => row.gate,
+        getSortValue: (row) => row.gate,
         cell: (row) => <span className="font-mono text-xs text-foreground/90">{row.gate}</span>,
       },
       {
         id: "result",
         header: "Result",
+        width: 120,
+        getSortValue: (row) => row.result,
+        getFilterValue: (row) => row.result,
+        filterOptions: [
+          { label: "Pass", value: "pass" },
+          { label: "Fail", value: "fail" },
+          { label: "Pending", value: "pending" },
+        ],
         cell: (row) => (
           <Badge
             variant="outline"
@@ -473,11 +485,17 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       {
         id: "observed",
         header: "Observed",
+        width: 140,
+        align: "right",
+        getSortValue: (row) => row.observed,
         cell: (row) => <span className="text-xs text-muted-foreground">{row.observed}</span>,
       },
       {
         id: "required",
         header: "Required",
+        width: 160,
+        align: "right",
+        getSortValue: (row) => row.required,
         cell: (row) => <span className="text-xs text-muted-foreground">{row.required}</span>,
       },
     ],
@@ -717,7 +735,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                       ) : null
                     }
                   >
-                    <DataTable columns={gateColumns} data={gateResults} keyExtractor={(r) => r.id} />
+                    <DataTable
+                      tableId={`run-readiness:${runId}`}
+                      title="Readiness gates"
+                      columns={gateColumns}
+                      data={gateResults}
+                      keyExtractor={(r) => r.id}
+                    />
                   </DetailSection>
                 ) : null}
               </>

@@ -35,6 +35,10 @@ export default function TasksPage() {
       {
         id: "task_id",
         header: "Task ID",
+        width: 260,
+        canHide: false,
+        getSearchValue: (row) => `${row.task_id} ${row.tenant_id} ${row.project_id}`,
+        getSortValue: (row) => row.task_id,
         cell: (row) => (
           <Link
             href={buildTaskDetailHref(row.task_id, {
@@ -52,6 +56,9 @@ export default function TasksPage() {
       {
         id: "run_id",
         header: "Run",
+        width: 220,
+        getSearchValue: (row) => row.run_id,
+        getSortValue: (row) => row.run_id,
         cell: (row) => (
           <Link
             href={`/runs/${encodeURIComponent(row.run_id)}`}
@@ -65,6 +72,16 @@ export default function TasksPage() {
       {
         id: "status",
         header: "Status",
+        width: 140,
+        getSortValue: (row) => normalizeStatus(row.status),
+        getFilterValue: (row) => normalizeStatus(row.status),
+        filterOptions: [
+          { label: "Pending", value: "PENDING" },
+          { label: "Running", value: "RUNNING" },
+          { label: "Success", value: "SUCCESS" },
+          { label: "Failed", value: "FAILED" },
+          { label: "Cancelled", value: "CANCELLED" },
+        ],
         cell: (row) => (
           <StatusBadge status={statusToMlopsBadge(row.status)} label={normalizeStatus(row.status)} size="sm" />
         ),
@@ -72,11 +89,16 @@ export default function TasksPage() {
       {
         id: "attempt",
         header: "Attempt",
+        width: 110,
+        align: "right",
+        getSortValue: (row) => row.attempt,
         cell: (row) => <span className="text-sm tabular-nums text-foreground/90">{row.attempt}</span>,
       },
       {
         id: "updated",
         header: "Updated",
+        width: 150,
+        getSortValue: (row) => row.updated_at,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">{formatRelativeTime(row.updated_at)}</span>
         ),
@@ -110,6 +132,7 @@ export default function TasksPage() {
       />
 
       <PageScrollBody
+        variant="workspace"
         header={
           <>
             {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_TASKS} /> : null}
@@ -161,11 +184,16 @@ export default function TasksPage() {
           skeletonRows={5}
         >
           <DataTable
+            className="min-h-0 flex-1"
+            tableId="tasks-recent"
+            title="Recent tasks"
+            description="High-density task list with quick filtering, sorting, and saved views."
             columns={taskColumns}
             data={rows}
             keyExtractor={(row) => `${row.tenant_id}:${row.project_id}:${row.task_id}`}
             onRowClick={openTask}
             emptyMessage="No tasks in recent runs."
+            loading={isLoading}
           />
         </ScopedListContent>
       </PageScrollBody>

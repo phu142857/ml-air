@@ -134,6 +134,7 @@ export default function RunsPage() {
       />
 
       <PageScrollBody
+        variant="workspace"
         header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} /> : null}
       >
         <ScopedListContent
@@ -146,6 +147,7 @@ export default function RunsPage() {
           emptyDescription="Start a run from Dataset Hub (Run / Train) or pick a workspace in the header."
         >
           <MlopsDataTable
+            className="min-h-0 flex-1"
             columns={runListColumns}
             data={rows}
             keyExtractor={(r) => r.run_id}

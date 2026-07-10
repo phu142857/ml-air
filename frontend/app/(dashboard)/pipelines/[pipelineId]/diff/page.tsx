@@ -23,7 +23,7 @@ import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { cn } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
 
-const sectionClass = "max-w-[1400px]";
+const sectionClass = "w-full";
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
@@ -89,17 +89,24 @@ function DiffPageInner() {
       {
         id: "key",
         header: "Key",
-        className: "w-[28%]",
+        width: 260,
+        canHide: false,
+        getSearchValue: (row) => row.key,
+        getSortValue: (row) => row.key,
         cell: (row) => <span className="font-mono text-xs text-[color:var(--status-pending-fg)]/90">{row.key}</span>,
       },
       {
         id: "left",
         header: "Left",
+        width: 360,
+        wrap: true,
         cell: (row) => <JsonBlock value={row.left} />,
       },
       {
         id: "right",
         header: "Right",
+        width: 360,
+        wrap: true,
         cell: (row) => <JsonBlock value={row.right} />,
       },
     ],
@@ -197,6 +204,9 @@ function DiffPageInner() {
         ) : (
           <DetailSection title="Changed keys" accentBorder="amber" bodyClassName="p-0">
             <DataTable
+              tableId={`pipeline-diff:${pipelineId}`}
+              title="Changed keys"
+              description="Top-level config differences between selected versions."
               columns={diffColumns}
               data={details}
               keyExtractor={(row) => row.key}

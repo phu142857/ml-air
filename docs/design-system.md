@@ -52,7 +52,7 @@ Base unit is **8px** (`gap-2`, `p-2`).
 | 5 | 20px | `px-4 py-5` | Page header padding |
 | 6 | 24px | `gap-6` / `p-6` | Section stacks, card body |
 
-Layout helpers: `page-body`, `page-body-flush`, `scroll-region`.
+Layout helpers: `page-body` (full-width workspace shell), `page-body-flush` (alias), `scroll-region`. Use `PageScrollBody` with `variant="workspace"` for trace-style full-height table pages.
 
 ## Motion
 

@@ -28,7 +28,11 @@ export function ScopedListContent({
   children,
 }: ScopedListContentProps) {
   if (isLoading) {
-    return <ListTableSkeleton rows={skeletonRows} />
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ListTableSkeleton rows={skeletonRows} />
+      </div>
+    )
   }
 
   return (
@@ -48,7 +52,7 @@ export function ScopedListContent({
           description={emptyDescription}
         />
       ) : (
-        children
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       )}
     </>
   )

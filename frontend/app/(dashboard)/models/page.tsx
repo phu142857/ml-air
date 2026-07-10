@@ -194,6 +194,7 @@ export default function ModelsPage() {
       />
 
       <PageScrollBody
+        variant="workspace"
         header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_MODELS} /> : null}
       >
         <ScopedListContent
@@ -207,6 +208,7 @@ export default function ModelsPage() {
           skeletonRows={5}
         >
           <MlopsDataTable
+            className="min-h-0 flex-1"
             columns={modelColumns}
             data={items}
             keyExtractor={(m) => m.model_id}

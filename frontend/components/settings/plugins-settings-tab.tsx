@@ -69,21 +69,38 @@ export function PluginsSettingsTab() {
       {
         id: "name",
         header: "Name",
+        width: 220,
+        canHide: false,
+        getSearchValue: (p) => p.name,
+        getSortValue: (p) => p.name,
         cell: (p) => <span className="font-mono text-xs text-foreground">{p.name}</span>,
       },
       {
         id: "version",
         header: "Version",
+        width: 140,
+        getSearchValue: (p) => p.version,
+        getSortValue: (p) => p.version,
         cell: (p) => <span className="text-xs text-muted-foreground">{p.version}</span>,
       },
       {
         id: "engine",
         header: "Engine",
+        width: 180,
+        getSearchValue: (p) => p.engine_version,
+        getSortValue: (p) => p.engine_version,
         cell: (p) => <span className="text-xs text-muted-foreground">{p.engine_version}</span>,
       },
       {
         id: "compat",
         header: "Compat",
+        width: 120,
+        getSortValue: (p) => (p.compatibility?.compatible === false ? "blocked" : "ok"),
+        getFilterValue: (p) => (p.compatibility?.compatible === false ? "blocked" : "ok"),
+        filterOptions: [
+          { label: "OK", value: "ok" },
+          { label: "Blocked", value: "blocked" },
+        ],
         cell: (p) =>
           p.compatibility?.compatible === false ? (
             <StatusBadge status="failed" label="blocked" showIcon={false} />
@@ -94,6 +111,13 @@ export function PluginsSettingsTab() {
       {
         id: "enabled",
         header: "Enabled",
+        width: 110,
+        getSortValue: (p) => (p.enabled ? 1 : 0),
+        getFilterValue: (p) => (p.enabled ? "on" : "off"),
+        filterOptions: [
+          { label: "On", value: "on" },
+          { label: "Off", value: "off" },
+        ],
         cell: (p) =>
           p.enabled ? (
             <Badge variant="outline" className="border-[color:var(--status-success-border)] text-[color:var(--status-success-fg)]">
@@ -108,7 +132,9 @@ export function PluginsSettingsTab() {
       {
         id: "actions",
         header: "Actions",
+        width: 120,
         className: "text-right",
+        canHide: false,
         cell: (p) => (
           <div className="text-right">
             <Button
@@ -129,7 +155,7 @@ export function PluginsSettingsTab() {
   );
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="w-full space-y-6">
       <DetailSection
         title="Loaded plugins"
         description="Plugins registered by the API runtime."
@@ -185,10 +211,14 @@ export function PluginsSettingsTab() {
           />
         ) : (
           <DataTable
+            tableId="plugins-registry"
+            title="Loaded plugins"
+            description="Registry view with saved views, compatibility filters, and quick actions."
             columns={pluginColumns}
             data={items}
             keyExtractor={(p) => p.name}
             emptyMessage="No plugins returned from the API."
+            loading={pluginsQuery.isLoading}
           />
         )}
       </DetailSection>

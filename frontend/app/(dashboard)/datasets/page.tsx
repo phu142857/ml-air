@@ -280,6 +280,7 @@ export default function DatasetsPage() {
       </PageToolbar>
 
       <PageScrollBody
+        variant={viewMode === "table" ? "workspace" : "scroll"}
         header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASETS} /> : null}
       >
         <ScopedListContent
@@ -295,6 +296,7 @@ export default function DatasetsPage() {
         >
         {viewMode === "table" ? (
           <MlopsDataTable
+            className="min-h-0 flex-1"
             columns={datasetTableColumns}
             data={filtered}
             keyExtractor={(d) => d.dataset_id}
