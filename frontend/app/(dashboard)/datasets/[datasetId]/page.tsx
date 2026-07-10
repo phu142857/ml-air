@@ -1011,7 +1011,7 @@ export default function DatasetHubPage() {
         header: "",
         className: "w-[9.5rem]",
         cell: (v) => (
-          <div className="flex items-center justify-end gap-0.5">
+          <div className="flex items-center justify-start gap-0.5">
             {scopePinned ? (
               <Button
                 type="button"

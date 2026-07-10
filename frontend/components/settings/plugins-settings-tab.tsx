@@ -133,10 +133,10 @@ export function PluginsSettingsTab() {
         id: "actions",
         header: "Actions",
         width: 120,
-        className: "text-right",
+        className: "w-[120px]",
         canHide: false,
         cell: (p) => (
-          <div className="text-right">
+          <div>
             <Button
               type="button"
               variant="outline"

@@ -92,7 +92,6 @@ function TopRunsTable({ runs }: { runs: RunUsageRollupItem[] }) {
       id: "gpu",
       header: "GPU",
       width: 110,
-      align: "right",
       getSortValue: (row) => row.gpu_seconds,
       cell: (row) => (
         <span className="text-xs tabular-nums">{formatRuntimeSeconds(row.gpu_seconds)}</span>
@@ -102,7 +101,6 @@ function TopRunsTable({ runs }: { runs: RunUsageRollupItem[] }) {
       id: "runtime",
       header: "Runtime",
       width: 120,
-      align: "right",
       getSortValue: (row) => row.runtime_seconds,
       cell: (row) => (
         <span className="text-xs tabular-nums">{formatRuntimeSeconds(row.runtime_seconds)}</span>
@@ -112,7 +110,6 @@ function TopRunsTable({ runs }: { runs: RunUsageRollupItem[] }) {
       id: "tasks",
       header: "Tasks",
       width: 80,
-      align: "right",
       getSortValue: (row) => row.task_count ?? 0,
       cell: (row) => (
         <span className="text-xs tabular-nums">{row.task_count ?? "—"}</span>
@@ -150,7 +147,6 @@ function ProjectsTable({ projects }: { projects: ProjectUsageRollupItem[] }) {
       id: "runs",
       header: "Runs",
       width: 90,
-      align: "right",
       getSortValue: (row) => row.run_count,
       cell: (row) => <span className="text-xs tabular-nums">{row.run_count}</span>,
     },
@@ -158,7 +154,6 @@ function ProjectsTable({ projects }: { projects: ProjectUsageRollupItem[] }) {
       id: "gpu",
       header: "GPU time",
       width: 130,
-      align: "right",
       getSortValue: (row) => row.usage?.gpu_seconds ?? 0,
       cell: (row) => (
         <span className="text-xs tabular-nums">
@@ -170,7 +165,6 @@ function ProjectsTable({ projects }: { projects: ProjectUsageRollupItem[] }) {
       id: "runtime",
       header: "Runtime",
       width: 130,
-      align: "right",
       getSortValue: (row) => row.usage?.runtime_seconds ?? 0,
       cell: (row) => (
         <span className="text-xs tabular-nums">

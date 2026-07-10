@@ -471,7 +471,6 @@ export default function ModelDetailPage() {
       {
         id: "actions",
         header: "Actions",
-        className: "text-right",
         cell: (v) => {
           const promoteTarget = nextPromotionStage(v.stage, promotionFeatures);
           const rollbackTarget = previousPromotionStage(v.stage, promotionFeatures);
@@ -482,7 +481,7 @@ export default function ModelDetailPage() {
             ? canRollbackVersionToStage(v, rollbackTarget, promotionFeatures)
             : false;
           return (
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap justify-start gap-2">
             {promoteTarget ? (
             <button
               type="button"

@@ -63,7 +63,6 @@ export default function PipelineVersionsPage() {
         header: "#",
         width: 96,
         canHide: false,
-        align: "right",
         getSortValue: (row) => row.version,
         cell: (row) => <span className="font-mono text-sm">{row.version}</span>,
       },

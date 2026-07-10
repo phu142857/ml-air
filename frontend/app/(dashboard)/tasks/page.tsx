@@ -90,7 +90,6 @@ export default function TasksPage() {
         id: "attempt",
         header: "Attempt",
         width: 110,
-        align: "right",
         getSortValue: (row) => row.attempt,
         cell: (row) => <span className="text-sm tabular-nums text-foreground/90">{row.attempt}</span>,
       },

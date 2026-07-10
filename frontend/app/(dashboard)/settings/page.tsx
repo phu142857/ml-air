@@ -209,7 +209,7 @@ function SettingsPageContent() {
       {
         id: "state",
         header: "",
-        className: "w-[88px] text-right",
+        className: "w-[88px]",
         cell: (row) => {
           const active = row.tenant_id === tenantId && row.project_id === projectId
           return active ? (

@@ -195,9 +195,7 @@ function headerLabel(header: React.ReactNode): string {
   return typeof header === "string" ? header : "Column"
 }
 
-function alignClass(align?: DataTableColumn<unknown>["align"]): string {
-  if (align === "center") return "text-center"
-  if (align === "right") return "text-right"
+function alignClass(): string {
   return "text-left"
 }
 
@@ -867,8 +865,12 @@ export function DataTable<T>({
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
               <Table
-                className={cn("table-fixed w-full border-collapse", DENSITY_ROW_CLASS[density])}
-                style={{ minWidth: `${tableMinWidth}px`, tableLayout: "fixed" }}
+                className={cn("table-fixed border-collapse", DENSITY_ROW_CLASS[density])}
+                style={{
+                  width: `${tableMinWidth}px`,
+                  minWidth: `${tableMinWidth}px`,
+                  tableLayout: "fixed",
+                }}
               >
                 <colgroup>
                   {visibleColumns.map((column) => (
@@ -896,12 +898,13 @@ export function DataTable<T>({
                           }}
                           className={cn(
                             "relative overflow-hidden border-border/70 bg-card text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
-                            alignClass(column.align),
+                            alignClass(),
                             stickyHeader && "top-0",
                             isPinned &&
                               "sticky z-30 border-r border-border bg-card",
                             column.headerClassName,
                             column.className,
+                            "text-left",
                           )}
                         >
                           <div className="relative flex min-w-0 items-center pr-2">
@@ -973,20 +976,21 @@ export function DataTable<T>({
                               left: isPinned ? pinnedOffsets[column.id] : undefined,
                             }}
                             className={cn(
-                              alignClass(column.align),
+                              alignClass(),
                               "max-w-0 overflow-hidden",
                               !column.wrap && "whitespace-nowrap",
                               column.wrap && "whitespace-normal",
                               isPinned &&
                                 "sticky z-10 border-r border-border bg-card group-hover:bg-muted/30 group-focus-visible:bg-muted/30",
                               column.className,
+                              "text-left",
                             )}
                           >
                             <div
                               className={cn(
-                                "min-w-0 max-w-full",
+                                "min-w-0 max-w-full text-left",
                                 !column.wrap &&
-                                  "truncate [&_a]:block [&_a]:max-w-full [&_a]:truncate [&_span]:block [&_span]:max-w-full [&_span]:truncate",
+                                  "truncate [&_a]:inline-block [&_a]:max-w-full [&_a]:truncate",
                                 column.wrap && "whitespace-normal break-words",
                               )}
                             >
