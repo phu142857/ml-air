@@ -148,6 +148,7 @@ export type LogItem = {
   level: string;
   message: string;
   trace_id?: string;
+  sequence?: number;
   payload?: LogItemPayload;
 };
 
@@ -1467,6 +1468,30 @@ export async function fetchRunLogsPage(
     has_more: Boolean(data.has_more),
     next_cursor: data.next_cursor ?? null,
   };
+}
+
+/** WebSocket URL for live run log streaming (API Pub/Sub fan-out). */
+export function buildRunLogsWsUrl(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+): string {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const path = `/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/logs/ws`;
+  const query = new URLSearchParams({ token: token.trim() }).toString();
+  const apiBase = getApiBaseUrl();
+  if (apiBase) {
+    const httpUrl = `${stripTrailingSlash(apiBase)}${path}?${query}`;
+    if (httpUrl.startsWith("https://")) return httpUrl.replace(/^https:/, "wss:");
+    if (httpUrl.startsWith("http://")) return httpUrl.replace(/^http:/, "ws:");
+    return httpUrl;
+  }
+  if (typeof window !== "undefined") {
+    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${window.location.host}${path}?${query}`;
+  }
+  return `ws://localhost:8080${path}?${query}`;
 }
 
 export async function fetchRunLogs(tenantId: string, projectId: string, runId: string, token: string) {

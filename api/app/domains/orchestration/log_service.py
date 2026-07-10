@@ -1,10 +1,15 @@
+"""Run/task log persistence (Postgres source of truth + Redis Pub/Sub realtime)."""
+
+from __future__ import annotations
+
 import json
 from datetime import datetime, timezone
 from typing import Any
 
-from app.domains.shared.pagination import PageResult, resolve_page_params
-from app.domains.shared.queue_service import redis_client
+from app.domains.shared.db_service import db_conn
+from app.domains.shared.pagination import PageResult, encode_cursor, resolve_page_params
 from app.domains.observability.trace_service import get_trace_id
+from sdk.mlair_log.store import append_log_entry
 
 
 def task_log_payload(
@@ -26,20 +31,14 @@ def task_log_payload(
     return pl
 
 
-def _build_log_entry(level: str, message: str, payload: dict | None = None) -> dict[str, Any]:
-    return {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "trace_id": get_trace_id(),
-        "level": level,
-        "message": message,
-        "payload": payload or {},
-    }
-
-
 def append_run_log(run_id: str, level: str, message: str, payload: dict | None = None) -> None:
-    entry = _build_log_entry(level, message, payload)
-    client = redis_client()
-    client.rpush(f"mlair:logs:{run_id}", json.dumps(entry))
+    append_log_entry(
+        run_id=run_id,
+        level=level,
+        message=message,
+        trace_id=get_trace_id(),
+        payload=payload or {},
+    )
 
 
 def append_task_run_log(
@@ -52,17 +51,22 @@ def append_task_run_log(
     worker_id: str | None = None,
     extra: dict | None = None,
 ) -> None:
-    """Append to the run log stream and a task-scoped index (same JSON line)."""
+    """Append one line to the run log stream (task_id indexed in Postgres)."""
     payload = task_log_payload(task_id=task_id, plugin=plugin, worker_id=worker_id)
     if extra:
         for key, value in extra.items():
             if value is not None and key not in payload:
                 payload[key] = value
-    entry = _build_log_entry(level, message, payload)
-    raw = json.dumps(entry)
-    client = redis_client()
-    client.rpush(f"mlair:logs:{run_id}", raw)
-    client.rpush(f"mlair:tasklogs:{task_id}", raw)
+    append_log_entry(
+        run_id=run_id,
+        task_id=task_id,
+        level=level,
+        message=message,
+        trace_id=get_trace_id(),
+        payload=payload,
+        plugin=plugin,
+        worker_id=worker_id,
+    )
 
 
 def read_run_logs_page(
@@ -74,17 +78,8 @@ def read_run_logs_page(
     tail: bool = False,
 ) -> PageResult:
     if tail:
-        return _read_log_list_page_tail(
-            f"mlair:logs:{run_id}",
-            limit=limit,
-            cursor=cursor,
-        )
-    return _read_log_list_page(
-        f"mlair:logs:{run_id}",
-        offset=offset,
-        limit=limit,
-        cursor=cursor,
-    )
+        return _read_run_logs_page_tail(run_id, limit=limit, cursor=cursor)
+    return _read_run_logs_page_forward(run_id, offset=offset, limit=limit, cursor=cursor)
 
 
 def read_run_logs(
@@ -94,160 +89,7 @@ def read_run_logs(
     cursor: str | None = None,
 ) -> list[dict]:
     page = read_run_logs_page(run_id, offset=offset, limit=limit, cursor=cursor)
-    return [{k: v for k, v in item.items() if k != "index"} for item in page.items]
-
-
-def _paginate_parsed_logs(
-    entries: list[dict[str, Any]],
-    *,
-    offset: int = 0,
-    limit: int = 200,
-    cursor: str | None = None,
-) -> PageResult:
-    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
-    if params.mode == "cursor" and params.cursor:
-        start = max(0, int(params.cursor.get("index", -1))) + 1
-    elif params.mode == "offset":
-        start = params.offset
-    else:
-        start = 0
-    slice_items = entries[start : start + params.limit]
-    items = [{**entry, "index": start + i} for i, entry in enumerate(slice_items)]
-    has_more = start + params.limit < len(entries)
-    next_cursor = None
-    if has_more and items:
-        from app.domains.shared.pagination import encode_cursor
-
-        next_cursor = encode_cursor({"index": items[-1]["index"]})
-    return PageResult(
-        items=items,
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=params.limit,
-        offset=params.offset if params.mode == "offset" else None,
-    )
-
-
-def _paginate_parsed_logs_tail(
-    entries: list[dict[str, Any]],
-    *,
-    limit: int = 200,
-    cursor: str | None = None,
-) -> PageResult:
-    params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=1000)
-    total = len(entries)
-    if total <= 0:
-        return PageResult(items=[], next_cursor=None, has_more=False, limit=params.limit)
-
-    if params.mode == "cursor" and params.cursor and params.cursor.get("dir") == "before":
-        end_exclusive = max(0, int(params.cursor.get("index", 0)))
-        start = max(0, end_exclusive - params.limit)
-    else:
-        start = max(0, total - params.limit)
-        end_exclusive = total
-
-    slice_items = entries[start:end_exclusive]
-    items = [{**entry, "index": start + i} for i, entry in enumerate(slice_items)]
-    has_more = start > 0
-    next_cursor = None
-    if has_more:
-        from app.domains.shared.pagination import encode_cursor
-
-        next_cursor = encode_cursor({"dir": "before", "index": start})
-    return PageResult(
-        items=items,
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=params.limit,
-    )
-
-
-def _read_log_list_page_tail(
-    redis_key: str,
-    *,
-    limit: int = 200,
-    cursor: str | None = None,
-) -> PageResult:
-    params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=1000)
-    client = redis_client()
-    total = int(client.llen(redis_key) or 0)
-    if total <= 0:
-        return PageResult(items=[], next_cursor=None, has_more=False, limit=params.limit)
-
-    if params.mode == "cursor" and params.cursor and params.cursor.get("dir") == "before":
-        end_exclusive = max(0, int(params.cursor.get("index", 0)))
-        start = max(0, end_exclusive - params.limit)
-        end = end_exclusive - 1
-    else:
-        start = max(0, total - params.limit)
-        end = total - 1
-
-    if end < start:
-        return PageResult(items=[], next_cursor=None, has_more=False, limit=params.limit)
-
-    raw_items = client.lrange(redis_key, start, end)
-    items = [{**entry, "index": start + i} for i, entry in enumerate(_parse_log_items(raw_items))]
-    has_more = start > 0
-    next_cursor = None
-    if has_more:
-        from app.domains.shared.pagination import encode_cursor
-
-        next_cursor = encode_cursor({"dir": "before", "index": start})
-    return PageResult(
-        items=items,
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=params.limit,
-    )
-
-
-def _read_log_list_page(redis_key: str, *, offset: int = 0, limit: int = 200, cursor: str | None = None) -> PageResult:
-    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
-    if params.mode == "cursor" and params.cursor:
-        start = max(0, int(params.cursor.get("index", -1))) + 1
-    elif params.mode == "offset":
-        start = params.offset
-    else:
-        start = 0
-    client = redis_client()
-    end = start + params.limit
-    raw_items = client.lrange(redis_key, start, end)
-    items = [{**entry, "index": start + i} for i, entry in enumerate(_parse_log_items(raw_items[: params.limit]))]
-    has_more = len(raw_items) > params.limit
-    next_cursor = None
-    if has_more and items:
-        from app.domains.shared.pagination import encode_cursor
-
-        next_cursor = encode_cursor({"index": items[-1]["index"]})
-    return PageResult(
-        items=items,
-        next_cursor=next_cursor,
-        has_more=has_more,
-        limit=params.limit,
-        offset=params.offset if params.mode == "offset" else None,
-    )
-
-
-def _task_logs_from_run_filter(
-    run_id: str,
-    task_id: str,
-    *,
-    offset: int = 0,
-    limit: int = 200,
-    cursor: str | None = None,
-    tail: bool = False,
-) -> PageResult:
-    client = redis_client()
-    raw_items = client.lrange(f"mlair:logs:{run_id}", 0, -1)
-    parsed = _parse_log_items(raw_items)
-    filtered = [
-        entry
-        for entry in parsed
-        if str((entry.get("payload") or {}).get("task_id") or "") == str(task_id)
-    ]
-    if tail:
-        return _paginate_parsed_logs_tail(filtered, limit=limit, cursor=cursor)
-    return _paginate_parsed_logs(filtered, offset=offset, limit=limit, cursor=cursor)
+    return [_public_entry(item) for item in page.items]
 
 
 def read_task_logs_page(
@@ -260,35 +102,8 @@ def read_task_logs_page(
     tail: bool = False,
 ) -> PageResult:
     if tail:
-        page = _read_log_list_page_tail(
-            f"mlair:tasklogs:{task_id}",
-            limit=limit,
-            cursor=cursor,
-        )
-        if page.items or not str(run_id or "").strip():
-            return page
-        return _task_logs_from_run_filter(
-            str(run_id).strip(),
-            task_id,
-            limit=limit,
-            cursor=cursor,
-            tail=True,
-        )
-    page = _read_log_list_page(
-        f"mlair:tasklogs:{task_id}",
-        offset=offset,
-        limit=limit,
-        cursor=cursor,
-    )
-    if page.items or not str(run_id or "").strip():
-        return page
-    return _task_logs_from_run_filter(
-        str(run_id).strip(),
-        task_id,
-        offset=offset,
-        limit=limit,
-        cursor=cursor,
-    )
+        return _read_task_logs_page_tail(task_id, limit=limit, cursor=cursor)
+    return _read_task_logs_page_forward(task_id, offset=offset, limit=limit, cursor=cursor)
 
 
 def read_task_logs(
@@ -298,21 +113,231 @@ def read_task_logs(
     cursor: str | None = None,
 ) -> list[dict]:
     page = read_task_logs_page(task_id, offset=offset, limit=limit, cursor=cursor)
-    return [{k: v for k, v in item.items() if k != "index"} for item in page.items]
+    return [_public_entry(item) for item in page.items]
 
 
-def _parse_log_items(raw_items: list) -> list[dict]:
-    parsed: list[dict] = []
-    for raw in raw_items:
+def _public_entry(item: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in item.items() if k != "index"}
+
+
+def _row_to_entry(row: tuple[Any, ...]) -> dict[str, Any]:
+    sequence, ts, level, message, trace_id, payload = row
+    if isinstance(payload, str):
         try:
-            parsed.append(json.loads(raw))
+            payload = json.loads(payload)
         except json.JSONDecodeError:
-            parsed.append(
-                {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "level": "WARN",
-                    "message": raw,
-                    "payload": {},
-                }
-            )
-    return parsed
+            payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    ts_out = ts.isoformat() if isinstance(ts, datetime) else str(ts or "")
+    return {
+        "ts": ts_out,
+        "trace_id": trace_id,
+        "level": str(level or "INFO"),
+        "message": str(message or ""),
+        "payload": payload,
+        "sequence": int(sequence),
+        "index": int(sequence),
+    }
+
+
+def _cursor_sequence(cursor: dict[str, Any] | None) -> int | None:
+    if not cursor:
+        return None
+    if "sequence" in cursor:
+        return int(cursor["sequence"])
+    if "index" in cursor:
+        return int(cursor["index"])
+    return None
+
+
+def _read_run_logs_page_forward(
+    run_id: str,
+    *,
+    offset: int = 0,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
+    where = "WHERE run_id = %s"
+    args: list[Any] = [run_id]
+    page_offset: int | None = None
+
+    if params.mode == "cursor" and params.cursor:
+        after_seq = _cursor_sequence(params.cursor)
+        if after_seq is not None:
+            where += " AND sequence > %s"
+            args.append(after_seq)
+    elif params.mode == "offset":
+        page_offset = params.offset
+
+    sql = f"""
+    SELECT sequence, ts, level, message, trace_id, payload
+    FROM run_log_entries
+    {where}
+    ORDER BY sequence ASC
+    """
+    if page_offset is not None:
+        sql += " OFFSET %s"
+        args.append(page_offset)
+    sql += " LIMIT %s"
+    args.append(params.limit + 1)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+
+    items = [_row_to_entry(row) for row in rows[: params.limit]]
+    has_more = len(rows) > params.limit
+    next_cursor = encode_cursor({"sequence": items[-1]["sequence"]}) if has_more and items else None
+    return PageResult(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=params.limit,
+        offset=page_offset,
+    )
+
+
+def _read_run_logs_page_tail(
+    run_id: str,
+    *,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=1000)
+    where = "WHERE run_id = %s"
+    args: list[Any] = [run_id]
+
+    if params.mode == "cursor" and params.cursor and params.cursor.get("dir") == "before":
+        before_seq = _cursor_sequence(params.cursor)
+        if before_seq is not None:
+            where += " AND sequence < %s"
+            args.append(before_seq)
+
+    sql = f"""
+    SELECT sequence, ts, level, message, trace_id, payload
+    FROM run_log_entries
+    {where}
+    ORDER BY sequence DESC
+    LIMIT %s
+    """
+    args.append(params.limit + 1)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+
+    fetched = rows[: params.limit]
+    has_more = len(rows) > params.limit
+    items = [_row_to_entry(row) for row in reversed(fetched)]
+    if not has_more and items:
+        min_seq = items[0]["sequence"]
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT EXISTS(SELECT 1 FROM run_log_entries WHERE run_id = %s AND sequence < %s)",
+                    (run_id, min_seq),
+                )
+                has_more = bool(cur.fetchone()[0])
+
+    next_cursor = encode_cursor({"dir": "before", "sequence": items[0]["sequence"]}) if has_more and items else None
+    return PageResult(items=items, next_cursor=next_cursor, has_more=has_more, limit=params.limit)
+
+
+def _read_task_logs_page_forward(
+    task_id: str,
+    *,
+    offset: int = 0,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
+    where = "WHERE task_id = %s"
+    args: list[Any] = [task_id]
+    page_offset: int | None = None
+
+    if params.mode == "cursor" and params.cursor:
+        after_seq = _cursor_sequence(params.cursor)
+        if after_seq is not None:
+            where += " AND sequence > %s"
+            args.append(after_seq)
+    elif params.mode == "offset":
+        page_offset = params.offset
+
+    sql = f"""
+    SELECT sequence, ts, level, message, trace_id, payload
+    FROM run_log_entries
+    {where}
+    ORDER BY sequence ASC
+    """
+    if page_offset is not None:
+        sql += " OFFSET %s"
+        args.append(page_offset)
+    sql += " LIMIT %s"
+    args.append(params.limit + 1)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+
+    items = [_row_to_entry(row) for row in rows[: params.limit]]
+    has_more = len(rows) > params.limit
+    next_cursor = encode_cursor({"sequence": items[-1]["sequence"]}) if has_more and items else None
+    return PageResult(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=params.limit,
+        offset=page_offset,
+    )
+
+
+def _read_task_logs_page_tail(
+    task_id: str,
+    *,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=1000)
+    where = "WHERE task_id = %s"
+    args: list[Any] = [task_id]
+
+    if params.mode == "cursor" and params.cursor and params.cursor.get("dir") == "before":
+        before_seq = _cursor_sequence(params.cursor)
+        if before_seq is not None:
+            where += " AND sequence < %s"
+            args.append(before_seq)
+
+    sql = f"""
+    SELECT sequence, ts, level, message, trace_id, payload
+    FROM run_log_entries
+    {where}
+    ORDER BY sequence DESC
+    LIMIT %s
+    """
+    args.append(params.limit + 1)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+
+    fetched = rows[: params.limit]
+    has_more = len(rows) > params.limit
+    items = [_row_to_entry(row) for row in reversed(fetched)]
+    if not has_more and items:
+        min_seq = items[0]["sequence"]
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT EXISTS(SELECT 1 FROM run_log_entries WHERE task_id = %s AND sequence < %s)",
+                    (task_id, min_seq),
+                )
+                has_more = bool(cur.fetchone()[0])
+
+    next_cursor = encode_cursor({"dir": "before", "sequence": items[0]["sequence"]}) if has_more and items else None
+    return PageResult(items=items, next_cursor=next_cursor, has_more=has_more, limit=params.limit)

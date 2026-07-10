@@ -45,7 +45,7 @@ from app.domains.platform.runtime_url_service import (
     resolve_runtime_realtime_base_url,
 )
 from app.api.list_pagination import guarded_page, page_response
-from app.domains.orchestration.log_service import append_run_log, read_run_logs, read_run_logs_page, read_task_logs, read_task_logs_page
+from app.domains.orchestration.log_service import append_run_log, read_run_logs_page, read_task_logs, read_task_logs_page
 from app.domains.orchestration.run_service import cancel_run_and_tasks
 from app.domains.governance.project_service import list_projects, list_tenants, register_project
 from app.domains.shared.queue_service import replay_dlq_for_run
@@ -1525,17 +1525,38 @@ async def run_logs_ws_v1(websocket: WebSocket, tenant_id: str, project_id: str, 
         await websocket.close(code=1008)
         return
 
-    cursor = 0
+    from redis.asyncio import Redis as AsyncRedis
+
+    from sdk.mlair_log.store import run_log_channel
+
+    redis_url = os.getenv("ML_AIR_REDIS_URL", "redis://redis:6379/0")
+    channel = run_log_channel(run_id)
+    client = AsyncRedis.from_url(redis_url, decode_responses=True)
+    pubsub = client.pubsub()
+    await pubsub.subscribe(channel)
     try:
         while True:
-            items = await asyncio.to_thread(read_run_logs, run_id, cursor, 200)
-            if items:
-                for item in items:
-                    await websocket.send_json(item)
-                cursor += len(items)
-            await asyncio.sleep(0.5)
+            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if not msg or msg.get("type") != "message":
+                continue
+            raw = msg.get("data")
+            if not raw:
+                continue
+            try:
+                entry = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict):
+                await websocket.send_json(entry)
     except WebSocketDisconnect:
         return
+    finally:
+        try:
+            await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+            await client.aclose()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @router.get("/auth/whoami")

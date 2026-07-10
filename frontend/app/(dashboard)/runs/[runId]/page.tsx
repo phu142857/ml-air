@@ -308,13 +308,17 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   useRunExecutionGraph(tenantId, projectId, runId, token, enabled)
 
   const logsRefetchMs = activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval
+  const logsLive = activeRunRefetchMs(runQuery.data?.status) !== false && tab === "logs"
   const logsQuery = useRunLogsInfinite(
     tenantId,
     projectId,
     runId,
     token,
     enabled && Boolean(runQuery.data),
-    typeof logsRefetchMs === "number" ? logsRefetchMs : false
+    {
+      streamLive: logsLive,
+      refetchInterval: logsLive ? false : (typeof logsRefetchMs === "number" ? logsRefetchMs : false),
+    },
   )
 
   const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
@@ -825,7 +829,17 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   ) : null}
                 </div>
                 <div className="flex min-w-0 items-center gap-3">
-                  {logsQuery.isFetching ? (
+                  {logsQuery.liveStatus === "live" ? (
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+                      Live
+                    </span>
+                  ) : logsQuery.liveStatus === "connecting" ? (
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Connecting
+                    </span>
+                  ) : logsQuery.isFetching ? (
                     <span className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       Refreshing
@@ -854,7 +868,10 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                     }
                     className="max-h-[min(520px,55vh)] space-y-1"
                     renderLine={(log, index) => (
-                      <LogLineRow key={`${log.ts}-${log.payload?.task_id ?? ""}-${index}`} log={log} />
+                      <LogLineRow
+                        key={`${log.sequence ?? log.ts}-${log.payload?.task_id ?? ""}-${index}`}
+                        log={log}
+                      />
                     )}
                   />
                 )}

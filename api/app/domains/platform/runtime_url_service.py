@@ -8,6 +8,17 @@ from urllib.parse import urlparse
 from starlette.requests import Request
 
 _INTERNAL_REALTIME_PORTS = frozenset({8001})
+_INTERNAL_UPSTREAM_HOSTS = frozenset(
+    {
+        "mlair_api",
+        "mlair-api",
+        "api",
+        "mlair_hub",
+        "mlair_realtime",
+        "mlair-hub",
+        "mlair-realtime",
+    }
+)
 
 
 def _parse_netloc(url: str) -> tuple[str, int | None]:
@@ -18,6 +29,43 @@ def _parse_netloc(url: str) -> tuple[str, int | None]:
         raw = f"http://{raw}"
     parsed = urlparse(raw)
     return (parsed.hostname or "").lower(), parsed.port
+
+
+def _is_internal_service_hostname(hostname: str) -> bool:
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in ("localhost", "127.0.0.1"):
+        return False
+    if host in _INTERNAL_UPSTREAM_HOSTS:
+        return True
+    # Docker Compose / k8s short names (no dot) are not browser-reachable.
+    if "." not in host:
+        return True
+    return False
+
+
+def _host_header_value(request: Request, header: str) -> str:
+    raw = (request.headers.get(header) or "").strip()
+    if not raw:
+        return ""
+    return raw.split(",")[0].strip()
+
+
+def _public_host_from_request(request: Request) -> str | None:
+    """Prefer forwarded client host; ignore internal nginx/docker upstream names."""
+    forwarded_port = _host_header_value(request, "x-forwarded-port")
+    for header in ("x-forwarded-host", "host"):
+        host_part = _host_header_value(request, header)
+        if not host_part:
+            continue
+        hostname, port = _parse_netloc(host_part if "://" in host_part else f"http://{host_part}")
+        if not hostname or _is_internal_service_hostname(hostname):
+            continue
+        if port is None and forwarded_port.isdigit():
+            host_part = f"{hostname}:{int(forwarded_port)}"
+        return host_part
+    return None
 
 
 def _realtime_ws_from_api_base(api_base_url: str) -> str | None:
@@ -55,14 +103,15 @@ def _should_rewrite_internal_realtime_url(explicit: str, api_base_url: str | Non
 def resolve_runtime_api_base_url(request: Request | None = None) -> str | None:
     explicit = os.getenv("ML_AIR_RUNTIME_API_BASE_URL", "").strip()
     if explicit:
+        hostname, _port = _parse_netloc(explicit if "://" in explicit else f"http://{explicit}")
+        if _is_internal_service_hostname(hostname):
+            return None
         return explicit.rstrip("/")
     if request is None:
         return None
-    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip()
+    host = _public_host_from_request(request)
     if not host:
         return None
-    # First value when proxies send comma-separated lists.
-    host = host.split(",")[0].strip()
     proto = (
         request.headers.get("x-forwarded-proto")
         or getattr(request.url, "scheme", None)

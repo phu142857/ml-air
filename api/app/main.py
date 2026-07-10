@@ -68,10 +68,12 @@ def on_startup() -> None:
     from app.domains.observability.event_outbox_service import start_outbox_drain_background
     from app.domains.lifecycle.workers.readiness_queue import start_readiness_queue_background
     from app.domains.observability.trace_retention_service import start_trace_retention_background
+    from app.domains.orchestration.run_log_retention_service import start_run_log_retention_background
 
     start_outbox_drain_background()
     start_readiness_queue_background()
     start_trace_retention_background()
+    start_run_log_retention_background()
     logger.info("api_startup_completed")
 
 

@@ -51,7 +51,7 @@ When using legacy offset paging, responses may also include `"offset": <n>`.
 | `GET .../audit/timeline` (+ export) | `ts`, `kind`, `resource_id` |
 | `GET .../semantic-events/outbox` | `created_at`, `outbox_id` |
 | `GET .../dataset-versions/{id}/preview` | `line_index` or `row_index` |
-| `GET .../runs/{id}/logs`, `.../tasks/{id}/logs` | `index` (Redis list position) |
+| `GET .../runs/{id}/logs`, `.../tasks/{id}/logs` | `sequence` (per-run monotonic) |
 
 **Already keyset:** `GET .../semantic-events/replay?after_sequence=` (sequence monotonic).
 

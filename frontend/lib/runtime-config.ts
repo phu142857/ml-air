@@ -32,12 +32,29 @@ function nonEmptyUrl(value: string | null | undefined): string | null {
 }
 
 /** Apply absolute api_base_url only for split-host deploys; same-origin Hub keeps relative `/v1`. */
+export function isInternalServiceHostname(hostname: string): boolean {
+  const host = String(hostname || "").trim().toLowerCase();
+  if (!host) return true;
+  if (host === "localhost" || host === "127.0.0.1") return false;
+  if (!host.includes(".")) return true;
+  return false;
+}
+
 export function shouldApplyRuntimeApiBaseUrl(url: string | null | undefined): boolean {
   const api = nonEmptyUrl(url);
   if (!api) return false;
   if (typeof window === "undefined") return true;
   try {
-    return new URL(api).origin !== window.location.origin;
+    const parsed = new URL(api);
+    if (isInternalServiceHostname(parsed.hostname)) return false;
+    if (parsed.hostname === window.location.hostname) {
+      const pagePort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
+      const apiPort = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+      if (pagePort === apiPort) return false;
+      // Same host, page on explicit port (e.g. :8080) but api URL omits it → keep same-origin /v1.
+      if (window.location.port && !parsed.port) return false;
+    }
+    return parsed.origin !== window.location.origin;
   } catch {
     return false;
   }

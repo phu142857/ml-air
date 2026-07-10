@@ -109,7 +109,7 @@ Content-Type: application/json
 ```
 
 - Up to **100** lines per request; `message` required; `level` defaults to `INFO` (`DEBUG`, `WARN`, `ERROR` allowed).
-- The API stores each line in Redis `mlair:logs:{run_id}` with payload `{ "task_id", "plugin", "worker_id" }` so the Hub can filter by task.
+- The API persists each line in Postgres `run_log_entries` and publishes it on Redis Pub/Sub (`mlair.run.{run_id}`) for realtime streaming. Payload includes `{ "task_id", "plugin", "worker_id" }` so the Hub can filter by task.
 - Lease / complete / fail also write summary lines (leased, success, failed) with the same payload shape.
 - Task-scoped read (maintainer/viewer token): `GET /v1/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs`.
 

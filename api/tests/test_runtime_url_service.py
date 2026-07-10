@@ -96,6 +96,37 @@ class TestRuntimeUrlService(unittest.TestCase):
             )
         self.assertEqual(ws, "wss://realtime.example.com")
 
+    def test_internal_upstream_host_returns_none(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ML_AIR_RUNTIME_API_BASE_URL", None)
+            out = resolve_runtime_api_base_url(_request(host="mlair_api", proto="http"))
+        self.assertIsNone(out)
+
+    def test_forwarded_port_appended_when_host_omits_port(self) -> None:
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/runtime-config",
+            "headers": [
+                (b"host", b"localhost"),
+                (b"x-forwarded-host", b"localhost"),
+                (b"x-forwarded-proto", b"http"),
+                (b"x-forwarded-port", b"8080"),
+            ],
+            "query_string": b"",
+            "client": ("127.0.0.1", 12345),
+            "server": ("localhost", 8080),
+            "scheme": "http",
+        }
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ML_AIR_RUNTIME_API_BASE_URL", None)
+            out = resolve_runtime_api_base_url(Request(scope))
+        self.assertEqual(out, "http://localhost:8080")
+
+    def test_explicit_internal_env_returns_none(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_RUNTIME_API_BASE_URL": "http://mlair_api"}, clear=False):
+            self.assertIsNone(resolve_runtime_api_base_url(_request()))
+
 
 if __name__ == "__main__":
     unittest.main()
