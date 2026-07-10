@@ -116,3 +116,21 @@ Orchestrated by `trace-explorer-workspace.tsx`. Keyboard: `↑`/`↓` navigate s
 Visual rules: flat `border-border` panels, semantic status colors on bars and `StatusBadge`, 16px parent-child indent per depth level. No gradients or glass effects.
 
 **Dialog mode** (`TraceExplorerDialog`): uses `dialog-viewport-90` (90vw × 90vh). Tab bar adds Events, Logs, Runs, Services, and Execution graph alongside the three-pane Spans workspace.
+
+## Dashboard (`/dashboard`)
+
+Bento grid operations board (Linear / Vercel / Grafana inspired):
+
+| Widget | Source |
+|--------|--------|
+| KPI strip | `useDashboardStats` — datasets, pipelines, runs, models |
+| Active runs | Runs with `RUNNING` status |
+| Queue | `PENDING` / `QUEUED` runs |
+| Workers | Hostnames from running run environments |
+| Storage | Dataset volume + `UsageRollupPanel` |
+| Recent traces | `fetchTraceList` |
+| Alerts | Failed runs, blocked readiness, audit timeline |
+| Pipeline health | Running pipelines + idle ratio |
+| GPU usage | Project/tenant usage rollup |
+
+Layout is persisted in `localStorage` (`mlair:dashboard-bento-layout`). **Edit layout** enables drag-to-swap and corner resize; **Widgets** menu toggles visibility and resets layout.
