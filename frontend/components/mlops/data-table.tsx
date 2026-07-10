@@ -166,9 +166,15 @@ function writeStoredViews(tableId: string, value: DataTableStoredState) {
   }
 }
 
-function readStoredWidths(tableId: string): Record<string, number> | null {
+function resolveWidthStorageKey(tableId: string | undefined, columnIds: string[]): string | null {
+  if (tableId) return widthsStorageKey(tableId)
+  if (columnIds.length === 0) return null
+  return `mlair:data-table-widths:cols:${columnIds.join("--")}`
+}
+
+function readStoredWidths(storageKey: string): Record<string, number> | null {
   try {
-    const raw = window.localStorage.getItem(widthsStorageKey(tableId))
+    const raw = window.localStorage.getItem(storageKey)
     if (!raw) return null
     return JSON.parse(raw) as Record<string, number>
   } catch {
@@ -176,9 +182,10 @@ function readStoredWidths(tableId: string): Record<string, number> | null {
   }
 }
 
-function writeStoredWidths(tableId: string, value: Record<string, number>) {
+function writeStoredWidths(storageKey: string | null, value: Record<string, number>) {
+  if (!storageKey) return
   try {
-    window.localStorage.setItem(widthsStorageKey(tableId), JSON.stringify(value))
+    window.localStorage.setItem(storageKey, JSON.stringify(value))
   } catch {
     // ignore storage failures
   }
@@ -297,6 +304,12 @@ export function DataTable<T>({
     [columns],
   )
 
+  const columnIds = useMemo(() => columns.map((column) => column.id), [columns])
+  const widthStorageKey = useMemo(
+    () => resolveWidthStorageKey(tableId, columnIds),
+    [columnIds, tableId],
+  )
+
   const [searchQuery, setSearchQuery] = useState("")
   const [density, setDensity] = useState<Density>(defaultDensity)
   const [pageSize, setPageSize] = useState(defaultPageSize)
@@ -309,6 +322,7 @@ export function DataTable<T>({
   const [activeViewId, setActiveViewId] = useState<string | null>(null)
   const [resizedWidths, setResizedWidths] = useState<Record<string, number>>({})
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1)
+  const [widthsReady, setWidthsReady] = useState(false)
 
   useEffect(() => {
     resizedWidthsRef.current = resizedWidths
@@ -319,23 +333,45 @@ export function DataTable<T>({
   }, [initialVisibility])
 
   useEffect(() => {
-    if (!tableId) return
-    const stored = readStoredViews(tableId)
-    const storedWidths = readStoredWidths(tableId)
-    if (storedWidths) setResizedWidths(storedWidths)
-    if (!stored) return
-    setSavedViews(stored.views || [])
-    setActiveViewId(stored.activeViewId)
-    const active = stored.views.find((view) => view.id === stored.activeViewId)
-    if (!active) return
-    setDensity(active.density)
-    setPageSize(active.pageSize)
-    setVisibility((prev) => ({ ...prev, ...active.visibility }))
-    setPinned(active.pinned)
-    setSorts(active.sorts)
-    setFilters(active.filters)
-    if (active.columnWidths) setResizedWidths(active.columnWidths)
-  }, [tableId])
+    setWidthsReady(false)
+    if (!widthStorageKey) {
+      setWidthsReady(true)
+      return
+    }
+
+    let widths = readStoredWidths(widthStorageKey) ?? {}
+
+    if (tableId) {
+      const stored = readStoredViews(tableId)
+      if (stored) {
+        setSavedViews(stored.views || [])
+        setActiveViewId(stored.activeViewId)
+        const active = stored.views.find((view) => view.id === stored.activeViewId)
+        if (active) {
+          setDensity(active.density)
+          setPageSize(active.pageSize)
+          setVisibility((prev) => ({ ...prev, ...active.visibility }))
+          setPinned(active.pinned)
+          setSorts(active.sorts)
+          setFilters(active.filters)
+          if (active.columnWidths && Object.keys(active.columnWidths).length > 0) {
+            widths = active.columnWidths
+          }
+        }
+      }
+    }
+
+    if (Object.keys(widths).length > 0) {
+      setResizedWidths(widths)
+      resizedWidthsRef.current = widths
+    }
+    setWidthsReady(true)
+  }, [tableId, widthStorageKey])
+
+  useEffect(() => {
+    if (!widthStorageKey || !widthsReady) return
+    writeStoredWidths(widthStorageKey, resizedWidths)
+  }, [resizedWidths, widthStorageKey, widthsReady])
 
   useEffect(() => {
     if (!tableId) return
@@ -471,17 +507,17 @@ export function DataTable<T>({
     setFilters({})
     setResizedWidths({})
     setActiveViewId(null)
-    if (tableId) writeStoredWidths(tableId, {})
+    if (widthStorageKey) writeStoredWidths(widthStorageKey, {})
   }
 
   const resetColumnWidth = useCallback((columnId: string) => {
     setResizedWidths((current) => {
       const next = { ...current }
       delete next[columnId]
-      if (tableId) writeStoredWidths(tableId, next)
+      resizedWidthsRef.current = next
       return next
     })
-  }, [tableId])
+  }, [])
 
   const beginColumnResize = useCallback(
     (columnId: string, event: React.MouseEvent<HTMLDivElement>) => {
@@ -493,11 +529,16 @@ export function DataTable<T>({
       const minWidth = column.minWidth ?? MIN_COLUMN_WIDTH
       const startX = event.clientX
       const startWidth = getEffectiveColumnWidth(column, resizedWidthsRef.current)
+      let latestWidths = resizedWidthsRef.current
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         const delta = moveEvent.clientX - startX
         const nextWidth = Math.max(minWidth, Math.round(startWidth + delta))
-        setResizedWidths((current) => ({ ...current, [columnId]: nextWidth }))
+        setResizedWidths((current) => {
+          latestWidths = { ...current, [columnId]: nextWidth }
+          resizedWidthsRef.current = latestWidths
+          return latestWidths
+        })
       }
 
       const onMouseUp = () => {
@@ -505,7 +546,7 @@ export function DataTable<T>({
         document.removeEventListener("mouseup", onMouseUp)
         document.body.style.cursor = ""
         document.body.style.userSelect = ""
-        if (tableId) writeStoredWidths(tableId, resizedWidthsRef.current)
+        if (widthStorageKey) writeStoredWidths(widthStorageKey, latestWidths)
       }
 
       document.body.style.cursor = "col-resize"
@@ -513,7 +554,7 @@ export function DataTable<T>({
       document.addEventListener("mousemove", onMouseMove)
       document.addEventListener("mouseup", onMouseUp)
     },
-    [columns, tableId],
+    [columns, widthStorageKey],
   )
 
   const saveCurrentView = () => {
@@ -549,7 +590,7 @@ export function DataTable<T>({
     setResizedWidths(view.columnWidths ?? {})
     setPageIndex(0)
     setActiveViewId(view.id)
-    if (tableId) writeStoredWidths(tableId, view.columnWidths ?? {})
+    if (widthStorageKey) writeStoredWidths(widthStorageKey, view.columnWidths ?? {})
   }
 
   const deleteActiveView = () => {
@@ -826,9 +867,17 @@ export function DataTable<T>({
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
               <Table
-                className={cn("table-fixed w-full", DENSITY_ROW_CLASS[density])}
-                style={{ minWidth: `${tableMinWidth}px` }}
+                className={cn("table-fixed w-full border-collapse", DENSITY_ROW_CLASS[density])}
+                style={{ minWidth: `${tableMinWidth}px`, tableLayout: "fixed" }}
               >
+                <colgroup>
+                  {visibleColumns.map((column) => (
+                    <col
+                      key={column.id}
+                      style={{ width: `${getEffectiveColumnWidth(column, resizedWidths)}px` }}
+                    />
+                  ))}
+                </colgroup>
                 <TableHeader className={cn(stickyHeader && "sticky top-0 z-20 bg-card")}>
                   <TableRow className="border-border/70 hover:bg-transparent">
                     {visibleColumns.map((column) => {
@@ -846,7 +895,7 @@ export function DataTable<T>({
                             left: isPinned ? pinnedOffsets[column.id] : undefined,
                           }}
                           className={cn(
-                            "relative border-border/70 bg-card text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+                            "relative overflow-hidden border-border/70 bg-card text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
                             alignClass(column.align),
                             stickyHeader && "top-0",
                             isPinned &&
@@ -925,7 +974,7 @@ export function DataTable<T>({
                             }}
                             className={cn(
                               alignClass(column.align),
-                              "min-w-0",
+                              "max-w-0 overflow-hidden",
                               !column.wrap && "whitespace-nowrap",
                               column.wrap && "whitespace-normal",
                               isPinned &&
@@ -933,7 +982,16 @@ export function DataTable<T>({
                               column.className,
                             )}
                           >
-                            {column.cell(row)}
+                            <div
+                              className={cn(
+                                "min-w-0 max-w-full",
+                                !column.wrap &&
+                                  "truncate [&_a]:block [&_a]:max-w-full [&_a]:truncate [&_span]:block [&_span]:max-w-full [&_span]:truncate",
+                                column.wrap && "whitespace-normal break-words",
+                              )}
+                            >
+                              {column.cell(row)}
+                            </div>
                           </TableCell>
                         )
                       })}
