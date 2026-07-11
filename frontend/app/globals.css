@@ -413,6 +413,19 @@
     overscroll-behavior: contain;
   }
 
+  /* Command palette — glass is allowed only on this overlay (see docs/design-system.md). */
+  .command-palette-surface {
+    @apply rounded-xl border border-border/70 bg-card/82 shadow-lg backdrop-blur-xl;
+  }
+
+  .command-palette-overlay {
+    @apply motion-reduce:backdrop-blur-none;
+  }
+
+  .command-palette-command [data-slot="command-input-wrapper"] {
+    @apply h-12 border-b border-border/60 bg-transparent px-4;
+  }
+
   .page-toolbar {
     @apply shrink-0 border-b border-border bg-background px-4 py-3 sm:px-6;
   }
