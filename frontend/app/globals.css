@@ -82,6 +82,10 @@
   --z-floating: 300;
   --z-modal: 250;
   --z-toast: 400;
+
+  --motion-duration-fast: 150ms;
+  --motion-duration: 200ms;
+  --motion-ease: ease-out;
 }
 
 .dark {
@@ -352,19 +356,112 @@
 
 @layer utilities {
   .transition-default {
-    transition-property: color, background-color, border-color, opacity;
-    transition-duration: 150ms;
-    transition-timing-function: ease-out;
+    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-duration: var(--motion-duration-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  .transition-interactive {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: var(--motion-duration);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .page-enter {
+    animation: page-enter var(--motion-duration) var(--motion-ease);
+  }
+
+  @keyframes success-flash-keyframes {
+    0% {
+      border-color: var(--status-success-border);
+      background-color: var(--status-success-bg);
+    }
+    100% {
+      border-color: var(--border);
+      background-color: var(--card);
+    }
+  }
+
+  .success-flash {
+    animation: success-flash-keyframes var(--motion-duration) var(--motion-ease);
+  }
+
+  .toast-success-enter {
+    animation: success-flash-keyframes var(--motion-duration-fast) var(--motion-ease);
+  }
+
+  @keyframes motion-safe-spin-keyframes {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .motion-safe-spin {
+    animation: motion-safe-spin-keyframes 1s linear infinite;
+  }
+
+  @keyframes skeleton-pulse-keyframes {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse-keyframes 1.4s var(--motion-ease) infinite;
+  }
+
+  .interactive-row {
+    outline: none;
+    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-duration: var(--motion-duration-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  .interactive-row:hover {
+    @apply bg-muted/40;
+  }
+
+  .interactive-row:focus-visible {
+    @apply bg-muted/50 ring-2 ring-ring/45 ring-offset-2 ring-offset-background;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .transition-default {
+    .transition-default,
+    .transition-interactive {
       transition-duration: 0.01ms;
+    }
+
+    .page-enter,
+    .success-flash,
+    .toast-success-enter {
+      animation: none;
+    }
+
+    .motion-safe-spin {
+      animation: none;
+    }
+
+    .skeleton-pulse {
+      animation: none;
+      opacity: 0.72;
     }
   }
 
   .focus-ring {
-    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   .dark .focus-ring {

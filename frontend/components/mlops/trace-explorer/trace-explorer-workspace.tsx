@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { Copy, Download, Link2, Loader2, Route } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ImperativePanelHandle } from "react-resizable-panels";
+import { Copy, Download, Link2, List, Loader2, PanelRight, Play, Route } from "lucide-react";
 
+import { MlopsEmptyState } from "@/components/mlops/layout";
 import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
+import { TracePaneRail } from "@/components/mlops/trace-explorer/trace-pane-rail";
 import { TraceSpanDetailsPane } from "@/components/mlops/trace-explorer/trace-span-details";
 import {
   findStepByFlatIndex,
   useTraceExplorerKeyboard,
 } from "@/components/mlops/trace-explorer/use-trace-explorer-keyboard";
+import { TraceWorkspaceEmpty } from "@/components/mlops/trace-explorer/trace-workspace-empty";
+import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog";
 import { TraceWaterfallView } from "@/components/mlops/trace-waterfall";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +23,10 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useTraceDetail } from "@/hooks/use-trace-detail";
+import {
+  TRACE_WORKSPACE_COLLAPSED_SIZE,
+  useTraceWorkspaceState,
+} from "@/hooks/use-trace-workspace-state";
 import { useAppContext } from "@/lib/app-context";
 import type { TraceSearchHit, TraceWaterfallStep } from "@/lib/api";
 import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
@@ -31,6 +40,7 @@ export type TraceExplorerWorkspaceProps = {
   traceSearch: string;
   onTraceSearchChange: (value: string) => void;
   listLoading?: boolean;
+  onRefreshTraces?: () => void;
   className?: string;
 };
 
@@ -41,9 +51,12 @@ export function TraceExplorerWorkspace({
   traceSearch,
   onTraceSearchChange,
   listLoading,
+  onRefreshTraces,
 }: TraceExplorerWorkspaceProps) {
   const { tenantId, projectId, token } = useAppContext();
   const normalized = selectedTraceId ? normalizeTraceId(selectedTraceId) || selectedTraceId.trim() : "";
+
+  const workspace = useTraceWorkspaceState({ tenantId, projectId });
 
   const { data, isLoading, isFetching, refetch } = useTraceDetail(
     tenantId,
@@ -58,6 +71,7 @@ export function TraceExplorerWorkspace({
   const [focusedFlatIndex, setFocusedFlatIndex] = useState<number | null>(null);
   const [spanFilter, setSpanFilter] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [triggerOpen, setTriggerOpen] = useState(false);
   const [flatSteps, setFlatSteps] = useState<TraceWaterfallStep[]>([]);
   const zoomHandlersRef = useRef<{
     zoomIn: () => void;
@@ -67,6 +81,8 @@ export function TraceExplorerWorkspace({
 
   const traceListSearchRef = useRef<HTMLInputElement>(null);
   const spanFilterRef = useRef<HTMLInputElement>(null);
+  const leftPanelRef = useRef<ImperativePanelHandle>(null);
+  const rightPanelRef = useRef<ImperativePanelHandle>(null);
 
   const waterfall = data?.unified_waterfall ?? data?.waterfall ?? null;
   const waterfallVariant = data?.unified_waterfall ? "unified" : "run";
@@ -96,7 +112,25 @@ export function TraceExplorerWorkspace({
     [flatSteps, selectedStep],
   );
 
-  useTraceExplorerKeyboard(Boolean(normalized), {
+  const toggleFullscreen = useCallback(() => {
+    workspace.setWaterfallFullscreen((prev) => !prev);
+  }, [workspace]);
+
+  useEffect(() => {
+    const panel = leftPanelRef.current;
+    if (!panel) return;
+    if (workspace.leftCollapsed) panel.collapse();
+    else panel.expand();
+  }, [workspace.leftCollapsed]);
+
+  useEffect(() => {
+    const panel = rightPanelRef.current;
+    if (!panel) return;
+    if (workspace.rightCollapsed) panel.collapse();
+    else panel.expand();
+  }, [workspace.rightCollapsed]);
+
+  useTraceExplorerKeyboard(Boolean(normalized) || workspace.waterfallFullscreen, {
     onFocusSearch: () => traceListSearchRef.current?.focus(),
     onMoveSelection: moveSelection,
     onToggleExpand: () => {
@@ -109,6 +143,7 @@ export function TraceExplorerWorkspace({
       setSelectedStep(null);
       setFocusedFlatIndex(null);
     },
+    onExitFullscreen: workspace.exitFullscreen,
     onZoomIn: () => zoomHandlersRef.current?.zoomIn(),
     onZoomOut: () => zoomHandlersRef.current?.zoomOut(),
     onResetZoom: () => zoomHandlersRef.current?.resetZoom(),
@@ -137,9 +172,107 @@ export function TraceExplorerWorkspace({
     }
   };
 
+  const handleRefresh = useCallback(() => {
+    onRefreshTraces?.();
+    if (normalized) void refetch();
+  }, [normalized, onRefreshTraces, refetch]);
+
+  const listEmptyAction = useMemo(
+    () =>
+      !listLoading && traceList.length === 0 && !traceSearch.trim() ? (
+        <div className="px-3 py-6">
+          <MlopsEmptyState
+            icon={Route}
+            title="No traces yet"
+            description="Run a pipeline to generate traces."
+            action={
+              <Button type="button" size="sm" onClick={() => setTriggerOpen(true)}>
+                <Play className="h-3.5 w-3.5" aria-hidden />
+                Trigger Run
+              </Button>
+            }
+          />
+        </div>
+      ) : undefined,
+    [listLoading, traceList.length, traceSearch],
+  );
+
+  const centerContent = useMemo(
+    () => (
+      <div className="flex h-full min-h-0 flex-col border-x border-border bg-card">
+        <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-3 py-2">
+          <label htmlFor="span-filter" className="sr-only">
+            Filter spans
+          </label>
+          <Input
+            id="span-filter"
+            ref={spanFilterRef}
+            value={spanFilter}
+            onChange={(e) => setSpanFilter(e.target.value)}
+            placeholder="Filter spans…"
+            className="h-8 text-xs"
+            disabled={!waterfall}
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {!normalized ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <TraceWorkspaceEmpty
+                onTriggerRun={() => setTriggerOpen(true)}
+                onRefresh={handleRefresh}
+                refreshing={listLoading || isFetching}
+              />
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading waterfall…
+            </div>
+          ) : !waterfall ? (
+            <p className="px-4 py-8 text-sm text-muted-foreground">
+              No timing data for this trace.
+            </p>
+          ) : (
+            <TraceWaterfallView
+              waterfall={waterfall}
+              variant={waterfallVariant}
+              selectedStepId={selectedStepId}
+              hoveredStepId={hoveredStepId}
+              focusedFlatIndex={focusedFlatIndex}
+              spanFilter={spanFilter}
+              onStepSelect={setSelectedStep}
+              onStepHover={(step) => setHoveredStepId(step?.id ?? null)}
+              onFlatStepsChange={setFlatSteps}
+              onZoomHandlersReady={(handlers) => {
+                zoomHandlersRef.current = handlers;
+              }}
+              waterfallFullscreen={workspace.waterfallFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          )}
+        </div>
+      </div>
+    ),
+    [
+      focusedFlatIndex,
+      handleRefresh,
+      hoveredStepId,
+      isFetching,
+      isLoading,
+      listLoading,
+      normalized,
+      selectedStepId,
+      spanFilter,
+      toggleFullscreen,
+      waterfall,
+      waterfallVariant,
+      workspace.waterfallFullscreen,
+    ],
+  );
+
   const toolbar = useMemo(
     () => (
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2">
+      <div className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2">
         <Route className="h-4 w-4 text-primary" aria-hidden />
         <code className="max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
           {normalized || "Select a trace"}
@@ -151,6 +284,16 @@ export function TraceExplorerWorkspace({
           </span>
         ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8"
+            disabled={workspace.waterfallFullscreen}
+            onClick={workspace.resetLayout}
+          >
+            Reset layout
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -201,94 +344,112 @@ export function TraceExplorerWorkspace({
         </div>
       </div>
     ),
-    [data, exporting, isFetching, normalized, refetch],
+    [
+      data,
+      exporting,
+      isFetching,
+      normalized,
+      refetch,
+      workspace.resetLayout,
+      workspace.waterfallFullscreen,
+    ],
   );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <TriggerRunDialog open={triggerOpen} onOpenChange={setTriggerOpen} />
+
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {selectedStep
           ? `Selected span ${selectedStep.label}, status ${selectedStep.status}`
           : ""}
       </div>
+
       {toolbar}
 
-      <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize={22} minSize={16} maxSize={35}>
-          <TraceListPane
-            items={traceList}
-            selectedTraceId={selectedTraceId}
-            onSelectTrace={handleTraceChange}
-            search={traceSearch}
-            onSearchChange={onTraceSearchChange}
-            isLoading={listLoading}
-            searchInputRef={traceListSearchRef}
-          />
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
-
-        <ResizablePanel defaultSize={53} minSize={35}>
-          <div className="flex h-full min-h-0 flex-col border-x border-border">
-            <div className="shrink-0 border-b border-border px-3 py-2">
-              <label htmlFor="span-filter" className="sr-only">
-                Filter spans
-              </label>
-              <Input
-                id="span-filter"
-                ref={spanFilterRef}
-                value={spanFilter}
-                onChange={(e) => setSpanFilter(e.target.value)}
-                placeholder="Filter spans…"
-                className="h-8 text-xs"
-                disabled={!waterfall}
+      {workspace.waterfallFullscreen ? (
+        <div className="min-h-0 flex-1 overflow-hidden">{centerContent}</div>
+      ) : (
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="min-h-0 flex-1"
+          onLayout={workspace.handlePanelLayout}
+        >
+          <ResizablePanel
+            ref={leftPanelRef}
+            id="trace-list"
+            defaultSize={workspace.defaultPanelSizes.left}
+            minSize={16}
+            maxSize={35}
+            collapsible
+            collapsedSize={TRACE_WORKSPACE_COLLAPSED_SIZE}
+            onCollapse={() => workspace.setLeftCollapsed(true)}
+            onExpand={() => workspace.setLeftCollapsed(false)}
+          >
+            {workspace.leftCollapsed ? (
+              <TracePaneRail
+                side="left"
+                icon={List}
+                label="Trace list"
+                onExpand={() => workspace.setLeftCollapsed(false)}
               />
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {!normalized ? (
-                <p className="px-4 py-8 text-sm text-muted-foreground">
-                  Select a trace from the list to view the waterfall timeline.
-                </p>
-              ) : isLoading ? (
-                <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading waterfall…
-                </div>
-              ) : !waterfall ? (
-                <p className="px-4 py-8 text-sm text-muted-foreground">
-                  No timing data for this trace.
-                </p>
-              ) : (
-                <TraceWaterfallView
-                  waterfall={waterfall}
-                  variant={waterfallVariant}
-                  selectedStepId={selectedStepId}
-                  hoveredStepId={hoveredStepId}
-                  focusedFlatIndex={focusedFlatIndex}
-                  spanFilter={spanFilter}
-                  onStepSelect={setSelectedStep}
-                  onStepHover={(step) => setHoveredStepId(step?.id ?? null)}
-                  onFlatStepsChange={setFlatSteps}
-                  onZoomHandlersReady={(handlers) => {
-                    zoomHandlersRef.current = handlers;
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        </ResizablePanel>
+            ) : (
+              <TraceListPane
+                items={traceList}
+                selectedTraceId={selectedTraceId}
+                onSelectTrace={handleTraceChange}
+                search={traceSearch}
+                onSearchChange={onTraceSearchChange}
+                isLoading={listLoading}
+                searchInputRef={traceListSearchRef}
+                onCollapse={workspace.toggleLeftCollapsed}
+                listEmptyAction={listEmptyAction}
+              />
+            )}
+          </ResizablePanel>
 
-        <ResizableHandle withHandle />
+          <ResizableHandle withHandle />
 
-        <ResizablePanel defaultSize={25} minSize={18} maxSize={40}>
-          <TraceSpanDetailsPane
-            traceId={normalized}
-            data={data}
-            selectedStep={selectedStep}
-            isLoading={isLoading}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+          <ResizablePanel
+            id="trace-waterfall"
+            defaultSize={workspace.defaultPanelSizes.center}
+            minSize={35}
+          >
+            {centerContent}
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
+
+          <ResizablePanel
+            ref={rightPanelRef}
+            id="trace-detail"
+            defaultSize={workspace.defaultPanelSizes.right}
+            minSize={18}
+            maxSize={40}
+            collapsible
+            collapsedSize={TRACE_WORKSPACE_COLLAPSED_SIZE}
+            onCollapse={() => workspace.setRightCollapsed(true)}
+            onExpand={() => workspace.setRightCollapsed(false)}
+          >
+            {workspace.rightCollapsed ? (
+              <TracePaneRail
+                side="right"
+                icon={PanelRight}
+                label="Span details"
+                onExpand={() => workspace.setRightCollapsed(false)}
+              />
+            ) : (
+              <TraceSpanDetailsPane
+                traceId={normalized}
+                data={data}
+                selectedStep={selectedStep}
+                isLoading={isLoading}
+                onCollapse={workspace.toggleRightCollapsed}
+              />
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
     </div>
   );
 }

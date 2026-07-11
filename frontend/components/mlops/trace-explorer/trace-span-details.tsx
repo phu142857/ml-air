@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, PanelRightClose } from "lucide-react";
 
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { Button } from "@/components/ui/button";
@@ -244,6 +244,7 @@ export type TraceSpanDetailsPaneProps = {
   data: TraceDetailResponse | null | undefined;
   selectedStep: TraceWaterfallStep | null;
   isLoading?: boolean;
+  onCollapse?: () => void;
 };
 
 export function TraceSpanDetailsPane({
@@ -251,6 +252,7 @@ export function TraceSpanDetailsPane({
   data,
   selectedStep,
   isLoading,
+  onCollapse,
 }: TraceSpanDetailsPaneProps) {
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-border bg-card">
@@ -261,8 +263,21 @@ export function TraceSpanDetailsPane({
             ? "Trace overview"
             : ""}
       </div>
-      <div className="shrink-0 border-b border-border px-4 py-3">
-        <h2 className="font-heading text-sm font-semibold text-foreground">Span details</h2>
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-heading text-sm font-semibold text-foreground">Span details</h2>
+          {onCollapse ? (
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={onCollapse}
+              aria-label="Collapse detail panel"
+              title="Collapse detail panel"
+            >
+              <PanelRightClose className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="scroll-region min-h-0 flex-1 px-4 py-4">
         {isLoading ? (

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { MlopsEmptyState, DetailSection } from "@/components/mlops/layout";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
+import { patchListQueryItem } from "@/lib/optimistic-list";
 import type { PluginItem } from "@/lib/api";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
@@ -24,8 +25,10 @@ export function PluginsSettingsTab() {
   const [validatePayload, setValidatePayload] = useState('{"name":"mlair"}');
   const [validateResult, setValidateResult] = useState("");
 
+  const pluginsQueryKey = [...mlairKeys.plugins.all(), token] as const;
+
   const pluginsQuery = useQuery({
-    queryKey: [...mlairKeys.plugins.all(), token],
+    queryKey: pluginsQueryKey,
     queryFn: () => fetchPlugins(token)
   });
 
@@ -45,11 +48,28 @@ export function PluginsSettingsTab() {
 
   const toggleMutation = useMutation({
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) => togglePlugin(name, enabled, token),
+    onMutate: async ({ name, enabled }) => {
+      await queryClient.cancelQueries({ queryKey: mlairKeys.plugins.all(), exact: false });
+      const previous = patchListQueryItem<PluginItem>(
+        queryClient,
+        pluginsQueryKey,
+        (item) => item.name === name,
+        (item) => ({ ...item, enabled }),
+      );
+      return { previous };
+    },
     onSuccess: async (_data, { name, enabled }) => {
       toastSuccess(enabled ? "Plugin enabled" : "Plugin disabled", name);
+    },
+    onError: (e, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(pluginsQueryKey, context.previous);
+      }
+      toastError("Toggle failed", String((e as Error)?.message || e));
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: mlairKeys.plugins.all(), exact: false });
     },
-    onError: (e) => toastError("Toggle failed", String((e as Error)?.message || e)),
   });
 
   const pluginOptions = useMemo(
@@ -142,7 +162,8 @@ export function PluginsSettingsTab() {
               variant="outline"
               size="sm"
               className="h-7 border-border bg-card text-xs"
-              disabled={toggleMutation.isPending}
+              loading={toggleMutation.isPending && toggleMutation.variables?.name === p.name}
+              loadingText={p.enabled ? "Disabling…" : "Enabling…"}
               onClick={() => toggleMutation.mutate({ name: p.name, enabled: !p.enabled })}
             >
               {p.enabled ? "Disable" : "Enable"}
@@ -166,10 +187,11 @@ export function PluginsSettingsTab() {
             variant="outline"
             size="sm"
             className="gap-2 bg-card border-border"
-            disabled={reloadMutation.isPending}
+            loading={reloadMutation.isPending}
+            loadingText="Reloading…"
             onClick={() => reloadMutation.mutate()}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${reloadMutation.isPending ? "animate-spin" : ""}`} />
+            <RefreshCw className="h-3.5 w-3.5" />
             Reload registry
           </Button>
         }

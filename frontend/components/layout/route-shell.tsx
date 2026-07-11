@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { usePathname } from "next/navigation"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "./app-sidebar"
 import { Topbar } from "./topbar"
 import { CommandPalette } from "@/components/command-palette"
 import { TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { TraceUrlSync } from "@/components/mlops/trace-url-sync"
+import { PageTransition } from "@/components/mlops/interaction"
 import { useRealtimeStatusToasts } from "@/hooks/use-realtime-status-toasts"
 import { useAppContext } from "@/lib/app-context"
 
@@ -15,6 +17,7 @@ interface RouteShellProps {
 }
 
 export function RouteShell({ children }: RouteShellProps) {
+  const pathname = usePathname()
   const [commandOpen, setCommandOpen] = useState(false)
   const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
   const { tenantId, projectId } = useAppContext()
@@ -44,7 +47,7 @@ export function RouteShell({ children }: RouteShellProps) {
       <SidebarInset className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden bg-background">
         <Topbar onOpenCommandPalette={() => setCommandOpen(true)} />
         <div className="relative z-[2] flex min-h-0 flex-1 flex-col overflow-hidden">
-          {children}
+          <PageTransition routeKey={pathname}>{children}</PageTransition>
         </div>
       </SidebarInset>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />

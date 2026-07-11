@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Hash, Loader2 } from "lucide-react";
+import { Hash, Loader2, PanelLeftClose } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall";
@@ -16,6 +16,8 @@ export type TraceListPaneProps = {
   onSearchChange: (value: string) => void;
   isLoading?: boolean;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  onCollapse?: () => void;
+  listEmptyAction?: React.ReactNode;
 };
 
 export function TraceListPane({
@@ -26,6 +28,8 @@ export function TraceListPane({
   onSearchChange,
   isLoading,
   searchInputRef,
+  onCollapse,
+  listEmptyAction,
 }: TraceListPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +43,21 @@ export function TraceListPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col border-r border-border bg-card">
-      <div className="shrink-0 border-b border-border px-3 py-3">
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-3 py-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="font-heading text-sm font-semibold text-foreground">Trace list</h2>
+          {onCollapse ? (
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              onClick={onCollapse}
+              aria-label="Collapse trace list"
+              title="Collapse trace list"
+            >
+              <PanelLeftClose className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
         <label htmlFor="trace-list-search" className="sr-only">
           Filter traces
         </label>
@@ -70,7 +88,9 @@ export function TraceListPane({
             Loading traces…
           </div>
         ) : items.length === 0 ? (
-          <p className="px-3 py-8 text-sm text-muted-foreground">No traces match your filter.</p>
+          listEmptyAction ?? (
+            <p className="px-3 py-8 text-sm text-muted-foreground">No traces match your filter.</p>
+          )
         ) : (
           items.map((item) => {
             const selected = item.trace_id === selectedTraceId;

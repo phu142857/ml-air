@@ -571,7 +571,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     key={entry.id}
                     value={entry.id}
                     onSelect={entry.onSelect}
-                    className="group mb-0.5 flex items-center gap-3 rounded-lg px-2 py-2.5 aria-selected:bg-accent/70"
+                    className="group mb-0.5 interactive-row flex items-center gap-3 rounded-lg px-2 py-2.5 aria-selected:bg-accent/70"
                   >
                     <CommandPaletteItem entry={entry} />
                   </CommandItem>

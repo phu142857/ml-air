@@ -1,8 +1,9 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { Activity, Cpu, Loader2 } from "lucide-react"
+import { Activity, Cpu } from "lucide-react"
 
+import { WidgetSkeleton } from "@/components/mlops/interaction"
 import { MlopsEmptyState } from "@/components/mlops/layout"
 import { fetchProjectUsage, fetchTenantUsage } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
@@ -54,12 +55,7 @@ export function GpuUsageWidget({
   }
 
   if (query.isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading GPU rollup…
-      </div>
-    )
+    return <WidgetSkeleton lines={3} />
   }
 
   if (query.isError) {

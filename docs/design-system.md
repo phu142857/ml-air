@@ -56,9 +56,25 @@ Layout helpers: `page-body` (full-width workspace shell), `page-body-flush` (ali
 
 ## Motion
 
-Use `transition-default` for color, background, border, and opacity transitions (150ms ease-out). Respect `prefers-reduced-motion`.
+Functional micro-interactions only — no decorative animation.
 
-**Removed:** `transition-premium`, `transition-smooth`, `hover:-translate-y-*`, `active:scale-[0.98]`, lift shadows on hover.
+| Token / utility | Value | Usage |
+|-----------------|-------|--------|
+| `--motion-duration-fast` | 150ms | Hover, color, opacity |
+| `--motion-duration` | 200ms | Page enter, dialogs, success flash |
+| `--motion-ease` | ease-out | All UI transitions |
+| `.transition-default` | fast + color/bg/border/opacity | Buttons, rows, links |
+| `.transition-interactive` | 200ms + transform | Overlays, toasts |
+| `.page-enter` | opacity fade | Route content (`PageTransition`) |
+| `.skeleton-pulse` | muted pulse | Loading skeletons |
+| `.interactive-row` | hover + focus ring | Lists, command palette items |
+| `.toast-success-enter` | success border flash | Success toasts |
+
+**Reduced motion:** `prefers-reduced-motion: reduce` disables pulses, spins, and enter animations; transitions collapse to ~0ms.
+
+**Glass:** allowed only on the command palette overlay (`.command-palette-surface`).
+
+**Removed patterns:** `transition-premium`, lift shadows, scale-on-press, decorative fade-ins on content blocks.
 
 ## Components
 
@@ -102,6 +118,9 @@ Mapping uses `statusToMlopsBadge` and `normalizeStatus` from `lib/status-style.t
 `components/mlops/design-tokens-slide.tsx` documents the live token set for internal review.
 
 ## Trace viewer (`/traces`)
+
+**UX contract (Trace 2.0):** [`trace-viewer-2.md`](./trace-viewer-2.md) — layout, keyboard, persistence, URL state, definition of done.  
+**Architecture (Trace 2.0):** [`adr/001-trace-viewer.md`](./adr/001-trace-viewer.md) — source of truth, workspace abstraction, performance budget. Implementation must follow both.
 
 Three-pane observability layout inspired by Grafana and Chrome DevTools Performance:
 

@@ -220,16 +220,12 @@ export default function DatasetsPage() {
             </Button>
             <Button
               type="button"
-              disabled={
-                !datasetName.trim() || !file || uploadMutation.isPending
-              }
+              disabled={!datasetName.trim() || !file}
+              loading={uploadMutation.isPending}
+              loadingText="Uploading…"
               onClick={() => uploadMutation.mutate()}
             >
-              {uploadMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Upload"
-              )}
+              Upload
             </Button>
           </DialogFooter>
         </DialogContent>

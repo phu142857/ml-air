@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, Route } from "lucide-react"
+import { WidgetSkeleton } from "@/components/mlops/interaction"
+import { Route } from "lucide-react"
 
 import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall"
 import { TraceLink } from "@/components/mlops/trace-link"
@@ -66,12 +67,7 @@ export function RecentTracesWidget({
   }
 
   if (tracesQ.isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading traces…
-      </div>
-    )
+    return <WidgetSkeleton lines={4} />
   }
 
   if (tracesQ.isError) {

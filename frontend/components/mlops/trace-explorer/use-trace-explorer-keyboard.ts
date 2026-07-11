@@ -9,6 +9,8 @@ export type TraceExplorerKeyboardHandlers = {
   onMoveSelection: (delta: number) => void;
   onToggleExpand: () => void;
   onClearSelection: () => void;
+  /** Return true when fullscreen was active and is now dismissed. */
+  onExitFullscreen?: () => boolean;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
@@ -51,6 +53,7 @@ export function useTraceExplorerKeyboard(
           break;
         case "Escape":
           e.preventDefault();
+          if (handlers.onExitFullscreen?.()) break;
           handlers.onClearSelection();
           break;
         case "+":

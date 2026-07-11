@@ -958,7 +958,7 @@ export function DataTable<T>({
                       data-selected={focusedRowIndex === rowIndex ? "true" : "false"}
                       tabIndex={0}
                       className={cn(
-                        "group border-border/50 outline-none transition-default hover:bg-muted/30 focus-visible:bg-muted/30",
+                        "group border-border/50 outline-none transition-default hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset",
                         onRowClick && "cursor-pointer",
                         rowClassName?.(row),
                       )}

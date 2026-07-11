@@ -5,8 +5,9 @@ import * as React from 'react'
 
 import type { ToastActionElement, ToastProps } from '@/components/ui/toast'
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_LIMIT = 3
+const TOAST_REMOVE_DELAY = 200
+const TOAST_DURATION = 3500
 
 type ToasterToast = ToastProps & {
   id: string
@@ -160,6 +161,10 @@ function toast({ ...props }: Toast) {
       },
     },
   })
+
+  window.setTimeout(() => {
+    dismiss()
+  }, TOAST_DURATION)
 
   return {
     id: id,

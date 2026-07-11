@@ -89,6 +89,7 @@ export default function TracesPage() {
               traceSearch={search}
               onTraceSearchChange={setSearch}
               listLoading={listQuery.isLoading}
+              onRefreshTraces={() => void listQuery.refetch()}
             />
           </div>
         </ScopedListContent>

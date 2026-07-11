@@ -10,7 +10,7 @@ type ToastCopyOpts = {
 };
 
 export function toastSuccess(title: string, description?: string) {
-  toast({ title, description });
+  toast({ title, description, className: "toast-success-enter" });
 }
 
 export function toastError(title: string, description?: string) {

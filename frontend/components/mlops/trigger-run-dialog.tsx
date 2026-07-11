@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -168,12 +167,13 @@ export function TriggerRunDialog({
             className={gated ? "bg-primary hover:bg-primary/90" : "bg-primary hover:bg-primary/90"}
             disabled={
               !effectivePipelineId ||
-              triggerMutation.isPending ||
               (!lockPipeline && !pipelineOptions.length && !pipelinesQuery.isLoading)
             }
+            loading={triggerMutation.isPending}
+            loadingText={gated ? "Triggering…" : "Starting…"}
             onClick={() => triggerMutation.mutate()}
           >
-            {triggerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : gated ? "Trigger" : "Start run"}
+            {gated ? "Trigger" : "Start run"}
           </Button>
         </DialogFooter>
       </DialogContent>

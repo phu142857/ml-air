@@ -51,7 +51,7 @@ function TimelineItemSkeleton({ isLast }: { isLast: boolean }) {
 
 export function AuditTimelineSkeleton({ count = 5, className }: AuditTimelineSkeletonProps) {
   return (
-    <div className={cn("relative animate-in fade-in duration-300", className)}>
+    <div className={cn("relative", className)}>
       {Array.from({ length: count }).map((_, index) => (
         <TimelineItemSkeleton key={index} isLast={index === count - 1} />
       ))}
@@ -135,7 +135,7 @@ export function TraceSidebarSkeleton() {
 // Full page skeleton combining all elements
 export function LifecyclePageSkeleton() {
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500">
+    <div className="flex h-full flex-col">
       {/* Page header skeleton */}
       <div className="border-b border-border/70 bg-background/60 px-4 py-4 sm:px-6">
         <div className="flex items-center justify-between">

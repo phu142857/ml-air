@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Minus, Plus, RotateCcw } from "lucide-react";
+import { ChevronDown, Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -285,6 +285,8 @@ export type TraceWaterfallViewProps = {
     zoomOut: () => void;
     resetZoom: () => void;
   }) => void;
+  waterfallFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 };
 
 export function TraceWaterfallView({
@@ -298,6 +300,8 @@ export function TraceWaterfallView({
   onStepHover,
   onFlatStepsChange,
   onZoomHandlersReady,
+  waterfallFullscreen = false,
+  onToggleFullscreen,
 }: TraceWaterfallViewProps) {
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
   const [internalHoveredId, setInternalHoveredId] = useState<string | null>(null);
@@ -489,6 +493,24 @@ export function TraceWaterfallView({
               <RotateCcw className="h-3.5 w-3.5" />
               Reset
             </Button>
+            {onToggleFullscreen ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={onToggleFullscreen}
+                aria-pressed={waterfallFullscreen}
+                aria-label={waterfallFullscreen ? "Exit fullscreen" : "Fullscreen waterfall"}
+              >
+                {waterfallFullscreen ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
+                {waterfallFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              </Button>
+            ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
             Drag timeline to zoom · ↑↓ navigate · Enter select

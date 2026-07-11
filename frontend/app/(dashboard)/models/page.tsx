@@ -178,10 +178,12 @@ export default function ModelsPage() {
             <Button
               type="button"
               className="bg-primary hover:bg-primary/90"
-              disabled={!name.trim() || registerMutation.isPending}
+              disabled={!name.trim()}
+              loading={registerMutation.isPending}
+              loadingText="Registering…"
               onClick={() => registerMutation.mutate()}
             >
-              {registerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Register"}
+              Register
             </Button>
           </DialogFooter>
         </DialogContent>
