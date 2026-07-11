@@ -244,6 +244,50 @@ export function TraceExplorerWorkspace({
     });
   }, [allSteps, selectedStep]);
 
+  const jumpToParent = useCallback(
+    (step: TraceWaterfallStep = selectedStep!) => {
+      if (!step) return;
+      const tree = buildTraceTreeIndex(allSteps);
+      const node = tree.get(step.id);
+      if (!node?.parentId) return;
+      const parent = tree.get(node.parentId);
+      if (parent) handleStepSelect(parent.step);
+    },
+    [allSteps, handleStepSelect, selectedStep],
+  );
+
+  const collapseOthers = useCallback(
+    (step: TraceWaterfallStep = selectedStep!) => {
+      if (!step) return;
+      const tree = buildTraceTreeIndex(allSteps);
+      const keepExpanded = new Set(getAncestorChain(tree, step.id).map((node) => node.id));
+      const next = new Set<string>();
+      for (const [id, node] of tree) {
+        if (node.childIds.length > 0 && !keepExpanded.has(id)) {
+          next.add(id);
+        }
+      }
+      setCollapsedSpanIds(next);
+    },
+    [allSteps, selectedStep],
+  );
+
+  const expandAll = useCallback(() => {
+    setCollapsedSpanIds(new Set());
+  }, []);
+
+  const spanActionContextExtras = useMemo(
+    () => ({
+      hasTree: allSteps.length > 1,
+      logsAvailable: Boolean((data?.log_count ?? 0) > 0),
+      onOpenLogsTab,
+      onJumpToParent: () => jumpToParent(),
+      onCollapseOthers: () => collapseOthers(),
+      onExpandAll: expandAll,
+    }),
+    [allSteps.length, collapseOthers, data?.log_count, expandAll, jumpToParent, onOpenLogsTab],
+  );
+
   const focusDetailPanel = useCallback(() => {
     if (!selectedStep && flatSteps.length) {
       const step = findStepByFlatIndex(flatSteps, focusedFlatIndex ?? 0);
@@ -443,6 +487,13 @@ export function TraceExplorerWorkspace({
               onFlatStepsChange={setFlatSteps}
               onAllStepsChange={setAllSteps}
               onSearchMatchesChange={handleSearchMatchesChange}
+              traceId={normalized}
+              traceDetail={data}
+              spanActionContext={spanActionContextExtras}
+              onOpenLogsTab={onOpenLogsTab}
+              onJumpToParent={jumpToParent}
+              onCollapseOthers={collapseOthers}
+              onExpandAll={expandAll}
               onZoomHandlersReady={(handlers) => {
                 zoomHandlersRef.current = handlers;
               }}
@@ -472,6 +523,13 @@ export function TraceExplorerWorkspace({
       handleSearchMatchesChange,
       spanFilter,
       currentSearchMatchId,
+      normalized,
+      data,
+      spanActionContextExtras,
+      onOpenLogsTab,
+      jumpToParent,
+      collapseOthers,
+      expandAll,
       toggleFullscreen,
       waterfall,
       waterfallVariant,
@@ -661,6 +719,7 @@ export function TraceExplorerWorkspace({
                 isLoading={isLoading}
                 onCollapse={workspace.toggleRightCollapsed}
                 onOpenLogsTab={onOpenLogsTab}
+                actionContext={spanActionContextExtras}
               />
             )}
           </ResizablePanel>

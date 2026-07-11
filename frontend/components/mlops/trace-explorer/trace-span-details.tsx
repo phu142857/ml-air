@@ -1,22 +1,43 @@
 "use client";
 
-import Link from "next/link";
-import { forwardRef, useImperativeHandle, useRef } from "react";
-import { Copy, ExternalLink, PanelRightClose } from "lucide-react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Copy, MoreHorizontal, PanelRightClose } from "lucide-react";
 
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { TraceCrossLinks } from "@/components/mlops/trace-explorer/trace-cross-links";
-import { Button } from "@/components/ui/button";
+import { TraceJsonViewer } from "@/components/mlops/trace-explorer/trace-json-viewer";
+import { TraceSpanDropdownItems } from "@/components/mlops/trace-explorer/trace-span-actions";
+import { buildSpanTimelineRows } from "@/components/mlops/trace-explorer/trace-span-events";
+import {
+  AuditEventCard,
+  SemanticEventCard,
+} from "@/components/mlops/trace-explorer/trace-secondary-panels";
 import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { TraceDetailResponse, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
 import { copyWithToast } from "@/lib/toast-actions";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
+import type { TraceSpanActionContext } from "@/components/mlops/trace-explorer/trace-span-actions";
 
 type AttributeGroup = {
   id: string;
   title: string;
   entries: Array<{ key: string; value: string }>;
 };
+
+export type SpanDetailTab = "attributes" | "events" | "json";
+
+const SPAN_DETAIL_TABS: Array<{ id: SpanDetailTab; label: string; shortcut: string }> = [
+  { id: "attributes", label: "Attributes", shortcut: "1" },
+  { id: "events", label: "Events", shortcut: "2" },
+  { id: "json", label: "JSON", shortcut: "3" },
+];
 
 function stringifyValue(value: unknown): string {
   if (value == null) return "—";
@@ -29,7 +50,7 @@ function stringifyValue(value: unknown): string {
   }
 }
 
-function groupSpanAttributes(step: TraceWaterfallStep): AttributeGroup[] {
+export function groupSpanAttributes(step: TraceWaterfallStep): AttributeGroup[] {
   const groups: AttributeGroup[] = [];
 
   const identity: Array<{ key: string; value: string }> = [
@@ -80,6 +101,30 @@ function groupSpanAttributes(step: TraceWaterfallStep): AttributeGroup[] {
   return groups;
 }
 
+export function spanToJson(step: TraceWaterfallStep): Record<string, unknown> {
+  return {
+    id: step.id,
+    kind: step.kind,
+    label: step.label,
+    status: step.status,
+    service: step.service,
+    plugin: step.plugin,
+    source: step.source,
+    run_id: step.run_id,
+    task_id: step.task_id,
+    span_id: step.span_id,
+    start_ts: step.start_ts,
+    end_ts: step.end_ts,
+    duration_ms: step.duration_ms,
+    offset_ms: step.offset_ms,
+    width_ms: step.width_ms,
+    end_offset_ms: step.end_offset_ms,
+    is_instant: step.is_instant,
+    depth: step.depth,
+    attributes: step.attributes ?? {},
+  };
+}
+
 function CopyableRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   const copy = () =>
     void copyWithToast(value, {
@@ -109,70 +154,11 @@ function CopyableRow({ label, value, mono = false }: { label: string; value: str
   );
 }
 
-function SpanDetails({
-  step,
-  data,
-  waterfall,
-  traceId,
-  onOpenLogsTab,
-}: {
-  step: TraceWaterfallStep;
-  data: TraceDetailResponse;
-  waterfall: TraceWaterfall | null;
-  traceId: string;
-  onOpenLogsTab?: () => void;
-}) {
+function AttributesTab({ step }: { step: TraceWaterfallStep }) {
   const groups = groupSpanAttributes(step);
-  const href =
-    step.kind === "run"
-      ? `/runs/${encodeURIComponent(step.id)}`
-      : step.kind === "task"
-        ? `/tasks/${encodeURIComponent(step.id)}`
-        : null;
-
-  const jsonText = JSON.stringify(
-    {
-      id: step.id,
-      kind: step.kind,
-      label: step.label,
-      status: step.status,
-      service: step.service,
-      plugin: step.plugin,
-      start_ts: step.start_ts,
-      end_ts: step.end_ts,
-      duration_ms: step.duration_ms,
-      attributes: step.attributes ?? {},
-    },
-    null,
-    2,
-  );
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-heading min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-            {step.label}
-          </h3>
-          <StatusBadge value={step.status} size="sm" />
-        </div>
-        <TraceCrossLinks
-          step={step}
-          data={data}
-          waterfall={waterfall}
-          traceId={traceId}
-          onOpenLogsTab={onOpenLogsTab}
-        />
-        {href ? (
-          <Button variant="outline" size="sm" className="h-8" asChild>
-            <Link href={href}>
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              Open {step.kind}
-            </Link>
-          </Button>
-        ) : null}
-      </div>
-
       {groups.map((group) => (
         <section key={group.id} aria-labelledby={`span-group-${group.id}`}>
           <h4
@@ -193,35 +179,72 @@ function SpanDetails({
           </dl>
         </section>
       ))}
-
-      <section aria-labelledby="span-json-heading">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h4
-            id="span-json-heading"
-            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-          >
-            JSON
-          </h4>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() =>
-              void copyWithToast(jsonText, {
-                successTitle: "Span JSON copied",
-              })
-            }
-          >
-            <Copy className="h-3 w-3" />
-            Copy JSON
-          </Button>
-        </div>
-        <pre className="max-h-48 overflow-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs text-foreground">
-          {jsonText}
-        </pre>
-      </section>
     </div>
+  );
+}
+
+function EventsTab({ step, data }: { step: TraceWaterfallStep; data: TraceDetailResponse }) {
+  const rows = useMemo(() => buildSpanTimelineRows(data, step), [data, step]);
+
+  if (!rows.length) {
+    return <p className="text-sm text-muted-foreground">No events linked to this span.</p>;
+  }
+
+  return (
+    <div className="space-y-3" role="list" aria-label="Span events">
+      {rows.map((row) =>
+        row.source === "semantic" ? (
+          <SemanticEventCard key={row.id} ev={row.row} />
+        ) : (
+          <AuditEventCard key={row.id} ev={row.row} />
+        ),
+      )}
+    </div>
+  );
+}
+
+function JsonTab({ step }: { step: TraceWaterfallStep }) {
+  return <TraceJsonViewer data={spanToJson(step)} />;
+}
+
+function SpanDetailsTabs({
+  step,
+  data,
+  activeTab,
+  onTabChange,
+}: {
+  step: TraceWaterfallStep;
+  data: TraceDetailResponse;
+  activeTab: SpanDetailTab;
+  onTabChange: (tab: SpanDetailTab) => void;
+}) {
+  return (
+    <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as SpanDetailTab)} className="min-h-0 flex-1">
+      <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card pb-2">
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
+          {SPAN_DETAIL_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.id}
+              value={tab.id}
+              className="h-8 px-2.5 text-xs"
+              aria-keyshortcuts={tab.shortcut}
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+
+      <TabsContent value="attributes" className="mt-0 px-0 py-4">
+        <AttributesTab step={step} />
+      </TabsContent>
+      <TabsContent value="events" className="mt-0 px-0 py-4">
+        <EventsTab step={step} data={data} />
+      </TabsContent>
+      <TabsContent value="json" className="mt-0 px-0 py-4">
+        <JsonTab step={step} />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -240,7 +263,7 @@ function TraceOverview({
     <div className="space-y-4">
       <div>
         <h3 className="font-heading text-sm font-semibold text-foreground">Trace overview</h3>
-        <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{traceId}</p>
+        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{traceId}</p>
       </div>
       <TraceCrossLinks
         step={null}
@@ -289,6 +312,7 @@ export type TraceSpanDetailsPaneProps = {
   isLoading?: boolean;
   onCollapse?: () => void;
   onOpenLogsTab?: () => void;
+  actionContext?: Omit<TraceSpanActionContext, "traceId" | "step" | "data" | "waterfall">;
 };
 
 export const TraceSpanDetailsPane = forwardRef<
@@ -303,17 +327,59 @@ export const TraceSpanDetailsPane = forwardRef<
     isLoading,
     onCollapse,
     onOpenLogsTab,
+    actionContext,
   },
   ref,
 ) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<SpanDetailTab>("attributes");
+
+  useEffect(() => {
+    setActiveTab("attributes");
+  }, [selectedStep?.id]);
+
+  const resolvedActionContext = useMemo<TraceSpanActionContext>(
+    () => ({
+      traceId,
+      step: selectedStep,
+      data,
+      waterfall,
+      logsAvailable: Boolean((data?.log_count ?? 0) > 0),
+      ...actionContext,
+    }),
+    [actionContext, data, selectedStep, traceId, waterfall],
+  );
+
+  const handleTabShortcut = useCallback(
+    (digit: string) => {
+      const tab = SPAN_DETAIL_TABS.find((item) => item.shortcut === digit);
+      if (tab && selectedStep) setActiveTab(tab.id);
+    },
+    [selectedStep],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const inDetail = Boolean(target?.closest('[data-trace-region="detail"]'));
+      if (!inDetail || !selectedStep) return;
+      if (event.key >= "1" && event.key <= "3" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const tag = target?.tagName?.toLowerCase();
+        if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+        event.preventDefault();
+        handleTabShortcut(event.key);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleTabShortcut, selectedStep]);
 
   useImperativeHandle(ref, () => ({
     focusFirstInteractive: () => {
       const root = contentRef.current;
       if (!root) return;
       const focusable = root.querySelector<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]',
+        'button:not([disabled]), a[href], input:not([disabled]), [role="tab"]',
       );
       focusable?.focus();
     },
@@ -333,40 +399,64 @@ export const TraceSpanDetailsPane = forwardRef<
       </div>
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-heading text-sm font-semibold text-foreground">Span details</h2>
-          {onCollapse ? (
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              onClick={onCollapse}
-              aria-label="Collapse detail panel"
-              title="Collapse detail panel"
-            >
-              <PanelRightClose className="h-4 w-4" aria-hidden />
-            </button>
-          ) : null}
+          <div className="min-w-0">
+            <h2 className="font-heading text-sm font-semibold text-foreground">Span details</h2>
+            {selectedStep ? (
+              <p className="truncate text-xs text-muted-foreground">{selectedStep.label}</p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Span actions"
+                  title="Span actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <TraceSpanDropdownItems {...resolvedActionContext} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {onCollapse ? (
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onClick={onCollapse}
+                aria-label="Collapse detail panel"
+                title="Collapse detail panel"
+              >
+                <PanelRightClose className="h-4 w-4" aria-hidden />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
-      <div ref={contentRef} className="scroll-region min-h-0 flex-1 px-4 py-4">
+      <div ref={contentRef} className="scroll-region flex min-h-0 flex-1 flex-col px-4">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading trace…</p>
+          <p className="py-4 text-sm text-muted-foreground">Loading trace…</p>
         ) : !data ? (
-          <p className="text-sm text-muted-foreground">Select a trace to load details.</p>
+          <p className="py-4 text-sm text-muted-foreground">Select a trace to load details.</p>
         ) : selectedStep ? (
-          <SpanDetails
+          <SpanDetailsTabs
             step={selectedStep}
             data={data}
-            waterfall={waterfall}
-            traceId={traceId}
-            onOpenLogsTab={onOpenLogsTab}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
           />
         ) : (
-          <TraceOverview
-            data={data}
-            traceId={traceId}
-            waterfall={waterfall}
-            onOpenLogsTab={onOpenLogsTab}
-          />
+          <div className="py-4">
+            <TraceOverview
+              data={data}
+              traceId={traceId}
+              waterfall={waterfall}
+              onOpenLogsTab={onOpenLogsTab}
+            />
+          </div>
         )}
       </div>
     </div>

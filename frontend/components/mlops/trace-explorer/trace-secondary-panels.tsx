@@ -105,7 +105,7 @@ function semanticExpandedContent(ev: TraceDetailEvent): boolean {
   );
 }
 
-function SemanticEventCard({ ev }: { ev: TraceDetailEvent }) {
+export function SemanticEventCard({ ev }: { ev: TraceDetailEvent }) {
   const [expanded, setExpanded] = useState(false);
   const omitKeys = payloadOmitKeysForSemantic(ev);
   const expandable = semanticExpandedContent(ev);
@@ -173,7 +173,7 @@ function SemanticEventCard({ ev }: { ev: TraceDetailEvent }) {
   );
 }
 
-function AuditEventCard({ ev }: { ev: TraceDetailAuditEvent }) {
+export function AuditEventCard({ ev }: { ev: TraceDetailAuditEvent }) {
   const [expanded, setExpanded] = useState(false);
   const omitKeys = payloadOmitKeysForAudit(ev);
   const expandable = hasPayload(filteredPayload(ev.payload, omitKeys));

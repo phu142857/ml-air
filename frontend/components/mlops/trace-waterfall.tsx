@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { ChevronDown, Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { HighlightText } from "@/components/mlops/trace-explorer/highlight-text";
+import { TraceSpanContextMenu, TraceSpanRowMenu } from "@/components/mlops/trace-explorer/trace-span-context-menu";
+import type { TraceSpanActionContext } from "@/components/mlops/trace-explorer/trace-span-actions";
 import { TraceSpanBreadcrumb } from "@/components/mlops/trace-explorer/trace-span-breadcrumb";
 import { buildSpanSearchMatchSet } from "@/components/mlops/trace-explorer/trace-span-search";
 import {
@@ -15,13 +17,15 @@ import {
   isRowVisible,
 } from "@/components/mlops/trace-explorer/trace-tree-utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
+import type { TraceDetailResponse, TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
 import { statusToMlopsBadge } from "@/lib/status-style";
 import { formatRuntimeSeconds } from "@/lib/usage-format";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
 
 const LABEL_COL = "minmax(200px, 280px)";
-const GRID_TEMPLATE = `${LABEL_COL} minmax(0, 1fr) 72px 80px`;
+const DURATION_COL = "80px";
+const STATUS_COL = "88px";
+const GRID_TEMPLATE = `${LABEL_COL} minmax(0, 1fr) ${DURATION_COL} ${STATUS_COL}`;
 
 export function formatWaterfallDuration(ms: number | null | undefined): string {
   if (ms == null || ms < 0 || Number.isNaN(ms)) return "—";
@@ -183,6 +187,7 @@ function WaterfallRow({
   onZoomMouseUp,
   refAreaLeft,
   refAreaRight,
+  rowMenu,
 }: {
   step: RowModel;
   scaleMs: number;
@@ -202,6 +207,7 @@ function WaterfallRow({
   onZoomMouseUp?: () => void;
   refAreaLeft?: number | null;
   refAreaRight?: number | null;
+  rowMenu?: ReactNode;
 }) {
   const href = stepHref(step);
   const duration = step.is_instant ? null : (step.duration_ms ?? (step.width_ms > 0 ? step.width_ms : null));
@@ -210,7 +216,7 @@ function WaterfallRow({
   return (
     <div
       className={cn(
-        "grid items-center gap-2 border-b border-border px-3 py-2 transition-default",
+        "group/row grid items-center gap-2 border-b border-border px-3 py-2 transition-default",
         isSelected && "bg-primary/8",
         isCurrentSearchMatch && "bg-primary/12 ring-1 ring-inset ring-primary/40",
         isSearchMatch && !isCurrentSearchMatch && !isSelected && "bg-primary/5",
@@ -264,10 +270,11 @@ function WaterfallRow({
               </p>
             ) : null}
           </div>
+          {rowMenu ? <div className="shrink-0">{rowMenu}</div> : null}
         </div>
       </div>
 
-      <div role="gridcell" className="min-w-0">
+      <div role="gridcell" className="relative z-0 min-w-0 overflow-hidden">
         <WaterfallBar
           step={step}
           scaleMs={scaleMs}
@@ -283,7 +290,10 @@ function WaterfallRow({
         />
       </div>
 
-      <div className="text-right font-mono text-xs tabular-nums text-foreground" role="gridcell">
+      <div
+        className="relative z-10 shrink-0 bg-inherit text-right font-mono text-xs tabular-nums text-foreground"
+        role="gridcell"
+      >
         {step.is_instant ? (
           <span className="text-muted-foreground">instant</span>
         ) : (
@@ -291,7 +301,7 @@ function WaterfallRow({
         )}
       </div>
 
-      <div className="flex justify-end" role="gridcell">
+      <div className="relative z-10 flex shrink-0 justify-end bg-inherit" role="gridcell">
         <StatusBadge value={step.status} size="sm" showIcon={false} />
       </div>
     </div>
@@ -313,6 +323,13 @@ export type TraceWaterfallViewProps = {
   onFlatStepsChange?: (steps: TraceWaterfallStep[]) => void;
   onAllStepsChange?: (steps: TraceWaterfallStep[]) => void;
   onSearchMatchesChange?: (orderedMatchIds: string[]) => void;
+  traceId?: string;
+  traceDetail?: TraceDetailResponse | null;
+  spanActionContext?: Omit<TraceSpanActionContext, "traceId" | "step" | "data" | "waterfall" | "treeNode">;
+  onOpenLogsTab?: () => void;
+  onJumpToParent?: (step: TraceWaterfallStep) => void;
+  onCollapseOthers?: (step: TraceWaterfallStep) => void;
+  onExpandAll?: () => void;
   onZoomHandlersReady?: (handlers: {
     zoomIn: () => void;
     zoomOut: () => void;
@@ -338,6 +355,13 @@ export function TraceWaterfallView({
   onFlatStepsChange,
   onAllStepsChange,
   onSearchMatchesChange,
+  traceId = "",
+  traceDetail = null,
+  spanActionContext,
+  onOpenLogsTab,
+  onJumpToParent,
+  onCollapseOthers,
+  onExpandAll,
   onZoomHandlersReady,
   waterfallFullscreen = false,
   onToggleFullscreen,
@@ -484,6 +508,35 @@ export function TraceWaterfallView({
   );
 
   const flatSteps = useMemo(() => rows.map((r) => r as TraceWaterfallStep), [rows]);
+  const hasTree = allSteps.length > 1;
+
+  const buildRowActionContext = useCallback(
+    (step: TraceWaterfallStep): TraceSpanActionContext => ({
+      traceId,
+      step,
+      data: traceDetail,
+      waterfall,
+      treeNode: treeIndex.get(step.id) ?? null,
+      hasTree,
+      onOpenLogsTab,
+      onJumpToParent: () => onJumpToParent?.(step),
+      onCollapseOthers: () => onCollapseOthers?.(step),
+      onExpandAll,
+      ...spanActionContext,
+    }),
+    [
+      hasTree,
+      onCollapseOthers,
+      onExpandAll,
+      onJumpToParent,
+      onOpenLogsTab,
+      spanActionContext,
+      traceDetail,
+      traceId,
+      treeIndex,
+      waterfall,
+    ],
+  );
 
   const prevSearchMatchIdsRef = useRef<string[]>([]);
   useEffect(() => {
@@ -673,7 +726,7 @@ export function TraceWaterfallView({
                         return (
                         <Tooltip key={`${step.source || "x"}-${step.id}`}>
                           <TooltipTrigger asChild>
-                            <div>
+                            <TraceSpanContextMenu context={buildRowActionContext(step)}>
                               <WaterfallRow
                                 step={step}
                                 scaleMs={scaleMs}
@@ -696,8 +749,9 @@ export function TraceWaterfallView({
                                 onZoomMouseUp={handleZoomMouseUp}
                                 refAreaLeft={refAreaLeft}
                                 refAreaRight={refAreaRight}
+                                rowMenu={<TraceSpanRowMenu context={buildRowActionContext(step)} />}
                               />
-                            </div>
+                            </TraceSpanContextMenu>
                           </TooltipTrigger>
                           <TooltipContent side="right" className="max-w-xs space-y-1 text-left">
                             <p className="font-medium">{step.label}</p>
