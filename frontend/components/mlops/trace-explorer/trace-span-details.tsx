@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { forwardRef, useImperativeHandle, useRef } from "react";
 import { Copy, ExternalLink, PanelRightClose } from "lucide-react";
 
 import { StatusBadge } from "@/components/mlops/status-badge";
+import { TraceCrossLinks } from "@/components/mlops/trace-explorer/trace-cross-links";
 import { Button } from "@/components/ui/button";
 import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall";
-import type { TraceDetailResponse, TraceWaterfallStep } from "@/lib/api";
+import type { TraceDetailResponse, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
 import { copyWithToast } from "@/lib/toast-actions";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
 
@@ -107,7 +109,19 @@ function CopyableRow({ label, value, mono = false }: { label: string; value: str
   );
 }
 
-function SpanDetails({ step }: { step: TraceWaterfallStep }) {
+function SpanDetails({
+  step,
+  data,
+  waterfall,
+  traceId,
+  onOpenLogsTab,
+}: {
+  step: TraceWaterfallStep;
+  data: TraceDetailResponse;
+  waterfall: TraceWaterfall | null;
+  traceId: string;
+  onOpenLogsTab?: () => void;
+}) {
   const groups = groupSpanAttributes(step);
   const href =
     step.kind === "run"
@@ -135,17 +149,24 @@ function SpanDetails({ step }: { step: TraceWaterfallStep }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-heading min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
             {step.label}
           </h3>
           <StatusBadge value={step.status} size="sm" />
         </div>
+        <TraceCrossLinks
+          step={step}
+          data={data}
+          waterfall={waterfall}
+          traceId={traceId}
+          onOpenLogsTab={onOpenLogsTab}
+        />
         {href ? (
           <Button variant="outline" size="sm" className="h-8" asChild>
             <Link href={href}>
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
               Open {step.kind}
             </Link>
           </Button>
@@ -204,13 +225,30 @@ function SpanDetails({ step }: { step: TraceWaterfallStep }) {
   );
 }
 
-function TraceOverview({ data, traceId }: { data: TraceDetailResponse; traceId: string }) {
+function TraceOverview({
+  data,
+  traceId,
+  waterfall,
+  onOpenLogsTab,
+}: {
+  data: TraceDetailResponse;
+  traceId: string;
+  waterfall: TraceWaterfall | null;
+  onOpenLogsTab?: () => void;
+}) {
   return (
     <div className="space-y-4">
       <div>
         <h3 className="font-heading text-sm font-semibold text-foreground">Trace overview</h3>
         <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{traceId}</p>
       </div>
+      <TraceCrossLinks
+        step={null}
+        data={data}
+        waterfall={waterfall}
+        traceId={traceId}
+        onOpenLogsTab={onOpenLogsTab}
+      />
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-lg border border-border bg-muted/40 p-3">
           <dt className="text-xs text-muted-foreground">Runs</dt>
@@ -233,29 +271,59 @@ function TraceOverview({ data, traceId }: { data: TraceDetailResponse; traceId: 
         <StatusBadge status="running" label="Live trace" size="sm" />
       ) : null}
       <p className="text-xs text-muted-foreground">
-        Select a span in the waterfall to inspect metadata, tags, and JSON.
+        Select a span or press ↑ ↓ to inspect. Press Enter to focus this panel.
       </p>
     </div>
   );
 }
 
+export type TraceSpanDetailsPaneHandle = {
+  focusFirstInteractive: () => void;
+};
+
 export type TraceSpanDetailsPaneProps = {
   traceId: string;
   data: TraceDetailResponse | null | undefined;
+  waterfall?: TraceWaterfall | null;
   selectedStep: TraceWaterfallStep | null;
   isLoading?: boolean;
   onCollapse?: () => void;
+  onOpenLogsTab?: () => void;
 };
 
-export function TraceSpanDetailsPane({
-  traceId,
-  data,
-  selectedStep,
-  isLoading,
-  onCollapse,
-}: TraceSpanDetailsPaneProps) {
+export const TraceSpanDetailsPane = forwardRef<
+  TraceSpanDetailsPaneHandle,
+  TraceSpanDetailsPaneProps
+>(function TraceSpanDetailsPane(
+  {
+    traceId,
+    data,
+    waterfall = null,
+    selectedStep,
+    isLoading,
+    onCollapse,
+    onOpenLogsTab,
+  },
+  ref,
+) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusFirstInteractive: () => {
+      const root = contentRef.current;
+      if (!root) return;
+      const focusable = root.querySelector<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]',
+      );
+      focusable?.focus();
+    },
+  }));
+
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-card">
+    <div
+      className="flex h-full min-h-0 flex-col border-l border-border bg-card"
+      data-trace-region="detail"
+    >
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {selectedStep
           ? `Span details for ${selectedStep.label}, ${selectedStep.status}`
@@ -279,17 +347,28 @@ export function TraceSpanDetailsPane({
           ) : null}
         </div>
       </div>
-      <div className="scroll-region min-h-0 flex-1 px-4 py-4">
+      <div ref={contentRef} className="scroll-region min-h-0 flex-1 px-4 py-4">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading trace…</p>
         ) : !data ? (
           <p className="text-sm text-muted-foreground">Select a trace to load details.</p>
         ) : selectedStep ? (
-          <SpanDetails step={selectedStep} />
+          <SpanDetails
+            step={selectedStep}
+            data={data}
+            waterfall={waterfall}
+            traceId={traceId}
+            onOpenLogsTab={onOpenLogsTab}
+          />
         ) : (
-          <TraceOverview data={data} traceId={traceId} />
+          <TraceOverview
+            data={data}
+            traceId={traceId}
+            waterfall={waterfall}
+            onOpenLogsTab={onOpenLogsTab}
+          />
         )}
       </div>
     </div>
   );
-}
+});

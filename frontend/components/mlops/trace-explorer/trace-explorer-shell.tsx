@@ -27,6 +27,7 @@ export type TraceExplorerShellProps = {
   onTraceSearchChange: (value: string) => void;
   listLoading?: boolean;
   onRefreshTraces?: () => void;
+  onOpenLogsTab?: () => void;
   /** Rendered at the end of the tab bar (e.g. dialog close button). */
   headerAction?: ReactNode;
   className?: string;
@@ -40,6 +41,7 @@ export function TraceExplorerShell({
   onTraceSearchChange,
   listLoading,
   onRefreshTraces,
+  onOpenLogsTab,
   headerAction,
   className,
 }: TraceExplorerShellProps) {
@@ -113,6 +115,7 @@ export function TraceExplorerShell({
           onTraceSearchChange={onTraceSearchChange}
           listLoading={listLoading}
           onRefreshTraces={onRefreshTraces}
+          onOpenLogsTab={onOpenLogsTab ?? (() => setActiveTab("logs"))}
         />
       </TabsContent>
 

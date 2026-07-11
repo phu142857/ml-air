@@ -42,7 +42,7 @@ export function TraceListPane({
   }, [selectedTraceId]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-border bg-card">
+    <div className="flex h-full min-h-0 flex-col border-r border-border bg-card" data-trace-region="trace-list">
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-3 py-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="font-heading text-sm font-semibold text-foreground">Trace list</h2>

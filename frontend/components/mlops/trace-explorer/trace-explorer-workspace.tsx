@@ -7,10 +7,19 @@ import { Copy, Download, Link2, List, Loader2, PanelRight, Play, Route } from "l
 import { MlopsEmptyState } from "@/components/mlops/layout";
 import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
 import { TracePaneRail } from "@/components/mlops/trace-explorer/trace-pane-rail";
-import { TraceSpanDetailsPane } from "@/components/mlops/trace-explorer/trace-span-details";
+import {
+  TraceSpanDetailsPane,
+  type TraceSpanDetailsPaneHandle,
+} from "@/components/mlops/trace-explorer/trace-span-details";
+import {
+  collectDescendantIds,
+  buildTraceTreeIndex,
+  getAncestorChain,
+} from "@/components/mlops/trace-explorer/trace-tree-utils";
 import {
   findStepByFlatIndex,
   useTraceExplorerKeyboard,
+  type TraceFocusRegion,
 } from "@/components/mlops/trace-explorer/use-trace-explorer-keyboard";
 import { TraceWorkspaceEmpty } from "@/components/mlops/trace-explorer/trace-workspace-empty";
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog";
@@ -41,6 +50,7 @@ export type TraceExplorerWorkspaceProps = {
   onTraceSearchChange: (value: string) => void;
   listLoading?: boolean;
   onRefreshTraces?: () => void;
+  onOpenLogsTab?: () => void;
   className?: string;
 };
 
@@ -52,6 +62,7 @@ export function TraceExplorerWorkspace({
   onTraceSearchChange,
   listLoading,
   onRefreshTraces,
+  onOpenLogsTab,
 }: TraceExplorerWorkspaceProps) {
   const { tenantId, projectId, token } = useAppContext();
   const normalized = selectedTraceId ? normalizeTraceId(selectedTraceId) || selectedTraceId.trim() : "";
@@ -73,6 +84,8 @@ export function TraceExplorerWorkspace({
   const [exporting, setExporting] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [flatSteps, setFlatSteps] = useState<TraceWaterfallStep[]>([]);
+  const [allSteps, setAllSteps] = useState<TraceWaterfallStep[]>([]);
+  const [collapsedSpanIds, setCollapsedSpanIds] = useState<Set<string>>(() => new Set());
   const zoomHandlersRef = useRef<{
     zoomIn: () => void;
     zoomOut: () => void;
@@ -81,6 +94,10 @@ export function TraceExplorerWorkspace({
 
   const traceListSearchRef = useRef<HTMLInputElement>(null);
   const spanFilterRef = useRef<HTMLInputElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const waterfallRegionRef = useRef<HTMLDivElement>(null);
+  const detailPaneRef = useRef<TraceSpanDetailsPaneHandle>(null);
+  const focusRegionRef = useRef<TraceFocusRegion>("waterfall");
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   const rightPanelRef = useRef<ImperativePanelHandle>(null);
 
@@ -93,10 +110,110 @@ export function TraceExplorerWorkspace({
     (traceId: string) => {
       setSelectedStep(null);
       setFocusedFlatIndex(null);
+      setCollapsedSpanIds(new Set());
       onSelectTrace(traceId);
     },
     [onSelectTrace],
   );
+
+  const focusRegion = useCallback((region: TraceFocusRegion) => {
+    focusRegionRef.current = region;
+    switch (region) {
+      case "trace-list":
+        traceListSearchRef.current?.focus();
+        break;
+      case "waterfall":
+        waterfallRegionRef.current?.focus();
+        break;
+      case "detail":
+        if (workspace.rightCollapsed) workspace.setRightCollapsed(false);
+        detailPaneRef.current?.focusFirstInteractive();
+        break;
+      case "toolbar": {
+        const firstButton = toolbarRef.current?.querySelector<HTMLElement>("button:not([disabled])");
+        firstButton?.focus();
+        break;
+      }
+      default:
+        break;
+    }
+  }, [workspace]);
+
+  const cycleFocusRegion = useCallback(
+    (direction: 1 | -1) => {
+      const order: TraceFocusRegion[] = ["trace-list", "waterfall", "detail", "toolbar"];
+      const currentIndex = order.indexOf(focusRegionRef.current);
+      const nextIndex = (currentIndex + direction + order.length) % order.length;
+      focusRegion(order[nextIndex]!);
+    },
+    [focusRegion],
+  );
+
+  const collapseSubtree = useCallback(() => {
+    if (!selectedStep) return;
+    const tree = buildTraceTreeIndex(allSteps);
+    const node = tree.get(selectedStep.id);
+    if (!node?.childIds.length) return;
+    setCollapsedSpanIds((prev) => new Set(prev).add(selectedStep.id));
+  }, [allSteps, selectedStep]);
+
+  const expandSubtree = useCallback(() => {
+    if (!selectedStep) return;
+    setCollapsedSpanIds((prev) => {
+      const next = new Set(prev);
+      next.delete(selectedStep.id);
+      const tree = buildTraceTreeIndex(allSteps);
+      for (const id of collectDescendantIds(tree, selectedStep.id)) {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, [allSteps, selectedStep]);
+
+  const handleStepSelect = useCallback(
+    (step: TraceWaterfallStep | null) => {
+      if (!step) {
+        setSelectedStep(null);
+        setFocusedFlatIndex(null);
+        return;
+      }
+
+      const tree = buildTraceTreeIndex(allSteps);
+      setCollapsedSpanIds((prev) => {
+        const next = new Set(prev);
+        for (const node of getAncestorChain(tree, step.id)) {
+          next.delete(node.id);
+        }
+        return next;
+      });
+
+      setSelectedStep(step);
+      const index = flatSteps.findIndex((item) => item.id === step.id);
+      setFocusedFlatIndex(index >= 0 ? index : null);
+    },
+    [allSteps, flatSteps],
+  );
+
+  const focusDetailPanel = useCallback(() => {
+    if (!selectedStep && flatSteps.length) {
+      const step = findStepByFlatIndex(flatSteps, focusedFlatIndex ?? 0);
+      if (step) handleStepSelect(step);
+    }
+    focusRegion("detail");
+  }, [flatSteps, focusRegion, focusedFlatIndex, handleStepSelect, selectedStep]);
+
+  const copyCurrentId = useCallback(() => {
+    const value = selectedStep?.id ?? normalized;
+    if (!value) return;
+    void copyWithToast(value, { successTitle: "Copied" });
+  }, [normalized, selectedStep]);
+
+  const isWaterfallFocused = useCallback(() => {
+    const active = document.activeElement;
+    if (!active) return true;
+    if (active.id === "trace-list-search" || active.id === "span-filter") return false;
+    return !active.closest('[data-trace-region="trace-list"], [data-trace-region="detail"], [data-trace-region="toolbar"]');
+  }, []);
 
   const moveSelection = useCallback(
     (delta: number) => {
@@ -105,11 +222,11 @@ export function TraceExplorerWorkspace({
         const current = prev ?? (selectedStep ? flatSteps.findIndex((s) => s.id === selectedStep.id) : -1);
         const next = Math.min(flatSteps.length - 1, Math.max(0, current + delta));
         const step = findStepByFlatIndex(flatSteps, next);
-        if (step) setSelectedStep(step);
+        if (step) handleStepSelect(step);
         return next;
       });
     },
-    [flatSteps, selectedStep],
+    [flatSteps, handleStepSelect, selectedStep],
   );
 
   const toggleFullscreen = useCallback(() => {
@@ -131,19 +248,33 @@ export function TraceExplorerWorkspace({
   }, [workspace.rightCollapsed]);
 
   useTraceExplorerKeyboard(Boolean(normalized) || workspace.waterfallFullscreen, {
-    onFocusSearch: () => traceListSearchRef.current?.focus(),
-    onMoveSelection: moveSelection,
-    onToggleExpand: () => {
-      if (focusedFlatIndex != null) {
-        const step = findStepByFlatIndex(flatSteps, focusedFlatIndex);
-        setSelectedStep(step);
-      }
+    onFocusSearch: () => {
+      focusRegion("trace-list");
     },
+    onMoveSelection: moveSelection,
+    onFocusDetailPanel: focusDetailPanel,
     onClearSelection: () => {
       setSelectedStep(null);
       setFocusedFlatIndex(null);
     },
     onExitFullscreen: workspace.exitFullscreen,
+    onClearSpanFilter: () => {
+      if (!spanFilter) return false;
+      setSpanFilter("");
+      spanFilterRef.current?.focus();
+      return true;
+    },
+    onClearTraceSearch: () => {
+      if (!traceSearch.trim()) return false;
+      onTraceSearchChange("");
+      traceListSearchRef.current?.focus();
+      return true;
+    },
+    onCollapseSubtree: collapseSubtree,
+    onExpandSubtree: expandSubtree,
+    onCopyId: copyCurrentId,
+    onCycleFocusRegion: cycleFocusRegion,
+    isWaterfallFocused,
     onZoomIn: () => zoomHandlersRef.current?.zoomIn(),
     onZoomOut: () => zoomHandlersRef.current?.zoomOut(),
     onResetZoom: () => zoomHandlersRef.current?.resetZoom(),
@@ -236,18 +367,22 @@ export function TraceExplorerWorkspace({
             <TraceWaterfallView
               waterfall={waterfall}
               variant={waterfallVariant}
+              selectedStep={selectedStep}
               selectedStepId={selectedStepId}
               hoveredStepId={hoveredStepId}
               focusedFlatIndex={focusedFlatIndex}
               spanFilter={spanFilter}
-              onStepSelect={setSelectedStep}
+              collapsedSpanIds={collapsedSpanIds}
+              onStepSelect={handleStepSelect}
               onStepHover={(step) => setHoveredStepId(step?.id ?? null)}
               onFlatStepsChange={setFlatSteps}
+              onAllStepsChange={setAllSteps}
               onZoomHandlersReady={(handlers) => {
                 zoomHandlersRef.current = handlers;
               }}
               waterfallFullscreen={workspace.waterfallFullscreen}
               onToggleFullscreen={toggleFullscreen}
+              waterfallRegionRef={waterfallRegionRef}
             />
           )}
         </div>
@@ -263,6 +398,9 @@ export function TraceExplorerWorkspace({
       normalized,
       selectedStepId,
       spanFilter,
+      collapsedSpanIds,
+      selectedStep,
+      handleStepSelect,
       toggleFullscreen,
       waterfall,
       waterfallVariant,
@@ -272,7 +410,11 @@ export function TraceExplorerWorkspace({
 
   const toolbar = useMemo(
     () => (
-      <div className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2">
+      <div
+        ref={toolbarRef}
+        data-trace-region="toolbar"
+        className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2"
+      >
         <Route className="h-4 w-4 text-primary" aria-hidden />
         <code className="max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
           {normalized || "Select a trace"}
@@ -440,11 +582,14 @@ export function TraceExplorerWorkspace({
               />
             ) : (
               <TraceSpanDetailsPane
+                ref={detailPaneRef}
                 traceId={normalized}
                 data={data}
+                waterfall={waterfall}
                 selectedStep={selectedStep}
                 isLoading={isLoading}
                 onCollapse={workspace.toggleRightCollapsed}
+                onOpenLogsTab={onOpenLogsTab}
               />
             )}
           </ResizablePanel>

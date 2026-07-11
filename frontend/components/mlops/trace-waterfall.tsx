@@ -6,6 +6,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/mlops/status-badge";
+import { TraceSpanBreadcrumb } from "@/components/mlops/trace-explorer/trace-span-breadcrumb";
+import {
+  buildTraceTreeIndex,
+  getRelatedSpanIds,
+  isRowVisible,
+} from "@/components/mlops/trace-explorer/trace-tree-utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
 import { statusToMlopsBadge } from "@/lib/status-style";
@@ -163,6 +169,8 @@ function WaterfallRow({
   isSelected,
   isHovered,
   isFocused,
+  isDimmed,
+  isRelated,
   onSelect,
   onHover,
   onZoomMouseDown,
@@ -177,6 +185,8 @@ function WaterfallRow({
   isSelected?: boolean;
   isHovered?: boolean;
   isFocused?: boolean;
+  isDimmed?: boolean;
+  isRelated?: boolean;
   onSelect?: (step: TraceWaterfallStep) => void;
   onHover?: (step: TraceWaterfallStep | null) => void;
   onZoomMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -194,8 +204,10 @@ function WaterfallRow({
       className={cn(
         "grid items-center gap-2 border-b border-border px-3 py-2 transition-default",
         isSelected && "bg-primary/8",
+        isRelated && !isSelected && "bg-primary/5",
         isHovered && !isSelected && "bg-muted/50",
         isFocused && !isSelected && "bg-muted/40",
+        isDimmed && "opacity-35",
       )}
       style={{ gridTemplateColumns: GRID_TEMPLATE }}
       onMouseEnter={() => onHover?.(step)}
@@ -273,13 +285,16 @@ function WaterfallRow({
 export type TraceWaterfallViewProps = {
   waterfall: TraceWaterfall;
   variant?: "run" | "otel" | "unified";
+  selectedStep?: TraceWaterfallStep | null;
   selectedStepId?: string | null;
   hoveredStepId?: string | null;
   focusedFlatIndex?: number | null;
   spanFilter?: string;
+  collapsedSpanIds?: Set<string>;
   onStepSelect?: (step: TraceWaterfallStep | null) => void;
   onStepHover?: (step: TraceWaterfallStep | null) => void;
   onFlatStepsChange?: (steps: TraceWaterfallStep[]) => void;
+  onAllStepsChange?: (steps: TraceWaterfallStep[]) => void;
   onZoomHandlersReady?: (handlers: {
     zoomIn: () => void;
     zoomOut: () => void;
@@ -287,26 +302,43 @@ export type TraceWaterfallViewProps = {
   }) => void;
   waterfallFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  waterfallRegionRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 export function TraceWaterfallView({
   waterfall,
   variant = "run",
+  selectedStep = null,
   selectedStepId: controlledSelectedId,
   hoveredStepId: controlledHoveredId,
   focusedFlatIndex = null,
   spanFilter = "",
+  collapsedSpanIds,
   onStepSelect,
   onStepHover,
   onFlatStepsChange,
+  onAllStepsChange,
   onZoomHandlersReady,
   waterfallFullscreen = false,
   onToggleFullscreen,
+  waterfallRegionRef,
 }: TraceWaterfallViewProps) {
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
   const [internalHoveredId, setInternalHoveredId] = useState<string | null>(null);
-  const selectedStepId = controlledSelectedId !== undefined ? controlledSelectedId : internalSelectedId;
+  const selectedStepId =
+    selectedStep?.id ??
+    (controlledSelectedId !== undefined ? controlledSelectedId : internalSelectedId);
   const hoveredStepId = controlledHoveredId !== undefined ? controlledHoveredId : internalHoveredId;
+
+  const treeIndex = useMemo(
+    () => buildTraceTreeIndex(waterfall.steps),
+    [waterfall.steps],
+  );
+
+  const relatedSpanIds = useMemo(() => {
+    if (!hoveredStepId) return null;
+    return getRelatedSpanIds(treeIndex, hoveredStepId);
+  }, [hoveredStepId, treeIndex]);
 
   const totalMs = Math.max(waterfall.total_ms, 1);
   const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null);
@@ -389,6 +421,7 @@ export function TraceWaterfallView({
     const unifiedMode = variant === "unified";
     const otelMode = variant === "otel" || waterfall.steps.some((s) => s.kind === "span");
     const filter = spanFilter.trim().toLowerCase();
+    const collapsed = collapsedSpanIds ?? new Set<string>();
 
     const base =
       unifiedMode || otelMode
@@ -416,23 +449,34 @@ export function TraceWaterfallView({
             return out;
           })();
 
+    const treeVisible = base.filter((step) => isRowVisible(step.id, collapsed, treeIndex));
+
     const filtered = filter
-      ? base.filter(
+      ? treeVisible.filter(
           (step) =>
             step.label.toLowerCase().includes(filter) ||
             step.id.toLowerCase().includes(filter) ||
             String(step.service || "").toLowerCase().includes(filter),
         )
-      : base;
+      : treeVisible;
 
     return filtered.map((step, flatIndex) => ({ ...step, flatIndex }));
-  }, [spanFilter, variant, waterfall.steps]);
+  }, [collapsedSpanIds, spanFilter, treeIndex, variant, waterfall.steps]);
+
+  const allSteps = useMemo(
+    () => waterfall.steps as TraceWaterfallStep[],
+    [waterfall.steps],
+  );
 
   const flatSteps = useMemo(() => rows.map((r) => r as TraceWaterfallStep), [rows]);
 
   useEffect(() => {
     onFlatStepsChange?.(flatSteps);
   }, [flatSteps, onFlatStepsChange]);
+
+  useEffect(() => {
+    onAllStepsChange?.(allSteps);
+  }, [allSteps, onAllStepsChange]);
 
   useEffect(() => {
     onZoomHandlersReady?.({ zoomIn, zoomOut, resetZoom });
@@ -452,6 +496,14 @@ export function TraceWaterfallView({
     }
     onStepHover?.(step);
   };
+
+  useEffect(() => {
+    if (focusedFlatIndex == null) return;
+    const row = document.querySelector(`[data-flat-index="${focusedFlatIndex}"]`);
+    if (row instanceof HTMLElement) {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }, [focusedFlatIndex]);
 
   const sections = useMemo<SectionModel[]>(() => {
     if (variant !== "unified") {
@@ -513,32 +565,44 @@ export function TraceWaterfallView({
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            Drag timeline to zoom · ↑↓ navigate · Enter select
+            Drag timeline to zoom · ↑↓ navigate · ←→ tree · Enter detail
           </p>
         </div>
 
+        <TraceSpanBreadcrumb
+          steps={allSteps}
+          selectedStep={selectedStep}
+          onSelectStep={onStepSelect ?? (() => undefined)}
+        />
+
         <div
-          className="sticky top-0 z-10 shrink-0 border-b border-border bg-card"
-          role="rowgroup"
-          aria-label="Timeline header"
+          ref={waterfallRegionRef}
+          tabIndex={-1}
+          data-trace-region="waterfall"
+          className="flex min-h-0 flex-1 flex-col outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <div
-            className="grid items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-            style={{ gridTemplateColumns: GRID_TEMPLATE }}
-            role="row"
+            className="sticky top-0 z-10 shrink-0 border-b border-border bg-card"
+            role="rowgroup"
+            aria-label="Timeline header"
           >
-            <span role="columnheader">Span</span>
-            <span role="columnheader">Timeline</span>
-            <span className="text-right" role="columnheader">
-              Duration
-            </span>
-            <span className="text-right" role="columnheader">
-              Status
-            </span>
+            <div
+              className="grid items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              style={{ gridTemplateColumns: GRID_TEMPLATE }}
+              role="row"
+            >
+              <span role="columnheader">Span</span>
+              <span role="columnheader">Timeline</span>
+              <span className="text-right" role="columnheader">
+                Duration
+              </span>
+              <span className="text-right" role="columnheader">
+                Status
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="scroll-region min-h-0 flex-1" role="grid" aria-label="Trace waterfall" aria-rowcount={rows.length}>
+          <div className="scroll-region min-h-0 flex-1" role="grid" aria-label="Trace waterfall" aria-rowcount={rows.length}>
           {rows.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No spans match the current filter.</p>
           ) : (
@@ -575,6 +639,8 @@ export function TraceWaterfallView({
                                 isSelected={selectedStepId === step.id}
                                 isHovered={hoveredStepId === step.id}
                                 isFocused={focusedFlatIndex === step.flatIndex}
+                                isDimmed={Boolean(relatedSpanIds && !relatedSpanIds.has(step.id))}
+                                isRelated={Boolean(relatedSpanIds?.has(step.id))}
                                 onSelect={handleStepSelect}
                                 onHover={handleStepHover}
                                 onZoomMouseDown={handleZoomMouseDown}
@@ -597,6 +663,7 @@ export function TraceWaterfallView({
               );
             })
           )}
+          </div>
         </div>
       </div>
     </TooltipProvider>
