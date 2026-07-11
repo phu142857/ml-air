@@ -22,6 +22,9 @@ export type TraceExplorerKeyboardHandlers = {
   onExpandSubtree?: () => void;
   onCopyId?: () => void;
   onCycleFocusRegion?: (direction: 1 | -1) => void;
+  hasSearchMatches?: () => boolean;
+  onNextSearchMatch?: () => void;
+  onPrevSearchMatch?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
@@ -75,6 +78,15 @@ export function useTraceExplorerKeyboard(
         if (handlers.onClearSpanFilter?.()) return;
         if (handlers.onClearTraceSearch?.()) return;
         handlers.onClearSelection();
+        return;
+      }
+
+      if (e.key === "F3") {
+        if (handlers.hasSearchMatches?.()) {
+          e.preventDefault();
+          if (e.shiftKey) handlers.onPrevSearchMatch?.();
+          else handlers.onNextSearchMatch?.();
+        }
         return;
       }
 

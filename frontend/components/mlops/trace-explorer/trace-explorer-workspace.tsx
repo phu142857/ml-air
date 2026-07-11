@@ -32,10 +32,12 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useTraceDetail } from "@/hooks/use-trace-detail";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   TRACE_WORKSPACE_COLLAPSED_SIZE,
   useTraceWorkspaceState,
 } from "@/hooks/use-trace-workspace-state";
+import { SPAN_SEARCH_DEBOUNCE_MS } from "@/components/mlops/trace-explorer/trace-span-search";
 import { useAppContext } from "@/lib/app-context";
 import type { TraceSearchHit, TraceWaterfallStep } from "@/lib/api";
 import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
@@ -81,6 +83,9 @@ export function TraceExplorerWorkspace({
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
   const [focusedFlatIndex, setFocusedFlatIndex] = useState<number | null>(null);
   const [spanFilter, setSpanFilter] = useState("");
+  const debouncedSpanFilter = useDebouncedValue(spanFilter, SPAN_SEARCH_DEBOUNCE_MS);
+  const [searchMatchIds, setSearchMatchIds] = useState<string[]>([]);
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [flatSteps, setFlatSteps] = useState<TraceWaterfallStep[]>([]);
@@ -105,16 +110,85 @@ export function TraceExplorerWorkspace({
   const waterfallVariant = data?.unified_waterfall ? "unified" : "run";
 
   const selectedStepId = selectedStep?.id ?? null;
+  const currentSearchMatchId =
+    debouncedSpanFilter.trim() && searchMatchIds.length
+      ? searchMatchIds[searchMatchIndex] ?? null
+      : null;
 
   const handleTraceChange = useCallback(
     (traceId: string) => {
       setSelectedStep(null);
       setFocusedFlatIndex(null);
+      setSpanFilter("");
+      setSearchMatchIds([]);
+      setSearchMatchIndex(0);
       setCollapsedSpanIds(new Set());
       onSelectTrace(traceId);
     },
     [onSelectTrace],
   );
+
+  const handleStepSelect = useCallback(
+    (step: TraceWaterfallStep | null) => {
+      if (!step) {
+        setSelectedStep(null);
+        setFocusedFlatIndex(null);
+        return;
+      }
+
+      const tree = buildTraceTreeIndex(allSteps);
+      setCollapsedSpanIds((prev) => {
+        const next = new Set(prev);
+        for (const node of getAncestorChain(tree, step.id)) {
+          next.delete(node.id);
+        }
+        return next;
+      });
+
+      setSelectedStep(step);
+      const index = flatSteps.findIndex((item) => item.id === step.id);
+      setFocusedFlatIndex(index >= 0 ? index : null);
+    },
+    [allSteps, flatSteps],
+  );
+
+  const handleSearchMatchesChange = useCallback(
+    (orderedMatchIds: string[]) => {
+      setSearchMatchIds(orderedMatchIds);
+      if (!debouncedSpanFilter.trim()) {
+        setSearchMatchIndex(0);
+        return;
+      }
+
+      setSearchMatchIndex(0);
+      const firstId = orderedMatchIds[0];
+      if (!firstId) return;
+
+      const step = flatSteps.find((item) => item.id === firstId);
+      if (step) handleStepSelect(step);
+    },
+    [debouncedSpanFilter, flatSteps, handleStepSelect],
+  );
+
+  const cycleSearchMatch = useCallback(
+    (delta: 1 | -1) => {
+      if (!searchMatchIds.length) return;
+      setSearchMatchIndex((prev) => {
+        const next = (prev + delta + searchMatchIds.length) % searchMatchIds.length;
+        const stepId = searchMatchIds[next];
+        const step = flatSteps.find((item) => item.id === stepId);
+        if (step) handleStepSelect(step);
+        return next;
+      });
+    },
+    [flatSteps, handleStepSelect, searchMatchIds],
+  );
+
+  useEffect(() => {
+    if (!selectedStepId || !searchMatchIds.length || !debouncedSpanFilter.trim()) return;
+    const index = searchMatchIds.indexOf(selectedStepId);
+    if (index >= 0) setSearchMatchIndex(index);
+  }, [debouncedSpanFilter, searchMatchIds, selectedStepId]);
 
   const focusRegion = useCallback((region: TraceFocusRegion) => {
     focusRegionRef.current = region;
@@ -169,30 +243,6 @@ export function TraceExplorerWorkspace({
       return next;
     });
   }, [allSteps, selectedStep]);
-
-  const handleStepSelect = useCallback(
-    (step: TraceWaterfallStep | null) => {
-      if (!step) {
-        setSelectedStep(null);
-        setFocusedFlatIndex(null);
-        return;
-      }
-
-      const tree = buildTraceTreeIndex(allSteps);
-      setCollapsedSpanIds((prev) => {
-        const next = new Set(prev);
-        for (const node of getAncestorChain(tree, step.id)) {
-          next.delete(node.id);
-        }
-        return next;
-      });
-
-      setSelectedStep(step);
-      const index = flatSteps.findIndex((item) => item.id === step.id);
-      setFocusedFlatIndex(index >= 0 ? index : null);
-    },
-    [allSteps, flatSteps],
-  );
 
   const focusDetailPanel = useCallback(() => {
     if (!selectedStep && flatSteps.length) {
@@ -261,6 +311,8 @@ export function TraceExplorerWorkspace({
     onClearSpanFilter: () => {
       if (!spanFilter) return false;
       setSpanFilter("");
+      setSearchMatchIds([]);
+      setSearchMatchIndex(0);
       spanFilterRef.current?.focus();
       return true;
     },
@@ -274,6 +326,10 @@ export function TraceExplorerWorkspace({
     onExpandSubtree: expandSubtree,
     onCopyId: copyCurrentId,
     onCycleFocusRegion: cycleFocusRegion,
+    hasSearchMatches: () =>
+      Boolean(debouncedSpanFilter.trim()) && searchMatchIds.length > 0,
+    onNextSearchMatch: () => cycleSearchMatch(1),
+    onPrevSearchMatch: () => cycleSearchMatch(-1),
     isWaterfallFocused,
     onZoomIn: () => zoomHandlersRef.current?.zoomIn(),
     onZoomOut: () => zoomHandlersRef.current?.zoomOut(),
@@ -333,17 +389,25 @@ export function TraceExplorerWorkspace({
       <div className="flex h-full min-h-0 flex-col border-x border-border bg-card">
         <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-3 py-2">
           <label htmlFor="span-filter" className="sr-only">
-            Filter spans
+            Search spans
           </label>
           <Input
             id="span-filter"
             ref={spanFilterRef}
             value={spanFilter}
             onChange={(e) => setSpanFilter(e.target.value)}
-            placeholder="Filter spans…"
+            placeholder="Search spans… name, service, status, attributes (F3)"
             className="h-8 text-xs"
             disabled={!waterfall}
+            aria-keyshortcuts="F3"
           />
+          {debouncedSpanFilter.trim() ? (
+            <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
+              {searchMatchIds.length
+                ? `${searchMatchIndex + 1} of ${searchMatchIds.length} matches`
+                : "No matches"}
+            </p>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
           {!normalized ? (
@@ -371,12 +435,14 @@ export function TraceExplorerWorkspace({
               selectedStepId={selectedStepId}
               hoveredStepId={hoveredStepId}
               focusedFlatIndex={focusedFlatIndex}
-              spanFilter={spanFilter}
+              spanFilter={debouncedSpanFilter}
+              currentSearchMatchId={currentSearchMatchId}
               collapsedSpanIds={collapsedSpanIds}
               onStepSelect={handleStepSelect}
               onStepHover={(step) => setHoveredStepId(step?.id ?? null)}
               onFlatStepsChange={setFlatSteps}
               onAllStepsChange={setAllSteps}
+              onSearchMatchesChange={handleSearchMatchesChange}
               onZoomHandlersReady={(handlers) => {
                 zoomHandlersRef.current = handlers;
               }}
@@ -397,10 +463,15 @@ export function TraceExplorerWorkspace({
       listLoading,
       normalized,
       selectedStepId,
-      spanFilter,
+      debouncedSpanFilter,
+      searchMatchIds.length,
+      searchMatchIndex,
       collapsedSpanIds,
       selectedStep,
       handleStepSelect,
+      handleSearchMatchesChange,
+      spanFilter,
+      currentSearchMatchId,
       toggleFullscreen,
       waterfall,
       waterfallVariant,

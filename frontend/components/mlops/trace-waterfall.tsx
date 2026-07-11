@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { ChevronDown, Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/mlops/status-badge";
+import { HighlightText } from "@/components/mlops/trace-explorer/highlight-text";
 import { TraceSpanBreadcrumb } from "@/components/mlops/trace-explorer/trace-span-breadcrumb";
+import { buildSpanSearchMatchSet } from "@/components/mlops/trace-explorer/trace-span-search";
 import {
   buildTraceTreeIndex,
   getRelatedSpanIds,
@@ -171,6 +173,9 @@ function WaterfallRow({
   isFocused,
   isDimmed,
   isRelated,
+  isSearchMatch,
+  isCurrentSearchMatch,
+  spanSearchQuery,
   onSelect,
   onHover,
   onZoomMouseDown,
@@ -187,6 +192,9 @@ function WaterfallRow({
   isFocused?: boolean;
   isDimmed?: boolean;
   isRelated?: boolean;
+  isSearchMatch?: boolean;
+  isCurrentSearchMatch?: boolean;
+  spanSearchQuery?: string;
   onSelect?: (step: TraceWaterfallStep) => void;
   onHover?: (step: TraceWaterfallStep | null) => void;
   onZoomMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -204,7 +212,9 @@ function WaterfallRow({
       className={cn(
         "grid items-center gap-2 border-b border-border px-3 py-2 transition-default",
         isSelected && "bg-primary/8",
-        isRelated && !isSelected && "bg-primary/5",
+        isCurrentSearchMatch && "bg-primary/12 ring-1 ring-inset ring-primary/40",
+        isSearchMatch && !isCurrentSearchMatch && !isSelected && "bg-primary/5",
+        isRelated && !isSelected && !isSearchMatch && "bg-primary/5",
         isHovered && !isSelected && "bg-muted/50",
         isFocused && !isSelected && "bg-muted/40",
         isDimmed && "opacity-35",
@@ -222,8 +232,10 @@ function WaterfallRow({
       role="row"
       tabIndex={isFocused ? 0 : -1}
       aria-selected={isSelected}
+      aria-current={isCurrentSearchMatch ? "true" : undefined}
       aria-label={rowLabel}
       data-flat-index={step.flatIndex}
+      data-step-id={step.id}
     >
       <div className="min-w-0" style={{ paddingLeft: step.paddingLeft }} role="gridcell">
         <div className="flex min-w-0 items-center gap-2">
@@ -239,13 +251,17 @@ function WaterfallRow({
                 className="link-primary block truncate text-sm font-medium"
                 onClick={(e) => e.stopPropagation()}
               >
-                {step.label}
+                <HighlightText text={step.label} query={spanSearchQuery ?? ""} />
               </Link>
             ) : (
-              <p className="truncate text-sm font-medium text-foreground">{step.label}</p>
+              <p className="truncate text-sm font-medium text-foreground">
+                <HighlightText text={step.label} query={spanSearchQuery ?? ""} />
+              </p>
             )}
             {step.service ? (
-              <p className="truncate font-mono text-xs text-muted-foreground">{step.service}</p>
+              <p className="truncate font-mono text-xs text-muted-foreground">
+                <HighlightText text={step.service} query={spanSearchQuery ?? ""} />
+              </p>
             ) : null}
           </div>
         </div>
@@ -290,11 +306,13 @@ export type TraceWaterfallViewProps = {
   hoveredStepId?: string | null;
   focusedFlatIndex?: number | null;
   spanFilter?: string;
+  currentSearchMatchId?: string | null;
   collapsedSpanIds?: Set<string>;
   onStepSelect?: (step: TraceWaterfallStep | null) => void;
   onStepHover?: (step: TraceWaterfallStep | null) => void;
   onFlatStepsChange?: (steps: TraceWaterfallStep[]) => void;
   onAllStepsChange?: (steps: TraceWaterfallStep[]) => void;
+  onSearchMatchesChange?: (orderedMatchIds: string[]) => void;
   onZoomHandlersReady?: (handlers: {
     zoomIn: () => void;
     zoomOut: () => void;
@@ -313,11 +331,13 @@ export function TraceWaterfallView({
   hoveredStepId: controlledHoveredId,
   focusedFlatIndex = null,
   spanFilter = "",
+  currentSearchMatchId = null,
   collapsedSpanIds,
   onStepSelect,
   onStepHover,
   onFlatStepsChange,
   onAllStepsChange,
+  onSearchMatchesChange,
   onZoomHandlersReady,
   waterfallFullscreen = false,
   onToggleFullscreen,
@@ -420,7 +440,6 @@ export function TraceWaterfallView({
   const rows = useMemo<RowModel[]>(() => {
     const unifiedMode = variant === "unified";
     const otelMode = variant === "otel" || waterfall.steps.some((s) => s.kind === "span");
-    const filter = spanFilter.trim().toLowerCase();
     const collapsed = collapsedSpanIds ?? new Set<string>();
 
     const base =
@@ -450,18 +469,14 @@ export function TraceWaterfallView({
           })();
 
     const treeVisible = base.filter((step) => isRowVisible(step.id, collapsed, treeIndex));
+    return treeVisible.map((step, flatIndex) => ({ ...step, flatIndex }));
+  }, [collapsedSpanIds, treeIndex, variant, waterfall.steps]);
 
-    const filtered = filter
-      ? treeVisible.filter(
-          (step) =>
-            step.label.toLowerCase().includes(filter) ||
-            step.id.toLowerCase().includes(filter) ||
-            String(step.service || "").toLowerCase().includes(filter),
-        )
-      : treeVisible;
-
-    return filtered.map((step, flatIndex) => ({ ...step, flatIndex }));
-  }, [collapsedSpanIds, spanFilter, treeIndex, variant, waterfall.steps]);
+  const spanSearchQuery = spanFilter.trim();
+  const searchMatches = useMemo(
+    () => buildSpanSearchMatchSet(rows, spanSearchQuery),
+    [rows, spanSearchQuery],
+  );
 
   const allSteps = useMemo(
     () => waterfall.steps as TraceWaterfallStep[],
@@ -469,6 +484,15 @@ export function TraceWaterfallView({
   );
 
   const flatSteps = useMemo(() => rows.map((r) => r as TraceWaterfallStep), [rows]);
+
+  const prevSearchMatchIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    const next = searchMatches.orderedMatchIds;
+    const prev = prevSearchMatchIdsRef.current;
+    if (prev.length === next.length && prev.every((id, index) => id === next[index])) return;
+    prevSearchMatchIdsRef.current = next;
+    onSearchMatchesChange?.(next);
+  }, [onSearchMatchesChange, searchMatches.orderedMatchIds]);
 
   useEffect(() => {
     onFlatStepsChange?.(flatSteps);
@@ -503,7 +527,15 @@ export function TraceWaterfallView({
     if (row instanceof HTMLElement) {
       row.scrollIntoView({ block: "nearest" });
     }
-  }, [focusedFlatIndex]);
+  }, [focusedFlatIndex, currentSearchMatchId]);
+
+  useEffect(() => {
+    if (!currentSearchMatchId) return;
+    const row = document.querySelector(`[data-step-id="${CSS.escape(currentSearchMatchId)}"]`);
+    if (row instanceof HTMLElement) {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }, [currentSearchMatchId]);
 
   const sections = useMemo<SectionModel[]>(() => {
     if (variant !== "unified") {
@@ -565,7 +597,7 @@ export function TraceWaterfallView({
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            Drag timeline to zoom · ↑↓ navigate · ←→ tree · Enter detail
+            Drag timeline to zoom · ↑↓ navigate · ←→ tree · F3 next match
           </p>
         </div>
 
@@ -628,7 +660,17 @@ export function TraceWaterfallView({
                     </button>
                   ) : null}
                   {!collapsed
-                    ? section.rows.map((step) => (
+                    ? section.rows.map((step) => {
+                        const isSearchMatch = searchMatches.matchIds.has(step.id);
+                        const isCurrentSearchMatch = currentSearchMatchId === step.id;
+                        const searchActive = Boolean(spanSearchQuery);
+                        const isSearchDimmed =
+                          searchActive &&
+                          !isSearchMatch &&
+                          selectedStepId !== step.id &&
+                          hoveredStepId !== step.id;
+
+                        return (
                         <Tooltip key={`${step.source || "x"}-${step.id}`}>
                           <TooltipTrigger asChild>
                             <div>
@@ -639,8 +681,14 @@ export function TraceWaterfallView({
                                 isSelected={selectedStepId === step.id}
                                 isHovered={hoveredStepId === step.id}
                                 isFocused={focusedFlatIndex === step.flatIndex}
-                                isDimmed={Boolean(relatedSpanIds && !relatedSpanIds.has(step.id))}
+                                isDimmed={
+                                  Boolean(relatedSpanIds && !relatedSpanIds.has(step.id)) ||
+                                  isSearchDimmed
+                                }
                                 isRelated={Boolean(relatedSpanIds?.has(step.id))}
+                                isSearchMatch={isSearchMatch}
+                                isCurrentSearchMatch={isCurrentSearchMatch}
+                                spanSearchQuery={spanSearchQuery}
                                 onSelect={handleStepSelect}
                                 onHover={handleStepHover}
                                 onZoomMouseDown={handleZoomMouseDown}
@@ -657,7 +705,8 @@ export function TraceWaterfallView({
                             <p>{formatDateTimeCompact(step.start_ts)}</p>
                           </TooltipContent>
                         </Tooltip>
-                      ))
+                        );
+                      })
                     : null}
                 </div>
               );
