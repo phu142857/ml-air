@@ -241,7 +241,9 @@ def search_stored_traces(
            MIN(name) FILTER (WHERE parent_span_id IS NULL) AS root_name,
            MIN(start_ts) AS start_ts,
            MAX(COALESCE(end_ts, start_ts)) AS end_ts,
-           MAX(COALESCE(duration_ms, 0)) AS duration_ms
+           MAX(COALESCE(duration_ms, 0)) AS duration_ms,
+           MAX(NULLIF(attributes->>'mlair.run_id', '')) AS run_id,
+           MAX(NULLIF(attributes->>'mlair.pipeline_id', '')) AS pipeline_id
     FROM trace_spans
     WHERE {where}
     GROUP BY trace_id
@@ -258,7 +260,7 @@ def search_stored_traces(
         return []
 
     out: list[dict[str, Any]] = []
-    for trace_id, root_service, root_name, start_ts, end_ts, duration_ms in rows:
+    for trace_id, root_service, root_name, start_ts, end_ts, duration_ms, run_id, pipeline_id in rows:
         tid = canonical_trace_id(str(trace_id)) or str(trace_id)
         dur = int(duration_ms) if duration_ms else None
         if dur is None and start_ts and end_ts:
@@ -274,6 +276,8 @@ def search_stored_traces(
                 "start_ts": _iso(start_ts),
                 "last_seen": _iso(end_ts or start_ts),
                 "duration_ms": dur,
+                "run_id": str(run_id).strip() if run_id else None,
+                "pipeline_id": str(pipeline_id).strip() if pipeline_id else None,
                 "source": "spans",
             }
         )
@@ -296,7 +300,9 @@ def list_project_traces(
            MIN(name) FILTER (WHERE parent_span_id IS NULL) AS root_name,
            MIN(start_ts) AS start_ts,
            MAX(COALESCE(end_ts, start_ts)) AS end_ts,
-           MAX(COALESCE(duration_ms, 0)) AS duration_ms
+           MAX(COALESCE(duration_ms, 0)) AS duration_ms,
+           MAX(NULLIF(attributes->>'mlair.run_id', '')) AS run_id,
+           MAX(NULLIF(attributes->>'mlair.pipeline_id', '')) AS pipeline_id
     FROM trace_spans
     WHERE (tenant_id IS NULL OR tenant_id = %(tenant_id)s)
       AND (project_id IS NULL OR project_id = %(project_id)s)
@@ -317,7 +323,7 @@ def list_project_traces(
         return []
 
     out: list[dict[str, Any]] = []
-    for trace_id, root_service, root_name, start_ts, end_ts, duration_ms in rows:
+    for trace_id, root_service, root_name, start_ts, end_ts, duration_ms, run_id, pipeline_id in rows:
         tid = canonical_trace_id(str(trace_id)) or str(trace_id)
         dur = int(duration_ms) if duration_ms else None
         if dur is None and start_ts and end_ts:
@@ -333,6 +339,8 @@ def list_project_traces(
                 "start_ts": _iso(start_ts),
                 "last_seen": _iso(end_ts or start_ts),
                 "duration_ms": dur,
+                "run_id": str(run_id).strip() if run_id else None,
+                "pipeline_id": str(pipeline_id).strip() if pipeline_id else None,
                 "source": "spans",
             }
         )

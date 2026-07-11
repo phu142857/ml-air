@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useMemo } from "react"
+import { Suspense, useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
@@ -9,9 +9,11 @@ import { ListTodo, Loader2 } from "lucide-react"
 import {
   fetchRunUsageSamples,
   fetchTaskResolved,
+  downloadRunLogsExport,
   normalizeProjectId,
   normalizeTaskId,
   type LogItem,
+  type LogSearchParams,
   type ResolvedTask,
 } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
@@ -30,10 +32,12 @@ import {
 } from "@/components/mlops/layout"
 import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
 import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
+import { ExecutionLogToolbar } from "@/components/mlops/execution-log-toolbar"
 import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
 import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
+import { toastError, toastSuccess } from "@/lib/toast-actions"
 import { isScopePinned } from "@/lib/scope"
 import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
 import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
@@ -158,15 +162,39 @@ function TaskDetailContent() {
   })
 
   const logsScope = taskApiScope
-  const logsRefetchMs = isActiveExecutionStatus(task?.status) ? ACTIVE_TASK_REFETCH_MS : poll.refetchInterval
+  const logsLive = isActiveExecutionStatus(task?.status)
+  const [logSearch, setLogSearch] = useState<LogSearchParams>({})
+  const [logExporting, setLogExporting] = useState(false)
+  const logsRefetchMs = logsLive ? ACTIVE_TASK_REFETCH_MS : poll.refetchInterval
   const logsQuery = useTaskLogsInfinite(
     logsScope?.tenantId ?? "",
     logsScope?.projectId ?? "",
     taskId,
+    taskRunId,
     token,
     Boolean(logsScope && task),
-    typeof logsRefetchMs === "number" ? logsRefetchMs : false
+    {
+      streamLive: logsLive,
+      refetchInterval: logsLive ? false : (typeof logsRefetchMs === "number" ? logsRefetchMs : false),
+      search: logSearch,
+    },
   )
+
+  const handleLogExport = useCallback(async () => {
+    if (!logsScope || !taskRunId) return
+    setLogExporting(true)
+    try {
+      await downloadRunLogsExport(logsScope.tenantId, logsScope.projectId, taskRunId, token, {
+        format: "jsonl",
+        search: { ...logSearch, taskId },
+      })
+      toastSuccess("Export started", "Task logs download should begin shortly.")
+    } catch (e) {
+      toastError("Export failed", formatApiClientError(e))
+    } finally {
+      setLogExporting(false)
+    }
+  }, [logsScope, taskRunId, token, logSearch, taskId])
 
   if (!isLoading && !isError && !task) {
     return (
@@ -367,27 +395,39 @@ function TaskDetailContent() {
               title="Task logs"
               accentBorder="violet"
               className="min-w-0"
-              bodyClassName="min-w-0"
+              bodyClassName="min-w-0 p-0"
             >
               {!logsScope ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="px-4 py-3 text-sm text-muted-foreground">
                   Resolve task scope to load logs (pin tenant/project or open from a run).
                 </p>
               ) : logsQuery.isError ? (
-                <p className="text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>
+                <p className="px-4 py-3 text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>
               ) : (
-                <ExecutionLogStream
-                  items={logsQuery.items}
-                  isLoading={logsQuery.isLoading}
-                  isRefreshing={logsQuery.isFetching && !logsQuery.isFetchingNextPage && logsQuery.items.length > 0}
-                  hasMoreOlder={Boolean(logsQuery.hasNextPage)}
-                  isLoadingOlder={logsQuery.isFetchingNextPage}
-                  onLoadOlder={() => void logsQuery.fetchNextPage()}
-                  className="max-h-[min(420px,50vh)]"
-                  renderLine={(log, index) => (
-                    <TaskLogLine key={`${log.ts}-${index}`} log={log} />
-                  )}
-                />
+                <>
+                  <ExecutionLogToolbar
+                    search={logSearch}
+                    onSearchChange={setLogSearch}
+                    liveStatus={logsQuery.liveStatus}
+                    isFetching={logsQuery.isFetching}
+                    onExport={taskRunId ? handleLogExport : undefined}
+                    exporting={logExporting}
+                  />
+                  <div className="min-w-0 px-1">
+                    <ExecutionLogStream
+                      items={logsQuery.items}
+                      isLoading={logsQuery.isLoading}
+                      isRefreshing={logsQuery.isFetching && !logsQuery.isFetchingNextPage && logsQuery.items.length > 0}
+                      hasMoreOlder={Boolean(logsQuery.hasNextPage)}
+                      isLoadingOlder={logsQuery.isFetchingNextPage}
+                      onLoadOlder={() => void logsQuery.fetchNextPage()}
+                      className="max-h-[min(420px,50vh)]"
+                      renderLine={(log, index) => (
+                        <TaskLogLine key={`${log.sequence ?? log.ts}-${index}`} log={log} />
+                      )}
+                    />
+                  </div>
+                </>
               )}
             </DetailSection>
             <JsonPayloadPanel title="Task payload" data={payload} className="min-w-0 border-border/60 bg-card" />

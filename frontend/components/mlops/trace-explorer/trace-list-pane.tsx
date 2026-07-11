@@ -95,7 +95,11 @@ export function TraceListPane({
                   <span className="truncate">{item.trace_id}</span>
                 </span>
                 <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span className="truncate">{item.root_service || item.source || "—"}</span>
+                  <span className="truncate">
+                    {[item.pipeline_id, item.run_id ? `run ${item.run_id}` : null, item.root_service || item.source]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </span>
                   <span className="shrink-0 font-mono tabular-nums">
                     {formatWaterfallDuration(item.duration_ms)}
                   </span>

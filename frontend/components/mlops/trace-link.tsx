@@ -76,14 +76,16 @@ type TraceLinkProps = {
   variant?: "button" | "link";
   size?: "sm" | "default";
   className?: string;
+  label?: string;
 };
 
-export function TraceLink({ traceId, variant = "button", size = "sm", className }: TraceLinkProps) {
+export function TraceLink({ traceId, variant = "button", size = "sm", className, label }: TraceLinkProps) {
   const [open, setOpen] = useState(false);
   const normalized = normalizeTraceId(traceId);
   if (!normalized) return null;
 
-  const label = `${normalized.slice(0, 8)}…`;
+  const shortId = `${normalized.slice(0, 8)}…`;
+  const displayLabel = label?.trim() || shortId;
 
   if (variant === "link") {
     return (
@@ -97,7 +99,7 @@ export function TraceLink({ traceId, variant = "button", size = "sm", className 
           )}
         >
           <Route className="h-3 w-3 shrink-0" strokeWidth={1.75} />
-          <span className="truncate font-mono">{label}</span>
+          <span className="truncate font-mono">{displayLabel}</span>
         </button>
         <TraceExplorerDialog traceId={normalized} open={open} onOpenChange={setOpen} />
       </>
@@ -117,7 +119,7 @@ export function TraceLink({ traceId, variant = "button", size = "sm", className 
         )}
       >
         <Route className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-        <span>View trace</span>
+        <span>{label?.trim() || "View trace"}</span>
       </Button>
       <TraceExplorerDialog traceId={normalized} open={open} onOpenChange={setOpen} />
     </>

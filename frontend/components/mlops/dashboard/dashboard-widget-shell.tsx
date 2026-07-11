@@ -128,7 +128,7 @@ export function DashboardWidgetShell({
         ) : null}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">{children}</div>
 
       {editMode ? (
         <div

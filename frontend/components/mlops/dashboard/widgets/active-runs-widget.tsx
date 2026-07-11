@@ -33,8 +33,9 @@ export function ActiveRunsWidget({ runs }: ActiveRunsWidgetProps) {
   }
 
   return (
-    <ul className="space-y-1.5">
-      {active.map((run) => (
+    <div className="flex h-full min-h-0 flex-col">
+      <ul className="min-h-0 flex-1 space-y-1.5 overflow-auto">
+        {active.map((run) => (
         <li key={run.run_id}>
           <Link
             href={`/runs/${encodeURIComponent(run.run_id)}`}
@@ -57,7 +58,8 @@ export function ActiveRunsWidget({ runs }: ActiveRunsWidgetProps) {
           </Link>
         </li>
       ))}
-    </ul>
+      </ul>
+    </div>
   )
 }
 

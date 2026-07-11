@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -10,6 +11,49 @@ from app.domains.shared.db_service import db_conn
 from app.domains.shared.pagination import PageResult, encode_cursor, resolve_page_params
 from app.domains.observability.trace_service import get_trace_id
 from sdk.mlair_log.store import append_log_entry
+
+
+@dataclass(frozen=True)
+class LogSearchFilters:
+    q: str | None = None
+    level: str | None = None
+    task_id: str | None = None
+    trace_id: str | None = None
+
+
+def _filter_sql(filters: LogSearchFilters | None, args: list[Any]) -> str:
+    if not filters:
+        return ""
+    parts: list[str] = []
+    if filters.level:
+        parts.append(" AND level = %s")
+        args.append(str(filters.level).strip().upper()[:16])
+    if filters.task_id:
+        parts.append(" AND task_id = %s")
+        args.append(str(filters.task_id))
+    if filters.trace_id:
+        parts.append(" AND trace_id = %s")
+        args.append(str(filters.trace_id).strip())
+    q = str(filters.q or "").strip()
+    if q:
+        pattern = f"%{q[:500]}%"
+        parts.append(" AND (message ILIKE %s OR payload::text ILIKE %s)")
+        args.extend([pattern, pattern])
+    return "".join(parts)
+
+
+def read_run_logs_page(
+    run_id: str,
+    *,
+    offset: int = 0,
+    limit: int = 200,
+    cursor: str | None = None,
+    tail: bool = False,
+    filters: LogSearchFilters | None = None,
+) -> PageResult:
+    if tail:
+        return _read_run_logs_page_tail(run_id, limit=limit, cursor=cursor, filters=filters)
+    return _read_run_logs_page_forward(run_id, offset=offset, limit=limit, cursor=cursor, filters=filters)
 
 
 def task_log_payload(
@@ -69,19 +113,6 @@ def append_task_run_log(
     )
 
 
-def read_run_logs_page(
-    run_id: str,
-    *,
-    offset: int = 0,
-    limit: int = 200,
-    cursor: str | None = None,
-    tail: bool = False,
-) -> PageResult:
-    if tail:
-        return _read_run_logs_page_tail(run_id, limit=limit, cursor=cursor)
-    return _read_run_logs_page_forward(run_id, offset=offset, limit=limit, cursor=cursor)
-
-
 def read_run_logs(
     run_id: str,
     offset: int = 0,
@@ -100,10 +131,17 @@ def read_task_logs_page(
     limit: int = 200,
     cursor: str | None = None,
     tail: bool = False,
+    filters: LogSearchFilters | None = None,
 ) -> PageResult:
+    merged = LogSearchFilters(
+        q=filters.q if filters else None,
+        level=filters.level if filters else None,
+        task_id=task_id,
+        trace_id=filters.trace_id if filters else None,
+    )
     if tail:
-        return _read_task_logs_page_tail(task_id, limit=limit, cursor=cursor)
-    return _read_task_logs_page_forward(task_id, offset=offset, limit=limit, cursor=cursor)
+        return _read_task_logs_page_tail(task_id, limit=limit, cursor=cursor, filters=merged)
+    return _read_task_logs_page_forward(task_id, offset=offset, limit=limit, cursor=cursor, filters=merged)
 
 
 def read_task_logs(
@@ -157,10 +195,12 @@ def _read_run_logs_page_forward(
     offset: int = 0,
     limit: int = 200,
     cursor: str | None = None,
+    filters: LogSearchFilters | None = None,
 ) -> PageResult:
     params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
     where = "WHERE run_id = %s"
     args: list[Any] = [run_id]
+    where += _filter_sql(filters, args)
     page_offset: int | None = None
 
     if params.mode == "cursor" and params.cursor:
@@ -205,10 +245,12 @@ def _read_run_logs_page_tail(
     *,
     limit: int = 200,
     cursor: str | None = None,
+    filters: LogSearchFilters | None = None,
 ) -> PageResult:
     params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=1000)
     where = "WHERE run_id = %s"
     args: list[Any] = [run_id]
+    where += _filter_sql(filters, args)
 
     if params.mode == "cursor" and params.cursor and params.cursor.get("dir") == "before":
         before_seq = _cursor_sequence(params.cursor)
@@ -235,12 +277,12 @@ def _read_run_logs_page_tail(
     items = [_row_to_entry(row) for row in reversed(fetched)]
     if not has_more and items:
         min_seq = items[0]["sequence"]
+        exists_where = "WHERE run_id = %s AND sequence < %s"
+        exists_args: list[Any] = [run_id, min_seq]
+        exists_where += _filter_sql(filters, exists_args)
         with db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT EXISTS(SELECT 1 FROM run_log_entries WHERE run_id = %s AND sequence < %s)",
-                    (run_id, min_seq),
-                )
+                cur.execute(f"SELECT EXISTS(SELECT 1 FROM run_log_entries {exists_where})", exists_args)
                 has_more = bool(cur.fetchone()[0])
 
     next_cursor = encode_cursor({"dir": "before", "sequence": items[0]["sequence"]}) if has_more and items else None
@@ -253,10 +295,12 @@ def _read_task_logs_page_forward(
     offset: int = 0,
     limit: int = 200,
     cursor: str | None = None,
+    filters: LogSearchFilters | None = None,
 ) -> PageResult:
     params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=200, max_limit=1000)
     where = "WHERE task_id = %s"
     args: list[Any] = [task_id]
+    where += _filter_sql(filters, args)
     page_offset: int | None = None
 
     if params.mode == "cursor" and params.cursor:
@@ -301,10 +345,12 @@ def _read_task_logs_page_tail(
     *,
     limit: int = 200,
     cursor: str | None = None,
+    filters: LogSearchFilters | None = None,
 ) -> PageResult:
     params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=1000)
     where = "WHERE task_id = %s"
     args: list[Any] = [task_id]
+    where += _filter_sql(filters, args)
 
     if params.mode == "cursor" and params.cursor and params.cursor.get("dir") == "before":
         before_seq = _cursor_sequence(params.cursor)
@@ -331,13 +377,91 @@ def _read_task_logs_page_tail(
     items = [_row_to_entry(row) for row in reversed(fetched)]
     if not has_more and items:
         min_seq = items[0]["sequence"]
+        exists_where = "WHERE task_id = %s AND sequence < %s"
+        exists_args: list[Any] = [task_id, min_seq]
+        exists_where += _filter_sql(filters, exists_args)
         with db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT EXISTS(SELECT 1 FROM run_log_entries WHERE task_id = %s AND sequence < %s)",
-                    (task_id, min_seq),
-                )
+                cur.execute(f"SELECT EXISTS(SELECT 1 FROM run_log_entries {exists_where})", exists_args)
                 has_more = bool(cur.fetchone()[0])
 
     next_cursor = encode_cursor({"dir": "before", "sequence": items[0]["sequence"]}) if has_more and items else None
+    return PageResult(items=items, next_cursor=next_cursor, has_more=has_more, limit=params.limit)
+
+
+def export_run_logs(
+    run_id: str,
+    *,
+    filters: LogSearchFilters | None = None,
+    limit: int = 5000,
+) -> list[dict]:
+    """Load matching log lines for download (capped)."""
+    cap = max(1, min(int(limit or 5000), 5000))
+    where = "WHERE run_id = %s"
+    args: list[Any] = [run_id]
+    where += _filter_sql(filters, args)
+    sql = f"""
+    SELECT sequence, ts, level, message, trace_id, payload
+    FROM run_log_entries
+    {where}
+    ORDER BY sequence ASC
+    LIMIT %s
+    """
+    args.append(cap)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+    return [_public_entry(_row_to_entry(row)) for row in rows]
+
+
+def _row_to_project_entry(row: tuple[Any, ...]) -> dict[str, Any]:
+    row_id, run_id, task_id, sequence, ts, level, message, trace_id, payload = row
+    entry = _row_to_entry((sequence, ts, level, message, trace_id, payload))
+    entry["run_id"] = run_id
+    entry["task_id"] = task_id
+    entry["id"] = int(row_id)
+    return entry
+
+
+def search_project_logs_page(
+    tenant_id: str,
+    project_id: str,
+    *,
+    run_id: str | None = None,
+    filters: LogSearchFilters | None = None,
+    limit: int = 200,
+    cursor: str | None = None,
+) -> PageResult:
+    """Search log lines across a project (newest first)."""
+    params = resolve_page_params(limit=limit, cursor=cursor, default_limit=200, max_limit=500)
+    where = "WHERE tenant_id = %s AND project_id = %s"
+    args: list[Any] = [tenant_id, project_id]
+    if run_id:
+        where += " AND run_id = %s"
+        args.append(run_id)
+    where += _filter_sql(filters, args)
+    if params.mode == "cursor" and params.cursor:
+        before_id = params.cursor.get("id")
+        if before_id is not None:
+            where += " AND id < %s"
+            args.append(int(before_id))
+
+    sql = f"""
+    SELECT id, run_id, task_id, sequence, ts, level, message, trace_id, payload
+    FROM run_log_entries
+    {where}
+    ORDER BY id DESC
+    LIMIT %s
+    """
+    args.append(params.limit + 1)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+
+    items = [_row_to_project_entry(row) for row in rows[: params.limit]]
+    has_more = len(rows) > params.limit
+    next_cursor = encode_cursor({"id": items[-1]["id"]}) if has_more and items else None
     return PageResult(items=items, next_cursor=next_cursor, has_more=has_more, limit=params.limit)

@@ -149,8 +149,25 @@ export type LogItem = {
   message: string;
   trace_id?: string;
   sequence?: number;
+  id?: number;
+  run_id?: string;
+  task_id?: string;
   payload?: LogItemPayload;
 };
+
+export type LogSearchParams = {
+  q?: string;
+  level?: string;
+  taskId?: string;
+  traceId?: string;
+};
+
+function appendLogSearchParams(sp: URLSearchParams, search?: LogSearchParams) {
+  if (search?.q) sp.set("q", search.q);
+  if (search?.level) sp.set("level", search.level);
+  if (search?.taskId) sp.set("task_id", search.taskId);
+  if (search?.traceId) sp.set("trace_id", search.traceId);
+}
 
 export type PipelineItem = {
   pipeline_id: string;
@@ -982,6 +999,8 @@ export type TraceSearchHit = {
   root_name?: string | null;
   duration_ms?: number | null;
   start_ts?: string | null;
+  run_id?: string | null;
+  pipeline_id?: string | null;
 };
 
 export type TraceSearchResponse = {
@@ -1448,13 +1467,14 @@ export async function fetchRunLogsPage(
   projectId: string,
   runId: string,
   token: string,
-  opts?: { limit?: number; cursor?: string | null; tail?: boolean }
+  opts?: { limit?: number; cursor?: string | null; tail?: boolean; search?: LogSearchParams }
 ): Promise<CursorPage<LogItem>> {
   const scopedProjectId = normalizeProjectId(projectId);
   const limit = opts?.limit ?? 200;
   const sp = new URLSearchParams({ limit: String(limit) });
   if (opts?.cursor) sp.set("cursor", opts.cursor);
   if (opts?.tail) sp.set("tail", "true");
+  appendLogSearchParams(sp, opts?.search);
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/logs?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }
@@ -1494,6 +1514,65 @@ export function buildRunLogsWsUrl(
   return `ws://localhost:8080${path}?${query}`;
 }
 
+export async function downloadRunLogsExport(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+  opts?: { format?: "jsonl" | "json" | "txt"; search?: LogSearchParams; limit?: number },
+): Promise<void> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const sp = new URLSearchParams({
+    format: opts?.format ?? "jsonl",
+    limit: String(opts?.limit ?? 5000),
+  });
+  appendLogSearchParams(sp, opts?.search);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/logs/export?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const ext = opts?.format ?? "jsonl";
+  const safeRun = runId.replace(/[^\w.-]+/g, "_").slice(0, 48);
+  const { downloadBlob } = await import("@/lib/utils");
+  downloadBlob(blob, `mlair-run-${safeRun}-logs.${ext}`);
+}
+
+export async function fetchProjectLogsSearch(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: {
+    runId?: string;
+    search?: LogSearchParams;
+    limit?: number;
+    cursor?: string | null;
+  },
+): Promise<CursorPage<LogItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const limit = opts?.limit ?? 100;
+  const sp = new URLSearchParams({ limit: String(limit) });
+  if (opts?.runId) sp.set("run_id", opts.runId);
+  if (opts?.cursor) sp.set("cursor", opts.cursor);
+  appendLogSearchParams(sp, opts?.search);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/logs/search?${sp.toString()}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return {
+    items: (data.items ?? []) as LogItem[],
+    limit: Number(data.limit ?? limit),
+    has_more: Boolean(data.has_more),
+    next_cursor: data.next_cursor ?? null,
+  };
+}
+
 export async function fetchRunLogs(tenantId: string, projectId: string, runId: string, token: string) {
   const page = await fetchRunLogsPage(tenantId, projectId, runId, token, { limit: 200 });
   return { items: page.items };
@@ -1504,13 +1583,14 @@ export async function fetchTaskLogsPage(
   projectId: string,
   taskId: string,
   token: string,
-  opts?: { limit?: number; cursor?: string | null; tail?: boolean }
+  opts?: { limit?: number; cursor?: string | null; tail?: boolean; search?: LogSearchParams }
 ): Promise<CursorPage<LogItem>> {
   const scopedProjectId = normalizeProjectId(projectId);
   const limit = opts?.limit ?? 200;
   const sp = new URLSearchParams({ limit: String(limit) });
   if (opts?.cursor) sp.set("cursor", opts.cursor);
   if (opts?.tail) sp.set("tail", "true");
+  appendLogSearchParams(sp, opts?.search);
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/tasks/${taskIdPathSegment(taskId)}/logs?${sp.toString()}`,
     { headers: authHeaders(token), cache: "no-store" }

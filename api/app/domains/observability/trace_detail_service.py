@@ -442,16 +442,32 @@ def get_trace_detail(*, tenant_id: str, project_id: str, trace_id: str) -> dict[
 def _list_traces_db(*, tenant_id: str, project_id: str, limit: int) -> list[dict[str, Any]]:
     sql = """
     (
-      SELECT DISTINCT config_snapshot->>'trace_id' AS trace_id, MAX(created_at) AS last_seen, 'run' AS source
-      FROM runs
-      WHERE tenant_id = %(tenant_id)s AND project_id = %(project_id)s
-        AND config_snapshot IS NOT NULL
-        AND config_snapshot->>'trace_id' IS NOT NULL
-      GROUP BY config_snapshot->>'trace_id'
+      SELECT trace_id, last_seen, run_id, pipeline_id, source
+      FROM (
+        SELECT
+          config_snapshot->>'trace_id' AS trace_id,
+          created_at AS last_seen,
+          run_id,
+          pipeline_id,
+          'run'::text AS source,
+          ROW_NUMBER() OVER (
+            PARTITION BY config_snapshot->>'trace_id'
+            ORDER BY created_at DESC
+          ) AS rn
+        FROM runs
+        WHERE tenant_id = %(tenant_id)s AND project_id = %(project_id)s
+          AND config_snapshot IS NOT NULL
+          AND config_snapshot->>'trace_id' IS NOT NULL
+      ) latest_runs
+      WHERE rn = 1
     )
     UNION ALL
     (
-      SELECT DISTINCT envelope->>'trace_id' AS trace_id, MAX(created_at) AS last_seen, 'semantic' AS source
+      SELECT envelope->>'trace_id' AS trace_id,
+             MAX(created_at) AS last_seen,
+             NULL::text AS run_id,
+             NULL::text AS pipeline_id,
+             'semantic'::text AS source
       FROM semantic_event_outbox
       WHERE tenant_id = %(tenant_id)s AND project_id = %(project_id)s
         AND envelope->>'trace_id' IS NOT NULL
@@ -474,7 +490,7 @@ def _list_traces_db(*, tenant_id: str, project_id: str, limit: int) -> list[dict
 
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for trace_id, last_seen, source in rows:
+    for trace_id, last_seen, run_id, pipeline_id, source in rows:
         tid = canonical_trace_id(str(trace_id or "")) or str(trace_id or "").strip()
         if not tid or tid in seen:
             continue
@@ -484,6 +500,8 @@ def _list_traces_db(*, tenant_id: str, project_id: str, limit: int) -> list[dict
                 "trace_id": tid,
                 "last_seen": _iso(last_seen),
                 "source": str(source),
+                "run_id": str(run_id).strip() if run_id else None,
+                "pipeline_id": str(pipeline_id).strip() if pipeline_id else None,
                 "root_service": None,
                 "root_name": None,
                 "duration_ms": None,

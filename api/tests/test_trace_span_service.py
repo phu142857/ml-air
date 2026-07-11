@@ -87,6 +87,8 @@ class TestTraceSpanService(unittest.TestCase):
                 "2026-01-01T00:00:00+00:00",
                 "2026-01-01T00:00:02+00:00",
                 120,
+                "run-1",
+                "demo-pipeline",
             )
         ]
         conn.cursor.return_value.__enter__.return_value = cur
@@ -98,6 +100,8 @@ class TestTraceSpanService(unittest.TestCase):
         self.assertEqual(out[0]["source"], "spans")
         self.assertEqual(out[0]["root_service"], "mlair-api")
         self.assertEqual(out[0]["duration_ms"], 120)
+        self.assertEqual(out[0]["run_id"], "run-1")
+        self.assertEqual(out[0]["pipeline_id"], "demo-pipeline")
 
 
 if __name__ == "__main__":

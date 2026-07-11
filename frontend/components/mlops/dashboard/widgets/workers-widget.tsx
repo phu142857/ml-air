@@ -70,7 +70,7 @@ export function WorkersWidget({ runs }: WorkersWidgetProps) {
         ))}
       </ul>
 
-      <Link href="/tasks" className="text-[10px] text-primary hover:text-primary/80">
+      <Link href="/tasks" className="shrink-0 text-[10px] text-primary hover:text-primary/80">
         Open tasks →
       </Link>
     </div>

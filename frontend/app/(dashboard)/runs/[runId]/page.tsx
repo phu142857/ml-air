@@ -43,6 +43,7 @@ import {
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
 import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
+import { ExecutionLogToolbar } from "@/components/mlops/execution-log-toolbar"
 import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
 import { mergeRunListRow } from "@/lib/execution-live-merge"
@@ -68,6 +69,8 @@ import {
   fetchRunUsage,
   fetchRunUsageSamples,
   fetchRunReadiness,
+  downloadRunLogsExport,
+  type LogSearchParams,
   cancelRun,
   normalizeProjectId,
   type LogItem,
@@ -307,6 +310,15 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
   useRunExecutionGraph(tenantId, projectId, runId, token, enabled)
 
+  const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
+  const [logSearch, setLogSearch] = useState<LogSearchParams>({})
+  const [logExporting, setLogExporting] = useState(false)
+
+  const logSearchEffective = useMemo((): LogSearchParams => {
+    const taskId = logTaskFilter !== "all" ? logTaskFilter : logSearch.taskId
+    return { ...logSearch, ...(taskId ? { taskId } : {}) }
+  }, [logSearch, logTaskFilter])
+
   const logsRefetchMs = activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval
   const logsLive = activeRunRefetchMs(runQuery.data?.status) !== false && tab === "logs"
   const logsQuery = useRunLogsInfinite(
@@ -318,10 +330,25 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     {
       streamLive: logsLive,
       refetchInterval: logsLive ? false : (typeof logsRefetchMs === "number" ? logsRefetchMs : false),
+      search: logSearchEffective,
     },
   )
 
-  const [logTaskFilter, setLogTaskFilter] = useState<string>("all")
+  const handleLogExport = useCallback(async () => {
+    setLogExporting(true)
+    try {
+      await downloadRunLogsExport(tenantId, projectId, runId, token, {
+        format: "jsonl",
+        search: logSearchEffective,
+      })
+      toastSuccess("Export started", "Run logs download should begin shortly.")
+    } catch (e) {
+      toastError("Export failed", formatApiClientError(e))
+    } finally {
+      setLogExporting(false)
+    }
+  }, [tenantId, projectId, runId, token, logSearchEffective])
+
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [runTimelineTaskId, setRunTimelineTaskId] = useState<string>("all")
   const toggleExpandedTask = useCallback(
@@ -434,11 +461,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     return Array.from(ids).sort()
   }, [tasks, logsQuery.items])
 
-  const displayedLogs = useMemo(() => {
-    const items = logsQuery.items
-    if (logTaskFilter === "all") return items
-    return items.filter((log) => log.payload?.task_id === logTaskFilter)
-  }, [logsQuery.items, logTaskFilter])
+  const displayedLogs = logsQuery.items
 
   const gateResults = useMemo(() => readinessToGateRows(readinessQuery.data), [readinessQuery.data])
   const metricsSeries = useMemo(
@@ -809,12 +832,17 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               title="Runner logs"
               bodyClassName="p-0"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/80 px-4 py-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">stdout / stderr</span>
-                  {logTaskOptions.length > 0 ? (
+              <ExecutionLogToolbar
+                search={logSearch}
+                onSearchChange={setLogSearch}
+                liveStatus={logsQuery.liveStatus}
+                isFetching={logsQuery.isFetching}
+                onExport={handleLogExport}
+                exporting={logExporting}
+                extra={
+                  logTaskOptions.length > 0 ? (
                     <Select value={logTaskFilter} onValueChange={setLogTaskFilter}>
-                      <SelectTrigger className="h-7 w-[min(320px,70vw)] font-mono text-xs">
+                      <SelectTrigger className="h-8 w-[min(280px,55vw)] font-mono text-xs">
                         <SelectValue placeholder="All tasks" />
                       </SelectTrigger>
                       <SelectContent>
@@ -826,32 +854,9 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : null}
-                </div>
-                <div className="flex min-w-0 items-center gap-3">
-                  {logsQuery.liveStatus === "live" ? (
-                    <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-                      Live
-                    </span>
-                  ) : logsQuery.liveStatus === "connecting" ? (
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Connecting
-                    </span>
-                  ) : logsQuery.isFetching ? (
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Refreshing
-                    </span>
-                  ) : null}
-                  {run ? (
-                    <span className="max-w-[min(280px,45vw)] truncate font-mono text-xs text-muted-foreground/80">
-                      {run.run_id}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
+                  ) : null
+                }
+              />
               <div className="min-w-0">
                 {logsQuery.isError ? (
                   <p className="text-sm text-destructive">{formatApiClientError(logsQuery.error)}</p>

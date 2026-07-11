@@ -45,7 +45,15 @@ from app.domains.platform.runtime_url_service import (
     resolve_runtime_realtime_base_url,
 )
 from app.api.list_pagination import guarded_page, page_response
-from app.domains.orchestration.log_service import append_run_log, read_run_logs_page, read_task_logs, read_task_logs_page
+from app.domains.orchestration.log_service import (
+    LogSearchFilters,
+    append_run_log,
+    export_run_logs,
+    read_run_logs_page,
+    read_task_logs,
+    read_task_logs_page,
+    search_project_logs_page,
+)
 from app.domains.orchestration.run_service import cancel_run_and_tasks
 from app.domains.governance.project_service import list_projects, list_tenants, register_project
 from app.domains.shared.queue_service import replay_dlq_for_run
@@ -1444,6 +1452,24 @@ def get_task_usage_v1(
     )
 
 
+def _parse_log_filters(
+    *,
+    q: str | None = None,
+    level: str | None = None,
+    task_id: str | None = None,
+    trace_id: str | None = None,
+) -> LogSearchFilters | None:
+    fl = LogSearchFilters(
+        q=(q or "").strip() or None,
+        level=(level or "").strip().upper() or None,
+        task_id=(task_id or "").strip() or None,
+        trace_id=(trace_id or "").strip() or None,
+    )
+    if not any([fl.q, fl.level, fl.task_id, fl.trace_id]):
+        return None
+    return fl
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/tasks/{task_id}/logs")
 def get_task_logs_v1(
     tenant_id: str,
@@ -1453,6 +1479,9 @@ def get_task_logs_v1(
     limit: int = 200,
     cursor: str | None = Query(default=None),
     tail: bool = Query(default=False),
+    q: str | None = Query(default=None),
+    level: str | None = Query(default=None),
+    trace_id: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1460,6 +1489,7 @@ def get_task_logs_v1(
     task = get_task_by_id(tenant_id=tenant_id, project_id=project_id, task_id=task_id)
     if not task:
         raise HTTPException(status_code=404, detail="task_not_found")
+    filters = _parse_log_filters(q=q, level=level, trace_id=trace_id)
     page = guarded_page(
         read_task_logs_page,
         task_id=task_id,
@@ -1468,6 +1498,7 @@ def get_task_logs_v1(
         limit=limit,
         cursor=cursor,
         tail=tail,
+        filters=filters,
     )
     return page_response(
         page,
@@ -1502,6 +1533,10 @@ def get_run_logs_v1(
     limit: int = 200,
     cursor: str | None = Query(default=None),
     tail: bool = Query(default=False),
+    q: str | None = Query(default=None, description="Substring search in message/payload."),
+    level: str | None = Query(default=None, description="Exact log level (INFO, WARN, ERROR, …)."),
+    task_id: str | None = Query(default=None, description="Filter by task_id column."),
+    trace_id: str | None = Query(default=None, description="Filter by trace_id."),
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
@@ -1509,8 +1544,92 @@ def get_run_logs_v1(
     run = get_run(run_id)
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
-    page = guarded_page(read_run_logs_page, run_id=run_id, offset=offset, limit=limit, cursor=cursor, tail=tail)
+    filters = _parse_log_filters(q=q, level=level, task_id=task_id, trace_id=trace_id)
+    page = guarded_page(
+        read_run_logs_page,
+        run_id=run_id,
+        offset=offset,
+        limit=limit,
+        cursor=cursor,
+        tail=tail,
+        filters=filters,
+    )
     return page_response(page, extra={"run_id": run_id}, include_offset=offset > 0 and not cursor)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/logs/export")
+def export_run_logs_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    export_format: str = Query(default="jsonl", alias="format"),
+    limit: int = Query(default=5000, ge=1, le=5000),
+    q: str | None = Query(default=None),
+    level: str | None = Query(default=None),
+    task_id: str | None = Query(default=None),
+    trace_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    fm = str(export_format or "jsonl").strip().lower()
+    if fm not in {"jsonl", "json", "txt"}:
+        raise HTTPException(status_code=422, detail="unsupported_export_format")
+    filters = _parse_log_filters(q=q, level=level, task_id=task_id, trace_id=trace_id)
+    items = export_run_logs(run_id, filters=filters, limit=limit)
+    safe_run = run_id.replace("/", "_")[:48]
+    if fm == "txt":
+        lines = [
+            f"{row.get('ts')} [{row.get('level')}] {row.get('message')}"
+            for row in items
+        ]
+        body = "\n".join(lines) + ("\n" if lines else "")
+        media = "text/plain; charset=utf-8"
+        ext = "txt"
+    elif fm == "json":
+        body = json.dumps({"run_id": run_id, "items": items}, indent=2, default=str)
+        media = "application/json"
+        ext = "json"
+    else:
+        body = "\n".join(json.dumps(row, default=str) for row in items) + ("\n" if items else "")
+        media = "application/x-ndjson"
+        ext = "jsonl"
+    return Response(
+        content=body,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="mlair-run-{safe_run}-logs.{ext}"'},
+    )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/logs/search")
+def search_project_logs_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    level: str | None = Query(default=None),
+    task_id: str | None = Query(default=None),
+    trace_id: str | None = Query(default=None),
+    limit: int = 200,
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    filters = _parse_log_filters(q=q, level=level, task_id=task_id, trace_id=trace_id)
+    page = guarded_page(
+        search_project_logs_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        run_id=run_id,
+        filters=filters,
+        limit=limit,
+        cursor=cursor,
+    )
+    return page_response(page, extra={"tenant_id": tenant_id, "project_id": project_id})
 
 
 @router.websocket("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/logs/ws")
