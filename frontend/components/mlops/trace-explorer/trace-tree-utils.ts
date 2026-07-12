@@ -96,14 +96,11 @@ export function buildSpanBreadcrumb(
   const tree = buildTraceTreeIndex(steps);
   const chain = getAncestorChain(tree, selectedStep.id);
 
-  const segments: TraceBreadcrumbSegment[] = [
-    { id: "__trace__", label: "Trace", step: null },
-    ...chain.map((node) => ({
-      id: node.id,
-      label: node.step.label,
-      step: node.step,
-    })),
-  ];
+  const segments: TraceBreadcrumbSegment[] = chain.map((node) => ({
+    id: node.id,
+    label: node.step.label,
+    step: node.step,
+  }));
 
   return truncateBreadcrumb(segments);
 }

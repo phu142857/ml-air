@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const INSPECTOR_STORAGE_KEY = "mlair.trace.inspector";
 
@@ -8,9 +8,7 @@ function readInspectorPreference(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const raw = window.localStorage.getItem(INSPECTOR_STORAGE_KEY);
-    if (raw === "true") return true;
-    if (raw === "false") return false;
-    return false;
+    return raw === "true";
   } catch {
     return false;
   }
@@ -25,8 +23,16 @@ function writeInspectorPreference(enabled: boolean) {
 }
 
 export function useTraceInspector() {
-  const [enabled, setEnabled] = useState(readInspectorPreference);
+  // Start false on SSR + first client paint to avoid toolbar width flash,
+  // then hydrate from localStorage after mount.
+  const [enabled, setEnabled] = useState(false);
   const [lockedSpanId, setLockedSpanId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setEnabled(readInspectorPreference());
+    setHydrated(true);
+  }, []);
 
   const toggleInspector = useCallback(() => {
     setEnabled((prev) => {
@@ -57,6 +63,7 @@ export function useTraceInspector() {
   return {
     inspectorEnabled: enabled,
     inspectorLockedSpanId: lockedSpanId,
+    inspectorHydrated: hydrated,
     toggleInspector,
     lockSpan,
     unlockSpan,

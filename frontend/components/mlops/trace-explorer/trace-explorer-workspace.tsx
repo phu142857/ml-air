@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
-import { Copy, Download, Link2, List, Loader2, PanelRight, Play, Route, ScanSearch } from "lucide-react";
+import { Copy, Download, Link2, List, Loader2, PanelRight, Play, RefreshCw, Route, ScanSearch } from "lucide-react";
 
 import { MlopsEmptyState } from "@/components/mlops/layout";
 import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
@@ -44,6 +44,7 @@ import type { TraceSearchHit, TraceWaterfallStep } from "@/lib/api";
 import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 import { normalizeTraceId } from "@/lib/trace-id";
+import { cn } from "@/lib/utils";
 
 export type TraceExplorerWorkspaceProps = {
   traceList: TraceSearchHit[];
@@ -677,37 +678,43 @@ export function TraceExplorerWorkspace({
       <div
         ref={toolbarRef}
         data-trace-region="toolbar"
-        className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2"
+        className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4"
       >
         <Route className="h-4 w-4 text-primary" aria-hidden />
-        <code className="max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
+        <code className="inline-block max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
           {normalized || "Select a trace"}
         </code>
-        {data?.is_live ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--status-running-border)] bg-[color:var(--status-running-bg)] px-2 py-0.5 text-xs font-medium text-[color:var(--status-running-fg)]">
-            <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-            Live
-          </span>
-        ) : null}
-        <div className="ml-auto flex flex-wrap items-center gap-1">
+        <span
+          className={cn(
+            "inline-flex h-6 min-w-[3.5rem] items-center justify-center gap-1 rounded-full border px-2 text-xs font-medium",
+            data?.is_live
+              ? "border-[color:var(--status-running-border)] bg-[color:var(--status-running-bg)] text-[color:var(--status-running-fg)]"
+              : "invisible border-transparent",
+          )}
+          aria-hidden={!data?.is_live}
+        >
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+          Live
+        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             type="button"
             variant={inspector.inspectorEnabled ? "secondary" : "ghost"}
             size="sm"
-            className="h-8"
+            className="h-8 min-w-[5.75rem] justify-center"
             aria-pressed={inspector.inspectorEnabled}
             aria-label="Toggle inspector mode"
             title="Inspect spans: hover to preview, click to lock, Esc to unlock"
             onClick={inspector.toggleInspector}
           >
-            <ScanSearch className="h-3.5 w-3.5" />
+            <ScanSearch className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Inspect
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8"
+            className="h-8 min-w-[6.5rem] justify-center"
             disabled={workspace.waterfallFullscreen}
             onClick={workspace.resetLayout}
           >
@@ -717,36 +724,36 @@ export function TraceExplorerWorkspace({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8"
+            className="h-8 min-w-[3.75rem] justify-center"
             disabled={!normalized}
             onClick={() => void copyTraceId()}
           >
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="h-3.5 w-3.5 shrink-0" aria-hidden />
             ID
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8"
+            className="h-8 min-w-[4.75rem] justify-center"
             disabled={!normalized}
             onClick={() => void copyShareLink()}
           >
-            <Link2 className="h-3.5 w-3.5" />
+            <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Share
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8"
+            className="h-8 min-w-[5.5rem] justify-center"
             disabled={exporting || !data}
             onClick={() => void handleExport()}
           >
             {exporting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
             ) : (
-              <Download className="h-3.5 w-3.5" />
+              <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
             )}
             Export
           </Button>
@@ -754,11 +761,16 @@ export function TraceExplorerWorkspace({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8"
+            className="h-8 min-w-[5.75rem] justify-center"
             disabled={!normalized || isFetching}
             onClick={() => void refetch()}
           >
-            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
+            {isFetching ? (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            )}
+            Refresh
           </Button>
         </div>
       </div>
@@ -874,7 +886,6 @@ export function TraceExplorerWorkspace({
                 )}
                 isLoading={isLoading}
                 onCollapse={workspace.toggleRightCollapsed}
-                onOpenLogsTab={onOpenLogsTab}
                 actionContext={spanActionContextExtras}
               />
             )}

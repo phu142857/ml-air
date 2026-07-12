@@ -55,7 +55,7 @@ function BreadcrumbSegment({
           type="button"
           className="max-w-[10rem] truncate text-left transition-default hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => onSelect(segment.step)}
-          aria-label={segment.step ? `Select span ${segment.label}` : "Show trace overview"}
+          aria-label={segment.step ? `Select span ${segment.label}` : segment.label}
         >
           {segment.label}
         </button>

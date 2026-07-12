@@ -3,8 +3,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Copy, MoreHorizontal, PanelRightClose } from "lucide-react";
 
-import { StatusBadge } from "@/components/mlops/status-badge";
-import { TraceCrossLinks } from "@/components/mlops/trace-explorer/trace-cross-links";
 import { TraceJsonViewer } from "@/components/mlops/trace-explorer/trace-json-viewer";
 import { TraceSpanDropdownItems } from "@/components/mlops/trace-explorer/trace-span-actions";
 import { buildSpanTimelineRows } from "@/components/mlops/trace-explorer/trace-span-events";
@@ -248,58 +246,6 @@ function SpanDetailsTabs({
   );
 }
 
-function TraceOverview({
-  data,
-  traceId,
-  waterfall,
-  onOpenLogsTab,
-}: {
-  data: TraceDetailResponse;
-  traceId: string;
-  waterfall: TraceWaterfall | null;
-  onOpenLogsTab?: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="font-heading text-sm font-semibold text-foreground">Trace overview</h3>
-        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{traceId}</p>
-      </div>
-      <TraceCrossLinks
-        step={null}
-        data={data}
-        waterfall={waterfall}
-        traceId={traceId}
-        onOpenLogsTab={onOpenLogsTab}
-      />
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <dt className="text-xs text-muted-foreground">Runs</dt>
-          <dd className="mt-1 font-semibold tabular-nums">{data.run_count}</dd>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <dt className="text-xs text-muted-foreground">Spans</dt>
-          <dd className="mt-1 font-semibold tabular-nums">{data.unified_step_count ?? 0}</dd>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <dt className="text-xs text-muted-foreground">Events</dt>
-          <dd className="mt-1 font-semibold tabular-nums">{data.event_count}</dd>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <dt className="text-xs text-muted-foreground">Logs</dt>
-          <dd className="mt-1 font-semibold tabular-nums">{data.log_count}</dd>
-        </div>
-      </dl>
-      {data.is_live ? (
-        <StatusBadge status="running" label="Live trace" size="sm" />
-      ) : null}
-      <p className="text-xs text-muted-foreground">
-        Select a span or press ↑ ↓ to inspect. Press Enter to focus this panel.
-      </p>
-    </div>
-  );
-}
-
 export type TraceSpanDetailsPaneHandle = {
   focusFirstInteractive: () => void;
 };
@@ -312,7 +258,6 @@ export type TraceSpanDetailsPaneProps = {
   isPreview?: boolean;
   isLoading?: boolean;
   onCollapse?: () => void;
-  onOpenLogsTab?: () => void;
   actionContext?: Omit<TraceSpanActionContext, "traceId" | "step" | "data" | "waterfall">;
 };
 
@@ -328,7 +273,6 @@ export const TraceSpanDetailsPane = forwardRef<
     isPreview = false,
     isLoading,
     onCollapse,
-    onOpenLogsTab,
     actionContext,
   },
   ref,
@@ -398,7 +342,7 @@ export const TraceSpanDetailsPane = forwardRef<
             ? `Previewing span ${selectedStep.label}, ${selectedStep.status}`
             : `Span details for ${selectedStep.label}, ${selectedStep.status}`
           : data
-            ? "Trace overview"
+            ? "No span selected"
             : ""}
       </div>
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
@@ -457,13 +401,11 @@ export const TraceSpanDetailsPane = forwardRef<
             onTabChange={setActiveTab}
           />
         ) : (
-          <div className="py-4">
-            <TraceOverview
-              data={data}
-              traceId={traceId}
-              waterfall={waterfall}
-              onOpenLogsTab={onOpenLogsTab}
-            />
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">
+            <p className="text-sm font-medium text-foreground">No span selected</p>
+            <p className="max-w-xs text-xs text-muted-foreground">
+              Select a span in the waterfall, or use ↑ ↓ to navigate. Press Enter to focus this panel.
+            </p>
           </div>
         )}
       </div>

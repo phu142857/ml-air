@@ -3,22 +3,36 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ChevronsLeft,
   ChevronsRight,
   Columns3,
+  Copy,
   Filter,
   LayoutTemplate,
+  Pencil,
   Pin,
   PinOff,
   Rows3,
   Search,
   TableProperties,
+  Trash2,
   X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -56,29 +70,30 @@ import {
   writePersistedDensity,
   type DataTableDensity,
 } from "@/lib/data-table-density"
+import {
+  duplicateViewName,
+  mergeColumnOrder,
+  moveColumnOrder,
+  normalizeSavedView,
+  readStoredWidths,
+  readWorkspaceState,
+  resolveWidthStorageKey,
+  uniqueViewName,
+  writeStoredWidths,
+  writeWorkspaceState,
+  type DataTableSavedView,
+  type DataTableSortDirection,
+  type DataTableWorkspaceLayout,
+  type DataTableWorkspaceState,
+} from "@/lib/data-table-workspace"
 import { cn } from "@/lib/utils"
 
 export type { DataTableDensity }
 
 type Density = DataTableDensity
-type SortDirection = "asc" | "desc"
+type SortDirection = DataTableSortDirection
 
-type DataTableSavedView = {
-  id: string
-  name: string
-  density: Density
-  pageSize: number
-  visibility: Record<string, boolean>
-  pinned: string[]
-  sorts: Array<{ id: string; direction: SortDirection }>
-  filters: Record<string, string[]>
-  columnWidths?: Record<string, number>
-}
-
-type DataTableStoredState = {
-  views: DataTableSavedView[]
-  activeViewId: string | null
-}
+type ViewNameDialogMode = "save" | "rename" | null
 
 export interface DataTableColumnFilterOption {
   label: string
@@ -149,57 +164,6 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" })
 }
 
-function storageKey(tableId: string) {
-  return `mlair:data-table:${tableId}`
-}
-
-function widthsStorageKey(tableId: string) {
-  return `mlair:data-table-widths:${tableId}`
-}
-
-function readStoredViews(tableId: string): DataTableStoredState | null {
-  try {
-    const raw = window.localStorage.getItem(storageKey(tableId))
-    if (!raw) return null
-    return JSON.parse(raw) as DataTableStoredState
-  } catch {
-    return null
-  }
-}
-
-function writeStoredViews(tableId: string, value: DataTableStoredState) {
-  try {
-    window.localStorage.setItem(storageKey(tableId), JSON.stringify(value))
-  } catch {
-    // ignore storage failures
-  }
-}
-
-function resolveWidthStorageKey(tableId: string | undefined, columnIds: string[]): string | null {
-  if (tableId) return widthsStorageKey(tableId)
-  if (columnIds.length === 0) return null
-  return `mlair:data-table-widths:cols:${columnIds.join("--")}`
-}
-
-function readStoredWidths(storageKey: string): Record<string, number> | null {
-  try {
-    const raw = window.localStorage.getItem(storageKey)
-    if (!raw) return null
-    return JSON.parse(raw) as Record<string, number>
-  } catch {
-    return null
-  }
-}
-
-function writeStoredWidths(storageKey: string | null, value: Record<string, number>) {
-  if (!storageKey) return
-  try {
-    window.localStorage.setItem(storageKey, JSON.stringify(value))
-  } catch {
-    // ignore storage failures
-  }
-}
-
 function headerLabel(header: React.ReactNode): string {
   return typeof header === "string" ? header : "Column"
 }
@@ -245,6 +209,15 @@ function getColumnSortValue<T>(column: DataTableColumn<T>, row: T): unknown {
   if (column.getFilterValue) return column.getFilterValue(row)
   if (column.getSearchValue) return column.getSearchValue(row)
   return null
+}
+
+function snapshotLayout(
+  visibility: Record<string, boolean>,
+  columnOrder: string[],
+  pinned: string[],
+  columnWidths: Record<string, number>,
+): DataTableWorkspaceLayout {
+  return { visibility, columnOrder, pinned, columnWidths }
 }
 
 function renderLoadingTable(columnCount: number, rowCount: number, density: Density) {
@@ -313,6 +286,7 @@ export function DataTable<T>({
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([])
   const resizedWidthsRef = useRef<Record<string, number>>({})
   const pendingKeyboardFocusRef = useRef<number | null>(null)
+  const skipNextWorkspaceWriteRef = useRef(true)
   const resolvedDefaultDensity = normalizeDataTableDensity(defaultDensity)
 
   const initialVisibility = useMemo(
@@ -328,6 +302,15 @@ export function DataTable<T>({
     () => resolveWidthStorageKey(tableId, columnIds),
     [columnIds, tableId],
   )
+  const defaultLayout = useMemo<DataTableWorkspaceLayout>(
+    () => ({
+      visibility: initialVisibility,
+      columnOrder: columnIds,
+      pinned: [],
+      columnWidths: {},
+    }),
+    [columnIds, initialVisibility],
+  )
 
   const [searchQuery, setSearchQuery] = useState("")
   const [density, setDensityState] = useState<Density>(() =>
@@ -338,6 +321,7 @@ export function DataTable<T>({
   const [pageSize, setPageSize] = useState(defaultPageSize)
   const [pageIndex, setPageIndex] = useState(0)
   const [visibility, setVisibility] = useState<Record<string, boolean>>(initialVisibility)
+  const [columnOrder, setColumnOrder] = useState<string[]>(columnIds)
   const [pinned, setPinned] = useState<string[]>([])
   const [sorts, setSorts] = useState<Array<{ id: string; direction: SortDirection }>>([])
   const [filters, setFilters] = useState<Record<string, string[]>>({})
@@ -345,7 +329,10 @@ export function DataTable<T>({
   const [activeViewId, setActiveViewId] = useState<string | null>(null)
   const [resizedWidths, setResizedWidths] = useState<Record<string, number>>({})
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1)
-  const [widthsReady, setWidthsReady] = useState(false)
+  const [workspaceReady, setWorkspaceReady] = useState(!tableId)
+  const [viewNameDialog, setViewNameDialog] = useState<ViewNameDialogMode>(null)
+  const [viewNameDraft, setViewNameDraft] = useState("")
+  const [deleteViewOpen, setDeleteViewOpen] = useState(false)
 
   const setDensity = useCallback((next: Density) => {
     setDensityState(next)
@@ -357,59 +344,126 @@ export function DataTable<T>({
   }, [resizedWidths])
 
   useEffect(() => {
-    setVisibility(initialVisibility)
-  }, [initialVisibility])
+    skipNextWorkspaceWriteRef.current = true
+    setWorkspaceReady(false)
 
-  useEffect(() => {
-    setWidthsReady(false)
-    if (!widthStorageKey) {
-      setWidthsReady(true)
-      return
+    let widths: Record<string, number> = {}
+    if (widthStorageKey) {
+      widths = readStoredWidths(widthStorageKey) ?? {}
     }
 
-    let widths = readStoredWidths(widthStorageKey) ?? {}
+    if (tableId && typeof window !== "undefined") {
+      const stored = readWorkspaceState(tableId, {
+        ...defaultLayout,
+        columnWidths: widths,
+      })
+      setSavedViews(stored.views)
+      setActiveViewId(stored.activeViewId)
 
-    if (tableId) {
-      const stored = readStoredViews(tableId)
-      if (stored) {
-        setSavedViews(stored.views || [])
-        setActiveViewId(stored.activeViewId)
-        const active = stored.views.find((view) => view.id === stored.activeViewId)
-        if (active) {
-          setDensityState(migrateStoredDensity(active.density))
-          setPageSize(active.pageSize)
-          setVisibility((prev) => ({ ...prev, ...active.visibility }))
-          setPinned(active.pinned)
-          setSorts(active.sorts)
-          setFilters(active.filters)
-          if (active.columnWidths && Object.keys(active.columnWidths).length > 0) {
-            widths = active.columnWidths
+      const active = stored.views.find((view) => view.id === stored.activeViewId)
+      const layout = active
+        ? {
+            visibility: { ...defaultLayout.visibility, ...active.visibility },
+            columnOrder: mergeColumnOrder(active.columnOrder, columnIds),
+            pinned: active.pinned,
+            columnWidths:
+              Object.keys(active.columnWidths).length > 0 ? active.columnWidths : widths,
           }
-        }
+        : {
+            visibility: { ...defaultLayout.visibility, ...stored.layout.visibility },
+            columnOrder: mergeColumnOrder(stored.layout.columnOrder, columnIds),
+            pinned: stored.layout.pinned,
+            columnWidths:
+              Object.keys(stored.layout.columnWidths).length > 0
+                ? stored.layout.columnWidths
+                : widths,
+          }
+
+      if (active) {
+        setDensityState(migrateStoredDensity(active.density))
+        setPageSize(active.pageSize)
+        setSorts(active.sorts)
+        setFilters(active.filters)
+      }
+
+      setVisibility(layout.visibility)
+      setColumnOrder(layout.columnOrder)
+      setPinned(layout.pinned)
+      setResizedWidths(layout.columnWidths)
+      resizedWidthsRef.current = layout.columnWidths
+    } else {
+      setVisibility(defaultLayout.visibility)
+      setColumnOrder(defaultLayout.columnOrder)
+      setPinned([])
+      if (Object.keys(widths).length > 0) {
+        setResizedWidths(widths)
+        resizedWidthsRef.current = widths
       }
     }
 
-    if (Object.keys(widths).length > 0) {
-      setResizedWidths(widths)
-      resizedWidthsRef.current = widths
-    }
-    setWidthsReady(true)
-  }, [tableId, widthStorageKey])
+    setWorkspaceReady(true)
+  }, [columnIds, defaultLayout, tableId, widthStorageKey])
 
   useEffect(() => {
-    if (!widthStorageKey || !widthsReady) return
+    if (!workspaceReady) return
+    setVisibility((prev) => {
+      const next = { ...initialVisibility }
+      for (const [id, value] of Object.entries(prev)) {
+        if (id in next) next[id] = value
+      }
+      return next
+    })
+    setColumnOrder((prev) => mergeColumnOrder(prev, columnIds))
+    setPinned((prev) => prev.filter((id) => columnIds.includes(id)))
+  }, [columnIds, initialVisibility, workspaceReady])
+
+  useEffect(() => {
+    if (!widthStorageKey || !workspaceReady) return
     writeStoredWidths(widthStorageKey, resizedWidths)
-  }, [resizedWidths, widthStorageKey, widthsReady])
+  }, [resizedWidths, widthStorageKey, workspaceReady])
 
   useEffect(() => {
-    if (!tableId) return
-    writeStoredViews(tableId, { views: savedViews, activeViewId })
-  }, [activeViewId, savedViews, tableId])
+    if (!tableId || !workspaceReady) return
+    if (skipNextWorkspaceWriteRef.current) {
+      skipNextWorkspaceWriteRef.current = false
+      return
+    }
+    const state: DataTableWorkspaceState = {
+      version: 2,
+      views: savedViews,
+      activeViewId,
+      layout: snapshotLayout(visibility, columnOrder, pinned, resizedWidths),
+    }
+    writeWorkspaceState(tableId, state)
+  }, [
+    activeViewId,
+    columnOrder,
+    pinned,
+    resizedWidths,
+    savedViews,
+    tableId,
+    visibility,
+    workspaceReady,
+  ])
+
+  const orderedColumns = useMemo(() => {
+    const byId = new Map(columns.map((column) => [column.id, column]))
+    return mergeColumnOrder(columnOrder, columnIds)
+      .map((id) => byId.get(id))
+      .filter((column): column is DataTableColumn<T> => Boolean(column))
+  }, [columnIds, columnOrder, columns])
 
   const visibleColumns = useMemo(() => {
-    const filtered = columns.filter((column) => visibility[column.id] !== false)
-    return filtered.length ? filtered : columns.slice(0, 1)
-  }, [columns, visibility])
+    const filtered = orderedColumns.filter((column) => visibility[column.id] !== false)
+    if (!filtered.length) return orderedColumns.slice(0, 1)
+
+    const pinnedSet = new Set(pinned)
+    const pinnedVisible = pinned
+      .map((id) => filtered.find((column) => column.id === id))
+      .filter((column): column is DataTableColumn<T> => Boolean(column))
+    const unpinned = filtered.filter((column) => !pinnedSet.has(column.id))
+    return [...pinnedVisible, ...unpinned]
+  }, [orderedColumns, pinned, visibility])
 
   const pinnedColumns = useMemo(() => {
     const allowed = pinned.filter((id) => visibleColumns.some((column) => column.id === id))
@@ -483,12 +537,14 @@ export function DataTable<T>({
 
   const activeFilterCount = Object.values(filters).reduce((sum, values) => sum + values.length, 0)
   const hasCustomWidths = Object.keys(resizedWidths).length > 0
+  const orderChanged = columnOrder.join("|") !== columnIds.join("|")
   const canResetView =
     searchQuery.length > 0 ||
     activeFilterCount > 0 ||
     sorts.length > 0 ||
     pinned.length > 0 ||
     hasCustomWidths ||
+    orderChanged ||
     Object.keys(visibility).some((id) => visibility[id] === false) ||
     density !== resolvedDefaultDensity ||
     pageSize !== defaultPageSize
@@ -499,7 +555,13 @@ export function DataTable<T>({
   }
 
   const togglePinned = (id: string) => {
-    setPinned((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]))
+    setPinned((current) =>
+      current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
+    )
+  }
+
+  const moveColumn = (id: string, direction: -1 | 1) => {
+    setColumnOrder((current) => moveColumnOrder(mergeColumnOrder(current, columnIds), id, direction))
   }
 
   const toggleSort = (id: string, multi: boolean) => {
@@ -530,6 +592,7 @@ export function DataTable<T>({
     setPageSize(defaultPageSize)
     setPageIndex(0)
     setVisibility(initialVisibility)
+    setColumnOrder(columnIds)
     setPinned([])
     setSorts([])
     setFilters({})
@@ -585,23 +648,75 @@ export function DataTable<T>({
     [columns, widthStorageKey],
   )
 
-  const saveCurrentView = () => {
-    if (!tableId || typeof window === "undefined") return
-    const name = window.prompt("Saved view name")
-    if (!name?.trim()) return
-    const view: DataTableSavedView = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
+  const captureCurrentView = useCallback(
+    (id: string, name: string): DataTableSavedView =>
+      normalizeSavedView(
+        {
+          id,
+          name,
+          density,
+          pageSize,
+          visibility,
+          columnOrder,
+          pinned,
+          sorts,
+          filters,
+          columnWidths: resizedWidths,
+        },
+        columnIds,
+      ),
+    [
+      columnIds,
+      columnOrder,
       density,
-      pageSize,
-      visibility,
-      pinned,
-      sorts,
       filters,
-      columnWidths: resizedWidths,
+      pageSize,
+      pinned,
+      resizedWidths,
+      sorts,
+      visibility,
+    ],
+  )
+
+  const openSaveViewDialog = () => {
+    if (!tableId) return
+    setViewNameDraft("")
+    setViewNameDialog("save")
+  }
+
+  const openRenameViewDialog = () => {
+    const active = savedViews.find((view) => view.id === activeViewId)
+    if (!active) return
+    setViewNameDraft(active.name)
+    setViewNameDialog("rename")
+  }
+
+  const commitViewNameDialog = () => {
+    const name = viewNameDraft.trim()
+    if (!name || !tableId) return
+
+    if (viewNameDialog === "save") {
+      const unique = uniqueViewName(
+        name,
+        savedViews.map((view) => view.name),
+      )
+      const view = captureCurrentView(crypto.randomUUID(), unique)
+      setSavedViews((current) => [...current, view])
+      setActiveViewId(view.id)
     }
-    setSavedViews((current) => [...current.filter((entry) => entry.name !== view.name), view])
-    setActiveViewId(view.id)
+
+    if (viewNameDialog === "rename" && activeViewId) {
+      const unique = uniqueViewName(
+        name,
+        savedViews.filter((view) => view.id !== activeViewId).map((view) => view.name),
+      )
+      setSavedViews((current) =>
+        current.map((view) => (view.id === activeViewId ? { ...view, name: unique } : view)),
+      )
+    }
+
+    setViewNameDialog(null)
+    setViewNameDraft("")
   }
 
   const applyView = (view: DataTableSavedView | null) => {
@@ -609,22 +724,37 @@ export function DataTable<T>({
       resetState()
       return
     }
-    setDensity(migrateStoredDensity(view.density))
-    setPageSize(view.pageSize)
-    setVisibility((prev) => ({ ...prev, ...view.visibility }))
-    setPinned(view.pinned)
-    setSorts(view.sorts)
-    setFilters(view.filters)
-    setResizedWidths(view.columnWidths ?? {})
+    const normalized = normalizeSavedView(view, columnIds)
+    setDensity(migrateStoredDensity(normalized.density))
+    setPageSize(normalized.pageSize)
+    setVisibility((prev) => ({ ...prev, ...normalized.visibility }))
+    setColumnOrder(mergeColumnOrder(normalized.columnOrder, columnIds))
+    setPinned(normalized.pinned)
+    setSorts(normalized.sorts)
+    setFilters(normalized.filters)
+    setResizedWidths(normalized.columnWidths)
     setPageIndex(0)
-    setActiveViewId(view.id)
-    if (widthStorageKey) writeStoredWidths(widthStorageKey, view.columnWidths ?? {})
+    setActiveViewId(normalized.id)
+    if (widthStorageKey) writeStoredWidths(widthStorageKey, normalized.columnWidths)
   }
 
-  const deleteActiveView = () => {
+  const duplicateActiveView = () => {
+    const active = savedViews.find((view) => view.id === activeViewId)
+    if (!active) return
+    const name = duplicateViewName(
+      active.name,
+      savedViews.map((view) => view.name),
+    )
+    const copy = captureCurrentView(crypto.randomUUID(), name)
+    setSavedViews((current) => [...current, copy])
+    setActiveViewId(copy.id)
+  }
+
+  const confirmDeleteActiveView = () => {
     if (!activeViewId) return
     setSavedViews((current) => current.filter((view) => view.id !== activeViewId))
     setActiveViewId(null)
+    setDeleteViewOpen(false)
   }
 
   const handleRowKeyDown = (row: T, rowIndex: number, e: React.KeyboardEvent<HTMLTableRowElement>) => {
@@ -713,26 +843,44 @@ export function DataTable<T>({
                 {tableId ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="sm" className="h-8">
-                        <LayoutTemplate className="h-3.5 w-3.5" />
-                        {currentViewLabel}
+                      <Button type="button" variant="outline" size="sm" className="h-8 min-w-[8.5rem] justify-start">
+                        <LayoutTemplate className="h-3.5 w-3.5 shrink-0" />
+                        <span className="max-w-[9rem] truncate">{currentViewLabel}</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
                       <DropdownMenuLabel>Saved views</DropdownMenuLabel>
-                      <DropdownMenuItem onSelect={() => applyView(null)}>Default view</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => applyView(null)}>
+                        Default view
+                      </DropdownMenuItem>
                       {savedViews.map((view) => (
-                        <DropdownMenuItem key={view.id} onSelect={() => applyView(view)}>
+                        <DropdownMenuItem
+                          key={view.id}
+                          onSelect={() => applyView(view)}
+                          className={cn(view.id === activeViewId && "bg-accent")}
+                        >
                           {view.name}
                         </DropdownMenuItem>
                       ))}
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={saveCurrentView}>Save current view…</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={openSaveViewDialog}>
+                        Save current view…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={openRenameViewDialog} disabled={!activeViewId}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        Rename view…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={duplicateActiveView} disabled={!activeViewId}>
+                        <Copy className="h-3.5 w-3.5" />
+                        Duplicate view
+                      </DropdownMenuItem>
                       <DropdownMenuItem
-                        onSelect={deleteActiveView}
+                        onSelect={() => setDeleteViewOpen(true)}
                         disabled={!activeViewId}
+                        className="text-destructive focus:text-destructive"
                       >
-                        Delete active view
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete view…
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -744,11 +892,13 @@ export function DataTable<T>({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8"
+                      className="h-8 min-w-[7.5rem] justify-start"
                       aria-label={`Row density: ${DATA_TABLE_DENSITY_OPTIONS.find((o) => o.value === density)?.label ?? density}`}
                     >
-                      <Rows3 className="h-3.5 w-3.5" />
-                      {DATA_TABLE_DENSITY_OPTIONS.find((o) => o.value === density)?.label ?? "Density"}
+                      <Rows3 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {DATA_TABLE_DENSITY_OPTIONS.find((o) => o.value === density)?.label ?? "Density"}
+                      </span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
@@ -773,39 +923,95 @@ export function DataTable<T>({
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" className="h-8">
-                      <Columns3 className="h-3.5 w-3.5" />
+                    <Button type="button" variant="outline" size="sm" className="h-8 min-w-[6.5rem] justify-start">
+                      <Columns3 className="h-3.5 w-3.5 shrink-0" />
                       Columns
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-72">
-                    <DropdownMenuLabel>Visibility</DropdownMenuLabel>
-                    {columns.map((column) => (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        checked={visibility[column.id] !== false}
-                        disabled={column.canHide === false}
-                        onCheckedChange={(checked) => setColumnVisible(column.id, Boolean(checked))}
-                      >
-                        {headerLabel(column.header)}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Pin columns</DropdownMenuLabel>
-                    {visibleColumns.map((column) => (
-                      <DropdownMenuItem
-                        key={`${column.id}-pin`}
-                        disabled={column.canPin === false}
-                        onSelect={() => togglePinned(column.id)}
-                      >
-                        {pinnedColumns.includes(column.id) ? (
-                          <PinOff className="h-3.5 w-3.5" />
-                        ) : (
-                          <Pin className="h-3.5 w-3.5" />
-                        )}
-                        {headerLabel(column.header)}
-                      </DropdownMenuItem>
-                    ))}
+                  <DropdownMenuContent align="end" className="w-80 p-0">
+                    <div className="border-b border-border px-3 py-2">
+                      <DropdownMenuLabel className="p-0">Columns</DropdownMenuLabel>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Toggle visibility, reorder, and pin
+                      </p>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto p-1">
+                      {orderedColumns.map((column, index) => {
+                        const isPinned = pinned.includes(column.id)
+                        const isVisible = visibility[column.id] !== false
+                        return (
+                          <div
+                            key={column.id}
+                            className="flex items-center gap-1 rounded-md px-1 py-1 hover:bg-accent/60"
+                          >
+                            <DropdownMenuCheckboxItem
+                              checked={isVisible}
+                              disabled={column.canHide === false}
+                              onCheckedChange={(checked) =>
+                                setColumnVisible(column.id, Boolean(checked))
+                              }
+                              onSelect={(event) => event.preventDefault()}
+                              className="min-w-0 flex-1 py-1.5 pl-8"
+                            >
+                              <span className="truncate">{headerLabel(column.header)}</span>
+                            </DropdownMenuCheckboxItem>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-7 w-7 shrink-0"
+                              disabled={index === 0}
+                              aria-label={`Move ${headerLabel(column.header)} up`}
+                              onPointerDown={(event) => event.preventDefault()}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                moveColumn(column.id, -1)
+                              }}
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-7 w-7 shrink-0"
+                              disabled={index >= orderedColumns.length - 1}
+                              aria-label={`Move ${headerLabel(column.header)} down`}
+                              onPointerDown={(event) => event.preventDefault()}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                moveColumn(column.id, 1)
+                              }}
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={isPinned ? "secondary" : "ghost"}
+                              size="icon-sm"
+                              className="h-7 w-7 shrink-0"
+                              disabled={column.canPin === false || !isVisible}
+                              aria-label={
+                                isPinned
+                                  ? `Unpin ${headerLabel(column.header)}`
+                                  : `Pin ${headerLabel(column.header)}`
+                              }
+                              onPointerDown={(event) => event.preventDefault()}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                togglePinned(column.id)
+                              }}
+                            >
+                              {isPinned ? (
+                                <PinOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Pin className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -1175,6 +1381,73 @@ export function DataTable<T>({
           </div>
         )}
       </div>
+
+      <Dialog
+        open={viewNameDialog != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewNameDialog(null)
+            setViewNameDraft("")
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {viewNameDialog === "rename" ? "Rename view" : "Save view"}
+            </DialogTitle>
+            <DialogDescription>
+              {viewNameDialog === "rename"
+                ? "Update the name for the active saved view."
+                : "Save the current column layout, pins, widths, density, and filters."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              commitViewNameDialog()
+            }}
+          >
+            <Input
+              value={viewNameDraft}
+              onChange={(event) => setViewNameDraft(event.target.value)}
+              placeholder="View name"
+              aria-label="View name"
+              autoFocus
+            />
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setViewNameDialog(null)
+                  setViewNameDraft("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={!viewNameDraft.trim()}>
+                {viewNameDialog === "rename" ? "Rename" : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDeleteDialog
+        open={deleteViewOpen}
+        title="Delete saved view?"
+        body={
+          activeViewId
+            ? `Delete “${savedViews.find((view) => view.id === activeViewId)?.name ?? "this view"}”? This only removes the saved layout from this browser.`
+            : "Delete this saved view?"
+        }
+        confirmLabel="Delete view"
+        onCancel={() => setDeleteViewOpen(false)}
+        onDelete={confirmDeleteActiveView}
+      />
     </div>
   )
 }
