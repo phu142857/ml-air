@@ -119,23 +119,33 @@ export function migrateWorkspaceState(
     return createDefaultWorkspace(fallbackLayout)
   }
 
-  const legacy = raw as LegacyStoredState
+  const legacy = raw as LegacyStoredState & {
+    layout?: Partial<DataTableWorkspaceLayout>
+  }
+  const nested = legacy.layout
   const views = (legacy.views ?? []).map((view) =>
     normalizeSavedView(view, fallbackLayout.columnOrder),
   )
+
+  // Prefer nested v2 `layout`, then top-level legacy fields, then defaults.
+  const visibility = nested?.visibility ?? legacy.visibility ?? fallbackLayout.visibility
+  const columnOrder = mergeColumnOrder(
+    nested?.columnOrder ?? legacy.columnOrder ?? fallbackLayout.columnOrder,
+    fallbackLayout.columnOrder,
+  )
+  const pinned = nested?.pinned ?? legacy.pinned ?? fallbackLayout.pinned
+  const columnWidths =
+    nested?.columnWidths ?? legacy.columnWidths ?? fallbackLayout.columnWidths
 
   return {
     version: 2,
     views,
     activeViewId: legacy.activeViewId ?? null,
     layout: {
-      visibility: legacy.visibility ?? fallbackLayout.visibility,
-      columnOrder: mergeColumnOrder(
-        legacy.columnOrder ?? fallbackLayout.columnOrder,
-        fallbackLayout.columnOrder,
-      ),
-      pinned: legacy.pinned ?? fallbackLayout.pinned,
-      columnWidths: legacy.columnWidths ?? fallbackLayout.columnWidths,
+      visibility,
+      columnOrder,
+      pinned,
+      columnWidths,
     },
   }
 }

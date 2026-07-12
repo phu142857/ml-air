@@ -485,19 +485,58 @@ export function DataTable<T>({
       skipNextWorkspaceWriteRef.current = false
       return
     }
-    const state: DataTableWorkspaceState = {
-      version: 2,
-      views: savedViews,
-      activeViewId,
-      layout: snapshotLayout(visibility, columnOrder, pinned, resizedWidths),
+    const layout = snapshotLayout(visibility, columnOrder, pinned, resizedWidths)
+
+    let views = savedViews
+    if (activeViewId != null) {
+      const active = savedViews.find((view) => view.id === activeViewId)
+      const needsSync =
+        active != null &&
+        (active.density !== density ||
+          active.pageSize !== pageSize ||
+          active.columnOrder.join("|") !== layout.columnOrder.join("|") ||
+          active.pinned.join("|") !== layout.pinned.join("|") ||
+          JSON.stringify(active.visibility) !== JSON.stringify(layout.visibility) ||
+          JSON.stringify(active.columnWidths) !== JSON.stringify(layout.columnWidths) ||
+          JSON.stringify(active.sorts) !== JSON.stringify(sorts) ||
+          JSON.stringify(active.filters) !== JSON.stringify(filters))
+
+      if (needsSync) {
+        views = savedViews.map((view) =>
+          view.id === activeViewId
+            ? {
+                ...view,
+                density,
+                pageSize,
+                visibility: layout.visibility,
+                columnOrder: layout.columnOrder,
+                pinned: layout.pinned,
+                columnWidths: layout.columnWidths,
+                sorts,
+                filters,
+              }
+            : view,
+        )
+        setSavedViews(views)
+      }
     }
-    writeWorkspaceState(tableId, state)
+
+    writeWorkspaceState(tableId, {
+      version: 2,
+      views,
+      activeViewId,
+      layout,
+    })
   }, [
     activeViewId,
     columnOrder,
+    density,
+    filters,
+    pageSize,
     pinned,
     resizedWidths,
     savedViews,
+    sorts,
     tableId,
     visibility,
     workspaceReady,

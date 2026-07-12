@@ -41,6 +41,32 @@ describe("data-table-workspace", () => {
     expect(migrated.layout.columnOrder).toEqual(["a", "b"])
   })
 
+  it("reads nested v2 layout for visibility, order, and pin", () => {
+    const migrated = migrateWorkspaceState(
+      {
+        version: 2,
+        views: [],
+        activeViewId: null,
+        layout: {
+          visibility: { a: false, b: true },
+          columnOrder: ["b", "a"],
+          pinned: ["b"],
+          columnWidths: { a: 120 },
+        },
+      },
+      {
+        visibility: { a: true, b: true },
+        columnOrder: ["a", "b"],
+        pinned: [],
+        columnWidths: {},
+      },
+    )
+    expect(migrated.layout.visibility).toEqual({ a: false, b: true })
+    expect(migrated.layout.columnOrder).toEqual(["b", "a"])
+    expect(migrated.layout.pinned).toEqual(["b"])
+    expect(migrated.layout.columnWidths).toEqual({ a: 120 })
+  })
+
   it("normalizes saved views and generates unique names", () => {
     const view = normalizeSavedView(
       { id: "v1", name: "  Main ", density: "spacious", columnOrder: ["b"] },
