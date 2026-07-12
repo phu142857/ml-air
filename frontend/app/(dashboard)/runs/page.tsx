@@ -18,11 +18,18 @@ import type { RunItem } from "@/lib/api"
 import { useRunsListLive } from "@/hooks/use-runs-list-live"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-function runDuration(r: RunItem): string {
+import { normalizeStatus } from "@/lib/status-style"
+
+function runDurationSeconds(r: RunItem): number | null {
   const c = r.created_at ? Date.parse(r.created_at) : NaN
   const u = r.updated_at ? Date.parse(r.updated_at) : NaN
-  if (!Number.isFinite(c) || !Number.isFinite(u) || u < c) return "—"
-  return formatRuntimeSeconds((u - c) / 1000)
+  if (!Number.isFinite(c) || !Number.isFinite(u) || u < c) return null
+  return (u - c) / 1000
+}
+
+function runDuration(r: RunItem): string {
+  const seconds = runDurationSeconds(r)
+  return seconds == null ? "—" : formatRuntimeSeconds(seconds)
 }
 
 function pickTraceId(run: RunItem): string | null {
@@ -37,21 +44,43 @@ const runListColumns: DataTableColumn<RunItem>[] = [
   {
     id: "run_id",
     header: "Run ID",
+    width: 260,
+    canHide: false,
+    getSearchValue: (run) => run.run_id,
+    getSortValue: (run) => run.run_id,
     cell: (run) => <span className="font-mono text-sm text-primary">{run.run_id}</span>,
   },
   {
     id: "pipeline",
     header: "Pipeline",
+    width: 200,
+    getSearchValue: (run) => run.pipeline_id,
+    getSortValue: (run) => run.pipeline_id,
+    getFilterValue: (run) => run.pipeline_id || null,
     cell: (run) => <span className="font-mono text-sm text-foreground/90">{run.pipeline_id}</span>,
   },
   {
     id: "status",
     header: "Status",
+    width: 140,
+    getSortValue: (run) => normalizeStatus(run.status),
+    getFilterValue: (run) => normalizeStatus(run.status),
+    filterOptions: [
+      { label: "Pending", value: "PENDING" },
+      { label: "Queued", value: "QUEUED" },
+      { label: "Running", value: "RUNNING" },
+      { label: "Success", value: "SUCCESS" },
+      { label: "Failed", value: "FAILED" },
+      { label: "Cancelled", value: "CANCELLED" },
+    ],
     cell: (run) => <StatusBadge value={run.status} size="sm" />,
   },
   {
     id: "started",
     header: "Started",
+    width: 180,
+    getSortValue: (run) => run.created_at || run.updated_at || "",
+    getSearchValue: (run) => run.created_at || run.updated_at || "",
     cell: (run) => {
       const started = run.created_at || run.updated_at
       return started ? (
@@ -67,11 +96,16 @@ const runListColumns: DataTableColumn<RunItem>[] = [
   {
     id: "duration",
     header: "Duration",
+    width: 120,
+    getSortValue: (run) => runDurationSeconds(run) ?? -1,
     cell: (run) => <span className="font-mono text-sm text-muted-foreground">{runDuration(run)}</span>,
   },
   {
     id: "trace",
     header: "Trace",
+    width: 200,
+    getSearchValue: (run) => pickTraceId(run) ?? "",
+    getSortValue: (run) => pickTraceId(run) ?? "",
     cell: (run) => {
       const traceId = pickTraceId(run)
       return (
@@ -148,6 +182,9 @@ export default function RunsPage() {
         >
           <MlopsDataTable
             className="min-h-0 flex-1"
+            tableId="runs-list"
+            title="Runs"
+            description="Search, filter by status/pipeline, and sort the run history."
             columns={runListColumns}
             data={rows}
             keyExtractor={(r) => r.run_id}

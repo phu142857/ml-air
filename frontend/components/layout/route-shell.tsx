@@ -29,6 +29,14 @@ export function RouteShell({ children }: RouteShellProps) {
     setTraceDialogId(traceId)
   }, [])
 
+  // `/traces` owns `?trace=` for the inline viewer — don't open the global dialog there.
+  const onTracesPage = pathname === "/traces" || pathname.startsWith("/traces/")
+  const openTraceDialogFromUrl = scopePinned && !onTracesPage
+
+  useEffect(() => {
+    if (onTracesPage) setTraceDialogId(null)
+  }, [onTracesPage])
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault()
@@ -51,7 +59,7 @@ export function RouteShell({ children }: RouteShellProps) {
         </div>
       </SidebarInset>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-      <TraceUrlSync enabled={scopePinned} onOpen={handleOpenTraceFromUrl} />
+      <TraceUrlSync enabled={openTraceDialogFromUrl} onOpen={handleOpenTraceFromUrl} />
       {traceDialogId ? (
         <TraceExplorerDialog
           traceId={traceDialogId}

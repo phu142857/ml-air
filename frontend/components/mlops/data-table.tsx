@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog"
 import {
   Dialog,
@@ -71,6 +72,14 @@ import {
   type DataTableDensity,
 } from "@/lib/data-table-density"
 import {
+  DATA_TABLE_SELECTION_COL_WIDTH,
+  defaultRowCopyText,
+  deriveFilterOptions,
+  formatRowsForClipboard,
+  isQuickFilterColumn,
+  toggleSelectionSet,
+} from "@/lib/data-table-findability"
+import {
   duplicateViewName,
   mergeColumnOrder,
   moveColumnOrder,
@@ -86,6 +95,7 @@ import {
   type DataTableWorkspaceLayout,
   type DataTableWorkspaceState,
 } from "@/lib/data-table-workspace"
+import { copyWithToast } from "@/lib/toast-actions"
 import { cn } from "@/lib/utils"
 
 export type { DataTableDensity }
@@ -143,6 +153,12 @@ interface DataTableProps<T> {
   defaultPageSize?: number
   pageSizeOptions?: number[]
   columnResize?: boolean
+  /** Enable row checkboxes + select-all / bulk copy (Sprint 2.3). Default true. */
+  selectable?: boolean
+  /** Optional custom copy text per row; defaults to tab-separated searchable fields. */
+  getRowCopyText?: (row: T) => string
+  /** Extra bulk actions rendered when one or more rows are selected. */
+  bulkActions?: React.ReactNode | ((ctx: { selectedRows: T[]; selectedIds: string[] }) => React.ReactNode)
 }
 
 const DEFAULT_PAGE_SIZES = [10, 25, 50, 100]
@@ -281,9 +297,13 @@ export function DataTable<T>({
   defaultPageSize = 25,
   pageSizeOptions = DEFAULT_PAGE_SIZES,
   columnResize = true,
+  selectable = true,
+  getRowCopyText,
+  bulkActions,
 }: DataTableProps<T>) {
   const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({})
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([])
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const resizedWidthsRef = useRef<Record<string, number>>({})
   const pendingKeyboardFocusRef = useRef<number | null>(null)
   const skipNextWorkspaceWriteRef = useRef(true)
@@ -333,6 +353,7 @@ export function DataTable<T>({
   const [viewNameDialog, setViewNameDialog] = useState<ViewNameDialogMode>(null)
   const [viewNameDraft, setViewNameDraft] = useState("")
   const [deleteViewOpen, setDeleteViewOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
   const setDensity = useCallback((next: Density) => {
     setDensityState(next)
@@ -474,25 +495,47 @@ export function DataTable<T>({
 
   const pinnedOffsets = useMemo(() => {
     const offsets: Record<string, number> = {}
-    let left = 0
+    let left = selectable ? DATA_TABLE_SELECTION_COL_WIDTH : 0
     pinnedColumns.forEach((id) => {
       offsets[id] = left
       const column = columns.find((entry) => entry.id === id)
       left += column ? getEffectiveColumnWidth(column, resizedWidths) : DEFAULT_COLUMN_WIDTH
     })
     return offsets
-  }, [columns, pinnedColumns, resizedWidths])
+  }, [columns, pinnedColumns, resizedWidths, selectable])
+
+  const filterSpecs = useMemo(
+    () =>
+      orderedColumns
+        .map((column) => ({
+          column,
+          options: deriveFilterOptions(column, data),
+        }))
+        .filter((entry) => entry.options.length > 0),
+    [data, orderedColumns],
+  )
 
   const filterableColumns = useMemo(
-    () => visibleColumns.filter((column) => (column.filterOptions?.length ?? 0) > 0),
-    [visibleColumns],
+    () => filterSpecs.map((entry) => entry.column),
+    [filterSpecs],
   )
+
+  const quickFilterSpecs = useMemo(
+    () => filterSpecs.filter((entry) => isQuickFilterColumn(entry.options)),
+    [filterSpecs],
+  )
+
+  const optionsByColumnId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof deriveFilterOptions>>()
+    for (const entry of filterSpecs) map.set(entry.column.id, entry.options)
+    return map
+  }, [filterSpecs])
 
   const processedRows = useMemo(() => {
     const normalizedQuery = normalizeSearchText(searchQuery)
     const searched = data.filter((row) => {
       if (!normalizedQuery) return true
-      return visibleColumns.some((column) => {
+      return orderedColumns.some((column) => {
         const value = getColumnSearchValue(column, row)
         return normalizeSearchText(value).includes(normalizedQuery)
       })
@@ -522,7 +565,7 @@ export function DataTable<T>({
     }
 
     return sorted
-  }, [columns, data, filterableColumns, filters, searchQuery, sorts, visibleColumns])
+  }, [columns, data, filterableColumns, filters, orderedColumns, searchQuery, sorts])
 
   const totalPages = Math.max(1, Math.ceil(processedRows.length / pageSize))
 
@@ -530,10 +573,34 @@ export function DataTable<T>({
     setPageIndex((current) => Math.min(current, totalPages - 1))
   }, [totalPages])
 
+  useEffect(() => {
+    const valid = new Set(processedRows.map((row) => keyExtractor(row)))
+    setSelectedIds((current) => {
+      let changed = false
+      const next = new Set<string>()
+      current.forEach((id) => {
+        if (valid.has(id)) next.add(id)
+        else changed = true
+      })
+      return changed ? next : current
+    })
+  }, [keyExtractor, processedRows])
+
   const pagedRows = useMemo(() => {
     const start = pageIndex * pageSize
     return processedRows.slice(start, start + pageSize)
   }, [pageIndex, pageSize, processedRows])
+
+  const selectedRows = useMemo(
+    () => processedRows.filter((row) => selectedIds.has(keyExtractor(row))),
+    [keyExtractor, processedRows, selectedIds],
+  )
+
+  const pageIds = useMemo(() => pagedRows.map((row) => keyExtractor(row)), [keyExtractor, pagedRows])
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id))
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id))
+  const allFilteredSelected =
+    processedRows.length > 0 && processedRows.every((row) => selectedIds.has(keyExtractor(row)))
 
   const activeFilterCount = Object.values(filters).reduce((sum, values) => sum + values.length, 0)
   const hasCustomWidths = Object.keys(resizedWidths).length > 0
@@ -576,6 +643,14 @@ export function DataTable<T>({
     })
   }
 
+  const clearSort = (id?: string) => {
+    if (!id) {
+      setSorts([])
+      return
+    }
+    setSorts((current) => current.filter((entry) => entry.id !== id))
+  }
+
   const updateFilter = (columnId: string, value: string, checked: boolean) => {
     setFilters((current) => {
       const next = new Set(current[columnId] ?? [])
@@ -585,6 +660,45 @@ export function DataTable<T>({
     })
     setPageIndex(0)
   }
+
+  const clearFilters = () => {
+    setFilters({})
+    setPageIndex(0)
+  }
+
+  const setRowSelected = (id: string, selected: boolean) => {
+    setSelectedIds((current) => toggleSelectionSet(current, id, selected))
+  }
+
+  const toggleSelectPage = (selected: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      for (const id of pageIds) {
+        if (selected) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  }
+
+  const selectAllFiltered = () => {
+    setSelectedIds(new Set(processedRows.map((row) => keyExtractor(row))))
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const resolveRowCopyText = useCallback(
+    (row: T) => getRowCopyText?.(row) ?? defaultRowCopyText(row, orderedColumns),
+    [getRowCopyText, orderedColumns],
+  )
+
+  const copySelectedRows = useCallback(async () => {
+    if (!selectedRows.length) return
+    const text = formatRowsForClipboard(selectedRows.map((row) => resolveRowCopyText(row)))
+    await copyWithToast(text, {
+      successTitle: `Copied ${selectedRows.length} row${selectedRows.length === 1 ? "" : "s"}`,
+    })
+  }, [resolveRowCopyText, selectedRows])
 
   const resetState = () => {
     setSearchQuery("")
@@ -598,6 +712,7 @@ export function DataTable<T>({
     setFilters({})
     setResizedWidths({})
     setActiveViewId(null)
+    setSelectedIds(new Set())
     if (widthStorageKey) writeStoredWidths(widthStorageKey, {})
   }
 
@@ -817,6 +932,76 @@ export function DataTable<T>({
     node?.focus()
   }, [pageIndex, pagedRows])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      const isTyping =
+        tag === "input" || tag === "textarea" || tag === "select" || Boolean(target?.isContentEditable)
+      const inTable = Boolean(target?.closest("[data-datatable-root='true']"))
+
+      if (event.key === "/" && !isTyping) {
+        if (!searchable || !inTable) return
+        event.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+        return
+      }
+
+      if (event.key === "Escape") {
+        if (isTyping && target === searchInputRef.current) {
+          if (searchQuery) {
+            event.preventDefault()
+            setSearchQuery("")
+            setPageIndex(0)
+          }
+          return
+        }
+        if (!inTable || isTyping) return
+        if (selectedIds.size) {
+          event.preventDefault()
+          clearSelection()
+          return
+        }
+        if (searchQuery || activeFilterCount || sorts.length) {
+          event.preventDefault()
+          setSearchQuery("")
+          clearFilters()
+          clearSort()
+        }
+        return
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+        if (!selectable || !inTable || isTyping) return
+        event.preventDefault()
+        selectAllFiltered()
+        return
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
+        if (!selectable || !inTable || isTyping || !selectedRows.length) return
+        // Allow native copy when user has a text selection
+        const selection = window.getSelection()?.toString()
+        if (selection?.trim()) return
+        event.preventDefault()
+        void copySelectedRows()
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [
+    activeFilterCount,
+    copySelectedRows,
+    searchable,
+    selectable,
+    selectedIds.size,
+    selectedRows.length,
+    searchQuery,
+    sorts.length,
+  ])
+
   const currentViewLabel =
     savedViews.find((view) => view.id === activeViewId)?.name ?? (tableId ? "Default view" : "Local view")
 
@@ -824,13 +1009,21 @@ export function DataTable<T>({
     () =>
       visibleColumns.reduce(
         (sum, column) => sum + getEffectiveColumnWidth(column, resizedWidths),
-        0,
+        selectable ? DATA_TABLE_SELECTION_COL_WIDTH : 0,
       ),
-    [resizedWidths, visibleColumns],
+    [resizedWidths, selectable, visibleColumns],
   )
 
+  const resolvedBulkActions =
+    typeof bulkActions === "function"
+      ? bulkActions({ selectedRows, selectedIds: [...selectedIds] })
+      : bulkActions
+
   return (
-    <div className={cn("panel-surface flex w-full min-w-0 flex-col overflow-hidden p-1", className)}>
+    <div
+      className={cn("panel-surface flex w-full min-w-0 flex-col overflow-hidden p-1", className)}
+      data-datatable-root="true"
+    >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b border-border bg-card/80 px-3 py-2.5">
           <div className="flex flex-col gap-2.5">
@@ -1019,52 +1212,60 @@ export function DataTable<T>({
 
             <div className="flex flex-wrap items-center gap-2">
               {searchable ? (
-                <label className="relative min-w-[14rem] flex-1 sm:max-w-xs">
+                <label className="relative min-w-[14rem] flex-1 sm:max-w-sm">
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    ref={searchInputRef}
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value)
                       setPageIndex(0)
                     }}
-                    placeholder="Search rows…"
-                    className="h-8 pl-8 text-xs"
+                    placeholder="Search this table…  (/)"
+                    className="h-8 pl-8 pr-16 text-xs"
                     aria-label="Search table rows"
                   />
+                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground">
+                    {searchQuery.trim()
+                      ? `${processedRows.length}/${data.length}`
+                      : `${data.length}`}
+                  </span>
                 </label>
               ) : null}
 
-              {filterableColumns.map((column) => {
-                const selected = filters[column.id] ?? []
-                return (
-                  <DropdownMenu key={column.id}>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="sm" className="h-8">
-                        <Filter className="h-3.5 w-3.5" />
-                        {headerLabel(column.header)}
-                        {selected.length ? ` (${selected.length})` : ""}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                      <DropdownMenuLabel>{headerLabel(column.header)}</DropdownMenuLabel>
-                      {column.filterOptions?.map((option) => {
-                        const checked = selected.includes(option.value)
-                        return (
-                          <DropdownMenuCheckboxItem
-                            key={option.value}
-                            checked={checked}
-                            onCheckedChange={(next) =>
-                              updateFilter(column.id, option.value, Boolean(next))
-                            }
-                          >
-                            {option.label}
-                          </DropdownMenuCheckboxItem>
-                        )
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )
-              })}
+              {filterSpecs
+                .filter((entry) => !isQuickFilterColumn(entry.options))
+                .map(({ column, options }) => {
+                  const selected = filters[column.id] ?? []
+                  return (
+                    <DropdownMenu key={column.id}>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" className="h-8 min-w-[5.5rem]">
+                          <Filter className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{headerLabel(column.header)}</span>
+                          {selected.length ? ` (${selected.length})` : ""}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56">
+                        <DropdownMenuLabel>{headerLabel(column.header)}</DropdownMenuLabel>
+                        {options.map((option) => {
+                          const checked = selected.includes(option.value)
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={option.value}
+                              checked={checked}
+                              onCheckedChange={(next) =>
+                                updateFilter(column.id, option.value, Boolean(next))
+                              }
+                            >
+                              {option.label}
+                            </DropdownMenuCheckboxItem>
+                          )
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )
+                })}
 
               {canResetView ? (
                 <Button type="button" variant="ghost" size="sm" className="h-8" onClick={resetState}>
@@ -1074,11 +1275,50 @@ export function DataTable<T>({
               ) : null}
             </div>
 
-            {activeFilterCount > 0 ? (
+            {quickFilterSpecs.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Quick filters
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {quickFilterSpecs.map(({ column, options }) => {
+                    const selected = filters[column.id] ?? []
+                    return (
+                      <div key={column.id} className="flex flex-wrap items-center gap-1">
+                        <span className="mr-0.5 text-[11px] text-muted-foreground">
+                          {headerLabel(column.header)}:
+                        </span>
+                        {options.map((option) => {
+                          const active = selected.includes(option.value)
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={cn(
+                                "inline-flex h-7 items-center rounded-md border px-2 text-[11px] transition-default",
+                                active
+                                  ? "border-primary/40 bg-primary/10 font-medium text-foreground"
+                                  : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                              )}
+                              aria-pressed={active}
+                              onClick={() => updateFilter(column.id, option.value, !active)}
+                            >
+                              {option.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {activeFilterCount > 0 || sorts.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
                 {filterableColumns.flatMap((column) =>
                   (filters[column.id] ?? []).map((value) => {
-                    const option = column.filterOptions?.find((entry) => entry.value === value)
+                    const option = optionsByColumnId.get(column.id)?.find((entry) => entry.value === value)
                     return (
                       <button
                         key={`${column.id}-${value}`}
@@ -1093,6 +1333,76 @@ export function DataTable<T>({
                     )
                   }),
                 )}
+                {sorts.map((sort, index) => {
+                  const column = columns.find((entry) => entry.id === sort.id)
+                  return (
+                    <button
+                      key={`sort-${sort.id}`}
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] text-muted-foreground transition-default hover:bg-accent"
+                      onClick={() => clearSort(sort.id)}
+                      title="Remove sort"
+                    >
+                      <span className="font-medium text-foreground">
+                        Sort {index + 1}: {column ? headerLabel(column.header) : sort.id}
+                      </span>
+                      <span>{sort.direction === "asc" ? "↑" : "↓"}</span>
+                      <X className="h-3 w-3" />
+                    </button>
+                  )
+                })}
+                {activeFilterCount > 0 ? (
+                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
+                {sorts.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => clearSort()}
+                  >
+                    Clear sorts
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selectable && selectedIds.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
+                <span className="text-xs font-medium text-foreground">
+                  {selectedIds.size} selected
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => void copySelectedRows()}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy rows
+                </Button>
+                {!allFilteredSelected ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7"
+                    onClick={selectAllFiltered}
+                  >
+                    Select all {processedRows.length}
+                  </Button>
+                ) : null}
+                {resolvedBulkActions}
+                <Button type="button" variant="ghost" size="sm" className="h-7" onClick={clearSelection}>
+                  Clear
+                </Button>
+                <span className="ml-auto hidden text-[10px] text-muted-foreground sm:inline">
+                  Ctrl/⌘A select all · Ctrl/⌘C copy · Esc clear
+                </span>
               </div>
             ) : null}
           </div>
@@ -1129,7 +1439,7 @@ export function DataTable<T>({
                 container={false}
                 role="grid"
                 aria-rowcount={processedRows.length}
-                aria-colcount={visibleColumns.length}
+                aria-colcount={visibleColumns.length + (selectable ? 1 : 0)}
                 className={cn("table-fixed border-collapse", DENSITY_ROW_CLASS[density])}
                 style={{
                   width: `${tableMinWidth}px`,
@@ -1138,6 +1448,9 @@ export function DataTable<T>({
                 }}
               >
                 <colgroup>
+                  {selectable ? (
+                    <col style={{ width: `${DATA_TABLE_SELECTION_COL_WIDTH}px` }} />
+                  ) : null}
                   {visibleColumns.map((column) => (
                     <col
                       key={column.id}
@@ -1151,6 +1464,23 @@ export function DataTable<T>({
                   )}
                 >
                   <TableRow className="border-border/70 hover:bg-transparent">
+                    {selectable ? (
+                      <TableHead
+                        className={cn(
+                          "sticky left-0 z-30 w-10 bg-card px-2",
+                          stickyHeader && "top-0",
+                        )}
+                      >
+                        <Checkbox
+                          checked={
+                            allPageSelected ? true : somePageSelected ? "indeterminate" : false
+                          }
+                          onCheckedChange={(checked) => toggleSelectPage(checked === true)}
+                          aria-label="Select all rows on this page"
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      </TableHead>
+                    ) : null}
                     {visibleColumns.map((column) => {
                       const sortEntry = sorts.find((entry) => entry.id === column.id)
                       const sortIndex = sorts.findIndex((entry) => entry.id === column.id)
@@ -1180,6 +1510,7 @@ export function DataTable<T>({
                             <button
                               type="button"
                               className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left outline-none transition-default hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                              title="Click to sort · Shift+click for multi-sort"
                               onClick={(e) => toggleSort(column.id, e.shiftKey)}
                             >
                               <span className="min-w-0 truncate">{column.header}</span>
@@ -1219,28 +1550,43 @@ export function DataTable<T>({
                 </TableHeader>
                 <TableBody>
                   {pagedRows.map((row, rowIndex) => {
+                    const rowId = keyExtractor(row)
+                    const isChecked = selectedIds.has(rowId)
                     const isFocused = focusedRowIndex === rowIndex
                     const isRovingTabStop =
                       isFocused || (focusedRowIndex < 0 && rowIndex === 0)
                     return (
                     <TableRow
-                      key={keyExtractor(row)}
+                      key={rowId}
                       ref={(node) => {
                         rowRefs.current[rowIndex] = node
                       }}
-                      data-selected={isFocused ? "true" : "false"}
+                      data-selected={isFocused || isChecked ? "true" : "false"}
                       tabIndex={isRovingTabStop ? 0 : -1}
                       className={cn(
                         "group border-border/50 outline-none transition-default",
                         "hover:bg-muted/40 data-[selected=true]:bg-muted/50",
                         "focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
                         onRowClick && "cursor-pointer",
+                        isChecked && "bg-primary/5",
                         rowClassName?.(row),
                       )}
                       onClick={() => onRowClick?.(row)}
                       onFocus={() => setFocusedRowIndex(rowIndex)}
                       onKeyDown={(e) => handleRowKeyDown(row, rowIndex, e)}
                     >
+                      {selectable ? (
+                        <TableCell
+                          className="sticky left-0 z-20 bg-card px-2 group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={(checked) => setRowSelected(rowId, checked === true)}
+                            aria-label={`Select row ${rowId}`}
+                          />
+                        </TableCell>
+                      ) : null}
                       {visibleColumns.map((column) => {
                         const isPinned = pinnedColumns.includes(column.id)
                         return (

@@ -44,7 +44,6 @@ import type { TraceSearchHit, TraceWaterfallStep } from "@/lib/api";
 import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 import { normalizeTraceId } from "@/lib/trace-id";
-import { cn } from "@/lib/utils";
 
 export type TraceExplorerWorkspaceProps = {
   traceList: TraceSearchHit[];
@@ -684,18 +683,6 @@ export function TraceExplorerWorkspace({
         <code className="inline-block max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
           {normalized || "Select a trace"}
         </code>
-        <span
-          className={cn(
-            "inline-flex h-6 min-w-[3.5rem] items-center justify-center gap-1 rounded-full border px-2 text-xs font-medium",
-            data?.is_live
-              ? "border-[color:var(--status-running-border)] bg-[color:var(--status-running-bg)] text-[color:var(--status-running-fg)]"
-              : "invisible border-transparent",
-          )}
-          aria-hidden={!data?.is_live}
-        >
-          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-          Live
-        </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             type="button"

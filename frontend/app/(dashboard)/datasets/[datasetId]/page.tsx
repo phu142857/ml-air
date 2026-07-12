@@ -75,6 +75,7 @@ import {
   datasetStatusBadgeClass,
   feedbackMessageClass,
   normalizeDatasetStatus,
+  normalizeStatus,
   readinessStatusChipClass,
   STATUS_CALLOUT_CLASS,
   STATUS_CHIP_CLASS,
@@ -672,6 +673,10 @@ export default function DatasetHubPage() {
       {
         id: "run_id",
         header: "Run",
+        width: 240,
+        canHide: false,
+        getSearchValue: (run) => run.run_id,
+        getSortValue: (run) => run.run_id,
         cell: (run) => (
           <span className="font-mono text-sm text-primary">{run.run_id}</span>
         ),
@@ -679,6 +684,10 @@ export default function DatasetHubPage() {
       {
         id: "pipeline",
         header: "Pipeline",
+        width: 200,
+        getSearchValue: (run) => run.pipeline_id || "",
+        getSortValue: (run) => run.pipeline_id || "",
+        getFilterValue: (run) => run.pipeline_id || null,
         cell: (run) => (
           <span className="font-mono text-xs text-muted-foreground">{run.pipeline_id || "—"}</span>
         ),
@@ -686,6 +695,17 @@ export default function DatasetHubPage() {
       {
         id: "status",
         header: "Status",
+        width: 140,
+        getSortValue: (run) => normalizeStatus(run.status),
+        getFilterValue: (run) => normalizeStatus(run.status),
+        filterOptions: [
+          { label: "Pending", value: "PENDING" },
+          { label: "Queued", value: "QUEUED" },
+          { label: "Running", value: "RUNNING" },
+          { label: "Success", value: "SUCCESS" },
+          { label: "Failed", value: "FAILED" },
+          { label: "Cancelled", value: "CANCELLED" },
+        ],
         cell: (run) => (
           <StatusBadge status={statusToMlopsBadge(run.status)} label={run.status} size="sm" />
         ),
@@ -693,6 +713,8 @@ export default function DatasetHubPage() {
       {
         id: "updated",
         header: "Updated",
+        width: 140,
+        getSortValue: (run) => run.updated_at,
         cell: (run) => (
           <span className="text-xs text-muted-foreground">{formatRelativeTime(run.updated_at)}</span>
         ),
@@ -706,6 +728,14 @@ export default function DatasetHubPage() {
       {
         id: "status",
         header: "Status",
+        width: 140,
+        getSortValue: (row) => String(row.status || "blocked").toLowerCase(),
+        getFilterValue: (row) => String(row.status || "blocked").toLowerCase(),
+        filterOptions: [
+          { label: "Eligible", value: "eligible" },
+          { label: "Blocked", value: "blocked" },
+          { label: "Ready", value: "ready" },
+        ],
         cell: (row) => (
           <span
             className={cn(
@@ -720,6 +750,9 @@ export default function DatasetHubPage() {
       {
         id: "sizes",
         header: "Current / Required",
+        width: 160,
+        getSortValue: (row) => Number(row.current_size || 0),
+        getSearchValue: (row) => `${row.current_size ?? 0} ${row.required_size ?? 0}`,
         cell: (row) => (
           <span>
             {Number(row.current_size || 0)} / {Number(row.required_size || 0)}
@@ -729,6 +762,9 @@ export default function DatasetHubPage() {
       {
         id: "dataset_version",
         header: "Version",
+        width: 180,
+        getSearchValue: (row) => row.dataset_version_id || "",
+        getSortValue: (row) => row.dataset_version_id || "",
         cell: (row) => (
           <span className="block max-w-[10rem] truncate font-mono text-xs text-muted-foreground" title={row.dataset_version_id || undefined}>
             {row.dataset_version_id || "—"}
@@ -738,6 +774,10 @@ export default function DatasetHubPage() {
       {
         id: "source",
         header: "Source",
+        width: 120,
+        getSearchValue: (row) => String(row.source || "manual"),
+        getSortValue: (row) => String(row.source || "manual"),
+        getFilterValue: (row) => String(row.source || "manual"),
         cell: (row) => (
           <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
             {String(row.source || "manual")}
@@ -747,7 +787,9 @@ export default function DatasetHubPage() {
       {
         id: "why",
         header: "Why blocked",
-        className: "max-w-[14rem]",
+        width: 220,
+        wrap: true,
+        getSearchValue: (row) => formatEvaluationReasons(row.reasons),
         cell: (row) => (
           <div className="text-xs text-muted-foreground" title={formatEvaluationReasons(row.reasons)}>
             {String(row.status || "").toLowerCase() === "eligible" ? (
@@ -763,6 +805,8 @@ export default function DatasetHubPage() {
       {
         id: "evaluated",
         header: "Evaluated",
+        width: 160,
+        getSortValue: (row) => row.evaluated_at || "",
         cell: (row) => <span>{formatDateTimeCompact(row.evaluated_at)}</span>,
       },
     ],
@@ -867,11 +911,23 @@ export default function DatasetHubPage() {
       {
         id: "version",
         header: "Version",
+        width: 120,
+        canHide: false,
+        getSearchValue: (v) => formatVersionLabel(v.version),
+        getSortValue: (v) => v.version,
         cell: (v) => <span className="whitespace-nowrap font-mono text-xs">{formatVersionLabel(v.version)}</span>,
       },
       {
         id: "status",
         header: "Quality",
+        width: 120,
+        getSortValue: (v) => normalizeDatasetStatus(v.status),
+        getFilterValue: (v) => normalizeDatasetStatus(v.status),
+        filterOptions: [
+          { label: "Ready", value: "READY" },
+          { label: "Warning", value: "WARNING" },
+          { label: "Failed", value: "FAILED" },
+        ],
         cell: (v) => (
           <span
             className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${datasetStatusBadgeClass(v.status)}`}
@@ -884,6 +940,10 @@ export default function DatasetHubPage() {
       {
         id: "source",
         header: "Source",
+        width: 140,
+        getSearchValue: (v) => datasetVersionSourceBadge(v).label,
+        getSortValue: (v) => datasetVersionSourceBadge(v).label,
+        getFilterValue: (v) => datasetVersionSourceBadge(v).label,
         cell: (v) => {
           const b = datasetVersionSourceBadge(v);
           return (
@@ -910,12 +970,17 @@ export default function DatasetHubPage() {
       {
         id: "rows",
         header: "Rows",
+        width: 100,
+        getSortValue: (v) => Number(v.record_count || 0),
+        getSearchValue: (v) => String(v.record_count ?? 0),
         cell: (v) => <>{Number(v.record_count || 0)}</>,
       },
       {
         id: "checksum",
         header: "Checksum",
-        className: "max-w-[7rem]",
+        width: 140,
+        getSearchValue: (v) => String(v.checksum || ""),
+        getSortValue: (v) => String(v.checksum || ""),
         cell: (v) => {
           const cs = String(v.checksum || "").trim();
           if (!cs) return <span className="text-[10px] text-muted-foreground">—</span>;
@@ -941,7 +1006,10 @@ export default function DatasetHubPage() {
       {
         id: "tags",
         header: "Tags",
-        className: "max-w-[12rem]",
+        width: 200,
+        wrap: true,
+        getSearchValue: (v) => (Array.isArray(v.tags) ? v.tags : []).join(" "),
+        getSortValue: (v) => (Array.isArray(v.tags) ? v.tags : []).length,
         cell: (v) => (
           <div className="flex flex-wrap gap-1">
             {(Array.isArray(v.tags) ? v.tags : []).length ? (
@@ -962,7 +1030,12 @@ export default function DatasetHubPage() {
       {
         id: "refs",
         header: "Refs",
-        className: "max-w-[10rem]",
+        width: 180,
+        wrap: true,
+        getSearchValue: (v) =>
+          (Array.isArray(v.external_refs) ? v.external_refs : [])
+            .map((r) => `${typeof r?.label === "string" ? r.label : ""} ${typeof r?.url === "string" ? r.url : ""}`)
+            .join(" "),
         cell: (v) => (
           <div className="text-[10px] text-muted-foreground">
             {(Array.isArray(v.external_refs) ? v.external_refs : []).length ? (
@@ -1362,6 +1435,9 @@ export default function DatasetHubPage() {
               ) : (
                 <>
                   <MlopsDataTable
+                    tableId="dataset-runs"
+                    title="Dataset runs"
+                    description="Search and filter runs linked to this dataset."
                     columns={datasetRunColumns}
                     data={datasetRunsQuery.items}
                     keyExtractor={(run) => run.run_id}
@@ -1717,6 +1793,9 @@ export default function DatasetHubPage() {
           ) : (
             <>
               <MlopsDataTable
+                tableId="dataset-evaluations"
+                title="Readiness evaluations"
+                description="Search and filter readiness evaluation history."
                 columns={evaluationColumns}
                 data={evaluationItems}
                 keyExtractor={(row) => row.evaluation_id}
@@ -1980,6 +2059,9 @@ export default function DatasetHubPage() {
                   onOpenAccumulation={() => setActiveTab("accumulation")}
                 />
                 <MlopsDataTable
+                tableId="dataset-versions"
+                title="Dataset versions"
+                description="Search, filter by quality/source, and sort versions."
                 columns={versionColumns}
                 data={versionsQuery.data?.items || []}
                 keyExtractor={(v) => v.version_id}

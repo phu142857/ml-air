@@ -194,22 +194,42 @@ function SettingsPageContent() {
       {
         id: "tenant",
         header: "Tenant",
+        width: 200,
+        canHide: false,
+        getSearchValue: (r) => r.tenant_id,
+        getSortValue: (r) => r.tenant_id,
+        getFilterValue: (r) => r.tenant_id,
         cell: (r) => <span className="font-mono text-foreground">{r.tenant_id}</span>,
       },
       {
         id: "project",
         header: "Project",
+        width: 200,
+        getSearchValue: (r) => r.project_id,
+        getSortValue: (r) => r.project_id,
+        getFilterValue: (r) => r.project_id,
         cell: (r) => <span className="font-mono text-foreground/90">{r.project_id}</span>,
       },
       {
         id: "role",
         header: "Role",
+        width: 140,
+        getSearchValue: (r) => r.role || "",
+        getSortValue: (r) => r.role || "",
+        getFilterValue: (r) => r.role || null,
         cell: (r) => <span className="text-muted-foreground">{r.role || "—"}</span>,
       },
       {
         id: "state",
         header: "",
-        className: "w-[88px]",
+        width: 88,
+        canHide: false,
+        getFilterValue: (row) =>
+          row.tenant_id === tenantId && row.project_id === projectId ? "active" : "switch",
+        filterOptions: [
+          { label: "Active", value: "active" },
+          { label: "Switch", value: "switch" },
+        ],
         cell: (row) => {
           const active = row.tenant_id === tenantId && row.project_id === projectId
           return active ? (
@@ -503,6 +523,9 @@ function SettingsPageContent() {
                     </p>
                   ) : (
                     <MlopsDataTable
+                      tableId="settings-scopes"
+                      title="Accessible scopes"
+                      description="Search and filter tenants and projects you can switch into."
                       columns={scopeTableColumns}
                       data={accessibleScopes}
                       keyExtractor={(row) => `${row.tenant_id}-${row.project_id}-${row.role}`}

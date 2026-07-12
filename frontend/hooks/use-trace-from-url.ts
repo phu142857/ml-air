@@ -8,7 +8,10 @@ type Options = {
   onOpen: (traceId: string) => void
 }
 
-/** Open trace explorer from `?trace=<trace_id>`. Cleans query after handling. */
+/**
+ * Open trace explorer dialog from `?trace=<trace_id>` on non-viewer routes.
+ * Skips `/traces` (inline Trace Viewer owns that query). Cleans query after handling.
+ */
 export function useTraceFromUrl({ enabled = true, onOpen }: Options) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -16,6 +19,8 @@ export function useTraceFromUrl({ enabled = true, onOpen }: Options) {
 
   useEffect(() => {
     if (!enabled) return
+    // Trace viewer page uses `?trace=` as shareable state — do not hijack into a dialog.
+    if (pathname === "/traces" || pathname.startsWith("/traces/")) return
 
     const trace = (searchParams.get("trace") || "").trim()
     if (!trace) return

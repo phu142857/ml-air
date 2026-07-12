@@ -40,11 +40,19 @@ const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
   {
     id: "stage",
     header: "Stage",
+    width: 200,
+    canHide: false,
+    getSearchValue: (stage) => stage.name,
+    getSortValue: (stage) => stage.name,
     cell: (stage) => <span className="text-sm text-foreground">{stage.name}</span>,
   },
   {
     id: "type",
     header: "Type",
+    width: 140,
+    getSearchValue: (stage) => stage.type,
+    getSortValue: (stage) => stage.type,
+    getFilterValue: (stage) => stage.type,
     cell: (stage) => (
       <span className="font-mono text-xs capitalize text-muted-foreground">{stage.type}</span>
     ),
@@ -52,6 +60,16 @@ const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
   {
     id: "status",
     header: "Status",
+    width: 140,
+    getSortValue: (stage) => mapStageStatus(stage.status),
+    getFilterValue: (stage) => mapStageStatus(stage.status),
+    filterOptions: [
+      { label: "Running", value: "running" },
+      { label: "Failed", value: "failed" },
+      { label: "Success", value: "success" },
+      { label: "Pending", value: "pending" },
+      { label: "Idle", value: "idle" },
+    ],
     cell: (stage) => {
       const sk = mapStageStatus(stage.status)
       if (sk === "idle") {
@@ -63,6 +81,10 @@ const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
   {
     id: "dependencies",
     header: "Dependencies",
+    width: 240,
+    wrap: true,
+    getSearchValue: (stage) => stage.dependencies.join(" "),
+    getSortValue: (stage) => stage.dependencies.length,
     cell: (stage) =>
       stage.dependencies.length > 0 ? (
         <div className="flex flex-wrap gap-1">
@@ -353,6 +375,9 @@ export default function PipelinesPage() {
                   <div>
                     <h3 className="mb-3 text-sm font-medium text-muted-foreground">Stages</h3>
                     <MlopsDataTable
+                      tableId="pipeline-stages"
+                      title="Stages"
+                      description="Search and filter stages in the selected pipeline."
                       columns={pipelineStageColumns}
                       data={displayPipeline.stages}
                       keyExtractor={(s) => s.id}

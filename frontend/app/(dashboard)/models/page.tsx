@@ -34,11 +34,19 @@ const modelColumns: DataTableColumn<ModelItem>[] = [
   {
     id: "name",
     header: "Name",
+    width: 220,
+    canHide: false,
+    getSearchValue: (m) => m.name,
+    getSortValue: (m) => m.name,
     cell: (m) => <span className="text-sm font-medium text-foreground">{m.name}</span>,
   },
   {
     id: "model_id",
     header: "Model ID",
+    width: 280,
+    getSearchValue: (m) =>
+      `${m.model_id} ${m.production_version != null ? formatVersionLabel(m.production_version) : ""}`,
+    getSortValue: (m) => m.model_id,
     cell: (m) => (
       <span className="inline-flex flex-wrap items-center gap-x-1.5 font-mono text-xs">
         <span className="text-muted-foreground">{m.model_id}</span>
@@ -53,7 +61,10 @@ const modelColumns: DataTableColumn<ModelItem>[] = [
   {
     id: "description",
     header: "Description",
-    className: "max-w-xs",
+    width: 280,
+    wrap: true,
+    getSearchValue: (m) => m.description || "",
+    getSortValue: (m) => m.description || "",
     cell: (m) => (
       <span className="block truncate text-sm text-muted-foreground">{m.description || "—"}</span>
     ),
@@ -61,11 +72,15 @@ const modelColumns: DataTableColumn<ModelItem>[] = [
   {
     id: "created",
     header: "Created",
+    width: 140,
+    getSortValue: (m) => m.created_at,
     cell: (m) => <span className="text-xs text-muted-foreground">{formatRelativeTime(m.created_at)}</span>,
   },
   {
     id: "updated",
     header: "Updated",
+    width: 140,
+    getSortValue: (m) => m.updated_at,
     cell: (m) => <span className="text-xs text-muted-foreground">{formatRelativeTime(m.updated_at)}</span>,
   },
 ]
@@ -211,6 +226,9 @@ export default function ModelsPage() {
         >
           <MlopsDataTable
             className="min-h-0 flex-1"
+            tableId="models-list"
+            title="Models"
+            description="Search and sort registered models in this scope."
             columns={modelColumns}
             data={items}
             keyExtractor={(m) => m.model_id}

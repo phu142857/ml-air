@@ -37,6 +37,10 @@ const datasetTableColumns: DataTableColumn<DatasetItem>[] = [
   {
     id: "name",
     header: "Name",
+    width: 240,
+    canHide: false,
+    getSearchValue: (d) => d.name,
+    getSortValue: (d) => d.name,
     cell: (d) => (
       <div className="flex items-center gap-2">
         <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -47,11 +51,17 @@ const datasetTableColumns: DataTableColumn<DatasetItem>[] = [
   {
     id: "dataset_id",
     header: "Dataset ID",
+    width: 260,
+    getSearchValue: (d) => d.dataset_id,
+    getSortValue: (d) => d.dataset_id,
     cell: (d) => <span className="font-mono text-xs text-muted-foreground">{d.dataset_id}</span>,
   },
   {
     id: "rows",
     header: "Rows",
+    width: 120,
+    getSortValue: (d) => Number(d.current_size || 0),
+    getSearchValue: (d) => String(d.current_size ?? ""),
     cell: (d) => (
       <span className="font-mono text-sm text-muted-foreground">{formatRowCount(d.current_size)}</span>
     ),
@@ -59,7 +69,9 @@ const datasetTableColumns: DataTableColumn<DatasetItem>[] = [
   {
     id: "checksum",
     header: "Checksum",
-    className: "max-w-[180px]",
+    width: 180,
+    getSearchValue: (d) => d.checksum || "",
+    getSortValue: (d) => d.checksum || "",
     cell: (d) => (
       <span className="block truncate font-mono text-[10px] text-muted-foreground/80">
         {d.checksum || "—"}
@@ -69,6 +81,8 @@ const datasetTableColumns: DataTableColumn<DatasetItem>[] = [
   {
     id: "updated",
     header: "Updated",
+    width: 140,
+    getSortValue: (d) => d.updated_at || d.created_at || "",
     cell: (d) => (
       <span className="text-xs text-muted-foreground">
         {formatRelativeTime(d.updated_at || d.created_at)}
@@ -232,18 +246,22 @@ export default function DatasetsPage() {
       </Dialog>
 
       <PageToolbar>
-        <div className="relative">
-          <Search
-            strokeWidth={1.75}
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            placeholder="Search datasets"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 w-64 pl-9 text-sm"
-          />
-        </div>
+        {viewMode === "grid" ? (
+          <div className="relative">
+            <Search
+              strokeWidth={1.75}
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              placeholder="Search datasets"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 w-64 pl-9 text-sm"
+            />
+          </div>
+        ) : (
+          <div />
+        )}
 
         <div className="flex items-center gap-2">
           <div className="flex items-center overflow-hidden rounded-xl border border-border/60 bg-muted/30 p-0.5">
@@ -283,18 +301,25 @@ export default function DatasetsPage() {
           isLoading={datasetsQuery.isLoading}
           isError={datasetsQuery.isError}
           errorMessage={datasetsQuery.error ? formatApiClientError(datasetsQuery.error) : undefined}
-          isEmpty={filtered.length === 0}
+          isEmpty={(viewMode === "table" ? items : filtered).length === 0}
           emptyIcon={Database}
-          emptyTitle={search ? "No matching datasets" : "No datasets in this scope"}
+          emptyTitle={
+            viewMode === "grid" && search ? "No matching datasets" : "No datasets in this scope"
+          }
           emptyDescription={
-            search ? "Try a different search term." : "Upload a dataset or pick a workspace in the header."
+            viewMode === "grid" && search
+              ? "Try a different search term."
+              : "Upload a dataset or pick a workspace in the header."
           }
         >
         {viewMode === "table" ? (
           <MlopsDataTable
             className="min-h-0 flex-1"
+            tableId="datasets-list"
+            title="Datasets"
+            description="Search, sort, and manage dataset inventory."
             columns={datasetTableColumns}
-            data={filtered}
+            data={items}
             keyExtractor={(d) => d.dataset_id}
             onRowClick={(d) => router.push(`/datasets/${encodeURIComponent(d.dataset_id)}`)}
             emptyMessage="No datasets match."

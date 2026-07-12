@@ -403,11 +403,24 @@ export default function ModelDetailPage() {
       {
         id: "version",
         header: "Version",
+        width: 120,
+        canHide: false,
+        getSearchValue: (v) => formatVersionLabel(v.version),
+        getSortValue: (v) => v.version,
         cell: (v) => <span className="font-mono text-sm">{formatVersionLabel(v.version)}</span>,
       },
       {
         id: "stage",
         header: "Stage",
+        width: 140,
+        getSortValue: (v) => (v.stage || "").toLowerCase(),
+        getFilterValue: (v) => (v.stage || "").toLowerCase(),
+        filterOptions: [
+          { label: "Dev", value: "dev" },
+          { label: "Staging", value: "staging" },
+          { label: "Production", value: "production" },
+          { label: "Archived", value: "archived" },
+        ],
         cell: (v) => (
           <span className={modelStagePillClass(v.stage)}>
             {modelStageIndicator(v.stage)} {v.stage}
@@ -417,6 +430,17 @@ export default function ModelDetailPage() {
       {
         id: "approval",
         header: "Approval",
+        width: 180,
+        getSortValue: (v) => v.approval_status || "",
+        getFilterValue: (v) => v.approval_status || "none",
+        filterOptions: [
+          { label: "Approved", value: "approved" },
+          { label: "Rejected", value: "rejected" },
+          { label: "Pending", value: "pending_manual_approval" },
+          { label: "None", value: "none" },
+        ],
+        getSearchValue: (v) =>
+          `${v.approval_status || ""} ${modelApprovalDisplayLabel(v.approval_status) || ""}`,
         cell: (v) => {
           const status = v.approval_status;
           if (status === "pending_manual_approval" && projectId !== "all") {
@@ -455,6 +479,9 @@ export default function ModelDetailPage() {
       {
         id: "run",
         header: "Run",
+        width: 220,
+        getSearchValue: (v) => v.run_id || "",
+        getSortValue: (v) => v.run_id || "",
         cell: (v) =>
           v.run_id ? (
             <Link
@@ -471,6 +498,8 @@ export default function ModelDetailPage() {
       {
         id: "actions",
         header: "Actions",
+        width: 280,
+        canHide: false,
         cell: (v) => {
           const promoteTarget = nextPromotionStage(v.stage, promotionFeatures);
           const rollbackTarget = previousPromotionStage(v.stage, promotionFeatures);
@@ -956,6 +985,9 @@ export default function ModelDetailPage() {
             </div>
           ) : null}
           <MlopsDataTable
+            tableId="model-versions"
+            title="Model versions"
+            description="Search and filter by stage or approval status."
             columns={versionColumns}
             data={paginatedVersions}
             keyExtractor={(v) => v.version_id}
