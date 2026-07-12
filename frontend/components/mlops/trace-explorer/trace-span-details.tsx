@@ -309,6 +309,7 @@ export type TraceSpanDetailsPaneProps = {
   data: TraceDetailResponse | null | undefined;
   waterfall?: TraceWaterfall | null;
   selectedStep: TraceWaterfallStep | null;
+  isPreview?: boolean;
   isLoading?: boolean;
   onCollapse?: () => void;
   onOpenLogsTab?: () => void;
@@ -324,6 +325,7 @@ export const TraceSpanDetailsPane = forwardRef<
     data,
     waterfall = null,
     selectedStep,
+    isPreview = false,
     isLoading,
     onCollapse,
     onOpenLogsTab,
@@ -392,7 +394,9 @@ export const TraceSpanDetailsPane = forwardRef<
     >
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {selectedStep
-          ? `Span details for ${selectedStep.label}, ${selectedStep.status}`
+          ? isPreview
+            ? `Previewing span ${selectedStep.label}, ${selectedStep.status}`
+            : `Span details for ${selectedStep.label}, ${selectedStep.status}`
           : data
             ? "Trace overview"
             : ""}
@@ -400,9 +404,13 @@ export const TraceSpanDetailsPane = forwardRef<
       <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="font-heading text-sm font-semibold text-foreground">Span details</h2>
+            <h2 className="font-heading text-sm font-semibold text-foreground">
+              {isPreview ? "Span preview" : "Span details"}
+            </h2>
             {selectedStep ? (
-              <p className="truncate text-xs text-muted-foreground">{selectedStep.label}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {isPreview ? "Hover preview — click a span to lock" : selectedStep.label}
+              </p>
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">

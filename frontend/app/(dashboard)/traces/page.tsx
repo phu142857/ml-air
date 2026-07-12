@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Route } from "lucide-react";
 
 import { TraceExplorerShell } from "@/components/mlops/trace-explorer/trace-explorer-shell";
 import { ScopePinnedInline } from "@/components/mlops/layout";
 import { ScopedListContent } from "@/components/mlops/scoped-list-content";
+import { useTraceViewerUrl } from "@/hooks/use-trace-viewer-url";
 import { useAppContext } from "@/lib/app-context";
 import { fetchTraceList } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
@@ -14,12 +15,13 @@ import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages";
 import { isScopePinned } from "@/lib/scope";
 import { formatApiClientError } from "@/lib/utils";
 
-export default function TracesPage() {
+function TracesPageContent() {
   const { tenantId, projectId, token } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
   const isAggregate = !scopePinned;
+  const url = useTraceViewerUrl();
   const [search, setSearch] = useState("");
-  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const autoSelectedRef = useRef(false);
 
   const listQuery = useQuery({
     queryKey: mlairKeys.trace.list(tenantId, projectId, 0),
@@ -39,11 +41,17 @@ export default function TracesPage() {
     [items, search],
   );
 
+  const selectedTraceId = url.traceId;
+
   useEffect(() => {
-    if (!selectedTraceId && filtered.length > 0) {
-      setSelectedTraceId(filtered[0].trace_id);
-    }
-  }, [filtered, selectedTraceId]);
+    autoSelectedRef.current = false;
+  }, [tenantId, projectId]);
+
+  useEffect(() => {
+    if (url.traceId || listQuery.isLoading || !filtered.length || autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
+    url.setTraceId(filtered[0]!.trace_id);
+  }, [filtered, listQuery.isLoading, url]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -85,11 +93,17 @@ export default function TracesPage() {
             <TraceExplorerShell
               traceList={filtered}
               selectedTraceId={selectedTraceId}
-              onSelectTrace={setSelectedTraceId}
+              onSelectTrace={url.setTraceId}
               traceSearch={search}
               onTraceSearchChange={setSearch}
               listLoading={listQuery.isLoading}
               onRefreshTraces={() => void listQuery.refetch()}
+              urlSpanId={url.spanId}
+              urlZoom={url.zoom}
+              urlQ={url.q}
+              onUrlSpanChange={url.setSpanId}
+              onUrlZoomChange={url.setZoom}
+              onUrlQChange={url.setQ}
             />
           </div>
         </ScopedListContent>
@@ -99,5 +113,19 @@ export default function TracesPage() {
         </p>
       )}
     </div>
+  );
+}
+
+export default function TracesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          Loading trace viewer…
+        </div>
+      }
+    >
+      <TracesPageContent />
+    </Suspense>
   );
 }

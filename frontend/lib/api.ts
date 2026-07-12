@@ -1,5 +1,6 @@
 import { buildAuditTimelineSearchParams, type AuditTimelineFilters } from "./audit-timeline-filters";
 import { resolveRealtimeWsBase } from "./realtime-url";
+import { buildTraceShareUrl as buildTraceViewerShareUrl } from "./trace-url-state";
 
 type RuntimeConfigGlobal = {
   __ML_AIR_RUNTIME_CONFIG__?: {
@@ -1149,11 +1150,15 @@ export async function downloadTraceExport(
   URL.revokeObjectURL(url);
 }
 
-export function buildTraceShareUrl(traceId: string): string {
-  if (typeof window === "undefined") return "";
-  const url = new URL(window.location.href);
-  url.searchParams.set("trace", traceId.trim());
-  return url.toString();
+export function buildTraceShareUrl(
+  traceId: string,
+  options?: {
+    spanId?: string | null;
+    zoom?: [number, number] | null;
+    q?: string;
+  },
+): string {
+  return buildTraceViewerShareUrl(traceId, options);
 }
 
 async function fetchAuditTimelineForScope(

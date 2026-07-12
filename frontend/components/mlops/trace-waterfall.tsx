@@ -179,6 +179,7 @@ function WaterfallRow({
   isRelated,
   isSearchMatch,
   isCurrentSearchMatch,
+  isInspectorLocked,
   spanSearchQuery,
   onSelect,
   onHover,
@@ -199,6 +200,7 @@ function WaterfallRow({
   isRelated?: boolean;
   isSearchMatch?: boolean;
   isCurrentSearchMatch?: boolean;
+  isInspectorLocked?: boolean;
   spanSearchQuery?: string;
   onSelect?: (step: TraceWaterfallStep) => void;
   onHover?: (step: TraceWaterfallStep | null) => void;
@@ -219,7 +221,8 @@ function WaterfallRow({
         "group/row grid items-center gap-2 border-b border-border px-3 py-2 transition-default",
         isSelected && "bg-primary/8",
         isCurrentSearchMatch && "bg-primary/12 ring-1 ring-inset ring-primary/40",
-        isSearchMatch && !isCurrentSearchMatch && !isSelected && "bg-primary/5",
+        isInspectorLocked && "ring-2 ring-primary ring-offset-1 ring-offset-card",
+        isSearchMatch && !isCurrentSearchMatch && !isSelected && !isInspectorLocked && "bg-primary/5",
         isRelated && !isSelected && !isSearchMatch && "bg-primary/5",
         isHovered && !isSelected && "bg-muted/50",
         isFocused && !isSelected && "bg-muted/40",
@@ -335,6 +338,10 @@ export type TraceWaterfallViewProps = {
     zoomOut: () => void;
     resetZoom: () => void;
   }) => void;
+  zoomDomain?: [number, number] | null;
+  onZoomDomainChange?: (domain: [number, number] | null) => void;
+  inspectorEnabled?: boolean;
+  inspectorLockedSpanId?: string | null;
   waterfallFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   waterfallRegionRef?: React.RefObject<HTMLDivElement | null>;
@@ -363,6 +370,10 @@ export function TraceWaterfallView({
   onCollapseOthers,
   onExpandAll,
   onZoomHandlersReady,
+  zoomDomain: controlledZoomDomain,
+  onZoomDomainChange,
+  inspectorEnabled = false,
+  inspectorLockedSpanId = null,
   waterfallFullscreen = false,
   onToggleFullscreen,
   waterfallRegionRef,
@@ -385,7 +396,16 @@ export function TraceWaterfallView({
   }, [hoveredStepId, treeIndex]);
 
   const totalMs = Math.max(waterfall.total_ms, 1);
-  const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null);
+  const [internalZoomDomain, setInternalZoomDomain] = useState<[number, number] | null>(null);
+  const zoomDomain =
+    controlledZoomDomain !== undefined ? controlledZoomDomain : internalZoomDomain;
+  const setZoomDomain = useCallback(
+    (domain: [number, number] | null) => {
+      if (onZoomDomainChange) onZoomDomainChange(domain);
+      else setInternalZoomDomain(domain);
+    },
+    [onZoomDomainChange],
+  );
   const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
   const [refAreaRight, setRefAreaRight] = useState<number | null>(null);
 
@@ -434,9 +454,9 @@ export function TraceWaterfallView({
     }
     setRefAreaLeft(null);
     setRefAreaRight(null);
-  }, [refAreaLeft, refAreaRight, scaleMs, totalMs]);
+  }, [refAreaLeft, refAreaRight, scaleMs, setZoomDomain, totalMs]);
 
-  const resetZoom = useCallback(() => setZoomDomain(null), []);
+  const resetZoom = useCallback(() => setZoomDomain(null), [setZoomDomain]);
 
   const zoomIn = useCallback(() => {
     const span = zoomMax - zoomMin;
@@ -446,7 +466,7 @@ export function TraceWaterfallView({
       Math.max(0, center - nextSpan / 2),
       Math.min(totalMs, center + nextSpan / 2),
     ]);
-  }, [totalMs, zoomMax, zoomMin]);
+  }, [setZoomDomain, totalMs, zoomMax, zoomMin]);
 
   const zoomOut = useCallback(() => {
     const span = zoomMax - zoomMin;
@@ -459,7 +479,7 @@ export function TraceWaterfallView({
     } else {
       setZoomDomain([left, right]);
     }
-  }, [totalMs, zoomMax, zoomMin]);
+  }, [setZoomDomain, totalMs, zoomMax, zoomMin]);
 
   const rows = useMemo<RowModel[]>(() => {
     const unifiedMode = variant === "unified";
@@ -560,7 +580,8 @@ export function TraceWaterfallView({
   }, [onZoomHandlersReady, zoomIn, zoomOut, resetZoom]);
 
   const handleStepSelect = (step: TraceWaterfallStep) => {
-    const next = selectedStepId === step.id ? null : step.id;
+    const shouldDeselect = !inspectorEnabled && selectedStepId === step.id;
+    const next = shouldDeselect ? null : step.id;
     if (controlledSelectedId === undefined) {
       setInternalSelectedId(next);
     }
@@ -741,6 +762,7 @@ export function TraceWaterfallView({
                                 isRelated={Boolean(relatedSpanIds?.has(step.id))}
                                 isSearchMatch={isSearchMatch}
                                 isCurrentSearchMatch={isCurrentSearchMatch}
+                                isInspectorLocked={inspectorLockedSpanId === step.id}
                                 spanSearchQuery={spanSearchQuery}
                                 onSelect={handleStepSelect}
                                 onHover={handleStepHover}

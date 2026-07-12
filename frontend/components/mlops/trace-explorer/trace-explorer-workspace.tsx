@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
-import { Copy, Download, Link2, List, Loader2, PanelRight, Play, Route } from "lucide-react";
+import { Copy, Download, Link2, List, Loader2, PanelRight, Play, Route, ScanSearch } from "lucide-react";
 
 import { MlopsEmptyState } from "@/components/mlops/layout";
 import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
@@ -32,6 +32,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { useTraceDetail } from "@/hooks/use-trace-detail";
+import { useTraceInspector } from "@/hooks/use-trace-inspector";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   TRACE_WORKSPACE_COLLAPSED_SIZE,
@@ -53,6 +54,12 @@ export type TraceExplorerWorkspaceProps = {
   listLoading?: boolean;
   onRefreshTraces?: () => void;
   onOpenLogsTab?: () => void;
+  urlSpanId?: string | null;
+  urlZoom?: [number, number] | null;
+  urlQ?: string;
+  onUrlSpanChange?: (spanId: string | null) => void;
+  onUrlZoomChange?: (zoom: [number, number] | null) => void;
+  onUrlQChange?: (q: string) => void;
   className?: string;
 };
 
@@ -65,11 +72,18 @@ export function TraceExplorerWorkspace({
   listLoading,
   onRefreshTraces,
   onOpenLogsTab,
+  urlSpanId,
+  urlZoom,
+  urlQ = "",
+  onUrlSpanChange,
+  onUrlZoomChange,
+  onUrlQChange,
 }: TraceExplorerWorkspaceProps) {
   const { tenantId, projectId, token } = useAppContext();
   const normalized = selectedTraceId ? normalizeTraceId(selectedTraceId) || selectedTraceId.trim() : "";
 
   const workspace = useTraceWorkspaceState({ tenantId, projectId });
+  const inspector = useTraceInspector();
 
   const { data, isLoading, isFetching, refetch } = useTraceDetail(
     tenantId,
@@ -82,8 +96,9 @@ export function TraceExplorerWorkspace({
   const [selectedStep, setSelectedStep] = useState<TraceWaterfallStep | null>(null);
   const [hoveredStepId, setHoveredStepId] = useState<string | null>(null);
   const [focusedFlatIndex, setFocusedFlatIndex] = useState<number | null>(null);
-  const [spanFilter, setSpanFilter] = useState("");
+  const [spanFilter, setSpanFilter] = useState(urlQ);
   const debouncedSpanFilter = useDebouncedValue(spanFilter, SPAN_SEARCH_DEBOUNCE_MS);
+  const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(urlZoom ?? null);
   const [searchMatchIds, setSearchMatchIds] = useState<string[]>([]);
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -105,6 +120,9 @@ export function TraceExplorerWorkspace({
   const focusRegionRef = useRef<TraceFocusRegion>("waterfall");
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   const rightPanelRef = useRef<ImperativePanelHandle>(null);
+  const invalidSpanWarnedRef = useRef<string | null>(null);
+  const hydratedSpanKeyRef = useRef<string | null>(null);
+  const urlQWriteSkipRef = useRef(false);
 
   const waterfall = data?.unified_waterfall ?? data?.waterfall ?? null;
   const waterfallVariant = data?.unified_waterfall ? "unified" : "run";
@@ -115,6 +133,71 @@ export function TraceExplorerWorkspace({
       ? searchMatchIds[searchMatchIndex] ?? null
       : null;
 
+  const previewStep = useMemo(() => {
+    if (!inspector.inspectorEnabled || inspector.inspectorLockedSpanId || !hoveredStepId) {
+      return null;
+    }
+    return allSteps.find((step) => step.id === hoveredStepId) ?? null;
+  }, [allSteps, hoveredStepId, inspector.inspectorEnabled, inspector.inspectorLockedSpanId]);
+
+  const detailStep = useMemo(() => {
+    if (!inspector.inspectorEnabled) return selectedStep;
+    if (inspector.inspectorLockedSpanId) {
+      return allSteps.find((step) => step.id === inspector.inspectorLockedSpanId) ?? selectedStep;
+    }
+    return previewStep;
+  }, [
+    allSteps,
+    inspector.inspectorEnabled,
+    inspector.inspectorLockedSpanId,
+    previewStep,
+    selectedStep,
+  ]);
+
+  useEffect(() => {
+    if (urlQ === undefined) return;
+    if (urlQ === spanFilter) return;
+    urlQWriteSkipRef.current = true;
+    setSpanFilter(urlQ);
+  }, [urlQ, spanFilter]);
+
+  useEffect(() => {
+    if (!onUrlQChange || urlQWriteSkipRef.current) {
+      urlQWriteSkipRef.current = false;
+      return;
+    }
+    if (debouncedSpanFilter === (urlQ ?? "")) return;
+    onUrlQChange(debouncedSpanFilter);
+  }, [debouncedSpanFilter, onUrlQChange, urlQ]);
+
+  useEffect(() => {
+    setZoomDomain(urlZoom ?? null);
+  }, [urlZoom]);
+
+  useEffect(() => {
+    if (!onUrlZoomChange) return;
+    const current = urlZoom ?? null;
+    const same =
+      (zoomDomain == null && current == null) ||
+      (zoomDomain != null &&
+        current != null &&
+        zoomDomain[0] === current[0] &&
+        zoomDomain[1] === current[1]);
+    if (!same) onUrlZoomChange(zoomDomain);
+  }, [onUrlZoomChange, urlZoom, zoomDomain]);
+
+  useEffect(() => {
+    if (!onUrlSpanChange) return;
+    if ((selectedStepId ?? null) === (urlSpanId ?? null)) return;
+    onUrlSpanChange(selectedStepId);
+  }, [onUrlSpanChange, selectedStepId, urlSpanId]);
+
+  useEffect(() => {
+    invalidSpanWarnedRef.current = null;
+    hydratedSpanKeyRef.current = null;
+    inspector.resetInspector();
+  }, [inspector.resetInspector, normalized]);
+
   const handleTraceChange = useCallback(
     (traceId: string) => {
       setSelectedStep(null);
@@ -123,9 +206,11 @@ export function TraceExplorerWorkspace({
       setSearchMatchIds([]);
       setSearchMatchIndex(0);
       setCollapsedSpanIds(new Set());
+      setZoomDomain(null);
+      inspector.resetInspector();
       onSelectTrace(traceId);
     },
-    [onSelectTrace],
+    [inspector.resetInspector, onSelectTrace],
   );
 
   const handleStepSelect = useCallback(
@@ -150,6 +235,40 @@ export function TraceExplorerWorkspace({
       setFocusedFlatIndex(index >= 0 ? index : null);
     },
     [allSteps, flatSteps],
+  );
+
+  useEffect(() => {
+    if (!urlSpanId || !allSteps.length) return;
+    const hydrationKey = `${normalized}:${urlSpanId}`;
+    if (hydratedSpanKeyRef.current === hydrationKey) return;
+
+    const step = allSteps.find((item) => item.id === urlSpanId);
+    if (step) {
+      hydratedSpanKeyRef.current = hydrationKey;
+      handleStepSelect(step);
+      return;
+    }
+
+    if (invalidSpanWarnedRef.current !== hydrationKey) {
+      invalidSpanWarnedRef.current = hydrationKey;
+      toastError("Span not found", "The linked span is not in this trace.");
+      onUrlSpanChange?.(null);
+    }
+  }, [allSteps, handleStepSelect, normalized, onUrlSpanChange, urlSpanId]);
+
+  const handleWaterfallStepSelect = useCallback(
+    (step: TraceWaterfallStep | null) => {
+      if (!step) {
+        handleStepSelect(null);
+        inspector.unlockSpan();
+        return;
+      }
+      handleStepSelect(step);
+      if (inspector.inspectorEnabled) {
+        inspector.lockSpan(step.id);
+      }
+    },
+    [handleStepSelect, inspector.inspectorEnabled, inspector.lockSpan, inspector.unlockSpan],
   );
 
   const handleSearchMatchesChange = useCallback(
@@ -350,7 +469,9 @@ export function TraceExplorerWorkspace({
     onClearSelection: () => {
       setSelectedStep(null);
       setFocusedFlatIndex(null);
+      inspector.unlockSpan();
     },
+    onUnlockInspector: inspector.unlockSpan,
     onExitFullscreen: workspace.exitFullscreen,
     onClearSpanFilter: () => {
       if (!spanFilter) return false;
@@ -386,9 +507,16 @@ export function TraceExplorerWorkspace({
     });
 
   const copyShareLink = () =>
-    void copyWithToast(buildTraceShareUrl(normalized), {
-      successTitle: "Share link copied",
-    });
+    void copyWithToast(
+      buildTraceShareUrl(normalized, {
+        spanId: selectedStepId,
+        zoom: zoomDomain,
+        q: spanFilter,
+      }),
+      {
+        successTitle: "Share link copied",
+      },
+    );
 
   const handleExport = async () => {
     if (!normalized || tenantId === "all" || projectId === "all") return;
@@ -482,11 +610,15 @@ export function TraceExplorerWorkspace({
               spanFilter={debouncedSpanFilter}
               currentSearchMatchId={currentSearchMatchId}
               collapsedSpanIds={collapsedSpanIds}
-              onStepSelect={handleStepSelect}
+              onStepSelect={handleWaterfallStepSelect}
               onStepHover={(step) => setHoveredStepId(step?.id ?? null)}
               onFlatStepsChange={setFlatSteps}
               onAllStepsChange={setAllSteps}
               onSearchMatchesChange={handleSearchMatchesChange}
+              zoomDomain={zoomDomain}
+              onZoomDomainChange={setZoomDomain}
+              inspectorEnabled={inspector.inspectorEnabled}
+              inspectorLockedSpanId={inspector.inspectorLockedSpanId}
               traceId={normalized}
               traceDetail={data}
               spanActionContext={spanActionContextExtras}
@@ -519,7 +651,10 @@ export function TraceExplorerWorkspace({
       searchMatchIndex,
       collapsedSpanIds,
       selectedStep,
-      handleStepSelect,
+      handleWaterfallStepSelect,
+      zoomDomain,
+      inspector.inspectorEnabled,
+      inspector.inspectorLockedSpanId,
       handleSearchMatchesChange,
       spanFilter,
       currentSearchMatchId,
@@ -555,6 +690,19 @@ export function TraceExplorerWorkspace({
           </span>
         ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-1">
+          <Button
+            type="button"
+            variant={inspector.inspectorEnabled ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8"
+            aria-pressed={inspector.inspectorEnabled}
+            aria-label="Toggle inspector mode"
+            title="Inspect spans: hover to preview, click to lock, Esc to unlock"
+            onClick={inspector.toggleInspector}
+          >
+            <ScanSearch className="h-3.5 w-3.5" />
+            Inspect
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -623,6 +771,8 @@ export function TraceExplorerWorkspace({
       refetch,
       workspace.resetLayout,
       workspace.waterfallFullscreen,
+      inspector.inspectorEnabled,
+      inspector.toggleInspector,
     ],
   );
 
@@ -715,7 +865,13 @@ export function TraceExplorerWorkspace({
                 traceId={normalized}
                 data={data}
                 waterfall={waterfall}
-                selectedStep={selectedStep}
+                selectedStep={detailStep}
+                isPreview={Boolean(
+                  inspector.inspectorEnabled &&
+                    !inspector.inspectorLockedSpanId &&
+                    detailStep &&
+                    detailStep.id !== selectedStep?.id,
+                )}
                 isLoading={isLoading}
                 onCollapse={workspace.toggleRightCollapsed}
                 onOpenLogsTab={onOpenLogsTab}

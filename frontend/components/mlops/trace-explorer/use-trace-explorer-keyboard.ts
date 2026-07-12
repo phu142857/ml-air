@@ -12,6 +12,8 @@ export type TraceExplorerKeyboardHandlers = {
   /** Focus detail panel on Enter (Sprint 1.2). */
   onFocusDetailPanel: () => void;
   onClearSelection: () => void;
+  /** Return true when inspector lock was released. */
+  onUnlockInspector?: () => boolean;
   /** Return true when fullscreen was active and is now dismissed. */
   onExitFullscreen?: () => boolean;
   /** Return true when span filter was cleared. */
@@ -75,6 +77,7 @@ export function useTraceExplorerKeyboard(
 
         e.preventDefault();
         if (handlers.onExitFullscreen?.()) return;
+        if (handlers.onUnlockInspector?.()) return;
         if (handlers.onClearSpanFilter?.()) return;
         if (handlers.onClearTraceSearch?.()) return;
         handlers.onClearSelection();

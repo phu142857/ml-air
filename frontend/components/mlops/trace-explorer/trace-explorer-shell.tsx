@@ -28,6 +28,12 @@ export type TraceExplorerShellProps = {
   listLoading?: boolean;
   onRefreshTraces?: () => void;
   onOpenLogsTab?: () => void;
+  urlSpanId?: string | null;
+  urlZoom?: [number, number] | null;
+  urlQ?: string;
+  onUrlSpanChange?: (spanId: string | null) => void;
+  onUrlZoomChange?: (zoom: [number, number] | null) => void;
+  onUrlQChange?: (q: string) => void;
   /** Rendered at the end of the tab bar (e.g. dialog close button). */
   headerAction?: ReactNode;
   className?: string;
@@ -42,6 +48,12 @@ export function TraceExplorerShell({
   listLoading,
   onRefreshTraces,
   onOpenLogsTab,
+  urlSpanId,
+  urlZoom,
+  urlQ,
+  onUrlSpanChange,
+  onUrlZoomChange,
+  onUrlQChange,
   headerAction,
   className,
 }: TraceExplorerShellProps) {
@@ -116,6 +128,12 @@ export function TraceExplorerShell({
           listLoading={listLoading}
           onRefreshTraces={onRefreshTraces}
           onOpenLogsTab={onOpenLogsTab ?? (() => setActiveTab("logs"))}
+          urlSpanId={urlSpanId}
+          urlZoom={urlZoom}
+          urlQ={urlQ}
+          onUrlSpanChange={onUrlSpanChange}
+          onUrlZoomChange={onUrlZoomChange}
+          onUrlQChange={onUrlQChange}
         />
       </TabsContent>
 
