@@ -18,7 +18,6 @@ import {
   ListTodo,
   Activity,
   FileDown,
-  ExternalLink,
 } from "lucide-react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Button } from "@/components/ui/button"
@@ -92,8 +91,6 @@ import { mlairKeys } from "@/lib/query-keys"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 import { useChartTheme } from "@/hooks/use-chart-theme"
-import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
-import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
 const RUN_USAGE_LIVE_REFRESH_MS = 1000
 const ACTIVE_RUN_REFETCH_MS = 4000
 
@@ -355,7 +352,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     (taskId: string) => setExpandedTaskId((prev) => (prev === taskId ? null : taskId)),
     [],
   )
-  const grafanaUiUrl = useGrafanaUiUrl()
 
   const trackingQuery = useQuery({
     queryKey: mlairKeys.run.tracking(runId),
@@ -735,30 +731,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                     title="Readiness gates"
                     description="Dataset readiness evaluated for this run."
                     accentBorder="sky"
-                    headerActions={
-                      grafanaUiUrl ? (
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {(["mlair-lifecycle-semantic.json", "mlair-lifecycle-eligibility.json"] as const).map(
-                            (file) => {
-                              const href = grafanaDashboardUrl(grafanaUiUrl, file)
-                              const label = file.replace(/\.json$/i, "")
-                              return href ? (
-                                <a
-                                  key={file}
-                                  href={href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-2 py-1 text-[10px] text-primary hover:bg-muted/50"
-                                >
-                                  {label}
-                                  <ExternalLink className="h-2.5 w-2.5" />
-                                </a>
-                              ) : null
-                            },
-                          )}
-                        </div>
-                      ) : null
-                    }
                   >
                     <DataTable
                       tableId={`run-readiness:${runId}`}
@@ -812,7 +784,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   onRunTimelineTaskChange={setRunTimelineTaskId}
                   runSamples={runUsageSamplesQuery.data?.samples ?? []}
                   runSamplesLoading={runUsageSamplesQuery.isLoading}
-                  grafanaUiUrl={grafanaUiUrl}
                   expandedTaskId={expandedTaskId}
                   onToggleTask={toggleExpandedTask}
                   samples={usageSamplesQuery.data?.samples ?? []}

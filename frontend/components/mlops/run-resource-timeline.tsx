@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
-import Link from "next/link"
 import {
   CartesianGrid,
   Legend,
@@ -13,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { ExternalLink, Activity, Cpu, Search } from "lucide-react"
+import { Activity, Cpu, Search } from "lucide-react"
 
 import { MetadataGrid, MlopsEmptyState } from "@/components/mlops/layout"
 import { Button } from "@/components/ui/button"
@@ -33,7 +32,6 @@ import type {
 } from "@/lib/api"
 import { formatMemMb, formatPct, computeUsagePeaksFromSamples, taskUsageLabel } from "@/lib/usage-format"
 import { useChartTheme } from "@/hooks/use-chart-theme"
-import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
 
 const CHART_COLORS = {
   cpu: "#38bdf8",
@@ -117,7 +115,6 @@ export function RunResourceTimeline({
   onTaskChange,
   loading,
   enabled,
-  grafanaUiUrl,
   embedded = false,
 }: {
   tasks: TaskItem[]
@@ -128,7 +125,6 @@ export function RunResourceTimeline({
   onTaskChange: (taskId: string) => void
   loading: boolean
   enabled: boolean
-  grafanaUiUrl: string | null
   embedded?: boolean
 }) {
   const chartTheme = useChartTheme()
@@ -179,8 +175,6 @@ export function RunResourceTimeline({
     ? runUsage ?? samplePeaks
     : usageByTaskId.get(selectedTaskId) ?? samplePeaks
 
-  const grafanaHref = grafanaDashboardUrl(grafanaUiUrl, "mlair-overview.json")
-
   const peakItems = [
     { label: "CPU peak", value: formatPct(peakUsage?.cpu_pct_peak ?? null), mono: true },
     { label: "CPU P95", value: formatPct(peakUsage?.cpu_pct_p95 ?? null), mono: true },
@@ -204,31 +198,21 @@ export function RunResourceTimeline({
   return (
     <div className="space-y-4">
       {embedded ? null : (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Task</span>
-          <Select value={selectedTaskId} onValueChange={onTaskChange}>
-            <SelectTrigger className="h-8 w-[min(360px,80vw)] font-mono text-xs">
-              <SelectValue placeholder="All tasks" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tasks (merged timeline)</SelectItem>
-              {tasks.map((t) => (
-                <SelectItem key={t.task_id} value={t.task_id} className="font-mono text-xs">
-                  {taskUsageLabel(t.task_id)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {grafanaHref ? (
-          <Button asChild size="sm" variant="outline" className="border-border bg-card">
-            <Link href={grafanaHref} target="_blank" rel="noopener noreferrer">
-              Open in Grafana
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Task</span>
+        <Select value={selectedTaskId} onValueChange={onTaskChange}>
+          <SelectTrigger className="h-8 w-[min(360px,80vw)] font-mono text-xs">
+            <SelectValue placeholder="All tasks" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All tasks (merged timeline)</SelectItem>
+            {tasks.map((t) => (
+              <SelectItem key={t.task_id} value={t.task_id} className="font-mono text-xs">
+                {taskUsageLabel(t.task_id)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       )}
 

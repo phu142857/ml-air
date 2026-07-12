@@ -40,7 +40,6 @@ import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
 import { toastError, toastSuccess } from "@/lib/toast-actions"
 import { isScopePinned } from "@/lib/scope"
 import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
-import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
 
 const ACTIVE_TASK_REFETCH_MS = 4000
 
@@ -85,7 +84,6 @@ function TaskDetailContent() {
   const scopeKey = taskScopeHintKey(hint)
 
   const poll = useRealtimeQueryPolling()
-  const grafanaUiUrl = useGrafanaUiUrl()
 
   const runIdHint = hint.runId
   const storeTask = useExecutionStore((s) => {
@@ -386,7 +384,6 @@ function TaskDetailContent() {
                   onTaskChange={() => {}}
                   loading={usageSamplesQuery.isLoading}
                   enabled={usageSamplesQuery.data?.enabled ?? true}
-                  grafanaUiUrl={grafanaUiUrl}
                   embedded
                 />
               )}

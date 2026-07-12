@@ -42,7 +42,6 @@ type RunTasksUsageTableProps = {
   runSamples?: UsageSamplePoint[]
   runSamplesLoading?: boolean
   samplesEnabled?: boolean
-  grafanaUiUrl?: string | null
   expandedTaskId: string | null
   onToggleTask: (taskId: string) => void
   samples: UsageSamplePoint[]
@@ -132,7 +131,6 @@ export function RunTasksUsageTable({
   runSamples = [],
   runSamplesLoading = false,
   samplesEnabled = true,
-  grafanaUiUrl = null,
   expandedTaskId,
   onToggleTask,
   samples,
@@ -183,7 +181,6 @@ export function RunTasksUsageTable({
           onTaskChange={onRunTimelineTaskChange ?? (() => {})}
           loading={runSamplesLoading}
           enabled={samplesEnabled}
-          grafanaUiUrl={grafanaUiUrl}
         />
       </Panel>
 
@@ -287,7 +284,6 @@ export function RunTasksUsageTable({
                                   onTaskChange={() => {}}
                                   loading={samplesLoading}
                                   enabled={samplesEnabled}
-                                  grafanaUiUrl={null}
                                   embedded
                                 />
                               ) : null}

@@ -25,6 +25,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -44,9 +46,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { MlopsEmptyState } from "@/components/mlops/layout"
+import {
+  DATA_TABLE_DENSITY_OPTIONS,
+  DENSITY_ROW_CLASS,
+  migrateStoredDensity,
+  normalizeDataTableDensity,
+  readPersistedDensity,
+  writePersistedDensity,
+  type DataTableDensity,
+} from "@/lib/data-table-density"
 import { cn } from "@/lib/utils"
 
-type Density = "compact" | "default" | "comfortable"
+export type { DataTableDensity }
+
+type Density = DataTableDensity
 type SortDirection = "asc" | "desc"
 
 type DataTableSavedView = {
@@ -109,16 +123,11 @@ interface DataTableProps<T> {
   searchable?: boolean
   stickyHeader?: boolean
   stickyFirstColumn?: boolean
-  defaultDensity?: Density
+  /** compact | comfortable | spacious (legacy `default` maps to comfortable) */
+  defaultDensity?: Density | "default"
   defaultPageSize?: number
   pageSizeOptions?: number[]
   columnResize?: boolean
-}
-
-const DENSITY_ROW_CLASS: Record<Density, string> = {
-  compact: "[&_td]:py-1.5 [&_th]:h-8 text-xs",
-  default: "[&_td]:py-2 [&_th]:h-10 text-sm",
-  comfortable: "[&_td]:py-3 [&_th]:h-11 text-sm",
 }
 
 const DEFAULT_PAGE_SIZES = [10, 25, 50, 100]
@@ -240,29 +249,39 @@ function getColumnSortValue<T>(column: DataTableColumn<T>, row: T): unknown {
 
 function renderLoadingTable(columnCount: number, rowCount: number, density: Density) {
   return (
-    <div className="min-w-0 overflow-x-auto overscroll-x-contain">
-      <Table className={cn("table-fixed min-w-full", DENSITY_ROW_CLASS[density])}>
-        <TableHeader>
+    <div
+      className="min-w-0 flex-1 overflow-auto overscroll-contain"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading table rows"
+    >
+      <Table container={false} className={cn("table-fixed min-w-full", DENSITY_ROW_CLASS[density])}>
+        <TableHeader className="sticky top-0 z-20 bg-card">
           <TableRow className="border-border/70 hover:bg-transparent">
             {Array.from({ length: columnCount }).map((_, i) => (
-              <TableHead key={i}>
-                <div className="h-3 w-20 rounded bg-muted" />
+              <TableHead key={i} className="bg-card">
+                <div className="skeleton-pulse h-3 w-20 rounded bg-muted" />
               </TableHead>
             ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {Array.from({ length: rowCount }).map((_, rowIndex) => (
-            <TableRow key={rowIndex} className="border-border/50">
+            <TableRow key={rowIndex} className="border-border/50 hover:bg-transparent">
               {Array.from({ length: columnCount }).map((__, cellIndex) => (
                 <TableCell key={cellIndex}>
-                  <div className="h-3.5 w-full max-w-[10rem] rounded bg-muted/70" />
+                  <div
+                    className="skeleton-pulse h-3.5 w-full max-w-[10rem] rounded bg-muted/70"
+                    style={{ width: `${55 + ((rowIndex + cellIndex) % 4) * 12}%` }}
+                  />
                 </TableCell>
               ))}
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      <span className="sr-only">Loading…</span>
     </div>
   )
 }
@@ -285,7 +304,7 @@ export function DataTable<T>({
   searchable = true,
   stickyHeader = true,
   stickyFirstColumn = true,
-  defaultDensity = "default",
+  defaultDensity = "comfortable",
   defaultPageSize = 25,
   pageSizeOptions = DEFAULT_PAGE_SIZES,
   columnResize = true,
@@ -293,6 +312,8 @@ export function DataTable<T>({
   const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({})
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([])
   const resizedWidthsRef = useRef<Record<string, number>>({})
+  const pendingKeyboardFocusRef = useRef<number | null>(null)
+  const resolvedDefaultDensity = normalizeDataTableDensity(defaultDensity)
 
   const initialVisibility = useMemo(
     () =>
@@ -309,7 +330,11 @@ export function DataTable<T>({
   )
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [density, setDensity] = useState<Density>(defaultDensity)
+  const [density, setDensityState] = useState<Density>(() =>
+    typeof window === "undefined"
+      ? resolvedDefaultDensity
+      : readPersistedDensity(resolvedDefaultDensity),
+  )
   const [pageSize, setPageSize] = useState(defaultPageSize)
   const [pageIndex, setPageIndex] = useState(0)
   const [visibility, setVisibility] = useState<Record<string, boolean>>(initialVisibility)
@@ -321,6 +346,11 @@ export function DataTable<T>({
   const [resizedWidths, setResizedWidths] = useState<Record<string, number>>({})
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1)
   const [widthsReady, setWidthsReady] = useState(false)
+
+  const setDensity = useCallback((next: Density) => {
+    setDensityState(next)
+    writePersistedDensity(next)
+  }, [])
 
   useEffect(() => {
     resizedWidthsRef.current = resizedWidths
@@ -346,7 +376,7 @@ export function DataTable<T>({
         setActiveViewId(stored.activeViewId)
         const active = stored.views.find((view) => view.id === stored.activeViewId)
         if (active) {
-          setDensity(active.density)
+          setDensityState(migrateStoredDensity(active.density))
           setPageSize(active.pageSize)
           setVisibility((prev) => ({ ...prev, ...active.visibility }))
           setPinned(active.pinned)
@@ -460,7 +490,7 @@ export function DataTable<T>({
     pinned.length > 0 ||
     hasCustomWidths ||
     Object.keys(visibility).some((id) => visibility[id] === false) ||
-    density !== defaultDensity ||
+    density !== resolvedDefaultDensity ||
     pageSize !== defaultPageSize
 
   const setColumnVisible = (id: string, next: boolean) => {
@@ -496,7 +526,7 @@ export function DataTable<T>({
 
   const resetState = () => {
     setSearchQuery("")
-    setDensity(defaultDensity)
+    setDensity(resolvedDefaultDensity)
     setPageSize(defaultPageSize)
     setPageIndex(0)
     setVisibility(initialVisibility)
@@ -579,7 +609,7 @@ export function DataTable<T>({
       resetState()
       return
     }
-    setDensity(view.density)
+    setDensity(migrateStoredDensity(view.density))
     setPageSize(view.pageSize)
     setVisibility((prev) => ({ ...prev, ...view.visibility }))
     setPinned(view.pinned)
@@ -625,11 +655,37 @@ export function DataTable<T>({
       setFocusedRowIndex(lastIndex)
       return
     }
+    if (e.key === "PageDown") {
+      e.preventDefault()
+      if (pageIndex < totalPages - 1) {
+        pendingKeyboardFocusRef.current = 0
+        setPageIndex((current) => Math.min(totalPages - 1, current + 1))
+        setFocusedRowIndex(0)
+      }
+      return
+    }
+    if (e.key === "PageUp") {
+      e.preventDefault()
+      if (pageIndex > 0) {
+        pendingKeyboardFocusRef.current = 0
+        setPageIndex((current) => Math.max(0, current - 1))
+        setFocusedRowIndex(0)
+      }
+      return
+    }
     if ((e.key === "Enter" || e.key === " ") && onRowClick) {
       e.preventDefault()
       onRowClick(row)
     }
   }
+
+  useEffect(() => {
+    const pending = pendingKeyboardFocusRef.current
+    if (pending == null) return
+    pendingKeyboardFocusRef.current = null
+    const node = rowRefs.current[pending]
+    node?.focus()
+  }, [pageIndex, pagedRows])
 
   const currentViewLabel =
     savedViews.find((view) => view.id === activeViewId)?.name ?? (tableId ? "Default view" : "Local view")
@@ -646,70 +702,72 @@ export function DataTable<T>({
   return (
     <div className={cn("panel-surface flex w-full min-w-0 flex-col overflow-hidden p-1", className)}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
-        <div className="shrink-0 border-b border-border p-1">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-start gap-3">
+        <div className="shrink-0 border-b border-border bg-card/80 px-3 py-2.5">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 {title ? <h3 className="font-heading text-sm font-semibold text-foreground">{title}</h3> : null}
-                {description ? <p className="mt-1 text-xs text-muted-foreground">{description}</p> : null}
+                {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
                 {tableId ? (
-                  <>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="outline" size="sm" className="h-8">
-                          <LayoutTemplate className="h-3.5 w-3.5" />
-                          {currentViewLabel}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-64">
-                        <DropdownMenuLabel>Saved views</DropdownMenuLabel>
-                        <DropdownMenuItem onSelect={() => applyView(null)}>Default view</DropdownMenuItem>
-                        {savedViews.map((view) => (
-                          <DropdownMenuItem key={view.id} onSelect={() => applyView(view)}>
-                            {view.name}
-                          </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={saveCurrentView}>Save current view…</DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={deleteActiveView}
-                          disabled={!activeViewId}
-                        >
-                          Delete active view
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" size="sm" className="h-8">
+                        <LayoutTemplate className="h-3.5 w-3.5" />
+                        {currentViewLabel}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuLabel>Saved views</DropdownMenuLabel>
+                      <DropdownMenuItem onSelect={() => applyView(null)}>Default view</DropdownMenuItem>
+                      {savedViews.map((view) => (
+                        <DropdownMenuItem key={view.id} onSelect={() => applyView(view)}>
+                          {view.name}
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={saveCurrentView}>Save current view…</DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={deleteActiveView}
+                        disabled={!activeViewId}
+                      >
+                        Delete active view
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" className="h-8">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      aria-label={`Row density: ${DATA_TABLE_DENSITY_OPTIONS.find((o) => o.value === density)?.label ?? density}`}
+                    >
                       <Rows3 className="h-3.5 w-3.5" />
-                      Density
+                      {DATA_TABLE_DENSITY_OPTIONS.find((o) => o.value === density)?.label ?? "Density"}
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40">
-                    <DropdownMenuCheckboxItem
-                      checked={density === "compact"}
-                      onCheckedChange={() => setDensity("compact")}
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuLabel>Row density</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup
+                      value={density}
+                      onValueChange={(value) => setDensity(normalizeDataTableDensity(value))}
                     >
-                      Compact
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={density === "default"}
-                      onCheckedChange={() => setDensity("default")}
-                    >
-                      Default
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                      checked={density === "comfortable"}
-                      onCheckedChange={() => setDensity("comfortable")}
-                    >
-                      Comfortable
-                    </DropdownMenuCheckboxItem>
+                      {DATA_TABLE_DENSITY_OPTIONS.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                          <span className="flex flex-col gap-0.5">
+                            <span>{option.label}</span>
+                            <span className="text-[10px] font-normal text-muted-foreground">
+                              {option.description}
+                            </span>
+                          </span>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -755,7 +813,7 @@ export function DataTable<T>({
 
             <div className="flex flex-wrap items-center gap-2">
               {searchable ? (
-                <label className="relative min-w-[16rem] flex-1 md:max-w-xs">
+                <label className="relative min-w-[14rem] flex-1 sm:max-w-xs">
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={searchQuery}
@@ -839,32 +897,33 @@ export function DataTable<T>({
             {renderLoadingTable(Math.max(visibleColumns.length, 3), loadingRows, density)}
           </div>
         ) : processedRows.length === 0 ? (
-          <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-muted">
-              {searchQuery || activeFilterCount ? (
-                <Search className="h-5 w-5 text-muted-foreground" />
-              ) : (
-                <TableProperties className="h-5 w-5 text-muted-foreground" />
-              )}
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">
-                {searchQuery || activeFilterCount ? "No matching rows" : emptyTitle}
-              </p>
-              <p className="max-w-md text-sm text-muted-foreground">
-                {searchQuery || activeFilterCount ? emptyDescription : emptyMessage}
-              </p>
-            </div>
-            {searchQuery || activeFilterCount ? (
-              <Button type="button" variant="outline" size="sm" onClick={resetState}>
-                Clear search and filters
-              </Button>
-            ) : null}
+          <div className="flex min-h-[16rem] flex-1 items-center justify-center p-4">
+            <MlopsEmptyState
+              icon={searchQuery || activeFilterCount ? Search : TableProperties}
+              title={searchQuery || activeFilterCount ? "No matching rows" : emptyTitle}
+              description={
+                searchQuery || activeFilterCount
+                  ? emptyDescription
+                  : emptyMessage
+              }
+              action={
+                searchQuery || activeFilterCount ? (
+                  <Button type="button" variant="outline" size="sm" onClick={resetState}>
+                    Clear search and filters
+                  </Button>
+                ) : undefined
+              }
+              className="w-full max-w-md border-none bg-transparent py-8 ring-0"
+            />
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
               <Table
+                container={false}
+                role="grid"
+                aria-rowcount={processedRows.length}
+                aria-colcount={visibleColumns.length}
                 className={cn("table-fixed border-collapse", DENSITY_ROW_CLASS[density])}
                 style={{
                   width: `${tableMinWidth}px`,
@@ -880,7 +939,11 @@ export function DataTable<T>({
                     />
                   ))}
                 </colgroup>
-                <TableHeader className={cn(stickyHeader && "sticky top-0 z-20 bg-card")}>
+                <TableHeader
+                  className={cn(
+                    stickyHeader && "sticky top-0 z-20 border-b border-border bg-card",
+                  )}
+                >
                   <TableRow className="border-border/70 hover:bg-transparent">
                     {visibleColumns.map((column) => {
                       const sortEntry = sorts.find((entry) => entry.id === column.id)
@@ -910,7 +973,7 @@ export function DataTable<T>({
                           <div className="relative flex min-w-0 items-center pr-2">
                             <button
                               type="button"
-                              className="inline-flex min-w-0 flex-1 items-center gap-1 text-left"
+                              className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left outline-none transition-default hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                               onClick={(e) => toggleSort(column.id, e.shiftKey)}
                             >
                               <span className="min-w-0 truncate">{column.header}</span>
@@ -949,16 +1012,22 @@ export function DataTable<T>({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedRows.map((row, rowIndex) => (
+                  {pagedRows.map((row, rowIndex) => {
+                    const isFocused = focusedRowIndex === rowIndex
+                    const isRovingTabStop =
+                      isFocused || (focusedRowIndex < 0 && rowIndex === 0)
+                    return (
                     <TableRow
                       key={keyExtractor(row)}
                       ref={(node) => {
                         rowRefs.current[rowIndex] = node
                       }}
-                      data-selected={focusedRowIndex === rowIndex ? "true" : "false"}
-                      tabIndex={0}
+                      data-selected={isFocused ? "true" : "false"}
+                      tabIndex={isRovingTabStop ? 0 : -1}
                       className={cn(
-                        "group border-border/50 outline-none transition-default hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset",
+                        "group border-border/50 outline-none transition-default",
+                        "hover:bg-muted/40 data-[selected=true]:bg-muted/50",
+                        "focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
                         onRowClick && "cursor-pointer",
                         rowClassName?.(row),
                       )}
@@ -981,7 +1050,7 @@ export function DataTable<T>({
                               !column.wrap && "whitespace-nowrap",
                               column.wrap && "whitespace-normal",
                               isPinned &&
-                                "sticky z-10 border-r border-border bg-card group-hover:bg-muted/30 group-focus-visible:bg-muted/30",
+                                "sticky z-10 border-r border-border bg-card group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50 group-focus-visible:bg-muted/50",
                               column.className,
                               "text-left",
                             )}
@@ -1000,13 +1069,18 @@ export function DataTable<T>({
                         )
                       })}
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border p-1">
-              <div className="text-xs text-muted-foreground">
+            <div
+              className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/60 px-3 py-2"
+              role="navigation"
+              aria-label="Table pagination"
+            >
+              <div className="text-xs text-muted-foreground" aria-live="polite">
                 Showing{" "}
                 <span className="font-medium text-foreground">
                   {processedRows.length === 0 ? 0 : pageIndex * pageSize + 1}
@@ -1021,9 +1095,11 @@ export function DataTable<T>({
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Rows</span>
+                  <label htmlFor={tableId ? `${tableId}-page-size` : undefined} className="text-xs text-muted-foreground">
+                    Rows
+                  </label>
                   <Select
                     value={String(pageSize)}
                     onValueChange={(value) => {
@@ -1031,7 +1107,12 @@ export function DataTable<T>({
                       setPageIndex(0)
                     }}
                   >
-                    <SelectTrigger size="sm" className="h-8 w-[86px] text-xs">
+                    <SelectTrigger
+                      id={tableId ? `${tableId}-page-size` : undefined}
+                      size="sm"
+                      className="h-8 w-[86px] text-xs"
+                      aria-label="Rows per page"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1065,7 +1146,7 @@ export function DataTable<T>({
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </Button>
-                  <div className="min-w-[5rem] text-center text-xs text-muted-foreground">
+                  <div className="min-w-[5.5rem] px-1 text-center text-xs text-muted-foreground">
                     Page <span className="font-medium text-foreground">{pageIndex + 1}</span> / {totalPages}
                   </div>
                   <Button
