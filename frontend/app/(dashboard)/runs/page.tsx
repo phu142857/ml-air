@@ -190,6 +190,8 @@ export default function RunsPage() {
             keyExtractor={(r) => r.run_id}
             onRowClick={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
             emptyMessage="No runs."
+            loading={runsQuery.isFetching && rows.length > 0}
+            stickyFirstColumn
           />
           {showLoadMore ? (
             <div className="flex justify-center border-t border-border/60 py-4">

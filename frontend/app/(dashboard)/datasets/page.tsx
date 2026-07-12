@@ -323,6 +323,8 @@ export default function DatasetsPage() {
             keyExtractor={(d) => d.dataset_id}
             onRowClick={(d) => router.push(`/datasets/${encodeURIComponent(d.dataset_id)}`)}
             emptyMessage="No datasets match."
+            loading={datasetsQuery.isFetching && items.length > 0}
+            stickyFirstColumn
           />
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

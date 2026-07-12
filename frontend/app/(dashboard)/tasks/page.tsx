@@ -192,7 +192,8 @@ export default function TasksPage() {
             keyExtractor={(row) => `${row.tenant_id}:${row.project_id}:${row.task_id}`}
             onRowClick={openTask}
             emptyMessage="No tasks in recent runs."
-            loading={isLoading}
+            loading={isFetching && rows.length > 0}
+            stickyFirstColumn
           />
         </ScopedListContent>
       </PageScrollBody>

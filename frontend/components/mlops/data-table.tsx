@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from "react"
 import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  AlertCircle,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  RefreshCw,
   Rows3,
   Search,
   TableProperties,
@@ -63,6 +65,10 @@ import {
 } from "@/components/ui/table"
 import { MlopsEmptyState } from "@/components/mlops/layout"
 import {
+  DataTableBodyRow,
+  type DataTableRowAction,
+} from "@/components/mlops/data-table-body-row"
+import {
   DATA_TABLE_DENSITY_OPTIONS,
   DENSITY_ROW_CLASS,
   migrateStoredDensity,
@@ -79,6 +85,11 @@ import {
   isQuickFilterColumn,
   toggleSelectionSet,
 } from "@/lib/data-table-findability"
+import {
+  computeVirtualWindow,
+  estimateRowHeight,
+  shouldVirtualizeRows,
+} from "@/lib/data-table-performance"
 import {
   duplicateViewName,
   mergeColumnOrder,
@@ -98,7 +109,7 @@ import {
 import { copyWithToast } from "@/lib/toast-actions"
 import { cn } from "@/lib/utils"
 
-export type { DataTableDensity }
+export type { DataTableDensity, DataTableRowAction }
 
 type Density = DataTableDensity
 type SortDirection = DataTableSortDirection
@@ -143,6 +154,11 @@ interface DataTableProps<T> {
   tableId?: string
   loading?: boolean
   loadingRows?: number
+  /** Sprint 2.4 — shown instead of rows when set (role=alert). */
+  error?: boolean
+  errorTitle?: string
+  errorMessage?: string
+  onRetry?: () => void
   title?: string
   description?: string
   searchable?: boolean
@@ -159,6 +175,15 @@ interface DataTableProps<T> {
   getRowCopyText?: (row: T) => string
   /** Extra bulk actions rendered when one or more rows are selected. */
   bulkActions?: React.ReactNode | ((ctx: { selectedRows: T[]; selectedIds: string[] }) => React.ReactNode)
+  /** Sprint 2.4 — right-click row menu. Default true. */
+  contextMenu?: boolean
+  /** Extra context-menu actions appended after built-ins. */
+  rowActions?: DataTableRowAction<T>[]
+  /**
+   * Sprint 2.4 — virtualize large page bodies.
+   * `auto` enables when page row count ≥ threshold.
+   */
+  virtualize?: boolean | "auto"
 }
 
 const DEFAULT_PAGE_SIZES = [10, 25, 50, 100]
@@ -239,7 +264,7 @@ function snapshotLayout(
 function renderLoadingTable(columnCount: number, rowCount: number, density: Density) {
   return (
     <div
-      className="min-w-0 flex-1 overflow-auto overscroll-contain"
+      className="min-h-0 flex-1 overflow-auto overscroll-contain motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       role="status"
       aria-live="polite"
       aria-busy="true"
@@ -288,6 +313,10 @@ export function DataTable<T>({
   tableId,
   loading = false,
   loadingRows = 8,
+  error = false,
+  errorTitle = "Couldn’t load table",
+  errorMessage = "Something went wrong while loading rows. Try again.",
+  onRetry,
   title,
   description,
   searchable = true,
@@ -300,10 +329,14 @@ export function DataTable<T>({
   selectable = true,
   getRowCopyText,
   bulkActions,
+  contextMenu = true,
+  rowActions,
+  virtualize = "auto",
 }: DataTableProps<T>) {
   const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({})
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([])
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const resizedWidthsRef = useRef<Record<string, number>>({})
   const pendingKeyboardFocusRef = useRef<number | null>(null)
   const skipNextWorkspaceWriteRef = useRef(true)
@@ -354,6 +387,9 @@ export function DataTable<T>({
   const [viewNameDraft, setViewNameDraft] = useState("")
   const [deleteViewOpen, setDeleteViewOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(360)
+  const [stickyEdgeShadow, setStickyEdgeShadow] = useState(false)
 
   const setDensity = useCallback((next: Density) => {
     setDensityState(next)
@@ -591,6 +627,59 @@ export function DataTable<T>({
     return processedRows.slice(start, start + pageSize)
   }, [pageIndex, pageSize, processedRows])
 
+  const rowHeight = estimateRowHeight(density)
+  const virtualEnabled = shouldVirtualizeRows(pagedRows.length, virtualize)
+  const virtualWindow = useMemo(() => {
+    if (!virtualEnabled) {
+      return {
+        startIndex: 0,
+        endIndex: pagedRows.length,
+        offsetTop: 0,
+        offsetBottom: 0,
+      }
+    }
+    return computeVirtualWindow({
+      rowCount: pagedRows.length,
+      rowHeight,
+      scrollTop,
+      viewportHeight,
+      overscan: 8,
+    })
+  }, [pagedRows.length, rowHeight, scrollTop, viewportHeight, virtualEnabled])
+
+  const visiblePagedRows = useMemo(
+    () =>
+      virtualEnabled
+        ? pagedRows.slice(virtualWindow.startIndex, virtualWindow.endIndex)
+        : pagedRows,
+    [pagedRows, virtualEnabled, virtualWindow.endIndex, virtualWindow.startIndex],
+  )
+
+  const handleTableScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget
+    setScrollTop(target.scrollTop)
+    setStickyEdgeShadow(target.scrollLeft > 2)
+  }, [])
+
+  useEffect(() => {
+    const node = scrollRef.current
+    if (!node || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      setViewportHeight(entry.contentRect.height)
+    })
+    observer.observe(node)
+    setViewportHeight(node.clientHeight)
+    setStickyEdgeShadow(node.scrollLeft > 2)
+    return () => observer.disconnect()
+  }, [loading, error, pagedRows.length])
+
+  useEffect(() => {
+    setScrollTop(0)
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [pageIndex, pageSize, searchQuery, filters, sorts])
+
   const selectedRows = useMemo(
     () => processedRows.filter((row) => selectedIds.has(keyExtractor(row))),
     [keyExtractor, processedRows, selectedIds],
@@ -699,6 +788,23 @@ export function DataTable<T>({
       successTitle: `Copied ${selectedRows.length} row${selectedRows.length === 1 ? "" : "s"}`,
     })
   }, [resolveRowCopyText, selectedRows])
+
+  const copySingleRow = useCallback(
+    async (row: T) => {
+      const text = resolveRowCopyText(row)
+      await copyWithToast(text, { successTitle: "Row copied" })
+    },
+    [resolveRowCopyText],
+  )
+
+  const getColumnWidthStyle = useCallback(
+    (column: { id: string; width?: number | string; minWidth?: number }) =>
+      columnWidthStyle(column as DataTableColumn<T>, resizedWidths),
+    [resizedWidths],
+  )
+
+  const softLoading = loading && data.length > 0 && !error
+  const hardLoading = loading && data.length === 0 && !error
 
   const resetState = () => {
     setSearchQuery("")
@@ -872,65 +978,79 @@ export function DataTable<T>({
     setDeleteViewOpen(false)
   }
 
-  const handleRowKeyDown = (row: T, rowIndex: number, e: React.KeyboardEvent<HTMLTableRowElement>) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault()
-      const nextIndex = Math.min(pagedRows.length - 1, rowIndex + 1)
-      rowRefs.current[nextIndex]?.focus()
+  const focusPagedRow = useCallback(
+    (nextIndex: number) => {
       setFocusedRowIndex(nextIndex)
-      return
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault()
-      const nextIndex = Math.max(0, rowIndex - 1)
-      rowRefs.current[nextIndex]?.focus()
-      setFocusedRowIndex(nextIndex)
-      return
-    }
-    if (e.key === "Home") {
-      e.preventDefault()
-      rowRefs.current[0]?.focus()
-      setFocusedRowIndex(0)
-      return
-    }
-    if (e.key === "End") {
-      e.preventDefault()
-      const lastIndex = Math.max(0, pagedRows.length - 1)
-      rowRefs.current[lastIndex]?.focus()
-      setFocusedRowIndex(lastIndex)
-      return
-    }
-    if (e.key === "PageDown") {
-      e.preventDefault()
-      if (pageIndex < totalPages - 1) {
-        pendingKeyboardFocusRef.current = 0
-        setPageIndex((current) => Math.min(totalPages - 1, current + 1))
-        setFocusedRowIndex(0)
+      pendingKeyboardFocusRef.current = nextIndex
+      if (virtualEnabled && scrollRef.current) {
+        const top = nextIndex * rowHeight
+        const bottom = top + rowHeight
+        const node = scrollRef.current
+        if (top < node.scrollTop) node.scrollTop = top
+        else if (bottom > node.scrollTop + node.clientHeight) {
+          node.scrollTop = bottom - node.clientHeight
+        }
       }
-      return
-    }
-    if (e.key === "PageUp") {
-      e.preventDefault()
-      if (pageIndex > 0) {
-        pendingKeyboardFocusRef.current = 0
-        setPageIndex((current) => Math.max(0, current - 1))
-        setFocusedRowIndex(0)
+    },
+    [rowHeight, virtualEnabled],
+  )
+
+  const handleRowKeyDown = useCallback(
+    (row: T, rowIndex: number, e: React.KeyboardEvent<HTMLTableRowElement>) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        focusPagedRow(Math.min(pagedRows.length - 1, rowIndex + 1))
+        return
       }
-      return
-    }
-    if ((e.key === "Enter" || e.key === " ") && onRowClick) {
-      e.preventDefault()
-      onRowClick(row)
-    }
-  }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        focusPagedRow(Math.max(0, rowIndex - 1))
+        return
+      }
+      if (e.key === "Home") {
+        e.preventDefault()
+        focusPagedRow(0)
+        return
+      }
+      if (e.key === "End") {
+        e.preventDefault()
+        focusPagedRow(Math.max(0, pagedRows.length - 1))
+        return
+      }
+      if (e.key === "PageDown") {
+        e.preventDefault()
+        if (pageIndex < totalPages - 1) {
+          pendingKeyboardFocusRef.current = 0
+          setPageIndex((current) => Math.min(totalPages - 1, current + 1))
+          setFocusedRowIndex(0)
+        }
+        return
+      }
+      if (e.key === "PageUp") {
+        e.preventDefault()
+        if (pageIndex > 0) {
+          pendingKeyboardFocusRef.current = 0
+          setPageIndex((current) => Math.max(0, current - 1))
+          setFocusedRowIndex(0)
+        }
+        return
+      }
+      if ((e.key === "Enter" || e.key === " ") && onRowClick) {
+        e.preventDefault()
+        onRowClick(row)
+      }
+    },
+    [focusPagedRow, onRowClick, pageIndex, pagedRows.length, totalPages],
+  )
 
   useEffect(() => {
     const pending = pendingKeyboardFocusRef.current
     if (pending == null) return
     pendingKeyboardFocusRef.current = null
-    const node = rowRefs.current[pending]
+    const localIndex = virtualEnabled ? pending - virtualWindow.startIndex : pending
+    const node = rowRefs.current[localIndex]
     node?.focus()
-  }, [pageIndex, pagedRows])
+  }, [pageIndex, pagedRows, virtualEnabled, virtualWindow.startIndex, visiblePagedRows])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1023,16 +1143,19 @@ export function DataTable<T>({
     <div
       className={cn("panel-surface flex w-full min-w-0 flex-col overflow-hidden p-1", className)}
       data-datatable-root="true"
+      aria-busy={loading || undefined}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b border-border bg-card/80 px-3 py-2.5">
           <div className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">
                 {title ? <h3 className="font-heading text-sm font-semibold text-foreground">{title}</h3> : null}
-                {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+                {description ? (
+                  <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">{description}</p>
+                ) : null}
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <div className="flex max-w-full flex-wrap items-center justify-start gap-1.5 sm:justify-end">
                 {tableId ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1408,9 +1531,30 @@ export function DataTable<T>({
           </div>
         </div>
 
-        {loading ? (
+        {error ? (
+          <div
+            className="flex min-h-[16rem] flex-1 items-center justify-center p-4"
+            role="alert"
+            aria-live="assertive"
+          >
+            <MlopsEmptyState
+              icon={AlertCircle}
+              title={errorTitle}
+              description={errorMessage}
+              action={
+                onRetry ? (
+                  <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                    Retry
+                  </Button>
+                ) : undefined
+              }
+              className="w-full max-w-md border-none bg-transparent py-8 ring-0"
+            />
+          </div>
+        ) : hardLoading ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {renderLoadingTable(Math.max(visibleColumns.length, 3), loadingRows, density)}
+            {renderLoadingTable(Math.max(visibleColumns.length + (selectable ? 1 : 0), 3), loadingRows, density)}
           </div>
         ) : processedRows.length === 0 ? (
           <div className="flex min-h-[16rem] flex-1 items-center justify-center p-4">
@@ -1433,11 +1577,29 @@ export function DataTable<T>({
             />
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            {softLoading ? (
+              <div
+                className="pointer-events-none absolute inset-0 z-40 flex items-start justify-center bg-background/40 pt-10 backdrop-blur-[1px] motion-safe:animate-in motion-safe:fade-in-0"
+                role="status"
+                aria-live="polite"
+                aria-label="Refreshing table"
+              >
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+                  <RefreshCw className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
+                  Updating…
+                </span>
+              </div>
+            ) : null}
+            <div
+              ref={scrollRef}
+              className="min-h-0 flex-1 overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+              onScroll={handleTableScroll}
+            >
               <Table
                 container={false}
                 role="grid"
+                aria-label={title || "Data table"}
                 aria-rowcount={processedRows.length}
                 aria-colcount={visibleColumns.length + (selectable ? 1 : 0)}
                 className={cn("table-fixed border-collapse", DENSITY_ROW_CLASS[density])}
@@ -1469,6 +1631,8 @@ export function DataTable<T>({
                         className={cn(
                           "sticky left-0 z-30 w-10 bg-card px-2",
                           stickyHeader && "top-0",
+                          stickyEdgeShadow &&
+                            "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-3 after:translate-x-full after:bg-gradient-to-r after:from-black/10 after:to-transparent dark:after:from-black/40",
                         )}
                       >
                         <Checkbox
@@ -1485,12 +1649,22 @@ export function DataTable<T>({
                       const sortEntry = sorts.find((entry) => entry.id === column.id)
                       const sortIndex = sorts.findIndex((entry) => entry.id === column.id)
                       const isPinned = pinnedColumns.includes(column.id)
+                      const isLastPinned =
+                        isPinned && pinnedColumns[pinnedColumns.length - 1] === column.id
                       return (
                         <TableHead
                           key={column.id}
                           ref={(node) => {
                             headerRefs.current[column.id] = node
                           }}
+                          scope="col"
+                          aria-sort={
+                            sortEntry
+                              ? sortEntry.direction === "asc"
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
                           style={{
                             ...columnWidthStyle(column, resizedWidths),
                             left: isPinned ? pinnedOffsets[column.id] : undefined,
@@ -1501,6 +1675,9 @@ export function DataTable<T>({
                             stickyHeader && "top-0",
                             isPinned &&
                               "sticky z-30 border-r border-border bg-card",
+                            isLastPinned &&
+                              stickyEdgeShadow &&
+                              "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-3 after:translate-x-full after:bg-gradient-to-r after:from-black/10 after:to-transparent dark:after:from-black/40",
                             column.headerClassName,
                             column.className,
                             "text-left",
@@ -1509,19 +1686,19 @@ export function DataTable<T>({
                           <div className="relative flex min-w-0 items-center pr-2">
                             <button
                               type="button"
-                              className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left outline-none transition-default hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                              className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                               title="Click to sort · Shift+click for multi-sort"
                               onClick={(e) => toggleSort(column.id, e.shiftKey)}
                             >
                               <span className="min-w-0 truncate">{column.header}</span>
                               {sortEntry ? (
                                 sortEntry.direction === "asc" ? (
-                                  <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+                                  <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
                                 ) : (
-                                  <ArrowDown className="h-3.5 w-3.5 shrink-0" />
+                                  <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                                 )
                               ) : (
-                                <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                                <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
                               )}
                               {sortIndex >= 0 && sorts.length > 1 ? (
                                 <span className="font-mono text-[10px]">{sortIndex + 1}</span>
@@ -1549,80 +1726,62 @@ export function DataTable<T>({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedRows.map((row, rowIndex) => {
+                  {virtualEnabled && virtualWindow.offsetTop > 0 ? (
+                    <TableRow aria-hidden className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={visibleColumns.length + (selectable ? 1 : 0)}
+                        className="p-0"
+                        style={{ height: virtualWindow.offsetTop }}
+                      />
+                    </TableRow>
+                  ) : null}
+                  {visiblePagedRows.map((row, localIndex) => {
+                    const rowIndex = virtualEnabled
+                      ? virtualWindow.startIndex + localIndex
+                      : localIndex
                     const rowId = keyExtractor(row)
                     const isChecked = selectedIds.has(rowId)
                     const isFocused = focusedRowIndex === rowIndex
                     const isRovingTabStop =
                       isFocused || (focusedRowIndex < 0 && rowIndex === 0)
                     return (
-                    <TableRow
-                      key={rowId}
-                      ref={(node) => {
-                        rowRefs.current[rowIndex] = node
-                      }}
-                      data-selected={isFocused || isChecked ? "true" : "false"}
-                      tabIndex={isRovingTabStop ? 0 : -1}
-                      className={cn(
-                        "group border-border/50 outline-none transition-default",
-                        "hover:bg-muted/40 data-[selected=true]:bg-muted/50",
-                        "focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
-                        onRowClick && "cursor-pointer",
-                        isChecked && "bg-primary/5",
-                        rowClassName?.(row),
-                      )}
-                      onClick={() => onRowClick?.(row)}
-                      onFocus={() => setFocusedRowIndex(rowIndex)}
-                      onKeyDown={(e) => handleRowKeyDown(row, rowIndex, e)}
-                    >
-                      {selectable ? (
-                        <TableCell
-                          className="sticky left-0 z-20 bg-card px-2 group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <Checkbox
-                            checked={isChecked}
-                            onCheckedChange={(checked) => setRowSelected(rowId, checked === true)}
-                            aria-label={`Select row ${rowId}`}
-                          />
-                        </TableCell>
-                      ) : null}
-                      {visibleColumns.map((column) => {
-                        const isPinned = pinnedColumns.includes(column.id)
-                        return (
-                          <TableCell
-                            key={column.id}
-                            style={{
-                              ...columnWidthStyle(column, resizedWidths),
-                              left: isPinned ? pinnedOffsets[column.id] : undefined,
-                            }}
-                            className={cn(
-                              alignClass(),
-                              "max-w-0 overflow-hidden",
-                              !column.wrap && "whitespace-nowrap",
-                              column.wrap && "whitespace-normal",
-                              isPinned &&
-                                "sticky z-10 border-r border-border bg-card group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50 group-focus-visible:bg-muted/50",
-                              column.className,
-                              "text-left",
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "min-w-0 max-w-full text-left",
-                                !column.wrap &&
-                                  "truncate [&_a]:inline-block [&_a]:max-w-full [&_a]:truncate",
-                                column.wrap && "whitespace-normal break-words",
-                              )}
-                            >
-                              {column.cell(row)}
-                            </div>
-                          </TableCell>
-                        )
-                      })}
-                    </TableRow>
+                      <DataTableBodyRow
+                        key={rowId}
+                        row={row}
+                        rowId={rowId}
+                        rowIndex={rowIndex}
+                        columns={visibleColumns}
+                        pinnedColumns={pinnedColumns}
+                        pinnedOffsets={pinnedOffsets}
+                        columnWidthStyle={getColumnWidthStyle}
+                        selectable={selectable}
+                        isChecked={isChecked}
+                        isFocused={isFocused}
+                        isRovingTabStop={isRovingTabStop}
+                        stickyEdgeShadow={stickyEdgeShadow}
+                        onRowClick={onRowClick}
+                        rowClassName={rowClassName}
+                        onFocusRow={setFocusedRowIndex}
+                        onKeyDownRow={handleRowKeyDown}
+                        onSelectRow={setRowSelected}
+                        onCopyRow={copySingleRow}
+                        contextMenu={contextMenu}
+                        rowActions={rowActions}
+                        rowRef={(node) => {
+                          rowRefs.current[localIndex] = node
+                        }}
+                      />
                     )
                   })}
+                  {virtualEnabled && virtualWindow.offsetBottom > 0 ? (
+                    <TableRow aria-hidden className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={visibleColumns.length + (selectable ? 1 : 0)}
+                        className="p-0"
+                        style={{ height: virtualWindow.offsetBottom }}
+                      />
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
             </div>

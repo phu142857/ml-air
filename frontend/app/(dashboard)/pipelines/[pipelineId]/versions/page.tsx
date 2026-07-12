@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { GitBranch } from "lucide-react";
 import { usePipelineVersionsList } from "@/hooks/use-pipeline-versions-list";
 import { useAppContext } from "@/lib/app-context";
-import { formatDateTimeCompact } from "@/lib/utils";
+import { formatDateTimeCompact, formatApiClientError } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
 import {
   DetailSection,
@@ -239,7 +239,11 @@ export default function PipelineVersionsPage() {
                 data={items}
                 keyExtractor={(row) => row.version_id}
                 emptyMessage="No versions yet."
-                loading={listQuery.isLoading}
+                loading={listQuery.isFetching && items.length > 0}
+                error={listQuery.isError}
+                errorMessage={listQuery.error ? formatApiClientError(listQuery.error) : undefined}
+                onRetry={() => void listQuery.refetch()}
+                stickyFirstColumn
               />
               {listQuery.hasNextPage ? (
                 <div className="flex justify-center border-t border-border/60 py-4">
