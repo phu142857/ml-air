@@ -6,7 +6,7 @@ Use MLAir readiness endpoints to evaluate **training eligibility** for a dataset
 
 ## UI terminology (Hub vs pipeline)
 
-Keep these names aligned with the operator UI and [`ROADMAP.md`](../../ROADMAP.md):
+Keep these names aligned with the Hub UI:
 
 | Term | Meaning | Primary surface |
 | --- | --- | --- |

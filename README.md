@@ -96,7 +96,7 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 - **Dataset Hub** (`/datasets`) is the default entry; **Run / Train** with pinned **Head snapshot (vN)** / `dataset_version_id`
 - **Lifecycle nav:** Datasets, Lifecycle dashboard, Models, Lineage — all roles
 - **Execution (maintainer):** Pipelines, Runs, Tasks — observability copy; hidden for viewer tokens ([hub-nav-access](frontend/lib/hub-nav-access.ts))
-- Realtime Hub sync (WS + polling fallback): [`docs/runbooks/staging-prod-signoff.md`](docs/runbooks/staging-prod-signoff.md)
+- Realtime Hub sync (WS + polling fallback): [`docs/guides/execution-realtime-architecture.md`](docs/guides/execution-realtime-architecture.md)
 - Sign-off automation: `make signoff-local` (wave0 + strict lifecycle + wave1 + scheduler HA)
 
 ### Incremental (non-blocking)
@@ -311,7 +311,7 @@ Copy `.env.example` → `.env` and keep them in sync when adding variables (**CI
 
 See `.env.example` for ports (`ML_AIR_*_PORT`), MinIO, Grafana admin defaults, and advanced JWT/JWKS settings.
 
-**Staging / production (Lifecycle OS):** use documented strict env — [`docs/runbooks/production-strict-lifecycle.md`](docs/runbooks/production-strict-lifecycle.md), [`deploy/env/staging-strict.env.example`](deploy/env/staging-strict.env.example), sunset milestones in [`docs/runbooks/legacy-compat-sunset.md`](docs/runbooks/legacy-compat-sunset.md).
+**Staging / production (Lifecycle OS):** use strict env overlays — [`docs/configuration.md`](docs/configuration.md), [`deploy/env/staging-strict.env.example`](deploy/env/staging-strict.env.example).
 
 ---
 

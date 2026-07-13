@@ -45,7 +45,7 @@ curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (bl
 | `mlair_readiness_blocked_total` | `path`, `tenant_id` | After `check_run_readiness` returns not ready on gated train paths |
 | `mlair_eligibility_denied_total` | `source`, `reason`, `tenant_id` | After `POST .../readiness/evaluate` **inserts a new** row when `ready` is false (deduplicated repeats do not increment) |
 
-**Tenant-aware alerts (Wave 1):** Prometheus group `mlair-lifecycle-semantic-tenant` fires per `tenant_id`; route in Alertmanager — see [wave1-production-maturity](../runbooks/wave1-production-maturity.md).
+**Tenant-aware alerts:** Prometheus group `mlair-lifecycle-semantic-tenant` fires per `tenant_id`; route in Alertmanager — see [Production maturity](./production-maturity.md).
 
 Stable internal → canonical → `reason` mapping: [Readiness and gating — Canonical readiness reason codes](./readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair).
 

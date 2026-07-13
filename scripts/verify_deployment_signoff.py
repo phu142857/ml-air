@@ -24,7 +24,6 @@ DEPLOY_ARTIFACTS = (
     "charts/ml-air/values-production.yaml",
     "charts/ml-air/values-production-strict.yaml",
     "deploy/monitoring/alertmanager-tenant-routes.example.yml",
-    "docs/deployment/DESIGN-FREEZE.md",
 )
 
 SIGNOFF_SCRIPTS = (
@@ -49,11 +48,7 @@ def check_deploy_artifacts() -> bool:
     if missing:
         _fail(f"missing deployment artifacts: {missing}")
         return False
-    freeze = (ROOT / "docs/deployment/DESIGN-FREEZE.md").read_text(encoding="utf-8")
-    if "CLOSED" not in freeze:
-        _fail("deployment DESIGN-FREEZE not CLOSED")
-        return False
-    _ok("deployment artifacts + frozen DESIGN-FREEZE")
+    _ok("deployment artifacts present")
     return True
 
 

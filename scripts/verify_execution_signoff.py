@@ -15,13 +15,6 @@ RETRY_POLICY = ROOT / "sdk" / "retry_policy.py"
 WORKER_TASKS = ROOT / "api" / "app" / "domains" / "orchestration" / "worker_task_service.py"
 WORKER_SETTINGS = ROOT / "api" / "app" / "settings" / "worker.py"
 
-EXEC_DOCS = (
-    "docs/execution/DESIGN-FREEZE.md",
-    "docs/execution/02-state-machines.md",
-    "docs/execution/03-lease-and-retry.md",
-    "docs/execution/08-contributor-rules.md",
-)
-
 
 def _fail(msg: str) -> None:
     print(f"[FAIL] {msg}")
@@ -29,19 +22,6 @@ def _fail(msg: str) -> None:
 
 def _ok(msg: str) -> None:
     print(f"[OK] {msg}")
-
-
-def check_execution_docs_frozen() -> bool:
-    missing = [p for p in EXEC_DOCS if not (ROOT / p).is_file()]
-    if missing:
-        _fail(f"missing execution docs: {missing}")
-        return False
-    freeze = (ROOT / "docs/execution/DESIGN-FREEZE.md").read_text(encoding="utf-8")
-    if "CLOSED" not in freeze:
-        _fail("execution DESIGN-FREEZE not CLOSED")
-        return False
-    _ok("execution package docs present and frozen")
-    return True
 
 
 def check_scheduler_state_machines() -> bool:
@@ -167,7 +147,6 @@ def run_container_execution_tests() -> bool:
 
 def main() -> int:
     checks = [
-        check_execution_docs_frozen(),
         check_scheduler_state_machines(),
         check_retry_and_worker_contract(),
         check_task_execution_mode_in_infra(),

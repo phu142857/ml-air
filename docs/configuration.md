@@ -2,7 +2,7 @@
 
 Single reference for installing and running MLAir with **sensible defaults**. The default runtime is an **all-in-one app container** (`ml-air:latest`) plus the supporting local services MLAir needs for a full developer experience: Prometheus, Grafana, and MinIO.
 
-> **Architecture:** Configuration layers and deployment contract are defined in the [Platform Configuration Architecture](config/DESIGN-FREEZE.md) package (Series 002, **Design Freeze v1.0 — CLOSED**). This guide is operator-facing; align with Package 002 during Configuration refactor.
+> Operator-facing reference for installing and running MLAir. Layered config (L0–L5) is implemented in code (`mlair/config/`, Hub System Settings); this guide covers what you set at deploy time.
 
 ## Goal
 
@@ -88,7 +88,7 @@ Profiles map to L2 bundles (see `mlair config print`). After Phase 4, **policy k
 | `ports.api` / `ports.frontend` | infra example (microservices) |
 | `ml_air_environment` | infra example / profile |
 
-Identity IAM (see [Login and Identity](guides/login-and-identity.md) and `docs/iam/11-migration-plan.md`):
+Identity IAM (see [Login and Identity](guides/login-and-identity.md)):
 
 | Variable | Purpose |
 |----------|---------|
@@ -183,7 +183,7 @@ export ML_AIR_SA_SCHEDULER_SECRET=...
 mlair start --profile production
 ```
 
-Equivalent to `deploy/env/production-strict.env.example`. Runbook: [Production strict lifecycle](./runbooks/production-strict-lifecycle.md).
+Equivalent to `deploy/env/production-strict.env.example`. See **Strict lifecycle** env vars below and `deploy/env/staging-strict.env.example`.
 
 ### Consume from another repo
 
@@ -191,8 +191,6 @@ Keep using pinned images and `MLAIR_API_IMAGE` — no monorepo submodule. Set pr
 
 ## Related docs
 
-- [Platform Architecture Series](architecture/00-platform-architecture-series.md)
-- [Package 002 — Platform Configuration](config/DESIGN-FREEZE.md)
 - [Installation](./getting-started/installation.md)
 - [Quickstart](./getting-started/quickstart.md)
 - [Run environment capture](./guides/run-environment.md)

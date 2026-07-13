@@ -51,14 +51,14 @@ These are the **only** product paths where a **dataset** snapshot may be chosen 
 
 ## Rollback and strictness levers
 
-Version-centric behavior is controlled by environment variables. A **product-owned sunset calendar** is not hard-coded in git — use the milestone table in [Legacy compatibility sunset (runbook)](../runbooks/legacy-compat-sunset.md) and copy dates into your change ticket.
+Version-centric behavior is controlled by environment variables. Document sunset dates in your change ticket when toggling legacy flags.
 
 | Variable | Effect |
 | --- | --- |
 | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED` | When `1` (default), `POST .../runs/trigger` requires `dataset_version_id`. When `0`, trigger may resolve latest version if omitted. |
 | `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` | When `1` **and** `ML_AIR_STRICT_DATASET_VERSION_REQUIRED=1`, `POST .../runs`, `POST .../pipelines/{id}/run`, and `POST .../pipelines/{id}/check-readiness` require a pinned `dataset_version_id` (top-level or `override_config`) **even when** the run does not declare dataset readiness inputs. **Default `1`** (immutable training anchor). Set `0` only for legacy non-dataset pipelines. |
 | `ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS` | When `1`, `POST .../runs`, gated pipeline run, and `check-readiness` require declared `inputs` in override or pipeline version config. |
-| `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | When `0` (default), dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, and **`GET .../eligibility`** forbid implicit latest-head when materialized versions exist (**422** without `dataset_version_id`). When `1`, legacy implicit head + `datasets.current_size` when no versions — see [readiness-v2-cutover](../runbooks/readiness-v2-cutover.md). |
+| `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` | When `0` (default), dataset **`GET .../readiness`**, **`POST .../readiness/evaluate`**, and **`GET .../eligibility`** forbid implicit latest-head when materialized versions exist (**422** without `dataset_version_id`). When `1`, legacy implicit head + `datasets.current_size` when no versions — see [Configure Data Readiness and Gating](../guides/configure-data-readiness-gating.md). |
 | `ML_AIR_WARN_IMPLICIT_DATASET_HEAD` | When `1`, log **`WARNING`** when implicit dataset-version head resolution runs (compat paths above). Default `0`. |
 
 For Hub UX, the readiness version row labeled **Head snapshot (vN)** pins the list head’s **`version_id`** (explicit id in the selector), not a nameless default. **Run / Train** pins the selected dataset version in the execution panel — see [Dataset Hub and Readiness](../guides/dataset-hub-and-readiness.md).

@@ -1,6 +1,6 @@
 # Lifecycle formal model (MVP)
 
-Engineering contract derived from shipped MLAir behavior. **Not** a machine-checked proof; use for reviews, onboarding, and Phase 9 alignment.
+Engineering contract derived from shipped MLAir behavior. Use for reviews and onboarding.
 
 **Related:** [State machines](./lifecycle-state-machines.md) · [Event envelope](../api/realtime-event-envelope.md) · [Readiness & gating](../api/readiness-and-gating.md)
 
@@ -95,7 +95,7 @@ Machine-checked type ↔ schema parity: [`test_semantic_event_type_schema_parity
 | **Side effects** | DB commit before or with publish; Hub invalidates on `type` map |
 | **Persistence** | Optional outbox (`ML_AIR_EVENT_OUTBOX`); audit timeline for readiness/promote |
 
-Formal proofs and full observability algebra: **deferred** (Phase 9 research backlog). **Partial machine checks:** event `type` enum ↔ JSON Schema — [`api/tests/test_semantic_event_type_schema_parity.py`](../../api/tests/test_semantic_event_type_schema_parity.py); readiness dedupe + immutable anchor defaults — [`api/tests/test_lifecycle_invariants.py`](../../api/tests/test_lifecycle_invariants.py). **Semantic observability MVP:** [`semantic_observability_model.py`](../../api/app/domains/observability/semantic_observability_model.py).
+**Machine checks:** event `type` enum ↔ JSON Schema — [`api/tests/test_semantic_event_type_schema_parity.py`](../../api/tests/test_semantic_event_type_schema_parity.py); readiness dedupe + immutable anchor defaults — [`api/tests/test_lifecycle_invariants.py`](../../api/tests/test_lifecycle_invariants.py). **Semantic observability index:** [`semantic_observability_model.py`](../../api/app/domains/observability/semantic_observability_model.py).
 
 ## Architecture diagram (logical)
 

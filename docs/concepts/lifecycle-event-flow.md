@@ -96,4 +96,4 @@ flowchart LR
 
 - [Reference: external integration surfaces](../guides/reference-integrations.md) — choose Redis vs webhooks vs audit vs metrics.
 - [Semantic event webhook cookbook](../guides/semantic-webhook-cookbook.md) — register HTTP targets and verify signatures.
-- [Runbook: Realtime / WebSocket service](../runbooks/realtime-service.md) — operate the fan-out path.
+- [Realtime event envelope (v1)](../api/realtime-event-envelope.md) — operate the fan-out path.

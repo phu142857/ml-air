@@ -12,7 +12,7 @@ api:
     jwtAudience: ""
     jwtJwksUrl: ""
   # Strict lifecycle OS for staging: merge deploy/env/staging-strict.env.example
-  # into API/scheduler env (Helm template extension TBD) — see docs/runbooks/production-strict-lifecycle.md
+  # into API/scheduler env (Helm template extension TBD) — see docs/configuration.md
   secret:
     # Prefer existing/external secret in staging.
     existingSecretName: ml-air-api-secrets

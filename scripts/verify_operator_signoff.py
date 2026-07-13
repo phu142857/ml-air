@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Operator sign-off bundle: Identity + Wave 0 realtime + optional strict lifecycle.
 
-Automates the gates in docs/runbooks/staging-prod-signoff.md (excluding Wave 1 / scheduler HA).
+Automates identity, realtime, and strict-lifecycle gates (excluding Wave 1 / scheduler HA).
 
 Usage:
   python scripts/verify_operator_signoff.py
@@ -175,7 +175,7 @@ def main() -> int:
     print(f"\nTOTAL {total}  PASS {passed}  FAIL {total - passed}")
 
     if not args.skip_wave0:
-        print("\nManual: Hub checklist — docs/runbooks/staging-prod-signoff.md § Hub manual")
+        print("\nManual: Hub checklist — verify realtime WS, login, and scoped nav in the browser")
     print("Wave 1: make wave1  |  Scheduler HA: make validate-scheduler-ha-quickstart")
     print("Legacy M1: make record-legacy-m1-snapshot ARGS='--start-date YYYY-MM-DD'")
 

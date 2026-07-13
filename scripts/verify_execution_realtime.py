@@ -208,7 +208,7 @@ def main() -> int:
         for name in failures:
             print(f"[FAIL] {name}", file=sys.stderr)
         print(
-            "[FAIL] execution realtime verification failed — see docs/runbooks/execution-realtime-ops.md",
+            "[FAIL] execution realtime verification failed — see docs/guides/execution-realtime-architecture.md",
             file=sys.stderr,
         )
         return 1

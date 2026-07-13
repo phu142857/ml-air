@@ -98,7 +98,6 @@ Each guide follows:
 - [Verify Manifest](./guides/verify-manifest.md)
 - [Rotate Keys](./guides/rotate-keys.md)
 - [Replay Security Checks](./guides/replay-security.md)
-- IAM design package: [Identity Design Freeze](./iam/DESIGN-FREEZE.md)
 
 ### Observability
 
@@ -124,7 +123,6 @@ Each guide follows:
 
 - [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md)
 - [Lifecycle formal model (MVP)](./concepts/lifecycle-formal-model.md)
-- [Phase 9 formalization (MVP)](./architecture/06-phase9-formalization.md)
 - [Lifecycle state machines (MVP)](./concepts/lifecycle-state-machines.md)
 - [Pipeline](./concepts/pipeline.md)
 - [Run](./concepts/run.md)
@@ -152,20 +150,6 @@ Each guide follows:
 - [Reference: external integration surfaces](./guides/reference-integrations.md)
 - [Integrate App with Plugin](./guides/integrate-app-with-plugin.md)
 - [Sync External Model Registry](./guides/sync-external-model-registry.md)
-
-## Operations & Runbooks (for operators)
-
-Advanced material for running MLAir in staging/production — not needed to use MLAir day to day.
-
-- [Runbook: Realtime / WebSocket service](./runbooks/realtime-service.md)
-- [Runbook: Execution realtime ops (Wave 0)](./runbooks/execution-realtime-ops.md)
-- [Runbook: Production WSS ingress](./runbooks/production-wss-ingress.md)
-- [Runbook: Wave 1 production maturity](./runbooks/wave1-production-maturity.md)
-- [Runbook: Staging → production sign-off (Lifecycle OS)](./runbooks/staging-prod-signoff.md)
-- [Sign-off: Wave 0 / 1 / Phase 9](./runbooks/signoff-wave0-wave1-phase9.md)
-- [Sign-off record template](./operations/signoff-record-template.md)
-- [Runbook: Legacy compatibility sunset](./runbooks/legacy-compat-sunset.md)
-- [Runbook: Production strict lifecycle (staging/prod env)](./runbooks/production-strict-lifecycle.md)
 
 ## Troubleshooting
 

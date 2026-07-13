@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated checks for Phase 9 formalization MVP (non-blocking research track)."""
+"""Automated checks for MLAir lifecycle contract docs and artifacts."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ PHASE9_DOCS = (
     "docs/api/realtime-event-envelope.md",
     "docs/api/readiness-and-gating.md",
     "docs/guides/semantic-observability-gaps.md",
-    "docs/architecture/06-phase9-formalization.md",
 )
 
 PHASE9_ARTIFACTS = (
@@ -51,9 +50,9 @@ def _ok(msg: str) -> None:
 def check_docs_and_artifacts() -> bool:
     missing = [p for p in (*PHASE9_DOCS, *PHASE9_ARTIFACTS) if not (ROOT / p).is_file()]
     if missing:
-        _fail(f"missing Phase 9 docs/artifacts: {missing}")
+        _fail(f"missing lifecycle contract docs/artifacts: {missing}")
         return False
-    _ok("Phase 9 docs + contract artifacts present")
+    _ok("lifecycle contract docs + artifacts present")
     return True
 
 
@@ -200,7 +199,7 @@ def main() -> int:
     passed = sum(1 for c in checks if c)
     total = len(checks)
     print(f"\nTOTAL {total} PASS {passed} FAIL {total - passed}")
-    print("\nDeferred (research): full proofs, symbolic lifecycle algebra — see docs/architecture/06-phase9-formalization.md")
+    print("\nLifecycle contract verification complete.")
     return 0 if all(checks) else 1
 
 

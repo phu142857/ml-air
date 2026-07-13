@@ -75,7 +75,7 @@ def main() -> int:
         print("[FAIL] Keys excluded from deployment contract present in .env.example:")
         for k in excluded_present:
             print(f"  - {k}")
-        print("See docs/config/07-deployment-contract.md")
+        print("See docs/configuration.md")
         return 1
 
     if len(contract_keys) > CONTRACT_MAX_KEYS:

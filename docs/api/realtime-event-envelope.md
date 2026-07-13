@@ -1,6 +1,6 @@
 # Realtime event envelope (v1)
 
-MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.{project_id}`** (see [Runbook: Realtime / WebSocket service](../runbooks/realtime-service.md)). The fan-out service forwards them to WebSocket clients; the browser hook maps `type` → React Query invalidation ([`frontend/lib/use-mlair-realtime.ts`](../../frontend/lib/use-mlair-realtime.ts)). **Architecture:** [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md) (Mermaid: outbox, Redis, webhooks, replay).
+MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.{project_id}`**. The fan-out service forwards them to WebSocket clients; the browser hook maps `type` → React Query invalidation ([`frontend/lib/use-mlair-realtime.ts`](../../frontend/lib/use-mlair-realtime.ts)). **Architecture:** [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md) (Mermaid: outbox, Redis, webhooks, replay). Operator detail: [Execution realtime architecture](../guides/execution-realtime-architecture.md).
 
 ## Envelope (all events)
 

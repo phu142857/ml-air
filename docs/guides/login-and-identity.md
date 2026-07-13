@@ -4,9 +4,9 @@
 
 Sign in to the Hub, obtain API access for curl/scripts, and manage users and service accounts as Global Admin.
 
-MLAir uses **login-first** human identity (Package 001). Static `viewer-token` / `maintainer-token` paste is **legacy dual-run only** when `ML_AIR_LEGACY_STATIC_TOKENS=1`.
+MLAir uses **login-first** human identity. Static `viewer-token` / `maintainer-token` paste is **legacy dual-run only** when `ML_AIR_LEGACY_STATIC_TOKENS=1`.
 
-Architecture reference: [Identity Design Package](../iam/DESIGN-FREEZE.md). Deployment secrets: [Configuration](../configuration.md), [Deployment contract](../config/07-deployment-contract.md).
+Deployment secrets: [Configuration](../configuration.md).
 
 ## Steps
 
@@ -95,4 +95,4 @@ If `ML_AIR_LEGACY_STATIC_TOKENS=1`, the API still accepts `viewer-token`, `maint
 
 - [Configure tenant and project scope](./configure-tenant-project-scope.md)
 - [OpenTelemetry and Trace explorer](./opentelemetry.md)
-- IAM REST detail: [REST API specification](../iam/05-rest-api-specification.md)
+- API reference: [API Overview](../api/overview.md)

@@ -10,7 +10,7 @@ This page is an **index** only — each row links to the canonical guide or API 
 
 | What you need | Integration surface | Start here |
 |----------------|----------------------|------------|
-| **Low-latency UI** updates when runs/datasets/models change | Redis Pub/Sub → WebSocket (same channel the Hub uses) | [Runbook: Realtime / WebSocket service](../runbooks/realtime-service.md), [Realtime event envelope (v1)](../api/realtime-event-envelope.md) |
+| **Low-latency UI** updates when runs/datasets/models change | Redis Pub/Sub → WebSocket (same channel the Hub uses) | [Execution realtime architecture](./execution-realtime-architecture.md), [Realtime event envelope (v1)](../api/realtime-event-envelope.md) |
 | **Same lifecycle JSON** as the Hub, at your **HTTPS endpoint** (filters, HMAC, retries) | Per-project **semantic webhooks** | [Semantic event webhook cookbook](./semantic-webhook-cookbook.md) |
 | **Architecture** of publish → Redis → outbox → webhooks | Diagrams | [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md) |
 | **Persisted** semantic envelopes + operator replay to Redis | Postgres **outbox** + replay API | [Realtime envelope § Durable outbox](../api/realtime-event-envelope.md#durable-outbox-optional) |

@@ -1,4 +1,4 @@
-# Verify Phase 2 observability on a run
+# Verify observability on a run
 
 Smoke-check G1 + resource timeline APIs after a **SUCCESS** training run on a running MLAir stack (`mlair start` / `mlair rebuild`).
 
