@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import types
 import unittest
@@ -29,19 +28,28 @@ from app.api.routes import v1
 from app.domains.lifecycle.evaluation_semantics import readiness_eval_result_matches_stored_row
 
 
-class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
-    def test_all_post_runs_defaults_on(self) -> None:
-        with patch.dict(os.environ, {"ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1"}, clear=False):
-            os.environ.pop("ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS", None)
-            self.assertTrue(v1._strict_dataset_version_all_post_runs())
+def _features(**overrides: object) -> SimpleNamespace:
+    base = {
+        "strict_dataset_version_required": True,
+        "strict_dataset_version_all_post_runs": True,
+        "require_declared_dataset_inputs": False,
+        "readiness_allow_legacy_fallback": False,
+    }
+    base.update(overrides)
+    return SimpleNamespace(features=SimpleNamespace(**base))
 
-    @patch.dict(
-        os.environ,
-        {
-            "ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1",
-            "ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS": "0",
-        },
-        clear=False,
+
+class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
+    @patch("app.api.routes.v1.get_settings", return_value=_features())
+    def test_all_post_runs_defaults_on(self, _settings) -> None:
+        self.assertTrue(v1._strict_dataset_version_all_post_runs())
+
+    @patch(
+        "app.api.routes.v1.get_settings",
+        return_value=_features(
+            strict_dataset_version_required=True,
+            strict_dataset_version_all_post_runs=False,
+        ),
     )
     @patch("app.api.routes.v1.create_run", return_value={"run_id": "r1"})
     @patch(
@@ -67,6 +75,7 @@ class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
         _merge,
         _eff,
         mock_create_run,
+        _settings,
     ) -> None:
         mock_auth.return_value = SimpleNamespace(role="maintainer", tenant_id=None, project_ids=None)
         mock_pv.return_value = {
@@ -88,51 +97,32 @@ class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
 class TestStrictDatasetVersionPinInvariant(unittest.TestCase):
     """Invariant: with strict pin on (default), unpinned runs are blocked; pinned runs pass."""
 
-    @patch.dict(
-        os.environ,
-        {
-            "ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1",
-            "ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS": "1",
-        },
-        clear=False,
-    )
-    def test_all_post_runs_unpinned_blocked(self) -> None:
+    @patch("app.api.routes.v1.get_settings", return_value=_features())
+    def test_all_post_runs_unpinned_blocked(self, _settings) -> None:
         with self.assertRaises(HTTPException) as ctx:
             v1._ensure_strict_dataset_version_for_all_post_runs_when_enabled({})
         self.assertEqual(ctx.exception.status_code, 422)
         self.assertEqual(ctx.exception.detail.get("reason"), "DATASET_VERSION_REQUIRED")
 
-    @patch.dict(
-        os.environ,
-        {
-            "ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1",
-            "ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS": "1",
-        },
-        clear=False,
-    )
-    def test_all_post_runs_pinned_allowed(self) -> None:
+    @patch("app.api.routes.v1.get_settings", return_value=_features())
+    def test_all_post_runs_pinned_allowed(self, _settings) -> None:
         v1._ensure_strict_dataset_version_for_all_post_runs_when_enabled(
             {"dataset_version_id": "dv-1"}
         )
 
-    @patch.dict(
-        os.environ,
-        {"ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "0"},
-        clear=False,
+    @patch(
+        "app.api.routes.v1.get_settings",
+        return_value=_features(strict_dataset_version_required=False),
     )
-    def test_strict_off_unpinned_allowed(self) -> None:
+    def test_strict_off_unpinned_allowed(self, _settings) -> None:
         v1._ensure_strict_dataset_version_for_all_post_runs_when_enabled({})
 
-    @patch.dict(
-        os.environ,
-        {"ML_AIR_STRICT_DATASET_VERSION_REQUIRED": "1"},
-        clear=False,
-    )
+    @patch("app.api.routes.v1.get_settings", return_value=_features())
     @patch(
         "app.api.routes.v1.readiness_service.effective_declared_readiness_inputs",
         return_value=[{"dataset": "example-dataset", "required_size": 50}],
     )
-    def test_declared_inputs_unpinned_blocked(self, _eff) -> None:
+    def test_declared_inputs_unpinned_blocked(self, _eff, _settings) -> None:
         with self.assertRaises(HTTPException) as ctx:
             v1._ensure_strict_dataset_version_for_declared_inputs({}, {})
         self.assertEqual(ctx.exception.status_code, 422)

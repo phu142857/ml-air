@@ -38,6 +38,8 @@
 
 Create tables from P3: `users`, `user_role_assignments`, `user_role_assignment_projects`, `service_accounts`, `service_account_credentials`, `service_account_permissions`, `service_account_scopes`, `service_account_scope_projects`, `user_sessions`, `identity_audit_events`.
 
+**Artifact:** `api/alembic/versions/0043_identity_schema.py` (revises `0042_run_log_entries`). Schema only — no seed / dual-run / auth logic.
+
 No removal of static token auth yet.
 
 ### Phase B — Bootstrap

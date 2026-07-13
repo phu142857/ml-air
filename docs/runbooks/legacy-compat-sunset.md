@@ -67,6 +67,14 @@ Suggested dates for a **2026 Q2** cutover (adjust per org release train). Copy i
 1. **M0 (done in git):** Defaults + tests + Hub UX; quickstart compose matches strict table.
 2. **M1 — Staging strict:** Apply [`deploy/env/staging-strict.env.example`](../../deploy/env/staging-strict.env.example); `ML_AIR_WARN_IMPLICIT_DATASET_HEAD=1`; grep logs for implicit-head warnings; fix callers omitting `dataset_version_id`.
 3. **M1 — Observe 28d:** Follow [readiness-v2-cutover](./readiness-v2-cutover.md) § Rollout plan steps 3–4; fill M1 sign-off table.
+
+```bash
+# Daily / weekly during M1 — capture runtime-config + window progress
+make record-legacy-m1-snapshot ARGS='--start-date YYYY-MM-DD'
+# JSON for ticket attachment:
+make record-legacy-m1-snapshot ARGS='--start-date YYYY-MM-DD --json'
+```
+
 4. **M2 — Production:** Apply [`deploy/env/production-strict.env.example`](../../deploy/env/production-strict.env.example); monitor `mlair_readiness_blocked_total`, `mlair_eligibility_denied_total`.
 5. **M3 — Pipeline audit:** List pipelines allowed to use unpinned generic `POST .../runs`; all others must declare inputs or stay under `ALL_POST_RUNS=1` ([dataset-version-immutability](../api/dataset-version-immutability.md)).
 6. **M4 — Env hygiene:** Remove legacy `=1` from all deployment repos; document in release notes.

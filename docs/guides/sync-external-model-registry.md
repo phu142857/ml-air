@@ -28,9 +28,12 @@ export YOUR_APP_TENANT_MAP_JSON='{"source-a":"default","source-b":"default"}'
 curl -X POST http://localhost:8000/your-app/models/sync \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 
-# Verify models in one scope
-curl "http://localhost:8080/v1/tenants/default/projects/project_a/models?limit=50" \
-  -H "Authorization: Bearer maintainer-token"
+# Verify models in one scope (MLAir API)
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TOKEN="<access_token from POST /v1/auth/login>"
+
+curl "$API/v1/tenants/default/projects/project_a/models?limit=50" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Result

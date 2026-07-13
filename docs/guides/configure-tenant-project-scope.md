@@ -24,19 +24,24 @@ Display names: if a project is in `tenant_projects`, the API uses the stored `na
 
 ## Command
 
+Obtain a bearer token first ([Login and Identity](./login-and-identity.md)):
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+# export TOKEN from POST /v1/auth/login
+
 # 1) Verify tenants from MLAir API (DB-driven)
-curl -H "Authorization: Bearer admin-token" \
-  "http://localhost:8080/v1/tenants?limit=200"
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants?limit=200"
 
 # 2) Verify tenant projects from MLAir API
-curl -H "Authorization: Bearer admin-token" \
-  "http://localhost:8080/v1/tenants/default/projects?limit=200"
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants/default/projects?limit=200"
 
 # 2b) Optional — register a project in the catalog (maintainer+), no runs required
 curl -sS -X POST \
-  "http://localhost:8080/v1/tenants/default/projects/registry" \
-  -H "Authorization: Bearer maintainer-token" \
+  "$API/v1/tenants/default/projects/registry" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"project_id":"acme_project","name":"ACME"}'
 
@@ -45,9 +50,11 @@ curl -X POST -H "Authorization: Bearer admin-secret" \
   "http://localhost:8000/your-app/models/sync"
 
 # 4) Verify tenant projects again (should include the new scopes)
-curl -H "Authorization: Bearer admin-token" \
-  "http://localhost:8080/v1/tenants/default/projects?limit=200"
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants/default/projects?limit=200"
 ```
+
+**Legacy dual-run:** if `ML_AIR_LEGACY_STATIC_TOKENS=1`, you may use `admin-token` / `maintainer-token` instead of `$TOKEN`.
 
 ## Result
 

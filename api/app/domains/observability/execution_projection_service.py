@@ -22,7 +22,9 @@ EXECUTION_EVENT_TYPES = frozenset(
 
 
 def projection_enabled() -> bool:
-    return os.getenv("ML_AIR_EXECUTION_PROJECTION", "1").strip() == "1"
+    from app.settings import get_settings
+
+    return get_settings().features.execution_projection
 
 
 def _projection_key(tenant_id: str, project_id: str) -> str:

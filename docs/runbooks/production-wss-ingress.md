@@ -55,6 +55,18 @@ Client `realtime_base_url`: `wss://mlair.example.com/realtime` (no trailing slas
 
 ## Kubernetes / Ingress (sketch)
 
+Chart baseline: `charts/ml-air/values-production.yaml` sets:
+
+- `api.env.runtimeRealtimeBaseUrl: wss://<host>/ws`
+- `ingress.tls.enabled: true` + WebSocket read timeout annotations
+- `api.secret.externalSecret.enabled: true` (External Secrets Operator)
+
+Install:
+
+```bash
+helm upgrade --install ml-air ./charts/ml-air -f charts/ml-air/values-production.yaml
+```
+
 - One **Ingress** host for Hub (HTTP).
 - Path `/realtime` → **Service** `realtime:8001` with `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"` and WebSocket annotations per your controller docs.
 - Or separate host `realtime.mlair.example.com` → `wss://realtime.mlair.example.com`.

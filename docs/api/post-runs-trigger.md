@@ -69,9 +69,15 @@ When set, MLAir uses that string as **`pipeline_id`** for version lookup and sch
 
 ## Example (curl)
 
+**Auth:** `$TOKEN` from [Login and Identity](../guides/login-and-identity.md) (maintainer+).
+
 ```bash
-curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/runs/trigger" \
-  -H "Authorization: Bearer maintainer-token" \
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
+curl -sS -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/trigger" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "model_id": "MODEL_ID",

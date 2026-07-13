@@ -17,6 +17,20 @@ from psycopg import connect
 from redis import Redis
 
 import realtime_publish
+from sdk.mlair_tokens import resolve_platform_api_token
+
+try:
+    from app.settings.worker import (
+        manifest_strict_key_lifecycle,
+        replay_require_artifact_evidence,
+        replay_require_checksum,
+        replay_require_signed_manifest,
+    )
+except ImportError:
+    manifest_strict_key_lifecycle = None  # type: ignore[assignment]
+    replay_require_artifact_evidence = None
+    replay_require_checksum = None
+    replay_require_signed_manifest = None
 
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
@@ -126,7 +140,12 @@ def _api_base_url() -> str:
 
 
 def _api_token() -> str:
-    return os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    token = resolve_platform_api_token()
+    if not token:
+        raise RuntimeError(
+            "ML_AIR_SERVICE_ACCOUNT_TOKEN or ML_AIR_SA_SCHEDULER_SECRET is required (IAM Service Account)"
+        )
+    return token
 
 
 def _api_post(path: str, payload: dict, timeout: int = 10) -> dict | None:
@@ -1085,6 +1104,8 @@ def _managed_keys_blob() -> dict:
 
 
 def _strict_key_lifecycle() -> bool:
+    if manifest_strict_key_lifecycle is not None:
+        return manifest_strict_key_lifecycle()
     return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "1") == "1"
 
 
@@ -1273,9 +1294,21 @@ def _init_replay_tasks_with_gating(
     Skip upstream tasks only when corresponding parent task succeeded.
     Returns True when gating passes, False when at least one required upstream task is missing.
     """
-    require_evidence = os.getenv("ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE", "1") != "0"
-    require_checksum = os.getenv("ML_AIR_REPLAY_REQUIRE_CHECKSUM", "1") == "1"
-    require_signed_manifest = os.getenv("ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST", "1") == "1"
+    require_evidence = (
+        replay_require_artifact_evidence()
+        if replay_require_artifact_evidence is not None
+        else os.getenv("ML_AIR_REPLAY_REQUIRE_ARTIFACT_EVIDENCE", "1") != "0"
+    )
+    require_checksum = (
+        replay_require_checksum()
+        if replay_require_checksum is not None
+        else os.getenv("ML_AIR_REPLAY_REQUIRE_CHECKSUM", "1") == "1"
+    )
+    require_signed_manifest = (
+        replay_require_signed_manifest()
+        if replay_require_signed_manifest is not None
+        else os.getenv("ML_AIR_REPLAY_REQUIRE_SIGNED_MANIFEST", "1") == "1"
+    )
     parent_success = _load_parent_success_tasks(parent_run_id)
     gating_ok = True
     for key in sorted(plan.keys()):

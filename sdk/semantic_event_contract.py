@@ -15,6 +15,7 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     {
         "run.created",
         "run.updated",
+        "run.tracking.updated",
         "task.updated",
         "model.promoted",
         "model.eligibility.updated",

@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.api.routes.v1 import router as v1_router
+from app.api.routes.identity_routes import router as identity_router
+from app.api.routes.system_settings_routes import router as system_settings_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.otel_api import (
     attach_mlair_trace_id_to_current_span,
@@ -43,6 +45,8 @@ async def _dataset_version_snapshot_integrity_handler(
 
 
 app.include_router(v1_router, prefix="/v1")
+app.include_router(identity_router, prefix="/v1")
+app.include_router(system_settings_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
 HEALTH_REQUEST_DURATION_SECONDS = Histogram(
@@ -64,6 +68,13 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 @app.on_event("startup")
 def on_startup() -> None:
     assert_db_connection()
+    from app.domains.governance.identity_bootstrap import maybe_bootstrap_global_admin, maybe_bootstrap_service_accounts
+
+    maybe_bootstrap_global_admin()
+    maybe_bootstrap_service_accounts()
+    from app.domains.platform.system_settings_service import maybe_seed_system_settings
+
+    maybe_seed_system_settings()
     plugin_registry.reload()
     from app.domains.observability.event_outbox_service import start_outbox_drain_background
     from app.domains.lifecycle.workers.readiness_queue import start_readiness_queue_background

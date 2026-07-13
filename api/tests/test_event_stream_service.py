@@ -4,21 +4,33 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
+
+if "redis" not in sys.modules:
+    sys.modules["redis"] = MagicMock()
 
 from app.domains.observability import event_stream_service as stream
 
 
 class TestEventStreamService(unittest.TestCase):
-    def test_stream_disabled_by_default(self) -> None:
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("ML_AIR_EVENT_STREAM", None)
-            self.assertFalse(stream.stream_enabled())
+    def test_stream_enabled_when_env_on(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_EVENT_STREAM": "1"}, clear=False):
+            self.assertTrue(stream.stream_enabled())
 
-    @patch.dict(os.environ, {"ML_AIR_EVENT_STREAM": "1"}, clear=False)
+    @patch.dict(os.environ, {"ML_AIR_EVENT_STREAM": "0"}, clear=False)
+    def test_stream_disabled_when_env_off(self) -> None:
+        self.assertFalse(stream.stream_enabled())
+
+    @patch.object(stream, "_worker_settings", return_value=None)
+    @patch.dict(
+        os.environ,
+        {"ML_AIR_EVENT_STREAM": "1", "ML_AIR_EVENT_STREAM_GLOBAL_FANOUT": "0"},
+        clear=False,
+    )
     @patch("app.domains.shared.queue_service.redis_client")
-    def test_append_scope_stream(self, mock_redis: MagicMock) -> None:
+    def test_append_scope_stream(self, mock_redis: MagicMock, _mock_ws: MagicMock) -> None:
         client = MagicMock()
         mock_redis.return_value = client
         ev = {

@@ -57,3 +57,12 @@ export function useCanSeeExecutionNav(): boolean {
     [tenantId, projectId, accessibleScopes, token],
   );
 }
+
+export function useCanSeeAdminNav(): boolean {
+  const { isGlobalAdmin, hubRole, accessibleScopes } = useAppContext();
+  return useMemo(() => {
+    if (isGlobalAdmin) return true;
+    if (hubRole === "admin") return true;
+    return accessibleScopes.some((s) => s.role === "admin");
+  }, [isGlobalAdmin, hubRole, accessibleScopes]);
+}

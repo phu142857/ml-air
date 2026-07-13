@@ -21,7 +21,7 @@ mlair health                    # stack containers + realtime /healthz
 python scripts/verify_execution_realtime.py   # runtime-config + WS handshake + Redis TCP
 ```
 
-Optional env overrides: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_AIR_PROJECT_ID`, `ML_AIR_REALTIME_VERIFY_TOKEN` (default `viewer-token`).
+Optional env overrides: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_AIR_PROJECT_ID`, `ML_AIR_REALTIME_VERIFY_TOKEN` (default: token from `python scripts/identity_smoke_token.py`; legacy: `viewer-token` when `ML_AIR_LEGACY_STATIC_TOKENS=1`).
 
 ## Manual Hub checklist (2 minutes)
 

@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "event_id": "phase9-fixture-0001",
+  "type": "run.updated",
+  "tenant_id": "default",
+  "project_id": "default_project",
+  "resource_id": "run-phase9-fixture",
+  "timestamp": 1710000000.0,
+  "sequence": 1,
+  "trace_id": "trace-phase9-fixture",
+  "payload": {
+    "run_id": "run-phase9-fixture",
+    "status": "RUNNING"
+  }
+}

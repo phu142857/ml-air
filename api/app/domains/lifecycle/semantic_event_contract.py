@@ -27,7 +27,9 @@ def _load_schema() -> dict[str, Any]:
 
 
 def strict_validation_enabled() -> bool:
-    return os.getenv("ML_AIR_SEMANTIC_EVENT_VALIDATE", "1").strip() == "1"
+    from app.settings import get_settings
+
+    return get_settings().features.semantic_event_validate
 
 
 def validate_semantic_event(event: dict[str, Any]) -> None:

@@ -33,13 +33,14 @@ from app.domains.governance.model_registry_service import (
     update_model_version_approval,
     upsert_model_pipeline_mapping,
 )
+from app.settings import get_settings
 from app.plugins.compatibility_service import (
     compatibility_matrix_payload,
     evaluate_registered_plugin,
     plugin_version_enforcement_enabled,
 )
 from app.plugins.registry import plugin_registry
-from app.domains.governance.auth_service import authenticate_bearer, authorize_scope
+from app.domains.governance.auth_service import Principal, authenticate_bearer, authorize_scope
 from app.domains.platform.runtime_url_service import (
     resolve_runtime_api_base_url,
     resolve_runtime_realtime_base_url,
@@ -454,11 +455,11 @@ def _enforce_tenant_quota(tenant_id: str, resource: str, *, project_id: str | No
 
 
 def _serving_slots_http_enabled() -> bool:
-    return os.getenv("ML_AIR_ENABLE_SERVING_SLOTS_HTTP", "1").strip() == "1"
+    return get_settings().features.serving_slots_http
 
 
 def _require_declared_dataset_inputs_enabled() -> bool:
-    return os.getenv("ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS", "1").strip() == "1"
+    return get_settings().features.require_declared_dataset_inputs
 
 
 def _ensure_declared_readiness_inputs(merged_override: dict, pipeline_version_config: dict) -> None:
@@ -482,12 +483,12 @@ def _ensure_declared_readiness_inputs(merged_override: dict, pipeline_version_co
 
 
 def _strict_dataset_version_required() -> bool:
-    return os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1"
+    return get_settings().features.strict_dataset_version_required
 
 
 def _strict_dataset_version_all_post_runs() -> bool:
     """Require a pinned version on generic POST run paths (not only declared-input runs). Default on."""
-    return os.getenv("ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS", "1") == "1"
+    return get_settings().features.strict_dataset_version_all_post_runs
 
 
 def _ensure_strict_dataset_version_for_all_post_runs_when_enabled(merged_override: dict) -> None:
@@ -1693,52 +1694,32 @@ def whoami_v1(authorization: str | None = Header(default=None)) -> dict:
 
 def _hub_default_route() -> str:
     """Hub `/` redirect target: datasets | lifecycle | dashboard | models."""
-    raw = os.getenv("ML_AIR_HUB_DEFAULT_ROUTE", "datasets").strip().lower() or "datasets"
-    allowed = frozenset({"datasets", "lifecycle", "dashboard", "models"})
-    return raw if raw in allowed else "datasets"
+    return get_settings().hub_default_route
 
 
 @router.get("/runtime-config")
 def runtime_config_v1(request: Request) -> dict:
+    cfg = get_settings()
     features = {
-        "realtime_enabled": True,
-        "dataset_hub_v2": os.getenv("ML_AIR_FEATURE_DATASET_HUB_V2", "1") == "1",
-        "strict_dataset_version_required": os.getenv("ML_AIR_STRICT_DATASET_VERSION_REQUIRED", "1") == "1",
-        "strict_dataset_version_all_post_runs": _strict_dataset_version_all_post_runs(),
-        "readiness_allow_legacy_fallback": readiness_service.is_readiness_legacy_fallback_enabled(),
-        "scope_debug_panel": os.getenv("ML_AIR_FEATURE_SCOPE_DEBUG_PANEL", "1") == "1",
-        "serving_slots_http": _serving_slots_http_enabled(),
-        "semantic_event_outbox": os.getenv("ML_AIR_EVENT_OUTBOX", "1") == "1",
-        "semantic_event_stream": os.getenv("ML_AIR_EVENT_STREAM", "1") == "1",
-        "semantic_event_stream_global_fanout": os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1") == "1",
-        "execution_projection": os.getenv("ML_AIR_EXECUTION_PROJECTION", "1") == "1",
-        "semantic_webhook_delivery": semantic_webhook_subscription_service.delivery_enabled(),
-        "semantic_webhook_dedupe": semantic_webhook_subscription_service.dedupe_enabled(),
-        "opentelemetry": os.getenv("ML_AIR_OTEL_ENABLED", "1") == "1",
-        "dataset_retention_policies": os.getenv("ML_AIR_DATASET_RETENTION_POLICIES", "1") == "1",
-        "tenant_quota_enforcement": tenant_quota_service.enforcement_enabled(),
-        "http_pipeline_tasks": os.getenv("ML_AIR_HTTP_PIPELINE_TASKS", "1") == "1",
-        "http_task_templates": os.getenv("ML_AIR_HTTP_TASK_TEMPLATES", "1") == "1",
-        "plugin_version_enforcement": plugin_version_enforcement_enabled(),
+        **cfg.runtime_features(),
         **promotion_governance_runtime(),
     }
-    grafana_ui = os.getenv("ML_AIR_GRAFANA_URL", "").strip() or None
     api_base_url = resolve_runtime_api_base_url(request)
     realtime_base_url = resolve_runtime_realtime_base_url(request, api_base_url=api_base_url)
     return {
-        "environment": os.getenv("ML_AIR_ENVIRONMENT", "dev"),
+        "environment": cfg.environment,
         "api_base_url": api_base_url,
         "realtime_base_url": realtime_base_url,
-        "default_tenant_hint": os.getenv("ML_AIR_DEFAULT_TENANT", "default"),
-        "default_project_hint": os.getenv("ML_AIR_DEFAULT_PROJECT", "default_project"),
-        "hub_default_route": _hub_default_route(),
+        "default_tenant_hint": cfg.default_tenant,
+        "default_project_hint": cfg.default_project,
+        "hub_default_route": cfg.hub_default_route,
         "features": features,
         "observability": {
-            "grafana_ui_url": grafana_ui,
+            "grafana_ui_url": cfg.observability.grafana_url,
             "semantic_observability_index": semantic_observability_index_dict(),
             "semantic_observability_surfaces": semantic_observability_surfaces_dict(),
-            "trace_span_retention_days": int(os.getenv("ML_AIR_TRACE_SPAN_RETENTION_DAYS", "30") or "30"),
-            "trace_sample_ratio": float(os.getenv("ML_AIR_OTEL_TRACE_SAMPLE_RATIO", "1") or "1"),
+            "trace_span_retention_days": cfg.observability.trace_span_retention_days,
+            "trace_sample_ratio": cfg.observability.trace_sample_ratio,
         },
         "build": {
             "frontend_version": os.getenv("ML_AIR_FRONTEND_VERSION", "").strip() or None,
@@ -1750,6 +1731,68 @@ def runtime_config_v1(request: Request) -> dict:
 @router.get("/bootstrap/context")
 def bootstrap_context_v1(authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
+    from app.domains.governance import identity_repository as identity_repo
+    from app.domains.governance.identity_service import accessible_scopes_for_user
+
+    if principal.principal_kind == "user" and principal.user_id:
+        user = identity_repo.get_user_by_id(principal.user_id)
+        if user:
+            scope_rows = accessible_scopes_for_user(user)
+            if user.get("is_global_admin"):
+                default_tenant = os.getenv("ML_AIR_DEFAULT_TENANT", "default")
+                admin_principal = Principal(
+                    token=principal.token,
+                    subject=principal.subject,
+                    token_issuer=principal.token_issuer,
+                    scope_mapping_version=1,
+                    role="admin",
+                    tenant_id=default_tenant,
+                    project_ids=["*"],
+                    principal_kind="user",
+                    user_id=principal.user_id,
+                    is_global_admin=True,
+                )
+                project_ids = scope_context_service.list_accessible_project_ids(admin_principal, default_tenant)
+                accessible_scopes = [
+                    {"tenant_id": default_tenant, "project_id": project_id, "role": "admin"}
+                    for project_id in project_ids
+                ]
+                role = "admin"
+            else:
+                accessible_scopes = scope_rows
+                role = accessible_scopes[0]["role"] if accessible_scopes else "viewer"
+                default_tenant = accessible_scopes[0]["tenant_id"] if accessible_scopes else os.getenv("ML_AIR_DEFAULT_TENANT", "default")
+                project_ids = list({s["project_id"] for s in accessible_scopes if s["tenant_id"] == default_tenant})
+            selected = scope_context_service.get_scope_override(principal.subject)
+            mapping_version = scope_context_service.resolve_mapping_version(principal, default_tenant)
+            selected_tenant = str((selected or {}).get("tenant_id") or default_tenant)
+            selected_project = str((selected or {}).get("project_id") or (project_ids[0] if project_ids else "default_project"))
+            if selected_tenant != default_tenant or selected_project not in project_ids:
+                selected_tenant = default_tenant
+                selected_project = project_ids[0] if project_ids else "default_project"
+            return {
+                "user": {
+                    "subject": principal.subject,
+                    "role": role,
+                    "tenant_id": default_tenant,
+                    "token_issuer": principal.token_issuer,
+                    "username": user.get("username"),
+                    "is_global_admin": bool(user.get("is_global_admin")),
+                },
+                "effective_scope": {
+                    "tenant_id": selected_tenant,
+                    "project_id": selected_project,
+                    "source": "scope_context_override" if selected else "role_assignment",
+                    "mapping_version": mapping_version,
+                },
+                "defaults": {
+                    "tenant_id": default_tenant,
+                    "project_id": project_ids[0] if project_ids else "default_project",
+                },
+                "accessible_scopes": accessible_scopes,
+                "feature_flags": {"scope_switcher": True, "identity_login": True},
+            }
+
     default_tenant = principal.tenant_id or os.getenv("ML_AIR_DEFAULT_TENANT", "default")
     project_ids = scope_context_service.list_accessible_project_ids(principal, default_tenant)
     selected = scope_context_service.get_scope_override(principal.subject)

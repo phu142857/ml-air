@@ -19,6 +19,19 @@ helm install ml-air charts/ml-air --namespace ml-air --create-namespace
 
 Use `charts/ml-air/values-staging.yaml` as a baseline for staging rollout.
 
+## Production values
+
+Use `charts/ml-air/values-production.yaml` for production-shaped installs:
+
+- **External Secrets Operator** for JWT (`api.secret.externalSecret.enabled=true`)
+- **WSS** via `api.env.runtimeRealtimeBaseUrl` (`wss://…/ws`)
+- Ingress TLS + WebSocket timeouts (`ingress.tls`, `ingress.annotations`)
+
+```bash
+helm upgrade --install ml-air charts/ml-air \
+  -f charts/ml-air/values-production.yaml
+```
+
 JWT secret options:
 
 - **Chart-managed Secret** (default):

@@ -3,13 +3,45 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="${COMPOSE_FILE:-deploy/docker-compose.quickstart.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-${MLAIR_COMPOSE_FILE:-}}"
 COMPOSE_HA_OVERRIDE="${COMPOSE_HA_OVERRIDE:-deploy/docker-compose.scheduler-ha.override.yml}"
 WAIT_SEC="${SCHEDULER_HA_WAIT_SEC:-45}"
 REDIS_PORT="${ML_AIR_REDIS_PORT:-6379}"
 LOCK_KEY="mlair:scheduler:tick-lock:validate_ha_script"
+ALLINONE_CONTAINER="${MLAIR_CONTAINER_NAME:-mlair}"
 
 cd "$ROOT"
+
+if [[ -z "${COMPOSE_FILE:-}" ]]; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$ALLINONE_CONTAINER"; then
+    COMPOSE_FILE="deploy/docker-compose.allinone.yml"
+  else
+    COMPOSE_FILE="deploy/docker-compose.quickstart.yml"
+  fi
+fi
+
+if [[ "$COMPOSE_FILE" == *allinone* ]]; then
+  echo "[1/2] All-in-one: Redis tick-lock via container ${ALLINONE_CONTAINER}"
+  if ! docker exec "$ALLINONE_CONTAINER" redis-cli -h 127.0.0.1 -p 6379 DEL "$LOCK_KEY" >/dev/null 2>&1; then
+    echo "[FAIL] cannot reach redis in ${ALLINONE_CONTAINER}" >&2
+    exit 1
+  fi
+  first="$(docker exec "$ALLINONE_CONTAINER" redis-cli SET "$LOCK_KEY" replica-a NX EX 10)"
+  if [[ "$first" != "OK" ]]; then
+    echo "[FAIL] first SET NX expected OK, got: ${first:-<empty>}" >&2
+    exit 1
+  fi
+  second="$(docker exec "$ALLINONE_CONTAINER" redis-cli SET "$LOCK_KEY" replica-b NX EX 10 || true)"
+  if [[ -n "$second" && "$second" != "(nil)" ]]; then
+    echo "[FAIL] second SET NX expected (nil), got: $second" >&2
+    exit 1
+  fi
+  docker exec "$ALLINONE_CONTAINER" redis-cli DEL "$LOCK_KEY" >/dev/null 2>&1 || true
+  echo "[2/2] SKIP multi-replica scheduler (all-in-one single supervisord)"
+  echo "[PASS] validate_scheduler_ha (allinone redis lock only)"
+  echo "       For scheduler=2 sign-off use: COMPOSE_FILE=deploy/docker-compose.quickstart.yml make validate-scheduler-ha"
+  exit 0
+fi
 
 compose() {
   docker compose -f "$COMPOSE_FILE" "$@"

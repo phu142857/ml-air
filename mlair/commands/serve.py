@@ -8,16 +8,21 @@ import sys
 from pathlib import Path
 
 from mlair.config.loader import apply_to_environ, load_config
-from mlair.paths import default_compose_file, default_env_example, repo_root
+from mlair.paths import default_compose_file, default_env_example, default_env_infra_example, repo_root
 
 
 def _ensure_env_file() -> None:
     env_path = repo_root() / ".env"
-    example = default_env_example()
-    if env_path.is_file() or not example.is_file():
+    if env_path.is_file():
         return
-    env_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
-    print(f"[mlair] created {env_path} from .env.example")
+    parts: list[str] = []
+    for example in (default_env_example(), default_env_infra_example()):
+        if example.is_file():
+            parts.append(example.read_text(encoding="utf-8").rstrip())
+    if not parts:
+        return
+    env_path.write_text("\n\n".join(parts) + "\n", encoding="utf-8")
+    print("[mlair] created .env from .env.example + deploy/.env.infra.example")
 
 
 def _compose_file(cfg: dict) -> Path:

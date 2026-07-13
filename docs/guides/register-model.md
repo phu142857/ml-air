@@ -12,9 +12,15 @@ Register a model artifact from a successful run.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md) (maintainer+).
+
 ```bash
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/models/register" \
-  -H "Authorization: Bearer maintainer-token" \
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/models/register" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"run_id":"<run_id>","task_id":"<task_id>","artifact_uri":"s3://bucket/model.pkl","name":"demo-model"}'
 ```

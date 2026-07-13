@@ -33,9 +33,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY sdk /app/sdk
+COPY mlair /app/mlair
+COPY api /app/api
 COPY executor /app/executor
 
 WORKDIR /app/executor
+
+ENV PYTHONPATH=/app/executor:/app/api:/app
 
 RUN useradd -m appuser && chown -R appuser:appuser /app
 

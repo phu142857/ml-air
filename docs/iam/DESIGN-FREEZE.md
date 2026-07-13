@@ -44,22 +44,20 @@ Architecture → Domain → Logical Database → REST → UI
 
 ---
 
-## Implementation phase (open)
+## Implementation phase (gated)
 
 ```text
-Identity Design Package v1.0  ✅ CLOSED
+002 Configuration Design Freeze     ✅ CLOSED
         ↓
-Alembic Revision #1
+001 Identity implementation         ✅ shipped (Phases A–F; CI verify_identity_*)
         ↓
-SQLAlchemy Models → Repositories → Auth Service
+002 Configuration refactor          ✅ CLOSED
         ↓
-JWT + SA Middleware (+ dual-run)
-        ↓
-REST APIs → Hub UI
-        ↓
-Remove Legacy → Integration Test → Security Review
+004 Governance draft v0.1
 ```
 
 Follow **Implementation Order** and **Definition of Done** in `11-migration-plan.md`.
+
+**Configuration gate:** [Package 002 Design Freeze](../config/DESIGN-FREEZE.md) is **CLOSED**. New `ML_AIR_*` env vars must comply with [deployment contract](../config/07-deployment-contract.md) groups A–E only.
 
 **No new design documents** unless an ADR opens a new design slice.

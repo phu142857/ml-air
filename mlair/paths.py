@@ -40,3 +40,7 @@ def profiles_dir() -> Path:
 
 def default_env_example() -> Path:
     return repo_root() / ".env.example"
+
+
+def default_env_infra_example() -> Path:
+    return repo_root() / "deploy" / ".env.infra.example"

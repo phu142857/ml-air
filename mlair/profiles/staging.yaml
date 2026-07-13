@@ -9,10 +9,10 @@ features:
   resource_monitor: true
   strict_dataset_version_required: true
   strict_dataset_version_all_post_runs: true
-  readiness_allow_legacy_fallback: true
-  skip_approval_for_promote: true
+  readiness_allow_legacy_fallback: false
+  skip_approval_for_promote: false
   warn_implicit_dataset_head: true
-  lineage_legacy_default_version_label: true
+  lineage_legacy_default_version_label: false
   dataset_hub_v2: true
   scope_debug_panel: true
   serving_slots_http: true

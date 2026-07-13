@@ -1,0 +1,66 @@
+# Production Helm overlay — External Secrets + WSS realtime URL
+# Install:
+#   helm upgrade --install ml-air ./charts/ml-air \
+#     -f charts/ml-air/values-production.yaml \
+#     -f charts/ml-air/values-production-strict.yaml   # optional strict lifecycle
+
+frontend:
+  image:
+    repository: ghcr.io/your-org/ml-air-frontend
+    tag: latest
+
+api:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/your-org/ml-air-api
+    tag: latest
+  env:
+    jwtIssuer: ""
+    jwtAudience: ""
+    jwtJwksUrl: ""
+    # Browser-reachable WSS URL (Hub realtime_base_url); must match ingress TLS host + /ws path
+    runtimeRealtimeBaseUrl: "wss://mlair.production.internal/ws"
+  secret:
+    existingSecretName: ""
+    key: jwtHs256Secret
+    value: "__from_external_secret__"
+    externalSecret:
+      enabled: true
+      secretStoreRef:
+        name: production-secret-store
+        kind: ClusterSecretStore
+      remoteRef:
+        key: ml-air/api-secrets
+        property: jwtHs256Secret
+    sealedSecret:
+      enabled: false
+      encryptedData: ""
+
+scheduler:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/your-org/ml-air-scheduler
+    tag: latest
+
+executor:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/your-org/ml-air-executor
+    tag: latest
+
+realtime:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/your-org/ml-air-realtime
+    tag: latest
+
+ingress:
+  enabled: true
+  className: nginx
+  host: mlair.production.internal
+  tls:
+    enabled: true
+    secretName: ml-air-tls
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"

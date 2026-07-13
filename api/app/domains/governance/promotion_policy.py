@@ -2,37 +2,23 @@
 
 from __future__ import annotations
 
-import os
-
-_DEFAULT_STAGE_ORDER = ("staging", "production")
+from app.settings import get_settings
 
 
 def promotion_stage_order() -> tuple[str, ...]:
-    raw = str(os.getenv("ML_AIR_PROMOTION_STAGE_ORDER", "staging,production")).strip()
-    parts = tuple(p.strip().lower() for p in raw.split(",") if p.strip())
-    return parts if parts else _DEFAULT_STAGE_ORDER
+    return get_settings().promotion.stage_order
 
 
 def rollback_enabled() -> bool:
-    return str(os.getenv("ML_AIR_ROLLBACK_ENABLED", "1")).strip().lower() not in ("0", "false", "no", "off")
+    return get_settings().promotion.rollback_enabled
 
 
 def rollback_requires_approval() -> bool:
-    return str(os.getenv("ML_AIR_ROLLBACK_REQUIRES_APPROVAL", "1")).strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return get_settings().promotion.rollback_requires_approval
 
 
 def allow_skip_forward_stages() -> bool:
-    return str(os.getenv("ML_AIR_PROMOTION_ALLOW_SKIP_STAGES", "1")).strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return get_settings().promotion.allow_skip_forward_stages
 
 
 def _normalize_stage(stage: str | None) -> str | None:

@@ -12,11 +12,17 @@ Compare two runs by status, duration, and tracked metrics.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md).
+
 ```bash
-curl -H "Authorization: Bearer viewer-token" \
-  "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id_1>"
-curl -H "Authorization: Bearer viewer-token" \
-  "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id_2>"
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id_1>"
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id_2>"
 ```
 
 ## Result

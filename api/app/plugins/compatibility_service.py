@@ -58,6 +58,6 @@ def enforce_plugin_version_pins(tasks: list[Any]) -> list[str]:
 
 
 def plugin_version_enforcement_enabled() -> bool:
-    import os
+    from app.settings import get_settings
 
-    return os.getenv("MLAIR_PLUGIN_VERSION_ENFORCE", "1").strip() != "0"
+    return get_settings().features.plugin_version_enforcement

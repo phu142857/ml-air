@@ -8,10 +8,16 @@ import base64
 import json
 import os
 import socket
+import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlencode, urlparse
+
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 
 def _http_json(url: str, timeout: float = 5.0) -> tuple[int, dict]:
@@ -26,6 +32,52 @@ def _http_json(url: str, timeout: float = 5.0) -> tuple[int, dict]:
             return exc.code, json.loads(raw or "{}")
         except json.JSONDecodeError:
             return exc.code, {"raw": raw}
+
+
+def _detect_allinone(api_base: str, ws_base: str) -> bool:
+    flag = os.getenv("MLAIR_ALLINONE", "").strip().lower()
+    if flag in {"1", "true", "yes"}:
+        return True
+    compose = os.getenv("MLAIR_COMPOSE_FILE", "").strip()
+    if "allinone" in compose:
+        return True
+    api_p = urlparse(api_base)
+    ws_p = urlparse(ws_base)
+    if api_p.hostname and api_p.hostname == ws_p.hostname:
+        api_port = api_p.port or (443 if api_p.scheme == "https" else 80)
+        ws_port = ws_p.port or (443 if ws_p.scheme == "wss" else 80)
+        if api_port == ws_port:
+            return True
+    return False
+
+
+def _redis_reachable(host: str, port: int) -> bool:
+    if _tcp_ok(host, port):
+        return True
+    container = os.getenv("MLAIR_CONTAINER_NAME", "mlair").strip() or "mlair"
+    try:
+        proc = subprocess.run(
+            ["docker", "exec", container, "redis-cli", "-h", "127.0.0.1", "-p", "6379", "PING"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return proc.returncode == 0 and "PONG" in (proc.stdout or "")
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _default_verify_token() -> str:
+    explicit = os.getenv("ML_AIR_REALTIME_VERIFY_TOKEN", "").strip()
+    if explicit:
+        return explicit
+    try:
+        from identity_smoke_token import resolve_smoke_bearer_token
+
+        return resolve_smoke_bearer_token("maintainer")
+    except Exception:
+        return "viewer-token"
 
 
 def _tcp_ok(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -43,7 +95,12 @@ def _ws_handshake_ok(ws_base: str, tenant_id: str, project_id: str, token: str, 
     port = parsed.port or (443 if parsed.scheme == "wss" else 80)
     path_base = (parsed.path or "").rstrip("/")
     qs = urlencode({"tenant_id": tenant_id, "project_id": project_id, "token": token})
-    path = f"{path_base}/ws?{qs}"
+    if path_base.endswith("/ws"):
+        path = f"{path_base}?{qs}"
+    elif path_base:
+        path = f"{path_base}/ws?{qs}"
+    else:
+        path = f"/ws?{qs}"
 
     key = base64.b64encode(os.urandom(16)).decode("ascii")
     request = (
@@ -76,7 +133,7 @@ def main() -> int:
     parser.add_argument("--realtime-port", type=int, default=int(os.getenv("MLAIR_REALTIME_PORT", "8001")))
     parser.add_argument("--tenant-id", default=os.getenv("ML_AIR_TENANT_ID", "default"))
     parser.add_argument("--project-id", default=os.getenv("ML_AIR_PROJECT_ID", "default_project"))
-    parser.add_argument("--token", default=os.getenv("ML_AIR_REALTIME_VERIFY_TOKEN", "viewer-token"))
+    parser.add_argument("--token", default=_default_verify_token())
     parser.add_argument("--redis-host", default=os.getenv("ML_AIR_REDIS_HOST", "127.0.0.1"))
     parser.add_argument("--redis-port", type=int, default=int(os.getenv("ML_AIR_REDIS_PORT", "6379")))
     parser.add_argument("--skip-ws", action="store_true", help="Skip WebSocket handshake check")
@@ -132,8 +189,10 @@ def main() -> int:
     else:
         print("[SKIP] realtime-health (--degraded)")
 
-    if _tcp_ok(args.redis_host, args.redis_port):
-        print(f"[PASS] redis-tcp ({args.redis_host}:{args.redis_port})")
+    if _redis_reachable(args.redis_host, args.redis_port):
+        print(f"[PASS] redis ({args.redis_host}:{args.redis_port} or all-in-one container)")
+    elif _detect_allinone(api_base, ws_base):
+        print("[SKIP] redis-tcp (all-in-one: redis not published on host)")
     else:
         failures.append(f"redis-tcp ({args.redis_host}:{args.redis_port})")
 

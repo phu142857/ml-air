@@ -12,9 +12,15 @@ Compare two pipeline versions to understand task-level changes.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md).
+
 ```bash
-curl -H "Authorization: Bearer viewer-token" \
-  "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/versions/diff?base=<v1>&target=<v2>"
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants/$TENANT/projects/$PROJECT/pipelines/<pipeline_id>/versions/diff?base=<v1>&target=<v2>"
 ```
 
 ## Result

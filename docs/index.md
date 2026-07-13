@@ -20,7 +20,7 @@ mlair start --pull
 mlair health                     # verify the stack is up
 ```
 
-Then open **http://localhost:8080**. Defaults work out of the box; override via [Configuration](./configuration.md). Step-by-step in [Installation](./getting-started/installation.md).
+Then open **http://localhost:8080/login** and sign in (bootstrap admin from `.env`). Defaults work out of the box; override via [Configuration](./configuration.md). Step-by-step in [Installation](./getting-started/installation.md) and [Login and Identity](./guides/login-and-identity.md).
 
 ## Documentation Philosophy
 
@@ -92,11 +92,13 @@ Each guide follows:
 - [Reload Plugin Registry](./guides/reload-plugin.md)
 - [Integrate App with Plugin](./guides/integrate-app-with-plugin.md)
 
-### Security
+### Security and Identity
 
+- [Login and Identity (Hub operators)](./guides/login-and-identity.md)
 - [Verify Manifest](./guides/verify-manifest.md)
 - [Rotate Keys](./guides/rotate-keys.md)
 - [Replay Security Checks](./guides/replay-security.md)
+- IAM design package: [Identity Design Freeze](./iam/DESIGN-FREEZE.md)
 
 ### Observability
 
@@ -104,6 +106,7 @@ Each guide follows:
 - [Resource usage attribution](./guides/usage-attribution.md)
 - [Resource Usage Contract v1](./guides/resource-usage-contract-v1.md)
 - [OpenTelemetry (traces, OTLP)](./guides/opentelemetry.md)
+- [Use the Trace Explorer](./guides/use-trace-explorer.md)
 - [Set Up Prometheus](./guides/setup-prometheus.md)
 - [Debug with Grafana](./guides/debug-with-grafana.md)
 
@@ -121,6 +124,7 @@ Each guide follows:
 
 - [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md)
 - [Lifecycle formal model (MVP)](./concepts/lifecycle-formal-model.md)
+- [Phase 9 formalization (MVP)](./architecture/06-phase9-formalization.md)
 - [Lifecycle state machines (MVP)](./concepts/lifecycle-state-machines.md)
 - [Pipeline](./concepts/pipeline.md)
 - [Run](./concepts/run.md)
@@ -133,6 +137,7 @@ Each guide follows:
 
 - [CLI Commands](./cli/commands.md)
 - [API Overview](./api/overview.md) (datasets: **`POST .../datasets/{id}/materialize`**, buffer, readiness history)
+- [Traces API](./api/traces.md) (list, search, detail, export, ingest)
 - [Realtime event envelope (v1)](./api/realtime-event-envelope.md) (Redis payload + `payload` field matrix; links to event-flow diagrams)
 - [POST /tenants/…/projects/registry](./api/post-tenant-projects-registry.md)
 - [POST /runs/trigger](./api/post-runs-trigger.md)

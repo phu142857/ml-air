@@ -20,10 +20,13 @@
 
 | Step | Command | Date | Operator | PASS / FAIL | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Stack health + Wave 0 | `mlair health` + `python scripts/verify_execution_realtime.py` | | | | |
+| Stack health + Wave 0 + Identity + strict | `make verify-operator-signoff-strict` | | | | |
+| Stack health + Wave 0 | `make verify-operator-signoff` | | | | |
 | Strict lifecycle config | `python scripts/verify_strict_lifecycle.py` | | | | |
 | Wave 1 + chaos | `make wave1` | | | | |
-| Scheduler HA | `make validate-scheduler-ha` | | | | _staging before prod HA_ |
+| Alertmanager routes (static) | `make verify-alertmanager-routes` | | | | |
+| Scheduler HA (`scheduler=2`) | `make validate-scheduler-ha-quickstart` | | | | _quickstart compose_ |
+| Legacy M1 snapshot | `make record-legacy-m1-snapshot ARGS='--start-date …'` | | | | _28d window_ |
 | Prometheus rules only | `make test-prometheus-rules` | | | | _optional if wave1 skipped_ |
 
 Env vars used: `ML_AIR_BASE_URL=`, `ML_AIR_TENANT_ID=default`, `ML_AIR_PROJECT_ID=default_project`

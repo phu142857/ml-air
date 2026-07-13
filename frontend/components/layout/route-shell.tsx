@@ -11,6 +11,7 @@ import { TraceUrlSync } from "@/components/mlops/trace-url-sync"
 import { PageTransition } from "@/components/mlops/interaction"
 import { useRealtimeStatusToasts } from "@/hooks/use-realtime-status-toasts"
 import { useAppContext } from "@/lib/app-context"
+import { HubAuthGuard } from "@/components/auth/hub-auth-guard"
 
 interface RouteShellProps {
   children: React.ReactNode
@@ -50,7 +51,8 @@ export function RouteShell({ children }: RouteShellProps) {
   }, [handleKeyDown])
 
   return (
-    <SidebarProvider>
+    <HubAuthGuard>
+      <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden bg-background">
         <Topbar onOpenCommandPalette={() => setCommandOpen(true)} />
@@ -69,6 +71,7 @@ export function RouteShell({ children }: RouteShellProps) {
           }}
         />
       ) : null}
-    </SidebarProvider>
+      </SidebarProvider>
+    </HubAuthGuard>
   )
 }

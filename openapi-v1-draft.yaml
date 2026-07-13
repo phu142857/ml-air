@@ -27,6 +27,8 @@ servers:
 
 tags:
   - name: Auth
+  - name: Identity
+  - name: Traces
   - name: Pipelines
   - name: Runs
   - name: Tasks
@@ -604,6 +606,139 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Whoami"
+
+  /v1/auth/login:
+    post:
+      tags: [Identity]
+      summary: Human login (username + password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Access and refresh tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: invalid_credential
+
+  /v1/auth/refresh:
+    post:
+      tags: [Identity]
+      summary: Rotate access token from refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: invalid_refresh_token
+
+  /v1/auth/logout:
+    post:
+      tags: [Identity]
+      summary: Revoke current refresh session
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: Session revoked
+
+  /v1/auth/me:
+    get:
+      tags: [Identity]
+      summary: Current user profile and assignments
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/users:
+    get:
+      tags: [Identity]
+      summary: List users (admin)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+    post:
+      tags: [Identity]
+      summary: Create user (admin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/service-accounts:
+    get:
+      tags: [Identity]
+      summary: List service accounts (admin)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Service account list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+    post:
+      tags: [Identity]
+      summary: Create service account (admin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceAccountCreateRequest"
+      responses:
+        "201":
+          description: Created service account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
 
   /v1/pipelines/validate:
     post:
@@ -1606,6 +1741,153 @@ paths:
         "404":
           description: run_not_found
 
+  /v1/tenants/{tenant_id}/projects/{project_id}/traces:
+    get:
+      tags: [Traces]
+      summary: List recent traces for a project
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Trace list page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/traces/search:
+    get:
+      tags: [Traces]
+      summary: Search traces by id fragment and filters
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Trace ID prefix (min 4 chars unless another filter is set)
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Attribute filter key:value
+        - name: run_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "422":
+          description: trace_search_requires_query_or_filter
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/traces/ingest:
+    post:
+      tags: [Traces]
+      summary: Ingest OTLP-style span batch (external workers)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TraceSpanIngestRequest"
+      responses:
+        "200":
+          description: Ingest acknowledgement
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, spans_written]
+                properties:
+                  ok:
+                    type: boolean
+                  spans_written:
+                    type: integer
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/traces/{trace_id}:
+    get:
+      tags: [Traces]
+      summary: Trace explorer detail (runs + OTLP spans)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: Unified trace payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "404":
+          description: trace_not_found
+
+  /v1/tenants/{tenant_id}/projects/{project_id}/traces/{trace_id}/export:
+    get:
+      tags: [Traces]
+      summary: Download trace explorer payload as JSON attachment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: JSON attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+        "404":
+          description: trace_not_found
+
   /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/versions:
     post:
       tags: [Pipelines]
@@ -2401,7 +2683,9 @@ components:
     BearerAuth:
       type: http
       scheme: bearer
-      description: Static API token, JWT, or `ML_AIR_WORKER_TOKEN` value when configured.
+      description: |
+        Identity JWT from `POST /v1/auth/login`, Service Account secret, or legacy static token
+        when `ML_AIR_LEGACY_STATIC_TOKENS=1`. Worker lease APIs may also accept `ML_AIR_WORKER_TOKEN`.
 
   parameters:
     TenantId:
@@ -2455,6 +2739,14 @@ components:
       required: true
       schema:
         type: string
+
+    TraceId:
+      in: path
+      name: trace_id
+      required: true
+      schema:
+        type: string
+        minLength: 1
 
     ListCursor:
       in: query
@@ -2929,6 +3221,81 @@ components:
           type: array
           items:
             type: string
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          nullable: true
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+
+    LoginResponse:
+      allOf:
+        - $ref: "#/components/schemas/TokenResponse"
+        - type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/JsonValue"
+
+    UserCreateRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        state:
+          type: string
+          default: active
+        is_global_admin:
+          type: boolean
+          default: false
+
+    ServiceAccountCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    TraceSpanIngestRequest:
+      type: object
+      description: OTLP-style span batch; see docs/guides/opentelemetry.md
+      additionalProperties: true
 
     TriggerRunRequest:
       type: object

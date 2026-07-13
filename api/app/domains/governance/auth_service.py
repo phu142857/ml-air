@@ -1,6 +1,5 @@
 import hmac
 import json
-import os
 import time
 from urllib.request import urlopen
 from dataclasses import dataclass
@@ -8,6 +7,8 @@ from dataclasses import dataclass
 import jwt
 from jwt import InvalidTokenError
 from fastapi import HTTPException
+
+from app.settings import get_settings
 
 ROLE_WEIGHT = {"viewer": 1, "maintainer": 2, "admin": 3}
 _JWKS_CACHE: dict[str, dict] = {}
@@ -23,9 +24,16 @@ class Principal:
     role: str
     tenant_id: str
     project_ids: list[str]
+    principal_kind: str = "legacy"
+    user_id: str | None = None
+    service_account_id: str | None = None
+    is_global_admin: bool = False
+    permissions: list[str] | None = None
 
 
 def _default_tokens() -> dict[str, dict]:
+    if not _legacy_static_tokens_enabled():
+        return {}
     return {
         "viewer-token": {"role": "viewer", "tenant_id": "default", "project_ids": ["default_project"]},
         "maintainer-token": {"role": "maintainer", "tenant_id": "default", "project_ids": ["default_project"]},
@@ -34,7 +42,7 @@ def _default_tokens() -> dict[str, dict]:
 
 
 def _token_db() -> dict[str, dict]:
-    raw = os.getenv("ML_AIR_AUTH_TOKENS_JSON", "").strip()
+    raw = get_settings().auth.auth_tokens_json
     if not raw:
         return _default_tokens()
     try:
@@ -59,28 +67,23 @@ def _extract_bearer_token(authorization: str | None) -> str:
 
 
 def _jwt_secret() -> str:
-    return os.getenv("ML_AIR_JWT_HS256_SECRET", "").strip()
+    return get_settings().auth.jwt_hs256_secret
 
 
 def _jwt_issuer() -> str:
-    return os.getenv("ML_AIR_JWT_ISSUER", "").strip()
+    return get_settings().auth.jwt_issuer
 
 
 def _jwt_audience() -> str:
-    return os.getenv("ML_AIR_JWT_AUDIENCE", "").strip()
+    return get_settings().auth.jwt_audience
 
 
 def _jwt_jwks_url() -> str:
-    return os.getenv("ML_AIR_JWT_JWKS_URL", "").strip()
+    return get_settings().auth.jwt_jwks_url
 
 
 def _jwt_jwks_ttl_seconds() -> int:
-    raw = os.getenv("ML_AIR_JWT_JWKS_CACHE_TTL_SECONDS", "300").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        value = 300
-    return max(30, value)
+    return get_settings().auth.jwt_jwks_cache_ttl_seconds
 
 
 def _jwt_decode_kwargs(algorithm: str) -> dict:
@@ -199,18 +202,132 @@ def _principal_from_token_data(token: str, token_data: dict, *, token_issuer: st
     )
 
 
+def _legacy_static_tokens_enabled() -> bool:
+    return get_settings().auth.legacy_static_tokens
+
+
+def _principal_from_identity_user(token: str, payload: dict) -> Principal:
+    from app.domains.governance import identity_repository as identity_repo
+    from app.domains.governance.identity_service import accessible_scopes_for_user
+
+    user_id = str(payload.get("sub") or "").strip()
+    user = identity_repo.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="invalid_token")
+    if user.get("state") != "active" and not user.get("is_global_admin"):
+        raise HTTPException(status_code=403, detail="account_disabled")
+    scopes = accessible_scopes_for_user(user)
+    if user.get("is_global_admin"):
+        role = "admin"
+        tenant_id = get_settings().default_tenant
+        project_ids = ["*"]
+    elif scopes:
+        first = scopes[0]
+        role = str(first.get("role") or "viewer")
+        tenant_id = str(first.get("tenant_id") or "")
+        project_ids = list({str(s.get("project_id")) for s in scopes if s.get("tenant_id") == tenant_id})
+    else:
+        role = "viewer"
+        tenant_id = get_settings().default_tenant
+        project_ids = []
+    return Principal(
+        token=token,
+        subject=user_id,
+        token_issuer="identity_jwt",
+        scope_mapping_version=1,
+        role=role,
+        tenant_id=tenant_id,
+        project_ids=project_ids,
+        principal_kind="user",
+        user_id=user_id,
+        is_global_admin=bool(user.get("is_global_admin")),
+    )
+
+
+def _principal_from_service_account(token: str, sa: dict) -> Principal:
+    from app.domains.governance import identity_repository as identity_repo
+
+    permissions = identity_repo.list_sa_permissions(sa["service_account_id"])
+    scopes = identity_repo.list_sa_scopes(sa["service_account_id"])
+    tenant_id = ""
+    project_ids: list[str] = []
+    if scopes:
+        tenant_id = str(scopes[0].get("tenant_id") or "")
+        if scopes[0].get("all_projects"):
+            project_ids = ["*"]
+        else:
+            project_ids = list(scopes[0].get("project_ids") or [])
+    return Principal(
+        token=token,
+        subject=sa["service_account_id"],
+        token_issuer="service_account",
+        scope_mapping_version=1,
+        role="maintainer",
+        tenant_id=tenant_id,
+        project_ids=project_ids,
+        principal_kind="service_account",
+        service_account_id=sa["service_account_id"],
+        permissions=permissions,
+    )
+
+
 def authenticate_bearer(authorization: str | None) -> Principal:
     token = _extract_bearer_token(authorization)
+
+    from app.domains.governance.identity_token_service import IDENTITY_ISSUER, decode_identity_access_token
+    from app.domains.governance import identity_repository as identity_repo
+    from app.domains.governance.identity_service import authenticate_sa_secret
+
+    if identity_repo.identity_tables_available():
+        sa = authenticate_sa_secret(token)
+        if sa:
+            return _principal_from_service_account(token, sa)
+        try:
+            payload = decode_identity_access_token(token)
+            return _principal_from_identity_user(token, payload)
+        except HTTPException as exc:
+            if exc.status_code != 401:
+                raise
+        except Exception:
+            pass
+
     jwt_payload = _decode_jwt_token(token)
     if jwt_payload is not None:
+        iss = str(jwt_payload.get("iss") or "")
+        if iss == IDENTITY_ISSUER:
+            return _principal_from_identity_user(token, jwt_payload)
         return _principal_from_token_data(token, jwt_payload, token_issuer="jwt")
-    token_data = _token_db().get(token)
-    if token_data:
-        return _principal_from_token_data(token, token_data, token_issuer="static_token")
+
+    if _legacy_static_tokens_enabled():
+        token_data = _token_db().get(token)
+        if token_data:
+            p = _principal_from_token_data(token, token_data, token_issuer="static_token")
+            p.principal_kind = "legacy"
+            return p
+
     raise HTTPException(status_code=401, detail="invalid_token")
 
 
 def authorize_scope(principal: Principal, tenant_id: str, project_id: str, min_role: str = "viewer") -> None:
+    if principal.principal_kind == "user" and principal.user_id:
+        from app.domains.governance.identity_service import authorize_user_scope
+
+        effective = authorize_user_scope(principal.user_id, tenant_id, project_id, min_role)
+        principal.role = effective
+        principal.tenant_id = tenant_id
+        return
+    if principal.principal_kind == "service_account" and principal.service_account_id:
+        from app.domains.governance.identity_service import authorize_service_account_scope
+
+        effective = authorize_service_account_scope(
+            principal.service_account_id,
+            tenant_id,
+            project_id,
+            min_role,
+        )
+        principal.role = effective
+        principal.tenant_id = tenant_id
+        return
     required = ROLE_WEIGHT.get(min_role, 1)
     current = ROLE_WEIGHT.get(principal.role, 0)
     if current < required:
@@ -224,18 +341,28 @@ def authorize_scope(principal: Principal, tenant_id: str, project_id: str, min_r
 def authenticate_worker_lease_principal(authorization: str | None) -> Principal | None:
     """
     External worker lease API:
-    - If ML_AIR_WORKER_TOKEN is set and Authorization matches, returns None (global lease; no tenant filter).
-    - Otherwise requires a maintainer-or-better static/JWT token (same bearer machinery as the rest of the API).
+    - Legacy: ML_AIR_WORKER_TOKEN global lease when ML_AIR_LEGACY_STATIC_TOKENS=1.
+    - Service Account with tasks:lease (+ scope on task routes).
+    - Human maintainer+ bearer (legacy static / JWT only when legacy enabled).
     """
-    worker_tok = os.getenv("ML_AIR_WORKER_TOKEN", "").strip()
-    if worker_tok:
-        try:
-            tok = _extract_bearer_token(authorization)
-        except HTTPException:
-            tok = ""
-        if tok and len(tok) == len(worker_tok) and hmac.compare_digest(tok.encode("utf-8"), worker_tok.encode("utf-8")):
-            return None
+    if _legacy_static_tokens_enabled():
+        worker_tok = get_settings().auth.worker_token
+        if worker_tok:
+            try:
+                tok = _extract_bearer_token(authorization)
+            except HTTPException:
+                tok = ""
+            if tok and len(tok) == len(worker_tok) and hmac.compare_digest(tok.encode("utf-8"), worker_tok.encode("utf-8")):
+                return None
     principal = authenticate_bearer(authorization)
+    if principal.principal_kind == "service_account" and principal.service_account_id:
+        from app.domains.governance.identity_service import sa_has_permission, sa_has_worker_permissions
+
+        if sa_has_worker_permissions(principal.service_account_id) and sa_has_permission(
+            principal.service_account_id, "tasks:lease"
+        ):
+            return principal
+        raise HTTPException(status_code=403, detail="insufficient_role")
     if ROLE_WEIGHT.get(principal.role, 0) < ROLE_WEIGHT["maintainer"]:
         raise HTTPException(status_code=403, detail="insufficient_role")
     return principal

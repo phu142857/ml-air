@@ -53,12 +53,19 @@ python scripts/verify_strict_lifecycle.py
 # 3 — Wave 1 + chaos
 make wave1
 
-# 4 — Scheduler HA (staging multi-replica)
-make validate-scheduler-ha
+# 4 — Scheduler HA (staging multi-replica; quickstart required for scheduler=2)
+make validate-scheduler-ha-quickstart
+
+# 4b — Legacy M1 snapshot (when strict env applied)
+make record-legacy-m1-snapshot ARGS='--start-date YYYY-MM-DD'
 
 # 5 — Optional local bundle (steps 1 + 3 + 4)
 make signoff-local
+# or automated only:
+make verify-operator-signoff-strict
 ```
+
+See [operator-signoff](./operator-signoff.md) for all commands.
 
 **Pass criteria:** all commands exit **0**; Hub manual items ticked; ticket record filled with **date + operator name**.
 

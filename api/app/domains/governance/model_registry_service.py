@@ -34,15 +34,15 @@ VALID_SERVING_SLOTS = frozenset({"candidate", "challenger", "champion", "canary"
 
 def _require_approval_for_production_promote() -> bool:
     """When True, promote to gated stages requires approval_status=approved."""
-    skip = str(os.getenv("ML_AIR_SKIP_APPROVAL_FOR_PROMOTE", "1")).strip().lower()
-    return skip not in ("1", "true", "yes")
+    from app.settings import get_settings
+
+    return not get_settings().promotion.skip_approval_for_promote
 
 
 def _stages_requiring_approval() -> frozenset[str]:
-    raw = str(os.getenv("ML_AIR_PROMOTION_APPROVAL_STAGES", "production")).strip()
-    if not raw:
-        return frozenset()
-    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+    from app.settings import get_settings
+
+    return frozenset(get_settings().promotion.approval_stages)
 
 
 def promotion_governance_runtime() -> dict:

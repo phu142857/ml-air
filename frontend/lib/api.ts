@@ -425,7 +425,13 @@ export type RuntimeConfigResponse = {
 };
 
 export type BootstrapContextResponse = {
-  user: { subject: string; role: string; tenant_id?: string | null };
+  user: {
+    subject: string;
+    role: string;
+    tenant_id?: string | null;
+    username?: string;
+    is_global_admin?: boolean;
+  };
   effective_scope: {
     tenant_id: string;
     project_id: string;

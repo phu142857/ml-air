@@ -16,7 +16,9 @@ Stack defaults enable usage tracking and resource monitoring.
 ```bash
 export MLAIR_VERIFY_RUN_ID=<success-run-id>
 export ML_AIR_BASE_URL=http://127.0.0.1:8080
-export ML_AIR_TRACKING_TOKEN=admin-token
+# Obtain token: python scripts/identity_smoke_token.py
+export ML_AIR_TRACKING_TOKEN="$(python scripts/identity_smoke_token.py)"
+```
 
 # Optional:
 export MLAIR_VERIFY_MODEL_ID=<model-id>

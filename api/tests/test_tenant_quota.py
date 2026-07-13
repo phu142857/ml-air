@@ -32,18 +32,18 @@ class TestTenantQuota(unittest.TestCase):
         self.assertEqual(resolve_max_parallel_tasks("t1", 10), 3)
         self.assertEqual(resolve_max_parallel_tasks("t1", 2), 2)
 
-    @patch.dict(os.environ, {"ML_AIR_TENANT_QUOTA_ENFORCE": "1"}, clear=False)
+    @patch("app.domains.governance.tenant_quota_service.enforcement_enabled", return_value=True)
     @patch("app.domains.governance.tenant_quota_service.get_tenant_quotas")
     @patch("app.domains.governance.tenant_quota_service.get_tenant_usage")
-    def test_assert_raises_when_at_limit(self, mock_usage, mock_quotas) -> None:
+    def test_assert_raises_when_at_limit(self, mock_usage, mock_quotas, _mock_enforce) -> None:
         mock_quotas.return_value = {"max_runs_per_project": 10}
         mock_usage.return_value = {"runs": 10}
         with self.assertRaises(TenantQuotaExceeded):
             assert_within_quota("t1", "runs", project_id="p1")
 
-    @patch.dict(os.environ, {"ML_AIR_TENANT_QUOTA_ENFORCE": "0"}, clear=False)
+    @patch("app.domains.governance.tenant_quota_service.enforcement_enabled", return_value=False)
     @patch("app.domains.governance.tenant_quota_service.get_tenant_usage")
-    def test_assert_skipped_when_enforcement_off(self, mock_usage) -> None:
+    def test_assert_skipped_when_enforcement_off(self, mock_usage, _mock_enforce) -> None:
         mock_usage.return_value = {"runs": 999_999}
         assert_within_quota("t1", "runs", project_id="p1")
 

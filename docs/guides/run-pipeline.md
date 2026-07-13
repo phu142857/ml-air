@@ -6,6 +6,8 @@ Trigger and monitor a pipeline run from CLI.
 
 **Dashboard note:** Production execution from the UI starts at **Dataset Hub** → **Run / Train** (train with model or run with pipeline). Pipeline pages are for observability (DAG, versions, run history). This guide covers CLI/API operators.
 
+**Auth:** Obtain `$TOKEN` via [Login and Identity](./login-and-identity.md) (`POST /v1/auth/login`). Legacy: `maintainer-token` when `ML_AIR_LEGACY_STATIC_TOKENS=1`.
+
 ## Steps
 
 1. Ensure stack is running.
@@ -26,8 +28,9 @@ python ./mlair logs <run_id> --limit 100
 
 Optional (shift-left): validate pipeline contract (plugins) before triggering:
 ```bash
-curl -X POST "http://localhost:8080/v1/pipelines/validate" \
-  -H "Authorization: Bearer maintainer-token" \
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+curl -X POST "$API/v1/pipelines/validate" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "config": {

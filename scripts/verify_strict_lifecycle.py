@@ -11,7 +11,7 @@ import urllib.request
 
 
 def main() -> int:
-    base = os.getenv("ML_AIR_BASE_URL", "http://localhost:18080").rstrip("/")
+    base = os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
     url = f"{base}/v1/runtime-config"
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310

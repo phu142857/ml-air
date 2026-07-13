@@ -19,7 +19,8 @@ jobs:
           python-version: "3.11"
 
       - name: Prepare env
-        run: cp .env.example .env
+        run: |
+          python -c "from pathlib import Path; p=[Path('.env.example'), Path('deploy/.env.infra.example')]; Path('.env').write_text('\n\n'.join(x.read_text(encoding='utf-8').rstrip() for x in p if x.is_file())+'\n', encoding='utf-8')"
 
       - name: Install mlair CLI
         run: pip install -e .
@@ -32,6 +33,29 @@ jobs:
 
       - name: Verify quickstart health
         run: mlair health
+
+      - name: Identity signoff (static checks)
+        run: python scripts/verify_identity_signoff.py
+
+      - name: Identity E2E API
+        run: python scripts/verify_identity_e2e.py
+
+      - name: Wave 0 execution realtime
+        run: |
+          ML_AIR_BASE_URL=http://localhost:8080 \
+          ML_AIR_TENANT_ID=default \
+          ML_AIR_PROJECT_ID=default_project \
+          python scripts/verify_execution_realtime.py
+
+      - name: Strict lifecycle env examples (static)
+        run: python scripts/verify_operator_signoff.py --skip-identity --skip-wave0
+
+      - name: Execution signoff (static + unit)
+        run: python scripts/verify_execution_signoff.py
+
+      - name: Identity unit tests (container)
+        run: |
+          docker exec mlair sh -c 'cd /app/api && PYTHONPATH=/app/api:/app python -m unittest tests.test_identity_unit tests.test_identity_integration tests.test_worker_settings_unit tests.test_platform_policy_unit -q'
 
       - name: Seed demo data
         run: make seed-demo
@@ -51,6 +75,9 @@ jobs:
 
       - name: Validate env sync (.env.example vs compose refs)
         run: python scripts/check_env_sync.py
+
+      - name: Deployment signoff (static guards)
+        run: python scripts/verify_deployment_signoff.py
 
   manifest-key-rotation-guard:
     runs-on: ubuntu-latest

@@ -18,7 +18,7 @@ References: [execution-realtime-ops](./execution-realtime-ops.md) · [wave1-prod
 | Wave 0 verify | `python scripts/verify_execution_realtime.py` | exit 0 |
 | Combined | `mlair health` then verify script | both pass |
 
-Optional env: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_AIR_PROJECT_ID`, `ML_AIR_REALTIME_VERIFY_TOKEN` (default `viewer-token`).
+Optional env: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_AIR_PROJECT_ID`, `ML_AIR_REALTIME_VERIFY_TOKEN` (default: `python scripts/identity_smoke_token.py`; legacy: `viewer-token` when `ML_AIR_LEGACY_STATIC_TOKENS=1`).
 
 ### Configuration (per environment)
 
@@ -26,7 +26,7 @@ Optional env: `ML_AIR_BASE_URL`, `MLAIR_REALTIME_PORT`, `ML_AIR_TENANT_ID`, `ML_
 - [ ] **operator** `realtime_base_url` correct for browser (dev: `ws://localhost:8001`; prod: **`wss://…`** on your hostname)
 - [ ] **operator** Realtime always on in current builds; set `ML_AIR_RUNTIME_REALTIME_BASE_URL=wss://…` ([production-wss-ingress](./production-wss-ingress.md))
 - [ ] **operator** Production ingress: fill [`production-wss-ingress.md`](./production-wss-ingress.md) table + set `ML_AIR_RUNTIME_REALTIME_BASE_URL=wss://…`
-- [ ] **operator** Hub token matches API auth (`ML_AIR_AUTH_TOKENS_JSON` / JWT)
+- [ ] **operator** Hub auth: identity login or service account secrets ([Login and Identity](../guides/login-and-identity.md))
 
 ### Manual Hub (≈2 min, pinned scope)
 
@@ -75,6 +75,8 @@ From [legacy-compat-sunset](./legacy-compat-sunset.md) pre-sunset / **M1 staging
 
 CI without Docker realtime control: `CHAOS_SKIP_REALTIME_STOP=1 make chaos-wave1`.
 
+**All-in-one:** chaos stops `realtime` via `supervisorctl` inside the `mlair` container and waits on `${ML_AIR_BASE_URL}/healthz` (nginx), not `:8001`.
+
 ### Tenant alerts
 
 - [ ] **operator** Deploy includes group **`mlair-lifecycle-semantic-tenant`** ([`mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml))
@@ -85,8 +87,14 @@ CI without Docker realtime control: `CHAOS_SKIP_REALTIME_STOP=1 make chaos-wave1
 ### Multi-replica scheduler (staging minimum)
 
 ```bash
-make validate-scheduler-ha
-# or: docker compose -f deploy/docker-compose.quickstart.yml up -d --scale scheduler=2
+make validate-scheduler-ha-quickstart
+# or: COMPOSE_FILE=deploy/docker-compose.quickstart.yml make validate-scheduler-ha
+```
+
+Static Alertmanager skeleton check (no cluster required):
+
+```bash
+make verify-alertmanager-routes
 ```
 
 - [ ] **operator** `ML_AIR_SCHEDULER_TICK_LOCK=1` (default) on all scheduler replicas
@@ -113,6 +121,18 @@ make validate-scheduler-ha
 
 **Important:** Phase 9 is **not** a production gate for Wave 0/1. Most items are **research backlog**. Sign-off here means agreeing what is **done in-repo** vs **deferred**.
 
+### Automated (contract MVP)
+
+```bash
+make verify-phase9-signoff
+```
+
+| Step | Command | Pass criteria |
+| --- | --- | --- |
+| Phase 9 bundle | `make verify-phase9-signoff` | exit 0 |
+| Observability coverage only | `make check-semantic-observability` | all `EventType` covered or documented gap |
+| Schema validator | `python scripts/validate_semantic_event.py sdk/fixtures/sample-semantic-event-v1.json` | prints `ok` |
+
 ### Shipped in repo (can sign “documentation / contract MVP”)
 
 | Item | Evidence |
@@ -122,6 +142,8 @@ make validate-scheduler-ha
 | Semantic event JSON schema + validator | [`sdk/schemas/mlair-semantic-event-v1.schema.json`](../../sdk/schemas/mlair-semantic-event-v1.schema.json), `scripts/validate_semantic_event.py` |
 | Canonical readiness reason codes | [`docs/api/readiness-and-gating.md`](../api/readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair) |
 | Readiness / eligibility / gating API semantics | [`readiness-and-gating.md`](../api/readiness-and-gating.md), OpenAPI |
+| Formal model (MVP) | [`docs/concepts/lifecycle-formal-model.md`](../concepts/lifecycle-formal-model.md) |
+| Phase 9 index | [`docs/architecture/06-phase9-formalization.md`](../architecture/06-phase9-formalization.md) |
 
 ### Research backlog (do **not** block Wave 0/1)
 
@@ -157,6 +179,8 @@ Execute in order:
 7. Fill **one change ticket per env** (date, operator, link this doc)
 8. Record ticket IDs; flip ROADMAP Phase 17/19 operator checkboxes in release notes
 
-Or locally: `make signoff-local` (wave0 + strict verify + wave1 + scheduler HA).
+Or locally: `make signoff-local` (strict automated bundle + wave1 + scheduler HA).
+
+See [operator-signoff](./operator-signoff.md) for command index.
 
 Phase 9: acknowledge MVP docs above; schedule formal work separately.

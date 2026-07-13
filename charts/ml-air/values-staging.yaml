@@ -40,6 +40,11 @@ executor:
     repository: ghcr.io/your-org/ml-air-executor
     tag: latest
 
+realtime:
+  image:
+    repository: ghcr.io/your-org/ml-air-realtime
+    tag: latest
+
 ingress:
   enabled: true
   className: nginx

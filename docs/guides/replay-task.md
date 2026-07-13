@@ -12,9 +12,15 @@ Replay a failed run from a selected task and validate recovery.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md) (maintainer+).
+
 ```bash
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/replay" \
-  -H "Authorization: Bearer maintainer-token" \
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id>/replay" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"from_task_id":"<task_id>","idempotency_key":"replay-001"}'
 python ./mlair logs <replay_run_id> --limit 200

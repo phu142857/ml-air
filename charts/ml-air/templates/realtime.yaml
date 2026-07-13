@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-air-realtime
+spec:
+  replicas: {{ .Values.realtime.replicaCount }}
+  selector:
+    matchLabels:
+      app: ml-air-realtime
+  template:
+    metadata:
+      labels:
+        app: ml-air-realtime
+    spec:
+      containers:
+        - name: realtime
+          image: "{{ .Values.realtime.image.repository }}:{{ .Values.realtime.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.realtime.service.port }}
+            - containerPort: {{ .Values.realtime.metricsPort }}
+          env:
+            - name: ML_AIR_REDIS_URL
+              value: {{ .Values.realtime.env.redisUrl | quote }}
+            - name: ML_AIR_DATABASE_URL
+              value: {{ .Values.realtime.env.databaseUrl | quote }}
+            - name: ML_AIR_JWT_HS256_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
+                  key: {{ .Values.api.secret.key }}
+            - name: ML_AIR_REALTIME_METRICS_PORT
+              value: {{ .Values.realtime.metricsPort | quote }}
+            - name: ML_AIR_OTEL_ENABLED
+              value: {{ .Values.realtime.env.otelEnabled | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.realtime.env.otelServiceName | quote }}
+{{- range $k, $v := .Values.realtime.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+{{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.realtime.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-air-realtime
+spec:
+  type: ClusterIP
+  selector:
+    app: ml-air-realtime
+  ports:
+    - name: http
+      port: {{ .Values.realtime.service.port }}
+      targetPort: {{ .Values.realtime.service.port }}
+    - name: metrics
+      port: {{ .Values.realtime.metricsPort }}
+      targetPort: {{ .Values.realtime.metricsPort }}

@@ -13,10 +13,14 @@ Connect an existing app workflow to MLAir through a plugin adapter.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md) (maintainer+).
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+
 # Verify plugin is registered (API — not a CLI subcommand)
-curl -sS http://localhost:8080/v1/plugins \
-  -H "Authorization: Bearer maintainer-token"
+curl -sS "$API/v1/plugins" \
+  -H "Authorization: Bearer $TOKEN"
 
 # Headless smoke: trigger run that references plugin name in pipeline YAML
 python ./mlair run examples/pipeline.custom-plugin.yaml

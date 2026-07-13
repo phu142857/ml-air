@@ -33,10 +33,16 @@ When triggering with a version pin, the pin applies only to pipeline input rows 
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md). Set `API`, `TENANT`, `PROJECT` below.
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
 # 0) Create/update a dataset readiness policy (recommended)
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/training-policies" \
-  -H "Authorization: Bearer admin-token" \
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/datasets/<dataset_id>/training-policies" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "manual",
@@ -47,11 +53,11 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 
 # 0.1) Evaluate dataset readiness by policy + dataset version
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness?policy_id=<policy_id>&dataset_version_id=<dataset_version_id>" \
-  -H "Authorization: Bearer admin-token"
+  -H "Authorization: Bearer $TOKEN"
 
 # 1) Check readiness first (non-executing check)
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/check-readiness" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "training_mode": "standard",
@@ -64,7 +70,7 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 
 # 2) Trigger run with gating (advanced / compatibility path)
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/run" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "pipeline_id": "<pipeline_id>",
@@ -89,7 +95,7 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 ```bash
 # Inspect run-level readiness snapshot
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/readiness" \
-  -H "Authorization: Bearer admin-token"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 You should see:
@@ -115,11 +121,11 @@ You can persist trigger automation per `tenant/project/model` and let scheduler 
 ```bash
 # 1) Read current trigger policy for model
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
-  -H "Authorization: Bearer admin-token"
+  -H "Authorization: Bearer $TOKEN"
 
 # 2) Enable auto trigger when READY (optional data anchor)
 curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "auto_ready",
@@ -132,7 +138,7 @@ curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/m
 
 # 3) Enable scheduled trigger
 curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/trigger-policy" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "schedule",

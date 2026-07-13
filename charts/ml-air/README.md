@@ -31,4 +31,12 @@ Executor commonly needs `ML_AIR_API_BASE_URL` and `ML_AIR_TRACKING_TOKEN` to cal
 helm upgrade --install ml-air ./charts/ml-air -f values-staging.yaml
 ```
 
+Staging strict lifecycle:
+
+```bash
+helm upgrade --install ml-air ./charts/ml-air \
+  -f values-staging.yaml \
+  -f values-staging-strict.yaml
+```
+
 Adjust `values-staging.yaml` or your own values file for your cluster and registry.

@@ -28,6 +28,10 @@ make smoke-quickstart
 
 You should get a successful smoke run and be able to open MLAir at `http://localhost:8080`.
 
+1. Sign in at **`/login`** (bootstrap admin from `.env`; see [Login and Identity](../guides/login-and-identity.md)).
+2. Pin **tenant** and **project** under **Settings** if the sidebar scope is empty.
+3. `make smoke-quickstart` obtains a bearer token via `POST /v1/auth/login` when legacy static tokens are off.
+
 ## Startup Hooks (External Integrations)
 
 If your external service supports startup sync to the MLAir model registry, enable it with **that service’s own** environment flags and optional project/tenant mapping (names vary by product).
@@ -48,12 +52,16 @@ This hook should be best-effort (startup does not fail if sync fails).
 - At least one task reaches `SUCCESS`.
 - Plugin execution logs are visible from CLI and UI.
 - Lineage edges are visible under **Lifecycle → Lineage** in the Hub.
+- Optional: open **Traces** or a run-linked trace in the [Trace explorer](../guides/use-trace-explorer.md) when OpenTelemetry is enabled.
 
-## Operator vs maintainer Hub nav
+## Hub navigation (after login)
 
-- **All roles:** Lifecycle (Datasets, Lifecycle, Models, Lineage), Overview, Settings.
-- **Maintainer / admin** (scoped token): **Execution (maintainer)** — Pipelines, Runs, Tasks.
-- **Viewer** token: Execution hidden; pin tenant/project and use Dataset Hub for train/run.
+- **All signed-in users:** Lifecycle (Datasets, Lifecycle, Models, Lineage), **Traces**, Overview, Settings.
+- **Maintainer+** in pinned scope: **Execution** — Pipelines, Runs, Tasks.
+- **Viewer** assignment: Execution hidden; use Dataset Hub for train/run.
+- **Global Admin:** **Admin** — Users, Service accounts, Audit.
+
+Role comes from tenant/project **assignments**, not from pasting `maintainer-token` in Settings (legacy dual-run only when `ML_AIR_LEGACY_STATIC_TOKENS=1`).
 
 ## Done
 

@@ -24,18 +24,24 @@ Unblock a pipeline run that failed due to the **execution gate** (data-readiness
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](../guides/login-and-identity.md).
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
 # 1) Check readiness snapshot
-curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/readiness" \
-  -H "Authorization: Bearer admin-token"
+curl -X GET "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id>/readiness" \
+  -H "Authorization: Bearer $TOKEN"
 
 # 2) Check dataset readiness by policy + dataset version
-curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness?policy_id=<policy_id>&dataset_version_id=<dataset_version_id>" \
-  -H "Authorization: Bearer admin-token"
+curl -X GET "$API/v1/tenants/$TENANT/projects/$PROJECT/datasets/<dataset_id>/readiness?policy_id=<policy_id>&dataset_version_id=<dataset_version_id>" \
+  -H "Authorization: Bearer $TOKEN"
 
 # 3) Re-run with tracked override (example only)
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/pipelines/<pipeline_id>/run" \
-  -H "Authorization: Bearer admin-token" \
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/pipelines/<pipeline_id>/run" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "pipeline_id": "<pipeline_id>",

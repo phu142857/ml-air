@@ -12,6 +12,21 @@ from typing import Any
 
 from redis import Redis
 
+try:
+    from app.settings.worker import (
+        event_replay_buffer_size,
+        event_stream_enabled,
+        event_stream_global_fanout_enabled,
+        event_stream_global_maxlen,
+        event_stream_maxlen,
+    )
+except ImportError:
+    event_replay_buffer_size = None  # type: ignore[assignment]
+    event_stream_enabled = None
+    event_stream_global_fanout_enabled = None
+    event_stream_maxlen = None
+    event_stream_global_maxlen = None
+
 logger = logging.getLogger("mlair.scheduler.realtime")
 
 try:
@@ -56,7 +71,11 @@ def _assign_sequence_and_buffer(client: Redis, event: dict[str, Any]) -> dict[st
     if not tenant_id or not project_id:
         return event
     try:
-        buf_size = max(50, min(int(os.getenv("ML_AIR_EVENT_REPLAY_BUFFER_SIZE", "1000")), 10_000))
+        buf_size = (
+            event_replay_buffer_size()
+            if event_replay_buffer_size is not None
+            else max(50, min(int(os.getenv("ML_AIR_EVENT_REPLAY_BUFFER_SIZE", "1000")), 10_000))
+        )
         seq = int(client.incr(f"mlair.events.seq.{tenant_id}.{project_id}"))
         event["sequence"] = seq
         raw = json.dumps(event, separators=(",", ":"), default=str)
@@ -76,8 +95,16 @@ def _assign_sequence_and_buffer(client: Redis, event: dict[str, Any]) -> dict[st
 
 
 def _append_event_streams(client: Redis, event: dict[str, Any]) -> None:
-    stream_on = os.getenv("ML_AIR_EVENT_STREAM", "1").strip() == "1"
-    global_on = os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1").strip() == "1"
+    stream_on = (
+        event_stream_enabled()
+        if event_stream_enabled is not None
+        else os.getenv("ML_AIR_EVENT_STREAM", "1").strip() == "1"
+    )
+    global_on = (
+        event_stream_global_fanout_enabled()
+        if event_stream_global_fanout_enabled is not None
+        else os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1").strip() == "1"
+    )
     if not stream_on and not global_on:
         return
     tenant_id = str(event.get("tenant_id") or "").strip()
@@ -90,7 +117,11 @@ def _append_event_streams(client: Redis, event: dict[str, Any]) -> None:
     fields = {"envelope": raw, "sequence": seq_field, "type": str(event.get("type") or "")}
     try:
         if stream_on:
-            stream_max = max(1000, min(int(os.getenv("ML_AIR_EVENT_STREAM_MAXLEN", "50000")), 1_000_000))
+            stream_max = (
+                event_stream_maxlen()
+                if event_stream_maxlen is not None
+                else max(1000, min(int(os.getenv("ML_AIR_EVENT_STREAM_MAXLEN", "50000")), 1_000_000))
+            )
             client.xadd(
                 f"mlair.events.stream.{tenant_id}.{project_id}",
                 fields,
@@ -98,7 +129,11 @@ def _append_event_streams(client: Redis, event: dict[str, Any]) -> None:
                 approximate=True,
             )
         if global_on:
-            global_max = max(5000, min(int(os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_MAXLEN", "200000")), 5_000_000))
+            global_max = (
+                event_stream_global_maxlen()
+                if event_stream_global_maxlen is not None
+                else max(5000, min(int(os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_MAXLEN", "200000")), 5_000_000))
+            )
             client.xadd(
                 "mlair.events.durable",
                 {**fields, "tenant_id": tenant_id, "project_id": project_id},

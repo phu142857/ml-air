@@ -14,15 +14,21 @@ Promote a registered model version to the target stage.
 
 ## Command (approve then promote)
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md) (maintainer+).
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
 # Required when ML_AIR_SKIP_APPROVAL_FOR_PROMOTE is unset/0
-curl -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/versions/3/approval" \
-  -H "Authorization: Bearer maintainer-token" \
+curl -X PUT "$API/v1/tenants/$TENANT/projects/$PROJECT/models/<model_id>/versions/3/approval" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"approval_status": "approved", "reason": "validated offline"}'
 
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/promote" \
-  -H "Authorization: Bearer maintainer-token" \
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/models/<model_id>/promote" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"version": 3, "stage": "production"}'
 ```

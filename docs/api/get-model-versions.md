@@ -12,10 +12,16 @@ List all versions for one model in a project scope.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](../guides/login-and-identity.md) (maintainer+).
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+
 curl \
-  "http://localhost:8080/v1/tenants/default/projects/default_project/models/<model_id>/versions" \
-  -H "Authorization: Bearer maintainer-token"
+  "$API/v1/tenants/$TENANT/projects/$PROJECT/models/<model_id>/versions" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Result

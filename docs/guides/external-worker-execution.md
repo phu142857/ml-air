@@ -46,8 +46,17 @@ Create a run through the normal API (for example your control plane calling MLAi
 
 ### 4. Auth
 
-- If **`ML_AIR_WORKER_TOKEN`** is set on the API: send `Authorization: Bearer <that token>` for lease/heartbeat/complete/fail. That token can lease tasks across tenants (service account).
-- If it is **not** set: use a **maintainer** (or stronger) static/JWT token; lease results are filtered to that principal’s tenant and project scope.
+Prefer **Service Account** secrets for workers ([Login and Identity](./login-and-identity.md) — Admin → Service accounts):
+
+- Issue or use bootstrap secrets such as `ML_AIR_SA_YOLO_WORKER_SECRET` / `ML_AIR_SA_VET_WORKER_SECRET`.
+- Send `Authorization: Bearer <sa_secret>` for lease, heartbeat, complete, fail, logs, and trace ingest.
+
+**Legacy / transitional:**
+
+- If **`ML_AIR_WORKER_TOKEN`** is set on the API: that single Bearer can lease tasks across tenants (parallel to a dedicated SA).
+- If **`ML_AIR_LEGACY_STATIC_TOKENS=1`**: maintainer static tokens still work for lease APIs within token scope.
+
+Human admin JWT from `/v1/auth/login` also works when the user has **editor+** in the task’s tenant/project.
 
 ### 5. Reference script
 
@@ -55,7 +64,7 @@ From the repo root (requires `psutil`; sends **Resource Usage Contract v1** on c
 
 ```bash
 export MLAIR_API_BASE_URL=http://localhost:8080
-export MLAIR_WORKER_TOKEN=your-worker-or-maintainer-token
+export MLAIR_WORKER_TOKEN="${ML_AIR_SA_YOLO_WORKER_SECRET:-<service-account-secret>}"
 export MLAIR_CAPABILITIES=app_etl_adapter,app_train_adapter
 PYTHONPATH=. python scripts/external_worker_example.py
 ```
@@ -96,7 +105,7 @@ While a task is **RUNNING** and leased by your `worker_id`, append lines to the 
 
 ```http
 POST /v1/tasks/{task_id}/logs
-Authorization: Bearer <worker-or-maintainer-token>
+Authorization: Bearer <service-account-secret>
 Content-Type: application/json
 
 {

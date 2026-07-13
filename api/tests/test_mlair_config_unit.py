@@ -17,14 +17,14 @@ class MlairConfigLoaderTests(unittest.TestCase):
         self.assertEqual(cfg["profile"], "development")
         env = to_env_mapping(cfg)
         self.assertEqual(env["ML_AIR_USAGE_TRACKING_ENABLED"], "1")
-        self.assertEqual(env["ML_AIR_STRICT_DATASET_VERSION_REQUIRED"], "0")
-        self.assertEqual(env["ML_AIR_API_PORT"], "8080")
+        self.assertEqual(env["ML_AIR_STRICT_DATASET_VERSION_REQUIRED"], "1")
+        self.assertEqual(env["MLAIR_PORT"], "8080")
 
     def test_staging_profile_strict(self) -> None:
         cfg = load_config(profile="staging")
         env = to_env_mapping(cfg)
         self.assertEqual(env["ML_AIR_STRICT_DATASET_VERSION_REQUIRED"], "1")
-        self.assertEqual(env["ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK"], "0")
+        self.assertEqual(env["ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK"], "1")
 
     def test_user_yaml_overrides_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

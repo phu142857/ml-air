@@ -57,7 +57,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "otel_enabled": True,
         "realtime_ws": "ws://localhost:8080/ws",
     },
-    "auth": {"tracking_token": "admin-token"},
+    "auth": {"tracking_token": ""},
 }
 
 _FEATURE_ENV_MAP = {
@@ -143,8 +143,11 @@ def _discover_user_config(explicit: str | None) -> Path | None:
         Path.cwd() / "mlair.yml",
         Path.home() / ".config" / "mlair" / "mlair.yaml",
     ):
-        if candidate.is_file():
-            return candidate
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            continue
     return None
 
 
@@ -187,11 +190,38 @@ def resolved_config(
     token = display.get("auth", {}).get("tracking_token")
     if token:
         display.setdefault("auth", {})["tracking_token"] = "***"
+    env_mapping = to_env_mapping(cfg)
     display["_effective_env"] = {
         k: ("***" if "SECRET" in k or "TOKEN" in k or "PASSWORD" in k else v)
-        for k, v in sorted(to_env_mapping(cfg).items())
+        for k, v in sorted(env_mapping.items())
     }
+    display["_layers"] = layered_config(cfg, env_mapping)
     return display
+
+
+def layered_config(cfg: dict[str, Any], env_mapping: dict[str, str] | None = None) -> dict[str, Any]:
+    """L1/L2/L3 breakdown for ``mlair config print`` (Package 002 Phase 1)."""
+    active_profile = str(cfg.get("profile") or "development")
+    l1 = deepcopy(_BUILTIN_DEFAULTS)
+    l1.pop("compose", None)
+    profile_overlay = _read_yaml(_profile_path(active_profile))
+    l2 = _deep_merge(
+        {
+            "profile": active_profile,
+            "features": deepcopy(_BUILTIN_DEFAULTS.get("features", {})),
+            "observability": deepcopy(_BUILTIN_DEFAULTS.get("observability", {})),
+        },
+        profile_overlay,
+    )
+    mapping = env_mapping if env_mapping is not None else to_env_mapping(cfg)
+    l3_keys = sorted(k for k in mapping if k in os.environ)
+    l3 = {k: os.environ[k] for k in l3_keys}
+    return {
+        "L1_builtin_defaults": l1,
+        "L2_profile": {"file": str(_profile_path(active_profile)), "overlay": profile_overlay},
+        "L2_merged": l2,
+        "L3_env_overrides": l3,
+    }
 
 
 def _bool_env(value: Any) -> str:

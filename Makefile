@@ -65,21 +65,83 @@ wave0: health verify-wave0
 
 .PHONY: chaos-wave1
 chaos-wave1:
-	bash scripts/chaos_wave1.sh
+	COMPOSE_FILE=$(COMPOSE_FILE) ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) bash scripts/chaos_wave1.sh
 
 .PHONY: wave1
 wave1: test-prometheus-rules chaos-wave1
 
 .PHONY: validate-scheduler-ha
 validate-scheduler-ha:
-	bash scripts/validate_scheduler_ha.sh
+	COMPOSE_FILE=$(COMPOSE_FILE) bash scripts/validate_scheduler_ha.sh
+
+.PHONY: validate-scheduler-ha-quickstart
+validate-scheduler-ha-quickstart:
+	COMPOSE_FILE=deploy/docker-compose.quickstart.yml bash scripts/validate_scheduler_ha.sh
+
+.PHONY: verify-alertmanager-routes
+verify-alertmanager-routes:
+	python scripts/verify_alertmanager_routes.py
+
+.PHONY: record-legacy-m1-snapshot
+record-legacy-m1-snapshot:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) ML_AIR_ENVIRONMENT=$(ML_AIR_ENVIRONMENT) \
+	python scripts/record_legacy_m1_snapshot.py $(ARGS)
 
 .PHONY: verify-strict-lifecycle
 verify-strict-lifecycle:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) python scripts/verify_strict_lifecycle.py
 
+.PHONY: verify-identity-signoff
+verify-identity-signoff:
+	python scripts/verify_identity_signoff.py
+
+.PHONY: verify-identity-e2e
+verify-identity-e2e:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) python scripts/verify_identity_e2e.py
+
+.PHONY: verify-identity
+verify-identity: verify-identity-signoff verify-identity-e2e
+
+.PHONY: sync-strict-lifecycle-l4
+sync-strict-lifecycle-l4:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) python scripts/sync_strict_lifecycle_l4.py
+
+.PHONY: verify-operator-signoff
+verify-operator-signoff:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/verify_operator_signoff.py
+
+.PHONY: verify-operator-signoff-strict
+verify-operator-signoff-strict:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/verify_operator_signoff.py --strict
+
+.PHONY: verify-execution-signoff
+verify-execution-signoff:
+	python scripts/verify_execution_signoff.py
+
+.PHONY: verify-dlq-cancel-integration
+verify-dlq-cancel-integration:
+	python scripts/verify_dlq_cancel_integration.py
+
+.PHONY: verify-phase9-signoff
+verify-phase9-signoff:
+	python scripts/verify_phase9_signoff.py
+
+.PHONY: check-semantic-observability
+check-semantic-observability:
+	python scripts/check_semantic_observability_coverage.py
+
+.PHONY: verify-deployment-signoff
+verify-deployment-signoff:
+	python scripts/verify_deployment_signoff.py
+
 .PHONY: signoff-local
-signoff-local: wave0 verify-strict-lifecycle wave1 validate-scheduler-ha
+signoff-local: verify-operator-signoff-strict verify-execution-signoff verify-deployment-signoff verify-alertmanager-routes wave1 validate-scheduler-ha
 
 .PHONY: verify-wave5
 verify-wave5:

@@ -4,12 +4,13 @@ Minimal external worker for MLAir — uses sdk.start_run + worker_client (zero-c
 
 Requires:
   - MLAir API with ML_AIR_TASK_EXECUTION_MODE=external
-  - ML_AIR_WORKER_TOKEN (or MLAIR_WORKER_TOKEN) matching API
+  - Service Account secret: ML_AIR_SA_YOLO_WORKER_SECRET / ML_AIR_SA_VET_WORKER_SECRET
+    (or MLAIR_WORKER_TOKEN / ML_AIR_SERVICE_ACCOUNT_TOKEN)
   - psutil in worker env
 
 Env:
   MLAIR_API_BASE_URL / ML_AIR_API_BASE_URL   default http://localhost:8080
-  MLAIR_WORKER_TOKEN / ML_AIR_WORKER_TOKEN
+  ML_AIR_SA_YOLO_WORKER_SECRET / ML_AIR_SA_VET_WORKER_SECRET / MLAIR_WORKER_TOKEN
   MLAIR_WORKER_ID      default demo-worker-1
   MLAIR_CAPABILITIES   comma-separated plugins
 """

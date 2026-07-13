@@ -2028,9 +2028,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "versions" ? (
-        <DetailSection
-          title="Dataset versions"
-          accentBorder={DATASET_SECTION_ACCENT}
+        <div
           className="min-w-0"
         >
             {versionsQuery.isLoading ? (
@@ -2070,7 +2068,7 @@ export default function DatasetHubPage() {
               />
               </>
             )}
-        </DetailSection>
+        </div>
       ) : null}
 
       {activeTab === "training" ? (

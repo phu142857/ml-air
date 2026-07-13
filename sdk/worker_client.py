@@ -19,12 +19,9 @@ def worker_api_base() -> str:
 
 
 def worker_bearer_token() -> str:
-    return (
-        os.getenv("MLAIR_WORKER_TOKEN", "").strip()
-        or os.getenv("ML_AIR_WORKER_TOKEN", "").strip()
-        or os.getenv("ML_AIR_TOKEN", "").strip()
-        or os.getenv("ML_AIR_TRACKING_TOKEN", "").strip()
-    )
+    from sdk.mlair_tokens import resolve_worker_api_token
+
+    return resolve_worker_api_token()
 
 
 def _task_url(task_id: str, suffix: str, *, base_url: str | None = None) -> str:

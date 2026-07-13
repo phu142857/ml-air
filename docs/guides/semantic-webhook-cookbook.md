@@ -16,7 +16,7 @@ This path is **separate** from the [downstream model promote webhook](./downstre
 2. API environment:
    - **`ML_AIR_WEBHOOK_ALLOWED_HOSTS`** — comma-separated **exact hostnames** (case-insensitive) allowed for `target_url` hosts. **Must be non-empty** before `POST .../webhooks/subscriptions` succeeds.
    - **`ML_AIR_SEMANTIC_WEBHOOK_DELIVERY=1`** — actually POST outbound after each valid semantic publish.
-3. A **maintainer** bearer token for the tenant/project scope you register under.
+3. A **maintainer+** bearer token for the tenant/project scope you register under ([Login and Identity](./login-and-identity.md)).
 
 ## Steps (operator)
 
@@ -30,7 +30,7 @@ Use **HTTPS** in production. The URL’s **hostname** must appear in `ML_AIR_WEB
 export API_BASE="${ML_AIR_BASE_URL:-http://localhost:8080}/v1"
 export TENANT="${ML_AIR_TENANT_ID:-default}"
 export PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
-export TOKEN="${ML_AIR_TOKEN:-maintainer-token}"
+export TOKEN="${ML_AIR_TOKEN:-$(python scripts/identity_smoke_token.py)}"
 
 curl -sS -X POST "$API_BASE/tenants/$TENANT/projects/$PROJECT/webhooks/subscriptions" \
   -H "Authorization: Bearer $TOKEN" \

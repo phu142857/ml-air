@@ -17,6 +17,13 @@ from typing import Any
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from redis import Redis
 
+from sdk.mlair_tokens import resolve_platform_api_token
+
+try:
+    from app.settings.worker import manifest_strict_key_lifecycle
+except ImportError:
+    manifest_strict_key_lifecycle = None  # type: ignore[assignment]
+
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -100,9 +107,18 @@ def _run_plugin_subprocess(
         return {"ok": False, "error": f"invalid_json_output: {exc}", "stdout": (stdout or "").strip()}
 
 
+def _api_token() -> str:
+    token = resolve_platform_api_token()
+    if not token:
+        raise RuntimeError(
+            "ML_AIR_SERVICE_ACCOUNT_TOKEN or ML_AIR_SA_EXECUTOR_SECRET is required (IAM Service Account)"
+        )
+    return token
+
+
 def _tracking_post(path: str, payload: dict) -> None:
     base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
-    token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    token = _api_token()
     req = urllib.request.Request(
         url=f"{base}{path}",
         method="POST",
@@ -118,7 +134,7 @@ def _tracking_post(path: str, payload: dict) -> None:
 
 def _api_post(path: str, payload: dict, timeout: int = 10) -> bool:
     base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
-    token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    token = _api_token()
     req = urllib.request.Request(
         url=f"{base}{path}",
         method="POST",
@@ -154,6 +170,8 @@ def _managed_keys_blob() -> dict:
 
 
 def _strict_key_lifecycle() -> bool:
+    if manifest_strict_key_lifecycle is not None:
+        return manifest_strict_key_lifecycle()
     return os.getenv("ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE", "1") == "1"
 
 
@@ -321,7 +339,7 @@ def _lineage_ingest(task: dict, plugin_result: dict) -> None:
     if not isinstance(result, dict) or "lineage" not in result:
         return
     base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
-    token = os.getenv("ML_AIR_TRACKING_TOKEN", "maintainer-token")
+    token = _api_token()
     tenant_id = task.get("tenant_id", "default")
     project_id = task.get("project_id", "default_project")
     run_id = task.get("run_id")

@@ -1,0 +1,25 @@
+# Helm overlay: production strict lifecycle (merge with values-production.yaml)
+# Install:
+#   helm upgrade --install ml-air ./charts/ml-air \
+#     -f charts/ml-air/values-production.yaml \
+#     -f charts/ml-air/values-production-strict.yaml
+
+api:
+  extraEnv:
+    MLAIR_PROFILE: production
+    ML_AIR_ENVIRONMENT: production
+    ML_AIR_STRICT_DATASET_VERSION_REQUIRED: "1"
+    ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS: "1"
+    ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK: "0"
+    ML_AIR_WARN_IMPLICIT_DATASET_HEAD: "0"
+    ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL: "0"
+    ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS: "0"
+
+scheduler:
+  extraEnv:
+    MLAIR_PROFILE: production
+    ML_AIR_ENVIRONMENT: production
+
+realtime:
+  extraEnv:
+    MLAIR_PROFILE: production

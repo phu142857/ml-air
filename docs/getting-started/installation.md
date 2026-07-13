@@ -54,13 +54,21 @@ Common keys (full list in [Configuration](../configuration.md)):
 |---|---|---|
 | `MLAIR_IMAGE` | `ml-air:latest` | Image to run (set to a GHCR ref for Path A) |
 | `MLAIR_PORT` | `8080` | Public port for Hub + API + realtime |
-| `ML_AIR_TRACKING_TOKEN` | `admin-token` | Bearer token for API / workers |
+| `ML_AIR_BOOTSTRAP_ADMIN_USERNAME` | `admin` | First Global Admin username (empty `users` table) |
+| `ML_AIR_BOOTSTRAP_ADMIN_PASSWORD` | `admin-change-me` | Bootstrap admin password — change after first login |
+| `ML_AIR_SA_SCHEDULER_SECRET` / `ML_AIR_SA_EXECUTOR_SECRET` | (generated in `.env.example`) | Service account secrets for platform automation |
+| `ML_AIR_LEGACY_STATIC_TOKENS` | `0` | `1` only during migration (`viewer-token`, etc.) |
 | `ML_AIR_USAGE_TRACKING_ENABLED` | `1` | CPU/RAM/GPU usage capture |
+
+## Sign in
+
+After the stack is healthy, open **`http://localhost:8080/login`** and sign in with the bootstrap admin credentials. Hub and API use identity JWTs by default — not pasted static tokens. See [Login and Identity](../guides/login-and-identity.md).
 
 ## Result
 
 - MLAir (Hub + API + realtime): `http://localhost:8080`
 - `mlair health` passes.
+- You can sign in at `/login` and open **Settings** to pin tenant/project scope.
 
 ## Done
 

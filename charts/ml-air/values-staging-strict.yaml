@@ -1,0 +1,25 @@
+# Helm overlay: staging strict lifecycle (merge with values-staging.yaml)
+# Install:
+#   helm upgrade --install ml-air ./charts/ml-air \
+#     -f charts/ml-air/values-staging.yaml \
+#     -f charts/ml-air/values-staging-strict.yaml
+
+api:
+  extraEnv:
+    MLAIR_PROFILE: staging
+    ML_AIR_ENVIRONMENT: staging
+    ML_AIR_STRICT_DATASET_VERSION_REQUIRED: "1"
+    ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS: "1"
+    ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK: "0"
+    ML_AIR_WARN_IMPLICIT_DATASET_HEAD: "1"
+    ML_AIR_LINEAGE_LEGACY_DEFAULT_VERSION_LABEL: "0"
+    ML_AIR_REQUIRE_DECLARED_DATASET_INPUTS: "0"
+
+scheduler:
+  extraEnv:
+    MLAIR_PROFILE: staging
+    ML_AIR_ENVIRONMENT: staging
+
+realtime:
+  extraEnv:
+    MLAIR_PROFILE: staging

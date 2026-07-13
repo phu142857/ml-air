@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -30,30 +29,17 @@ class TenantQuotaExceeded(ValueError):
 
 
 def enforcement_enabled() -> bool:
-    return os.getenv("ML_AIR_TENANT_QUOTA_ENFORCE", "1").strip() == "1"
+    from app.settings import get_settings
 
-
-def _env_limit(name: str, default: int | None) -> int | None:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return default
+    return get_settings().features.tenant_quota_enforce
 
 
 def default_quota_limits() -> dict:
+    from app.settings.platform_policy import platform_quota_limits
+
+    limits = platform_quota_limits()
     return {
-        "max_projects": _env_limit("ML_AIR_TENANT_QUOTA_MAX_PROJECTS", 200),
-        "max_datasets_per_project": _env_limit("ML_AIR_TENANT_QUOTA_MAX_DATASETS_PER_PROJECT", 500),
-        "max_models_per_project": _env_limit("ML_AIR_TENANT_QUOTA_MAX_MODELS_PER_PROJECT", 200),
-        "max_runs_per_project": _env_limit("ML_AIR_TENANT_QUOTA_MAX_RUNS_PER_PROJECT", 50_000),
-        "max_webhook_subscriptions_per_project": _env_limit(
-            "ML_AIR_TENANT_QUOTA_MAX_WEBHOOK_SUBSCRIPTIONS_PER_PROJECT", 50
-        ),
-        # Internal scheduler throttle; not configured via governance UI.
-        "max_parallel_tasks": _env_limit("ML_AIR_TENANT_QUOTA_DEFAULT_MAX_PARALLEL_TASKS", 1000),
+        **limits,
         "webhook_allowed_hosts": None,
     }
 
@@ -67,7 +53,9 @@ def tenant_max_parallel_tasks(tenant_id: str) -> int:
     limits = get_tenant_quotas(tenant_id)
     raw = limits.get("max_parallel_tasks")
     if raw is None:
-        raw = _env_limit("ML_AIR_TENANT_QUOTA_DEFAULT_MAX_PARALLEL_TASKS", 1)
+        from app.settings.platform_policy import platform_quota_limits
+
+        raw = platform_quota_limits().get("max_parallel_tasks", 1)
     return _clamp_parallel_tasks(int(raw or 1))
 
 

@@ -9,6 +9,7 @@ def fail(msg: str) -> None:
 
 root = Path(__file__).resolve().parents[1]
 staging_values = (root / "charts/ml-air/values-staging.yaml").read_text(encoding="utf-8")
+production_values = (root / "charts/ml-air/values-production.yaml").read_text(encoding="utf-8")
 deploy_wf = (root / ".github/workflows/deploy-helm-staging.yml").read_text(encoding="utf-8")
 
 if "ml-air-staging.example.com" in staging_values:
@@ -36,5 +37,17 @@ if "--wait --timeout" not in deploy_wf:
 
 if "helm rollback" not in deploy_wf:
     fail("deploy workflow must include rollback on failure")
+
+prod_path = root / "charts/ml-air/values-production.yaml"
+if not prod_path.is_file():
+    fail("missing charts/ml-air/values-production.yaml")
+if "externalSecret:\n      enabled: true" not in production_values:
+    fail("values-production.yaml must enable externalSecret for production JWT")
+if "sealedSecret:\n      enabled: true" in production_values:
+    fail("values-production.yaml must not use sealedSecret when externalSecret is production default")
+if "runtimeRealtimeBaseUrl:" not in production_values or "wss://" not in production_values:
+    fail("values-production.yaml must set api.env.runtimeRealtimeBaseUrl with wss://")
+if "ingress:\n  enabled: true" not in production_values or "tls:\n    enabled: true" not in production_values:
+    fail("values-production.yaml must enable ingress TLS for WSS")
 
 print("[deploy-config-check] OK")

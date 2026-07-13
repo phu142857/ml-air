@@ -2,6 +2,8 @@
 
 Single reference for installing and running MLAir with **sensible defaults**. The default runtime is an **all-in-one app container** (`ml-air:latest`) plus the supporting local services MLAir needs for a full developer experience: Prometheus, Grafana, and MinIO.
 
+> **Architecture:** Configuration layers and deployment contract are defined in the [Platform Configuration Architecture](config/DESIGN-FREEZE.md) package (Series 002, **Design Freeze v1.0 — CLOSED**). This guide is operator-facing; align with Package 002 during Configuration refactor.
+
 ## Goal
 
 Use MLAir immediately after install. Override only when you need staging/production semantics or the legacy multi-container layout.
@@ -16,7 +18,7 @@ mlair start               # start from images
 mlair health
 ```
 
-Open MLAir at `http://localhost:8080` (default). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. The default stack also starts local observability/storage companions on their standard ports: Grafana `:33000`, Prometheus `:39090`, and MinIO console `:9001`. Distributed traces are viewed in the Hub **Trace explorer** (popup from Runs, Lifecycle, or Command palette).
+Open MLAir at `http://localhost:8080/login` (default). Sign in with bootstrap admin credentials — see [Login and Identity](guides/login-and-identity.md). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. The default stack also starts local observability/storage companions on their standard ports: Grafana `:33000`, Prometheus `:39090`, and MinIO console `:9001`. Distributed traces are viewed in the Hub [Trace explorer](guides/use-trace-explorer.md) (sidebar **Traces**, run detail, or `?trace=<id>`).
 
 No `mlair.yaml` required — profile **`development`** applies automatically.
 
@@ -76,21 +78,26 @@ MLAIR_PROFILE=production mlair start
 
 ### Profile → environment variables
 
-Profiles map to `ML_AIR_*` keys consumed by API, scheduler, and executor. Examples:
+Profiles map to L2 bundles (see `mlair config print`). After Phase 4, **policy keys** resolve **L4 → profile → L1** when `system_settings` is seeded; env aliases for those keys are ignored unless `ML_AIR_CONFIG_ACCEPT_POLICY_ENV=1` (rollback). L3 secrets and compose infra env are unchanged.
 
-| Profile key | Environment variable |
-|-------------|---------------------|
-| `features.usage_tracking` | `ML_AIR_USAGE_TRACKING_ENABLED` |
-| `features.resource_monitor` | `ML_AIR_RESOURCE_MONITOR_ENABLED` |
-| `features.strict_dataset_version_required` | `ML_AIR_STRICT_DATASET_VERSION_REQUIRED` |
-| `features.strict_dataset_version_all_post_runs` | `ML_AIR_STRICT_DATASET_VERSION_ALL_POST_RUNS` |
-| `features.readiness_allow_legacy_fallback` | `ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK` |
-| `features.skip_approval_for_promote` | `ML_AIR_SKIP_APPROVAL_FOR_PROMOTE` |
-| `ports.hub` | `MLAIR_PORT` |
-| `ports.api` | `ML_AIR_API_PORT` (microservices profile) |
-| `ports.frontend` | `ML_AIR_FRONTEND_PORT` (microservices profile) |
-| `ml_air_environment` | `ML_AIR_ENVIRONMENT` |
-| `auth.tracking_token` | `ML_AIR_TRACKING_TOKEN` |
+| Profile key | Resolved via |
+|-------------|----------------|
+| `features.*` | L4 `features.*` → profile → L1 (env alias only with rollback flag) |
+| `hub.default_route`, `identity.lockout`, `governance.*` | L4 → profile → L1 |
+| `ports.hub` | `MLAIR_PORT` (contract) |
+| `ports.api` / `ports.frontend` | infra example (microservices) |
+| `ml_air_environment` | infra example / profile |
+
+Identity IAM (see [Login and Identity](guides/login-and-identity.md) and `docs/iam/11-migration-plan.md`):
+
+| Variable | Purpose |
+|----------|---------|
+| `ML_AIR_IDENTITY_JWT_SECRET` | Human Access JWT signing |
+| `ML_AIR_BOOTSTRAP_ADMIN_USERNAME` / `PASSWORD` | One-time Global Admin seed |
+| `ML_AIR_LEGACY_STATIC_TOKENS` | `0` = target (no static `*-token`) |
+| `ML_AIR_SA_SCHEDULER_SECRET` | Platform scheduler SA bootstrap |
+| `ML_AIR_SA_EXECUTOR_SECRET` | Platform executor SA bootstrap |
+| `ML_AIR_SA_YOLO_WORKER_SECRET` / `VET` | External worker SAs |
 
 Boolean values accept YAML `true`/`false` or `1`/`0` in env.
 
@@ -122,7 +129,7 @@ observability:
   otel_enabled: true
 
 auth:
-  tracking_token: admin-token
+  tracking_token: ""
 ```
 
 ## CLI commands
@@ -164,11 +171,11 @@ Set in environment (not committed):
 
 ```bash
 export ML_AIR_DATABASE_URL=postgresql://...
-export ML_AIR_JWT_HS256_SECRET=...
-export ML_AIR_TRACKING_TOKEN=...
+export ML_AIR_IDENTITY_JWT_SECRET=...
+export ML_AIR_SA_SCHEDULER_SECRET=...
 ```
 
-`mlair start` creates `.env` from `.env.example` on first run if missing. For production, use secret manager + compose override — see `deploy/env/staging-strict.env.example`.
+`mlair start` creates `.env` on first run by merging **`.env.example`** (L3 contract, ≤30 keys) and **`deploy/.env.infra.example`** (compose ports, bootstrap creds, scheduler tuning). Policy knobs belong in Hub **System (L4)** or `MLAIR_PROFILE`, not infra env.
 
 ### Strict lifecycle (staging / production)
 
@@ -184,11 +191,14 @@ Keep using pinned images and `MLAIR_API_IMAGE` — no monorepo submodule. Set pr
 
 ## Related docs
 
+- [Platform Architecture Series](architecture/00-platform-architecture-series.md)
+- [Package 002 — Platform Configuration](config/DESIGN-FREEZE.md)
 - [Installation](./getting-started/installation.md)
 - [Quickstart](./getting-started/quickstart.md)
 - [Run environment capture](./guides/run-environment.md)
 - [CLI commands](./cli/commands.md)
-- `.env.example` — Docker-layer env reference (transitional; prefer this doc for mental model)
+- `.env.example` — L3 deployment contract (groups A–E)
+- `deploy/.env.infra.example` — compose ports, image bootstrap, scheduler/executor tuning
 
 ## Done
 

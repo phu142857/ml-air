@@ -18,7 +18,7 @@ Pipelines and runs remain under **Execution (maintainer)** — observability/sub
 | viewer | Lifecycle + Overview + Settings only |
 | maintainer, admin | + Execution (Pipelines, Runs, Tasks) |
 
-Test: set token to `viewer-token` in Settings, pin scope — Execution group disappears. Use `maintainer-token` to debug pipelines/runs.
+Test: sign in as a **viewer** assignment (or user with viewer role only) — **Execution** group disappears. Sign in as **maintainer+** to debug pipelines/runs. See [Login and Identity](./login-and-identity.md).
 
 ## Blocked readiness (Dashboard)
 

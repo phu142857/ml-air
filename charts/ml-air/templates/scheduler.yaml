@@ -21,3 +21,7 @@ spec:
               value: {{ .Values.scheduler.env.redisUrl | quote }}
             - name: ML_AIR_DATABASE_URL
               value: {{ .Values.scheduler.env.databaseUrl | quote }}
+{{- range $k, $v := .Values.scheduler.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+{{- end }}

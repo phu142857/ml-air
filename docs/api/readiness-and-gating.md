@@ -172,18 +172,20 @@ Example `POST` payloads:
 }
 ```
 
+**Auth:** `$TOKEN` from [Login and Identity](../guides/login-and-identity.md) for all `curl` examples below unless noted.
+
 Example **read** (derived readiness; no audit row):
 
 ```bash
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness?policy_id=<policy_id>&dataset_version_id=<version_id>" \
-  -H "Authorization: Bearer admin-token"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Example **persisted evaluation** (audit history):
 
 ```bash
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/readiness/evaluate?policy_id=<policy_id>&dataset_version_id=<version_id>" \
-  -H "Authorization: Bearer admin-token"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Full `curl POST` examples:
@@ -191,7 +193,7 @@ Full `curl POST` examples:
 ```bash
 # Small incremental training (100)
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/training-policies" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "manual",
@@ -204,7 +206,7 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 ```bash
 # Daily retrain (1000)
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/training-policies" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "schedule",
@@ -217,7 +219,7 @@ curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/
 ```bash
 # Production promotion gate (5000)
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/training-policies" \
-  -H "Authorization: Bearer admin-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "trigger_mode": "manual",
@@ -253,19 +255,19 @@ Example:
 
 ```bash
 curl -X PATCH "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/buffer" \
-  -H "Authorization: Bearer maintainer-token" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"target_threshold": 2500, "accumulation_strategy": "manual_materialize_only"}'
 ```
 
 ```bash
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/<dataset_id>/buffer/materialize" \
-  -H "Authorization: Bearer maintainer-token"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ```bash
 curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/datasets/buffer/materialize-scheduled?limit=50" \
-  -H "Authorization: Bearer maintainer-token"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 2) `POST /v1/tenants/{tenant_id}/projects/{project_id}/pipelines/{pipeline_id}/check-readiness`
@@ -412,7 +414,7 @@ APIs persist **storage literals** on `dataset_versions.source_type` and buffer r
 
 ```bash
 curl -X GET "http://localhost:8080/v1/tenants/default/projects/default_project/runs/<run_id>/readiness" \
-  -H "Authorization: Bearer admin-token"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Result

@@ -14,6 +14,8 @@ import {
   Settings,
   LayoutDashboard,
   Route,
+  Users,
+  Shield,
 } from "lucide-react"
 import {
   Sidebar,
@@ -27,7 +29,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
-import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
+import { useCanSeeExecutionNav, useCanSeeAdminNav } from "@/lib/hub-nav-access"
 
 type NavItem = {
   title: string
@@ -56,6 +58,12 @@ const executionNav: NavItem[] = [
 
 const settingsNav: NavItem[] = [
   { title: "Settings", href: "/settings", icon: Settings },
+]
+
+const adminNav: NavItem[] = [
+  { title: "Users", href: "/admin/users", icon: Users },
+  { title: "Service accounts", href: "/admin/service-accounts", icon: Shield },
+  { title: "Identity audit", href: "/admin/audit", icon: Shield },
 ]
 
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
@@ -105,6 +113,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 
 export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
+  const showAdminNav = useCanSeeAdminNav()
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
@@ -131,6 +140,7 @@ export function AppSidebar() {
         {showExecutionNav ? (
           <NavGroup label="Execution" items={executionNav} />
         ) : null}
+        {showAdminNav ? <NavGroup label="IAM" items={adminNav} /> : null}
         <NavGroup label="Admin" items={settingsNav} />
       </SidebarContent>
     </Sidebar>

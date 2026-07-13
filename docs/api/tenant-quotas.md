@@ -1,6 +1,6 @@
 # Tenant quotas and webhook allowlists
 
-Per-tenant limits on catalog resources and optional **additional** webhook hostname restrictions (intersection with global `ML_AIR_WEBHOOK_ALLOWED_HOSTS`).
+Per-tenant limits on catalog resources (L5) and optional **additional** webhook hostname restrictions (intersection with the platform allowlist in L4).
 
 ## API
 
@@ -22,24 +22,24 @@ Implementation: [`api/app/domains/governance/tenant_quota_service.py`](../../api
 | Runs | `max_runs_per_project` | `POST .../runs`, pipeline run, trigger |
 | Webhook subscriptions | `max_webhook_subscriptions_per_project` | `POST .../webhooks/subscriptions` |
 
-When a limit is `null` in the stored row, the service falls back to environment defaults (see below).
+When a limit is `null` in the stored row, the service falls back to **L4** `governance.quota_defaults` (via `GET /v1/system/settings`), then code defaults.
 
 ## Webhook hosts
 
-- Global allowlist: `ML_AIR_WEBHOOK_ALLOWED_HOSTS` (required for delivery setup).
-- Tenant list: `webhook_allowed_hosts` on the quota row — when non-empty, the target host must appear in **both** global and tenant lists.
+- **Platform (L4):** `governance.webhook_allowed_hosts` in system settings — required for delivery setup.
+- **Tenant (L5):** `webhook_allowed_hosts` on the quota row — when non-empty, the target host must appear in **both** platform and tenant lists.
 
-## Environment
+Configure platform hosts via `PATCH /v1/system/settings` (global admin) or Hub **System (L4)** tab.
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `ML_AIR_TENANT_QUOTA_ENFORCE` | `0` | Set `1` to return **429** `tenant_quota_exceeded` when over limit |
-| `ML_AIR_TENANT_QUOTA_MAX_PROJECTS` | `200` | Default cap when no DB row |
-| `ML_AIR_TENANT_QUOTA_MAX_DATASETS_PER_PROJECT` | `500` | |
-| `ML_AIR_TENANT_QUOTA_MAX_MODELS_PER_PROJECT` | `200` | |
-| `ML_AIR_TENANT_QUOTA_MAX_RUNS_PER_PROJECT` | `50000` | |
-| `ML_AIR_TENANT_QUOTA_MAX_WEBHOOK_SUBSCRIPTIONS_PER_PROJECT` | `50` | |
-| `ML_AIR_TENANT_QUOTA_DEFAULT_MAX_PARALLEL_TASKS` | `1000` | Internal default concurrent **task** slots per project |
+## Enforcement
+
+| Layer | Control |
+| --- | --- |
+| L4 `features.tenant_quota_enforce` | Platform toggle for **429** `tenant_quota_exceeded` |
+| L4 `governance.quota_defaults` | Default ceilings when no per-tenant DB row |
+| L5 `tenant_quotas` table | Per-tenant overrides (Hub tenant settings) |
+
+Rollback: `ML_AIR_CONFIG_ACCEPT_POLICY_ENV=1` restores env aliases for L4 quota defaults and `ML_AIR_WEBHOOK_ALLOWED_HOSTS`.
 
 ## Execution parallelism
 

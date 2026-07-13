@@ -3,9 +3,19 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ml-air
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.host }}
@@ -25,4 +35,18 @@ spec:
                 name: ml-air-api
                 port:
                   number: {{ .Values.api.service.port }}
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: ml-air-realtime
+                port:
+                  number: {{ .Values.realtime.service.port }}
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: ml-air-realtime
+                port:
+                  number: {{ .Values.realtime.service.port }}
 {{- end }}

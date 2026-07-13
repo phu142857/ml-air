@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 logger = logging.getLogger("mlair.observability.event_stream")
@@ -14,15 +13,39 @@ DEFAULT_STREAM_MAXLEN = 50_000
 DEFAULT_GLOBAL_MAXLEN = 200_000
 
 
+def _worker_settings():
+    try:
+        from app.settings import worker as ws
+
+        return ws
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def stream_enabled() -> bool:
+    ws = _worker_settings()
+    if ws is not None:
+        return ws.event_stream_enabled()
+    import os
+
     return os.getenv("ML_AIR_EVENT_STREAM", "1").strip() == "1"
 
 
 def global_fanout_enabled() -> bool:
+    ws = _worker_settings()
+    if ws is not None:
+        return ws.event_stream_global_fanout_enabled()
+    import os
+
     return os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_FANOUT", "1").strip() == "1"
 
 
 def stream_maxlen() -> int:
+    ws = _worker_settings()
+    if ws is not None:
+        return ws.event_stream_maxlen()
+    import os
+
     raw = os.getenv("ML_AIR_EVENT_STREAM_MAXLEN", str(DEFAULT_STREAM_MAXLEN)).strip()
     try:
         n = int(raw)
@@ -32,6 +55,11 @@ def stream_maxlen() -> int:
 
 
 def global_stream_maxlen() -> int:
+    ws = _worker_settings()
+    if ws is not None:
+        return ws.event_stream_global_maxlen()
+    import os
+
     raw = os.getenv("ML_AIR_EVENT_STREAM_GLOBAL_MAXLEN", str(DEFAULT_GLOBAL_MAXLEN)).strip()
     try:
         n = int(raw)

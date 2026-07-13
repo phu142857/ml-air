@@ -70,15 +70,20 @@ EOF
 pip install -e .
 
 # 3) Reload and verify from MLAir API
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/plugins/reload" \
-  -H "Authorization: Bearer admin-token"
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+# export TOKEN from POST /v1/auth/login (admin+ for reload; maintainer+ for validate)
 
-curl "http://localhost:8080/v1/tenants/default/projects/default_project/plugins" \
-  -H "Authorization: Bearer viewer-token"
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/plugins/reload" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl "$API/v1/tenants/$TENANT/projects/$PROJECT/plugins" \
+  -H "Authorization: Bearer $TOKEN"
 
 # 4) Validate plugin context
-curl -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/plugins/my_train_plugin/validate" \
-  -H "Authorization: Bearer maintainer-token" \
+curl -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/plugins/my_train_plugin/validate" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"context":{"dataset_uri":"s3://bucket/datasets/train.parquet"}}'
 

@@ -23,12 +23,15 @@ def _database_url() -> str:
 
 
 def delivery_enabled() -> bool:
-    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DELIVERY", "1").strip() == "1"
+    from app.settings import get_settings
+
+    return get_settings().features.semantic_webhook_delivery
 
 
 def dedupe_enabled() -> bool:
-    """When on, skip webhook POST if this ``(event_id, subscription_id)`` already succeeded once."""
-    return os.getenv("ML_AIR_SEMANTIC_WEBHOOK_DEDUPE", "1").strip() == "1"
+    from app.settings import get_settings
+
+    return get_settings().features.semantic_webhook_dedupe
 
 
 def retry_max_attempts() -> int:
@@ -50,10 +53,9 @@ def retry_backoff_initial_ms() -> int:
 
 
 def webhook_allowed_hosts() -> list[str]:
-    raw = os.getenv("ML_AIR_WEBHOOK_ALLOWED_HOSTS", "").strip()
-    if not raw:
-        return []
-    return [h.strip().lower() for h in raw.split(",") if h.strip()]
+    from app.settings.platform_policy import platform_webhook_allowed_hosts
+
+    return platform_webhook_allowed_hosts()
 
 
 def is_target_host_allowlisted(url: str) -> bool:

@@ -3,6 +3,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { BootstrapContextResponse } from "@/lib/api";
 import { fetchBootstrapContext } from "@/lib/api";
+import { clearAuthSession, loadAuthSession, refreshIdentity, saveAuthSession } from "@/lib/identity-api";
 
 export type AccessibleScopeRow = { tenant_id: string; project_id: string; role: string };
 
@@ -10,6 +11,10 @@ type AppContextValue = {
   tenantId: string;
   projectId: string;
   token: string;
+  refreshToken: string;
+  username: string | null;
+  hubRole: string | null;
+  isGlobalAdmin: boolean;
   mappingVersion: number;
   bootstrapSource: string;
   isBootstrapped: boolean;
@@ -20,9 +25,11 @@ type AppContextValue = {
   setTenantId: (value: string) => void;
   setProjectId: (value: string) => void;
   setToken: (value: string) => void;
+  setRefreshToken: (value: string) => void;
   setMappingVersion: (value: number) => void;
   /** Re-fetch bootstrap; use `withSpinner: false` when an outer scope transaction already shows loading. */
   refreshBootstrap: (opts?: { withSpinner?: boolean }) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -61,7 +68,11 @@ function deriveScopeLists(ctx: BootstrapContextResponse): {
 export function AppContextProvider({ children }: PropsWithChildren) {
   const [tenantId, setTenantId] = useState("default");
   const [projectId, setProjectId] = useState("default_project");
-  const [token, setToken] = useState("maintainer-token");
+  const [token, setToken] = useState("");
+  const [refreshToken, setRefreshToken] = useState("");
+  const [username, setUsername] = useState<string | null>(null);
+  const [hubRole, setHubRole] = useState<string | null>(null);
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
   const [mappingVersion, setMappingVersion] = useState(1);
   const [bootstrapSource, setBootstrapSource] = useState("client_fallback");
   const [isBootstrapped, setIsBootstrapped] = useState(false);
@@ -76,6 +87,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
     setProjectId(ctx.effective_scope.project_id);
     setMappingVersion(ctx.effective_scope.mapping_version || 1);
     setBootstrapSource(String(ctx.effective_scope.source || "bootstrap"));
+    const u = (ctx.user as { username?: string; is_global_admin?: boolean; role?: string } | undefined);
+    if (u?.username) setUsername(u.username);
+    if (u?.role) setHubRole(u.role);
+    setIsGlobalAdmin(Boolean(u?.is_global_admin) || u?.role === "admin");
     const lists = deriveScopeLists(ctx);
     setAccessibleScopes(lists.accessibleScopes);
     setTenantOptions(lists.tenantOptions);
@@ -83,6 +98,13 @@ export function AppContextProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    const session = loadAuthSession();
+    if (session) {
+      setToken(session.accessToken);
+      setRefreshToken(session.refreshToken);
+      if (session.username) setUsername(session.username);
+      return;
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
@@ -95,7 +117,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const key = `${token}`;
-    if (!token.trim()) return;
+    if (!token.trim()) {
+      setIsBootstrapped(true);
+      return;
+    }
     if (bootstrapKeyRef.current === key) return;
     bootstrapKeyRef.current = key;
     (async () => {
@@ -106,6 +131,25 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         applyBootstrapState(ctx);
         setIsBootstrapped(true);
       } catch {
+        if (refreshToken.trim()) {
+          try {
+            const refreshed = await refreshIdentity(refreshToken);
+            const next = {
+              accessToken: refreshed.access_token,
+              refreshToken: refreshed.refresh_token,
+              username: username || undefined,
+            };
+            saveAuthSession(next);
+            setToken(refreshed.access_token);
+            setRefreshToken(refreshed.refresh_token);
+            const ctx = await fetchBootstrapContext(refreshed.access_token, { signal: ac.signal });
+            applyBootstrapState(ctx);
+            setIsBootstrapped(true);
+            return;
+          } catch {
+            // fall through
+          }
+        }
         setTenantId((prev) => prev || "default");
         setProjectId((prev) => prev || "default_project");
         setMappingVersion((prev) => prev || 1);
@@ -118,7 +162,7 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         clearTimeout(tid);
       }
     })();
-  }, [token, applyBootstrapState]);
+  }, [token, refreshToken, username, applyBootstrapState]);
 
   const refreshBootstrap = useCallback(
     async (opts?: { withSpinner?: boolean }) => {
@@ -147,16 +191,42 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         STORAGE_KEY,
         JSON.stringify({ tenantId, projectId, token, mappingVersion, bootstrapSource })
       );
+      if (token && refreshToken) {
+        saveAuthSession({
+          accessToken: token,
+          refreshToken,
+          username: username || undefined,
+        });
+      }
     } catch {
       // ignore storage write failures
     }
-  }, [tenantId, projectId, token, mappingVersion, bootstrapSource]);
+  }, [tenantId, projectId, token, refreshToken, username, mappingVersion, bootstrapSource]);
+
+  const logout = useCallback(async () => {
+    const { logoutIdentity } = await import("@/lib/identity-api");
+    try {
+      if (token.trim()) await logoutIdentity(token, refreshToken || undefined);
+    } catch {
+      // ignore logout API errors
+    }
+    clearAuthSession();
+    setToken("");
+    setRefreshToken("");
+    setUsername(null);
+    bootstrapKeyRef.current = "";
+    if (typeof window !== "undefined") window.location.href = "/login";
+  }, [token, refreshToken]);
 
   const value = useMemo(
     () => ({
       tenantId,
       projectId,
       token,
+      refreshToken,
+      username,
+      hubRole,
+      isGlobalAdmin,
       mappingVersion,
       bootstrapSource,
       isBootstrapped,
@@ -167,13 +237,19 @@ export function AppContextProvider({ children }: PropsWithChildren) {
       setTenantId,
       setProjectId,
       setToken,
+      setRefreshToken,
       setMappingVersion,
-      refreshBootstrap
+      refreshBootstrap,
+      logout,
     }),
     [
       tenantId,
       projectId,
       token,
+      refreshToken,
+      username,
+      hubRole,
+      isGlobalAdmin,
       mappingVersion,
       bootstrapSource,
       isBootstrapped,
@@ -181,7 +257,8 @@ export function AppContextProvider({ children }: PropsWithChildren) {
       tenantOptions,
       projectOptions,
       isScopeLoading,
-      refreshBootstrap
+      refreshBootstrap,
+      logout,
     ]
   );
 

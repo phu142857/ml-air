@@ -28,6 +28,8 @@ Export **distributed traces** from MLAir processes using standard **OpenTelemetr
 
 ## Hub UI
 
+Operator walkthrough: [Use the Trace explorer](./use-trace-explorer.md).
+
 - **Traces** page (`/traces`) — browse recent traces for the pinned project.
 - **Trace explorer** — timeline, unified waterfall (drag to zoom), service dependency graph, live polling, export/share, execution graph.
 - Share links: `?trace=<trace_id>` on any dashboard page.

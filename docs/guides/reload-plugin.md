@@ -12,10 +12,14 @@ Reload plugin registry after plugin updates.
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md) (maintainer+).
+
 ```bash
 mlair rebuild
-curl -sS http://localhost:8080/v1/plugins \
-  -H "Authorization: Bearer maintainer-token"
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+
+curl -sS "$API/v1/plugins" \
+  -H "Authorization: Bearer $TOKEN"
 # optional: POST /v1/plugins/reload (maintainer) after registry changes
 ```
 

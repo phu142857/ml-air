@@ -64,7 +64,7 @@ def run_doctor(
     if not env_path.is_file():
         example = root / ".env.example"
         if example.is_file():
-            print("[WARN] .env not found; `mlair start` will copy from .env.example")
+            print("[WARN] .env not found; `mlair start` will merge .env.example + deploy/.env.infra.example")
         else:
             print("[WARN] .env not found")
     else:

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Settings, Key, Globe, Building2, FolderKanban, Save, Eye, EyeOff, Copy, Check, ExternalLink, Puzzle, Loader2, RefreshCw, Palette, Shield } from "lucide-react"
+import { Settings, Key, Globe, Building2, FolderKanban, Save, Eye, EyeOff, Copy, Check, ExternalLink, Puzzle, Loader2, RefreshCw, Palette, Shield, Server } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,6 +27,7 @@ import {
   writeRuntimeConfigOverride,
 } from "@/lib/runtime-config"
 import { PluginsSettingsTab } from "@/components/settings/plugins-settings-tab"
+import { SystemSettingsTab } from "@/components/settings/system-settings-tab"
 import { useAppContext, type AccessibleScopeRow } from "@/lib/app-context"
 import { fetchTenantQuotas, fetchTenantQuotaUsage, upsertTenantQuotas } from "@/lib/api"
 import { switchScopeWithRetry } from "@/lib/scope-switch"
@@ -35,7 +36,7 @@ import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions"
 import { formatVersionLabel } from "@/lib/version-label"
 import { cn } from "@/lib/utils"
 
-const SETTINGS_TABS = ["runtime", "api", "scope", "governance", "plugins", "design-tokens"] as const
+const SETTINGS_TABS = ["runtime", "api", "scope", "governance", "system", "plugins", "design-tokens"] as const
 
 function SettingsPageContent() {
   const searchParams = useSearchParams()
@@ -58,14 +59,16 @@ function SettingsPageContent() {
     projectId,
     token,
     setToken,
+    username,
     mappingVersion,
     bootstrapSource,
     isBootstrapped,
     accessibleScopes,
     isScopeLoading,
     refreshBootstrap,
+    isGlobalAdmin,
+    logout,
   } = useAppContext()
-
   const [showApiKey, setShowApiKey] = useState(false)
   const [draftToken, setDraftToken] = useState(token)
   const [copied, setCopied] = useState(false)
@@ -271,6 +274,9 @@ function SettingsPageContent() {
             { id: "api", label: "Session", icon: <Key className="h-3.5 w-3.5" /> },
             { id: "scope", label: "Scope Management", icon: <Building2 className="h-3.5 w-3.5" /> },
             { id: "governance", label: "Governance", icon: <Shield className="h-3.5 w-3.5" /> },
+            ...(isGlobalAdmin
+              ? [{ id: "system", label: "System (L4)", icon: <Server className="h-3.5 w-3.5" /> }]
+              : []),
             { id: "plugins", label: "Plugins", icon: <Puzzle className="h-3.5 w-3.5" /> },
             { id: "design-tokens", label: "Design Tokens", icon: <Palette className="h-3.5 w-3.5" /> },
           ]}
@@ -384,9 +390,21 @@ function SettingsPageContent() {
             <div className="max-w-2xl">
               <DetailSection
                 title="Session bearer token"
-                description="Token sent as Authorization: Bearer for API requests. Stored in localStorage with tenant/project scope."
+                description="Sign in at /login (Identity IAM). Legacy bearer paste only when ML_AIR_LEGACY_STATIC_TOKENS=1."
                 accentBorder="violet"
               >
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  {username ? <span>Signed in as <strong className="text-foreground">{username}</strong></span> : null}
+                  <Button type="button" variant="outline" size="sm" onClick={() => logout()}>
+                    Sign out
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <a href="/login">Sign in</a>
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <a href="/admin/users">Admin: Users</a>
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="session-token" className="text-sm text-muted-foreground">
                     Token value
@@ -559,7 +577,7 @@ function SettingsPageContent() {
             <div className="max-w-2xl">
               <DetailSection
                 title="Tenant quotas"
-                description="Capacity limits per tenant and project. Enforcement requires ML_AIR_TENANT_QUOTA_ENFORCE=1 on the API."
+                description="Capacity limits per tenant and project (L5). Enforcement follows platform feature tenant_quota_enforce (L4 features)."
                 accentBorder="amber"
               >
                 {tenantId === "all" ? (
@@ -629,7 +647,7 @@ function SettingsPageContent() {
                         className="mt-1 h-8 font-mono text-xs"
                       />
                       <p className="mt-1 text-[10px] text-muted-foreground">
-                        Must also appear in global ML_AIR_WEBHOOK_ALLOWED_HOSTS. Leave empty to use global list only.
+                        Must also appear in the platform webhook allowlist (L4 governance.webhook_allowed_hosts). Leave empty to use the global list only.
                       </p>
                     </div>
                     <Button
@@ -646,6 +664,12 @@ function SettingsPageContent() {
               </DetailSection>
             </div>
           </TabsContent>
+
+          {isGlobalAdmin ? (
+            <TabsContent value="system" className={tabPanelScrollClassName("space-y-6")}>
+              <SystemSettingsTab token={token} />
+            </TabsContent>
+          ) : null}
 
           <TabsContent value="plugins" className={tabPanelScrollClassName("space-y-6")}>
             <PluginsSettingsTab />

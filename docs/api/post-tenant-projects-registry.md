@@ -17,10 +17,15 @@ Declare a **project id** for a tenant in MLAir’s **catalog** (`tenant_projects
 
 ## Command
 
+**Auth:** `$TOKEN` from [Login and Identity](../guides/login-and-identity.md) (maintainer+).
+
 ```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+
 curl -sS -X POST \
-  "http://localhost:8080/v1/tenants/default/projects/registry" \
-  -H "Authorization: Bearer maintainer-token" \
+  "$API/v1/tenants/$TENANT/projects/registry" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"project_id":"project_north","name":"North project"}'
 ```

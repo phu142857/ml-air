@@ -37,8 +37,9 @@ class ReadinessEligibilityBlocked(ValueError):
 
 
 def _allow_legacy_readiness_fallback() -> bool:
-    # Phase 6 default: strict version-centric readiness; rollback by setting env to 1/true.
-    return str(os.getenv("ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK", "1")).strip().lower() not in {"0", "false", "no", "off"}
+    from app.settings import get_settings
+
+    return get_settings().features.readiness_allow_legacy_fallback
 
 
 def is_readiness_legacy_fallback_enabled() -> bool:

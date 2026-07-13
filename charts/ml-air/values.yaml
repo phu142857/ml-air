@@ -29,6 +29,8 @@ api:
     modelPromoteWebhookUrl: ""
     modelPromoteWebhookBearerToken: ""
     modelPromoteWebhookTimeoutSeconds: "15"
+    runtimeRealtimeBaseUrl: ""
+  extraEnv: {}
   secret:
     # If set, API will read JWT secret from an existing Kubernetes Secret.
     # Otherwise chart-managed Secret `ml-air-api-secrets` is used.
@@ -55,6 +57,7 @@ scheduler:
   env:
     redisUrl: redis://ml-air-redis:6379/0
     databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
+  extraEnv: {}
 
 executor:
   replicaCount: 1
@@ -64,6 +67,22 @@ executor:
   env:
     redisUrl: redis://ml-air-redis:6379/0
     databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
+  extraEnv: {}
+
+realtime:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/ml-air-realtime
+    tag: latest
+  service:
+    port: 8001
+  metricsPort: 9104
+  env:
+    redisUrl: redis://ml-air-redis:6379/0
+    databaseUrl: postgresql://mlair:mlair@ml-air-postgres:5432/mlair
+    otelEnabled: "1"
+    otelServiceName: mlair-realtime
+  extraEnv: {}
 
 redis:
   image: redis:7-alpine
@@ -93,3 +112,7 @@ ingress:
   enabled: false
   className: ""
   host: ml-air.local
+  tls:
+    enabled: false
+    secretName: ""
+  annotations: {}

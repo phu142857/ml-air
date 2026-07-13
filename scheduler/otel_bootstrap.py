@@ -13,7 +13,12 @@ _provider_set = False
 
 
 def otel_worker_enabled() -> bool:
-    return os.getenv("ML_AIR_OTEL_ENABLED", "1").strip() == "1"
+    try:
+        from app.settings.worker import otel_enabled
+
+        return otel_enabled()
+    except ImportError:
+        return os.getenv("ML_AIR_OTEL_ENABLED", "1").strip() == "1"
 
 
 def ensure_worker_tracing(*, service_name: str) -> None:

@@ -171,13 +171,19 @@ Implementation merges **`context`** from the request body first, then sets the k
 
 ## curl examples
 
-Replace host, tokens, and ids.
+**Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md). Replace host, ids, and export `API` / `TENANT` / `PROJECT` as in other guides.
+
+```bash
+API="${ML_AIR_BASE_URL:-http://localhost:8080}"
+TENANT="${ML_AIR_TENANT_ID:-default}"
+PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
+```
 
 **Mapping**
 
 ```bash
-curl -sS -X PUT "http://localhost:8080/v1/tenants/default/projects/default_project/models/MODEL_ID/pipeline-mapping" \
-  -H "Authorization: Bearer maintainer-token" \
+curl -sS -X PUT "$API/v1/tenants/$TENANT/projects/$PROJECT/models/MODEL_ID/pipeline-mapping" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"pipeline_id":"my_training_pipeline"}'
 ```
@@ -185,15 +191,15 @@ curl -sS -X PUT "http://localhost:8080/v1/tenants/default/projects/default_proje
 **Resolved**
 
 ```bash
-curl -sS "http://localhost:8080/v1/tenants/default/projects/default_project/models/MODEL_ID/resolved-pipeline" \
-  -H "Authorization: Bearer viewer-token"
+curl -sS "$API/v1/tenants/$TENANT/projects/$PROJECT/models/MODEL_ID/resolved-pipeline" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Trigger**
 
 ```bash
-curl -sS -X POST "http://localhost:8080/v1/tenants/default/projects/default_project/runs/trigger" \
-  -H "Authorization: Bearer maintainer-token" \
+curl -sS -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/trigger" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "model_id": "MODEL_ID",
