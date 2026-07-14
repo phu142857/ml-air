@@ -52,8 +52,12 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "replay_require_signed_manifest": True,
         "manifest_strict_key_lifecycle": True,
     },
+    "infra": {
+        "minio": False,
+        "prometheus": False,
+        "grafana": False,
+    },
     "observability": {
-        "grafana_url": "http://localhost:33000",
         "otel_enabled": True,
         "realtime_ws": "ws://localhost:8080/ws",
     },
@@ -97,6 +101,50 @@ _FEATURE_ENV_MAP = {
     "manifest_strict_key_lifecycle": "ML_AIR_MANIFEST_STRICT_KEY_LIFECYCLE",
 }
 
+_INFRA_ENV_MAP = {
+    "minio": "MLAIR_INFRA_MINIO",
+    "prometheus": "MLAIR_INFRA_PROMETHEUS",
+    "grafana": "MLAIR_INFRA_GRAFANA",
+}
+
+
+def _bool_env(value: Any) -> str:
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on"):
+        return "1"
+    if text in ("0", "false", "no", "off"):
+        return "0"
+    return str(value)
+
+
+def _truthy(value: Any) -> bool:
+    return _bool_env(value) == "1"
+
+
+def infra_enabled(cfg: dict[str, Any]) -> dict[str, bool]:
+    """Resolved optional all-in-one sidecars (MinIO / Prometheus / Grafana)."""
+    infra = cfg.get("infra") if isinstance(cfg.get("infra"), dict) else {}
+    grafana = _truthy(infra.get("grafana"))
+    prometheus = _truthy(infra.get("prometheus")) or grafana
+    return {
+        "minio": _truthy(infra.get("minio")),
+        "prometheus": prometheus,
+        "grafana": grafana,
+    }
+
+
+def compose_profiles(cfg: dict[str, Any]) -> tuple[str, ...]:
+    """Docker Compose profile names for optional infra services."""
+    enabled = infra_enabled(cfg)
+    profiles: list[str] = []
+    for name in ("minio", "prometheus", "grafana"):
+        if enabled.get(name):
+            profiles.append(name)
+    return tuple(profiles)
+
+
 _PORT_ENV_MAP = {
     "hub": "MLAIR_PORT",
     "api": "ML_AIR_API_PORT",
@@ -105,6 +153,8 @@ _PORT_ENV_MAP = {
     "postgres": "ML_AIR_POSTGRES_PORT",
     "grafana": "ML_AIR_GRAFANA_PORT",
     "prometheus": "ML_AIR_PROMETHEUS_PORT",
+    "minio_api": "ML_AIR_MINIO_API_PORT",
+    "minio_console": "ML_AIR_MINIO_CONSOLE_PORT",
 }
 
 
@@ -209,6 +259,7 @@ def layered_config(cfg: dict[str, Any], env_mapping: dict[str, str] | None = Non
         {
             "profile": active_profile,
             "features": deepcopy(_BUILTIN_DEFAULTS.get("features", {})),
+            "infra": deepcopy(_BUILTIN_DEFAULTS.get("infra", {})),
             "observability": deepcopy(_BUILTIN_DEFAULTS.get("observability", {})),
         },
         profile_overlay,
@@ -222,17 +273,6 @@ def layered_config(cfg: dict[str, Any], env_mapping: dict[str, str] | None = Non
         "L2_merged": l2,
         "L3_env_overrides": l3,
     }
-
-
-def _bool_env(value: Any) -> str:
-    if isinstance(value, bool):
-        return "1" if value else "0"
-    text = str(value).strip().lower()
-    if text in ("1", "true", "yes", "on"):
-        return "1"
-    if text in ("0", "false", "no", "off"):
-        return "0"
-    return str(value)
 
 
 def to_env_mapping(cfg: dict[str, Any]) -> dict[str, str]:
@@ -252,8 +292,17 @@ def to_env_mapping(cfg: dict[str, Any]) -> dict[str, str]:
             env[env_name] = str(ports[key])
 
     observability = cfg.get("observability") if isinstance(cfg.get("observability"), dict) else {}
-    if observability.get("grafana_url"):
-        env["ML_AIR_GRAFANA_URL"] = str(observability["grafana_url"])
+    infra = infra_enabled(cfg)
+    for key, env_name in _INFRA_ENV_MAP.items():
+        env[env_name] = "1" if infra.get(key) else "0"
+    profiles = compose_profiles(cfg)
+    env["COMPOSE_PROFILES"] = ",".join(profiles) if profiles else ""
+    if infra.get("grafana"):
+        grafana_port = ports.get("grafana", 33000)
+        default_grafana = f"http://localhost:{grafana_port}"
+        grafana_url = str(observability.get("grafana_url") or default_grafana).strip()
+        if grafana_url:
+            env["ML_AIR_GRAFANA_URL"] = grafana_url
     if observability.get("realtime_ws"):
         env["ML_AIR_RUNTIME_REALTIME_BASE_URL"] = str(observability["realtime_ws"])
     if observability.get("otel_enabled") is not None:
@@ -300,4 +349,6 @@ def apply_to_environ(
     for key, value in mapping.items():
         if override_existing or key not in os.environ:
             os.environ[key] = value
+    if "COMPOSE_PROFILES" in mapping:
+        os.environ["COMPOSE_PROFILES"] = mapping["COMPOSE_PROFILES"]
     return mapping

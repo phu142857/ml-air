@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from mlair.config.loader import apply_to_environ, load_config
+from mlair.config.loader import apply_to_environ, infra_enabled, load_config
 from mlair.paths import default_compose_file, default_env_example, default_env_infra_example, repo_root
 
 
@@ -145,13 +145,19 @@ def _sync_wheel_to_consumers(wheel: Path) -> None:
 def _print_endpoints(cfg: dict) -> None:
     compose_rel = str((cfg.get("compose") or {}).get("file") or "")
     is_allinone = "allinone" in compose_rel
+    infra = infra_enabled(cfg)
     if is_allinone:
         hub_port = os.getenv("MLAIR_PORT", "8080")
         print("[mlair] single-container stack starting")
         print(f"  MLAir:    http://localhost:{hub_port}")
-        print(f"  Grafana:  http://localhost:{os.getenv('ML_AIR_GRAFANA_PORT', '33000')}")
-        print(f"  Prom:     http://localhost:{os.getenv('ML_AIR_PROMETHEUS_PORT', '39090')}")
-        print(f"  MinIO:    http://localhost:{os.getenv('ML_AIR_MINIO_CONSOLE_PORT', '9001')}")
+        if infra.get("grafana"):
+            print(f"  Grafana:  http://localhost:{os.getenv('ML_AIR_GRAFANA_PORT', '33000')}")
+        if infra.get("prometheus"):
+            print(f"  Prom:     http://localhost:{os.getenv('ML_AIR_PROMETHEUS_PORT', '39090')}")
+        if infra.get("minio"):
+            print(f"  MinIO:    http://localhost:{os.getenv('ML_AIR_MINIO_CONSOLE_PORT', '9001')}")
+        if not any(infra.values()):
+            print("  Infra:    MinIO / Prometheus / Grafana off (enable via mlair.yaml → infra)")
     else:
         api_port = os.getenv("ML_AIR_API_PORT", "8080")
         ui_port = os.getenv("ML_AIR_FRONTEND_PORT", "38080")

@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from mlair.config.loader import apply_to_environ, load_config
+from mlair.config.loader import apply_to_environ, infra_enabled, load_config
 from mlair.paths import repo_root
 
 
@@ -93,6 +93,14 @@ def run_doctor(
 
     if is_allinone:
         ports = [int(os.getenv("MLAIR_PORT", "8080"))]
+        infra = infra_enabled(cfg)
+        if infra.get("prometheus"):
+            ports.append(int(os.getenv("ML_AIR_PROMETHEUS_PORT", "39090")))
+        if infra.get("grafana"):
+            ports.append(int(os.getenv("ML_AIR_GRAFANA_PORT", "33000")))
+        if infra.get("minio"):
+            ports.append(int(os.getenv("ML_AIR_MINIO_API_PORT", "9000")))
+            ports.append(int(os.getenv("ML_AIR_MINIO_CONSOLE_PORT", "9001")))
     else:
         ports = [
             int(os.getenv("ML_AIR_FRONTEND_PORT", "38080")),

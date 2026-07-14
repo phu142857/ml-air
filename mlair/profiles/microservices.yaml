@@ -47,7 +47,6 @@ features:
   manifest_strict_key_lifecycle: true
 
 observability:
-  grafana_url: http://localhost:33000
   realtime_ws: ws://localhost:8001
   otel_enabled: true
 

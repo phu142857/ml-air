@@ -60,15 +60,18 @@ Common keys (full list in [Configuration](../configuration.md)):
 | `ML_AIR_LEGACY_STATIC_TOKENS` | `0` | `1` only during migration (`viewer-token`, etc.) |
 | `ML_AIR_USAGE_TRACKING_ENABLED` | `1` | CPU/RAM/GPU usage capture |
 
-## Sign in
-
-After the stack is healthy, open **`http://localhost:8080/login`** and sign in with the bootstrap admin credentials. Hub and API use identity JWTs by default — not pasted static tokens. See [Login and Identity](../guides/login-and-identity.md).
+Optional **MinIO / Prometheus / Grafana** sidecars are **off by default**. Enable in `mlair.yaml` (see [Configuration](../configuration.md#optional-infra-sidecars-all-in-one)) or via `MLAIR_INFRA_*` in `deploy/.env.infra.example`.
 
 ## Result
 
 - MLAir (Hub + API + realtime): `http://localhost:8080`
 - `mlair health` passes.
 - You can sign in at `/login` and open **Settings** to pin tenant/project scope.
+- Grafana `:33000`, Prometheus `:39090`, MinIO console `:9001` — only when `infra` is enabled in config.
+
+## Sign in
+
+After the stack is healthy, open **`http://localhost:8080/login`** and sign in with the bootstrap admin credentials. Hub and API use identity JWTs by default — not pasted static tokens. See [Login and Identity](../guides/login-and-identity.md).
 
 ## Done
 

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from mlair.config.loader import apply_to_environ, load_config, to_env_mapping
+from mlair.config.loader import apply_to_environ, compose_profiles, infra_enabled, load_config, to_env_mapping
 
 
 class MlairConfigLoaderTests(unittest.TestCase):
@@ -19,6 +19,27 @@ class MlairConfigLoaderTests(unittest.TestCase):
         self.assertEqual(env["ML_AIR_USAGE_TRACKING_ENABLED"], "1")
         self.assertEqual(env["ML_AIR_STRICT_DATASET_VERSION_REQUIRED"], "1")
         self.assertEqual(env["MLAIR_PORT"], "8080")
+        self.assertEqual(env.get("COMPOSE_PROFILES"), "")
+        self.assertEqual(env.get("MLAIR_INFRA_MINIO"), "0")
+
+    def test_infra_profiles_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            user = Path(tmp) / "mlair.yaml"
+            user.write_text(
+                "profile: development\ninfra:\n  minio: true\n  grafana: true\n",
+                encoding="utf-8",
+            )
+            cfg = load_config(str(user), profile="development")
+            env = to_env_mapping(cfg)
+            self.assertEqual(env["COMPOSE_PROFILES"], "minio,prometheus,grafana")
+            self.assertEqual(env["MLAIR_INFRA_PROMETHEUS"], "1")
+            self.assertEqual(env["ML_AIR_GRAFANA_URL"], "http://localhost:33000")
+
+    def test_infra_enabled_auto_prometheus_with_grafana(self) -> None:
+        cfg = load_config(profile="development")
+        cfg["infra"] = {"grafana": True}
+        self.assertTrue(infra_enabled(cfg)["prometheus"])
+        self.assertEqual(compose_profiles(cfg), ("prometheus", "grafana"))
 
     def test_staging_profile_strict(self) -> None:
         cfg = load_config(profile="staging")

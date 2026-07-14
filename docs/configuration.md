@@ -1,6 +1,6 @@
 # MLAir configuration
 
-Single reference for installing and running MLAir with **sensible defaults**. The default runtime is an **all-in-one app container** (`ml-air:latest`) plus the supporting local services MLAir needs for a full developer experience: Prometheus, Grafana, and MinIO.
+Single reference for installing and running MLAir with **sensible defaults**. The default runtime is a **single all-in-one app container** (`ml-air:latest`) on port **8080**. Optional sidecars — **MinIO**, **Prometheus**, and **Grafana** — are **off by default** and start only when enabled in `mlair.yaml` → `infra` (or matching `MLAIR_INFRA_*` env vars).
 
 > Operator-facing reference for installing and running MLAir. Layered config (L0–L5) is implemented in code (`mlair/config/`, Hub System Settings); this guide covers what you set at deploy time.
 
@@ -18,9 +18,9 @@ mlair start               # start from images
 mlair health
 ```
 
-Open MLAir at `http://localhost:8080/login` (default). Sign in with bootstrap admin credentials — see [Login and Identity](guides/login-and-identity.md). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. The default stack also starts local observability/storage companions on their standard ports: Grafana `:33000`, Prometheus `:39090`, and MinIO console `:9001`. Distributed traces are viewed in the Hub [Trace explorer](guides/use-trace-explorer.md) (sidebar **Traces**, run detail, or `?trace=<id>`).
+Open MLAir at `http://localhost:8080/login` (default). Sign in with bootstrap admin credentials — see [Login and Identity](guides/login-and-identity.md). API (`/v1`), Hub UI, and realtime (`/ws`) share that single origin. Distributed traces are viewed in the Hub [Trace explorer](guides/use-trace-explorer.md) (sidebar **Traces**, run detail, or `?trace=<id>`).
 
-No `mlair.yaml` required — profile **`development`** applies automatically.
+No `mlair.yaml` required — profile **`development`** applies automatically. Artifact storage defaults to **local volumes** inside the all-in-one container (`file:///mlair/artifacts/...`).
 
 ### Single public app port (default)
 
@@ -34,7 +34,43 @@ The all-in-one image runs an internal nginx reverse proxy on **`:8080`**:
 | `/health` | API health |
 | `/healthz` | Realtime health |
 
-Override the host mapping with `ports.hub` in `mlair.yaml` or `MLAIR_PORT` in the environment. API, Hub, and realtime are **not** published on separate host ports in this mode; observability/storage companions still expose their own local ports for direct access.
+Override the host mapping with `ports.hub` in `mlair.yaml` or `MLAIR_PORT` in the environment. API, Hub, and realtime are **not** published on separate host ports in this mode.
+
+### Optional infra sidecars (all-in-one)
+
+MinIO, Prometheus, and Grafana are **optional** Compose profiles. They are **not** started on a plain `mlair start` unless you enable them.
+
+**Recommended** — `mlair.yaml`:
+
+```yaml
+infra:
+  minio: true
+  prometheus: true
+  grafana: true
+
+observability:
+  grafana_url: http://localhost:33000   # optional; default uses ML_AIR_GRAFANA_PORT
+```
+
+Then `mlair rebuild` or `mlair start`. The CLI sets `COMPOSE_PROFILES` and pulls/starts only the enabled images.
+
+| Sidecar | Host port (default) | Purpose |
+|---------|---------------------|---------|
+| MinIO | API `:9000`, console `:9001` | S3-compatible object storage (`minio://` URIs) |
+| Prometheus | `:39090` | Scrape API/scheduler/executor/realtime `/metrics` |
+| Grafana | `:33000` | Dashboards under `deploy/monitoring/grafana/` |
+
+**Env mirror** (in `deploy/.env.infra.example`, merged into `.env`):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `MLAIR_INFRA_MINIO` | `0` | Start MinIO profile |
+| `MLAIR_INFRA_PROMETHEUS` | `0` | Start Prometheus profile |
+| `MLAIR_INFRA_GRAFANA` | `0` | Start Grafana profile (auto-enables Prometheus) |
+| `ML_AIR_GRAFANA_URL` | — | Hub Grafana links when Grafana is on |
+| `ML_AIR_PROMETHEUS_URL` | — | Scripts / drills (optional) |
+
+Enabling `grafana: true` automatically enables Prometheus (Grafana needs a datasource).
 
 ### Legacy multi-container layout
 
@@ -66,7 +102,7 @@ Bundled in `mlair/profiles/` (also shipped inside the `mlair` wheel).
 
 | Profile | Use case | Strict dataset pin | Promote approval |
 |---------|----------|----------------------|------------------|
-| `development` | Local all-in-one app + observability stack (`mlair start`) | on | skipped (dev) |
+| `development` | Local all-in-one app (`mlair start`); infra sidecars off by default | on | skipped (dev) |
 | `microservices` | Legacy multi-container compose | off | skipped (dev) |
 | `staging` | Pre-prod sign-off | on | enforced |
 | `production` | Lifecycle OS production | on | enforced |
@@ -85,6 +121,7 @@ Profiles map to L2 bundles (see `mlair config print`). After Phase 4, **policy k
 | `features.*` | L4 `features.*` → profile → L1 (env alias only with rollback flag) |
 | `hub.default_route`, `identity.lockout`, `governance.*` | L4 → profile → L1 |
 | `ports.hub` | `MLAIR_PORT` (contract) |
+| `infra.*` | `MLAIR_INFRA_*`, `COMPOSE_PROFILES` (all-in-one sidecars) |
 | `ports.api` / `ports.frontend` | infra example (microservices) |
 | `ml_air_environment` | infra example / profile |
 
@@ -125,8 +162,15 @@ features:
   skip_approval_for_promote: true
 
 observability:
-  grafana_url: http://localhost:33000
   otel_enabled: true
+
+# Optional all-in-one sidecars (off by default — images start only when enabled):
+# infra:
+#   minio: true
+#   prometheus: true
+#   grafana: true
+# observability:
+#   grafana_url: http://localhost:33000
 
 auth:
   tracking_token: ""

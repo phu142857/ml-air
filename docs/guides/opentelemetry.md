@@ -24,7 +24,7 @@ Export **distributed traces** from MLAir processes using standard **OpenTelemetr
 | `ML_AIR_TRACE_SPAN_RETENTION_DAYS` | Delete spans older than N days (default `30`). |
 | `ML_AIR_TRACE_SPAN_RETENTION_INTERVAL_SEC` | Purge loop interval (default `3600`). |
 | `OTEL_SERVICE_NAME` | Logical service name per process. |
-| `ML_AIR_GRAFANA_URL` | Optional Grafana UI base URL for metrics dashboards. |
+| `ML_AIR_GRAFANA_URL` | Optional Grafana UI base URL (set when `infra.grafana` is enabled in all-in-one). |
 
 ## Hub UI
 

@@ -66,6 +66,21 @@ def main() -> int:
             ("api-health", lambda: _http_ok(f"http://localhost:{hub_port}/health")),
             ("realtime-health", lambda: _http_ok(f"http://localhost:{hub_port}/healthz")),
         ]
+        if os.getenv("MLAIR_INFRA_PROMETHEUS", "0").strip().lower() in ("1", "true", "yes"):
+            prometheus_port = int(os.getenv("ML_AIR_PROMETHEUS_PORT", "39090"))
+            checks.append(("prometheus", lambda: _http_ok(f"http://localhost:{prometheus_port}/-/healthy")))
+        if os.getenv("MLAIR_INFRA_GRAFANA", "0").strip().lower() in ("1", "true", "yes"):
+            grafana_port = int(os.getenv("ML_AIR_GRAFANA_PORT", "33000"))
+            checks.append(("grafana", lambda: _http_ok(f"http://localhost:{grafana_port}/api/health")))
+        if os.getenv("MLAIR_INFRA_MINIO", "0").strip().lower() in ("1", "true", "yes"):
+            minio_api_port = int(os.getenv("ML_AIR_MINIO_API_PORT", "9000"))
+            minio_console_port = int(os.getenv("ML_AIR_MINIO_CONSOLE_PORT", "9001"))
+            checks.extend(
+                [
+                    ("minio-api-tcp", lambda: _tcp_ok("127.0.0.1", minio_api_port)),
+                    ("minio-console", lambda: _http_ok(f"http://localhost:{minio_console_port}")),
+                ]
+            )
     else:
         frontend_port = int(os.getenv("ML_AIR_FRONTEND_PORT", "38080"))
         api_port = int(os.getenv("ML_AIR_API_PORT", "8080"))

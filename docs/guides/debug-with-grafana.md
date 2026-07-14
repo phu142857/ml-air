@@ -4,23 +4,34 @@
 
 Use Grafana dashboards to debug run latency and failures.
 
+## Prerequisites
+
+Grafana is **off by default** on all-in-one. Enable in `mlair.yaml`:
+
+```yaml
+infra:
+  grafana: true
+```
+
+(Prometheus starts automatically.) Or `MLAIR_INFRA_GRAFANA=1` in `.env`. Then `mlair rebuild` or `mlair start`.
+
 ## Steps
 
-1. Open Grafana.
+1. Open Grafana at `http://localhost:33000` (default; login `admin` / `admin` unless `GF_SECURITY_*` changed).
 2. Select an MLAir dashboard (for example **MLAir Runtime Overview** for executor/scheduler, or **MLAir lifecycle (semantic metrics)** for train intent, readiness gate, eligibility denied, materialization, and model promote/approval — see [`view-metrics`](./view-metrics.md#grafana-quickstart)).
 3. Correlate spikes with run IDs and task failures.
 
 ## Command
 
 ```bash
-xdg-open http://localhost:3001
+xdg-open http://localhost:33000
 ```
 
 ## Result
 
 You can identify bottlenecks and failure windows using dashboard panels.
 
-For **firing alert rules** (including lifecycle burst heuristics), use Prometheus UI or Alertmanager as configured in your deploy; rule definitions live in [`deploy/monitoring/alerts/mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml) — see [View metrics — Lifecycle semantic alerts](./view-metrics.md#lifecycle-semantic-alerts-slo-style-heuristics). Validate rule YAML locally with **`make test-prometheus-rules`** (uses `promtool` or a small Prometheus container).
+For **firing alert rules** (including lifecycle burst heuristics), use Prometheus at `http://localhost:39090` or Alertmanager as configured in your deploy; rule definitions live in [`deploy/monitoring/alerts/mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml) — see [View metrics — Lifecycle semantic alerts](./view-metrics.md#lifecycle-semantic-alerts-slo-style-heuristics). Validate rule YAML locally with **`make test-prometheus-rules`** (uses `promtool` or a small Prometheus container).
 
 ## Scope/Auth Panels
 

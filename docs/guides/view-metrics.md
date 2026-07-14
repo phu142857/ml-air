@@ -6,15 +6,15 @@ View platform and run metrics for health and performance.
 
 ## Steps
 
-1. Ensure stack is running.
-2. Open Prometheus endpoint.
+1. Ensure stack is running and **infra** includes Prometheus (`mlair.yaml` → `infra.prometheus: true` or `MLAIR_INFRA_PROMETHEUS=1`).
+2. Open Prometheus at `http://localhost:39090` (default all-in-one host port).
 3. Query run/task metrics.
 
 ## Command
 
 ```bash
 mlair start
-curl "http://localhost:9090/api/v1/query?query=mlair_scheduler_queue_depth"
+curl "http://localhost:39090/api/v1/query?query=mlair_scheduler_queue_depth"
 ```
 
 ## Lifecycle counters (API and scheduler)
@@ -34,8 +34,8 @@ These counters track semantic lifecycle emits (independent of whether Redis Pub/
 Example queries:
 
 ```bash
-curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum(rate(mlair_lifecycle_training_completed_total[5m]))'
-curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (blocked_by_gate) (rate(mlair_lifecycle_training_triggered_total[15m]))'
+curl -sG "http://localhost:39090/api/v1/query" --data-urlencode 'query=sum(rate(mlair_lifecycle_training_completed_total[5m]))'
+curl -sG "http://localhost:39090/api/v1/query" --data-urlencode 'query=sum by (blocked_by_gate) (rate(mlair_lifecycle_training_triggered_total[15m]))'
 ```
 
 ## Readiness gate and persisted eligibility (API)
@@ -52,7 +52,7 @@ Stable internal → canonical → `reason` mapping: [Readiness and gating — Ca
 Example:
 
 ```bash
-curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (path) (rate(mlair_readiness_blocked_total[15m]))'
+curl -sG "http://localhost:39090/api/v1/query" --data-urlencode 'query=sum by (path) (rate(mlair_readiness_blocked_total[15m]))'
 ```
 
 **Note:** `mlair_lifecycle_training_triggered_total` already counts Hub train intent (including `blocked_by_gate`); `mlair_readiness_blocked_total` counts only runs that hit the readiness gate and were marked blocked.
@@ -60,7 +60,7 @@ curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (pa
 Additional examples:
 
 ```bash
-curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum by (reason, source) (rate(mlair_eligibility_denied_total[1h]))'
+curl -sG "http://localhost:39090/api/v1/query" --data-urlencode 'query=sum by (reason, source) (rate(mlair_eligibility_denied_total[1h]))'
 ```
 
 ## Materialization and buffer gauges (API)
@@ -80,12 +80,12 @@ Counters and histograms are emitted from [`api/app/domains/lifecycle/lineage_ser
 Example:
 
 ```bash
-curl -sG "http://localhost:9090/api/v1/query" --data-urlencode 'query=sum(rate(mlair_dataset_materialization_version_created_total[15m]))'
+curl -sG "http://localhost:39090/api/v1/query" --data-urlencode 'query=sum(rate(mlair_dataset_materialization_version_created_total[15m]))'
 ```
 
 ## Lifecycle semantic alerts (SLO-style heuristics)
 
-Quickstart Prometheus loads [`deploy/monitoring/alerts/mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml). The **`mlair-lifecycle-semantic`** rule group fires **warning**-severity alerts on bursts of semantic lifecycle friction (thresholds are starting points — tune per tenant/project in your fork or overlay rules).
+Quickstart Prometheus (when `infra.prometheus: true`) loads [`deploy/monitoring/alerts/mlair-alerts.yml`](../../deploy/monitoring/alerts/mlair-alerts.yml). The **`mlair-lifecycle-semantic`** rule group fires **warning**-severity alerts on bursts of semantic lifecycle friction (thresholds are starting points — tune per tenant/project in your fork or overlay rules).
 
 | Alert | Signal (simplified) |
 | --- | --- |
@@ -100,7 +100,9 @@ Materialization heuristics remain in the **`mlair-runtime`** group of the same f
 
 ## Grafana (quickstart)
 
-Dashboard JSON lives under [`deploy/monitoring/grafana/dashboards/`](../../deploy/monitoring/grafana/dashboards/). The quickstart Compose file mounts that directory into Grafana.
+Enable Grafana in `mlair.yaml` (`infra.grafana: true` — Prometheus is started automatically). Dashboard JSON lives under [`deploy/monitoring/grafana/dashboards/`](../../deploy/monitoring/grafana/dashboards/). The all-in-one Compose file mounts that directory when the `grafana` profile is active.
+
+Default UI: `http://localhost:33000` (admin / admin unless changed via `GF_SECURITY_*` in `.env`).
 
 | Dashboard | UID | Focus |
 | --- | --- | --- |

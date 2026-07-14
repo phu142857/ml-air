@@ -1,6 +1,6 @@
-# MLAir default local runtime: one all-in-one app container plus supporting
-# observability/storage services. The app still exposes one public entrypoint
-# (:8080) for Hub + API (/v1) + realtime (/ws) via internal nginx.
+# MLAir default local runtime: one all-in-one app container plus optional sidecars.
+# MinIO / Prometheus / Grafana use Compose profiles (minio, prometheus, grafana) and
+# start only when enabled in mlair.yaml → infra (see docs/configuration.md).
 
 name: mlair
 
@@ -62,12 +62,10 @@ services:
       - "9102"
       - "9103"
       - "9104"
-    depends_on:
-      minio:
-        condition: service_started
     restart: unless-stopped
 
   minio:
+    profiles: ["minio"]
     image: minio/minio:latest
     container_name: ml-air-minio
     command: server /data --console-address ":9001"
@@ -82,6 +80,7 @@ services:
     restart: unless-stopped
 
   prometheus:
+    profiles: ["prometheus"]
     image: prom/prometheus:v2.54.1
     container_name: ml-air-prometheus
     command:
@@ -96,6 +95,7 @@ services:
     restart: unless-stopped
 
   grafana:
+    profiles: ["grafana"]
     image: grafana/grafana:11.2.0
     container_name: ml-air-grafana
     environment:

@@ -3,6 +3,7 @@
 # Full reference: docs/configuration.md
 #
 # All features default to ON in profiles and code. Set feature keys to false to disable.
+# Infra sidecars (MinIO / Prometheus / Grafana) default to OFF.
 
 profile: development
 
@@ -18,7 +19,12 @@ profile: development
 
 # observability:
 #   otel_enabled: false
-#   otel_enabled: true
+#   grafana_url: http://localhost:33000  # when infra.grafana: true
+
+# infra:
+#   minio: true
+#   prometheus: true
+#   grafana: true
 
 # auth:
 #   tracking_token: admin-token
