@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DetailSection, ResourcePageHeader } from "@/components/mlops/layout";
+import { DetailSection, PageScrollBody, ResourcePageHeader } from "@/components/mlops/layout";
+import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/lib/app-context";
 import {
   SA_PERMISSION_CATALOG,
@@ -27,11 +28,13 @@ import {
   fetchTenantsForAdmin,
   fetchTenantProjectsForAdmin,
 } from "@/lib/identity-admin-api";
+import { formatApiClientError } from "@/lib/utils";
 
 export default function AdminServiceAccountDetailPage() {
   const params = useParams();
   const saId = String(params.saId || "");
   const { token } = useAppContext();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permInit, setPermInit] = useState(false);
@@ -75,7 +78,17 @@ export default function AdminServiceAccountDetailPage() {
 
   const savePerms = useMutation({
     mutationFn: () => putServiceAccountPermissions(token, saId, permissions),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-sa-perms", saId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sa-perms", saId] });
+      toast({ title: "Permissions saved" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Save permissions failed",
+        description: formatApiClientError(e),
+      });
+    },
   });
 
   const issue = useMutation({
@@ -83,6 +96,14 @@ export default function AdminServiceAccountDetailPage() {
     onSuccess: (data) => {
       setShowSecret({ token_id: data.token_id, secret: data.secret });
       qc.invalidateQueries({ queryKey: ["admin-sa-creds", saId] });
+      toast({ title: "Secret issued", description: "Copy the secret now — shown once." });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Issue secret failed",
+        description: formatApiClientError(e),
+      });
     },
   });
 
@@ -91,12 +112,30 @@ export default function AdminServiceAccountDetailPage() {
     onSuccess: (data) => {
       setShowSecret({ token_id: data.token_id, secret: data.secret });
       qc.invalidateQueries({ queryKey: ["admin-sa-creds", saId] });
+      toast({ title: "Secret rotated", description: "Copy the new secret now — shown once." });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Rotate secret failed",
+        description: formatApiClientError(e),
+      });
     },
   });
 
   const revokeSa = useMutation({
     mutationFn: () => revokeServiceAccount(token, saId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-sa-detail", saId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sa-detail", saId] });
+      toast({ title: "Service account revoked" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Revoke account failed",
+        description: formatApiClientError(e),
+      });
+    },
   });
 
   const addScope = useMutation({
@@ -106,7 +145,47 @@ export default function AdminServiceAccountDetailPage() {
         all_projects: scopeAll,
         project_ids: scopeAll ? [] : scopeProjects,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-sa-scopes", saId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sa-scopes", saId] });
+      toast({ title: "Scope added" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Add scope failed",
+        description: formatApiClientError(e),
+      });
+    },
+  });
+
+  const removeScope = useMutation({
+    mutationFn: (scopeId: string) => deleteServiceAccountScope(token, saId, scopeId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sa-scopes", saId] });
+      toast({ title: "Scope removed" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Remove scope failed",
+        description: formatApiClientError(e),
+      });
+    },
+  });
+
+  const revokeCredential = useMutation({
+    mutationFn: (tokenId: string) => revokeServiceAccountCredential(token, saId, tokenId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-sa-creds", saId] });
+      toast({ title: "Credential revoked" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Revoke credential failed",
+        description: formatApiClientError(e),
+      });
+    },
   });
 
   async function loadTenants() {
@@ -120,20 +199,23 @@ export default function AdminServiceAccountDetailPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <ResourcePageHeader
-        icon={Bot}
-        accent="zinc"
-        title={saQuery.data?.name || "Service account"}
-        subtitle={saId}
-        actions={
-          <Link href="/admin/service-accounts" className="text-sm text-muted-foreground hover:underline">
-            Back
-          </Link>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <PageScrollBody
+        header={
+          <ResourcePageHeader
+            icon={Bot}
+            accent="zinc"
+            title={saQuery.data?.name || "Service account"}
+            subtitle={saId}
+            actions={
+              <Link href="/admin/service-accounts" className="text-sm text-muted-foreground hover:underline">
+                Back
+              </Link>
+            }
+          />
         }
-      />
-
-      <DetailSection title="Account">
+      >
+        <DetailSection title="Account">
         <p className="text-sm">State: {saQuery.data?.state || "…"}</p>
         <Button variant="destructive" size="sm" className="mt-2" onClick={() => revokeSa.mutate()}>
           Revoke account
@@ -171,11 +253,7 @@ export default function AdminServiceAccountDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() =>
-                  deleteServiceAccountScope(token, saId, s.id).then(() =>
-                    qc.invalidateQueries({ queryKey: ["admin-sa-scopes", saId] }),
-                  )
-                }
+                onClick={() => removeScope.mutate(s.id)}
               >
                 Remove
               </Button>
@@ -256,11 +334,7 @@ export default function AdminServiceAccountDetailPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
-                    revokeServiceAccountCredential(token, saId, c.token_id).then(() =>
-                      qc.invalidateQueries({ queryKey: ["admin-sa-creds", saId] }),
-                    )
-                  }
+                  onClick={() => revokeCredential.mutate(c.token_id)}
                 >
                   Revoke
                 </Button>
@@ -269,6 +343,7 @@ export default function AdminServiceAccountDetailPage() {
           ))}
         </ul>
       </DetailSection>
+      </PageScrollBody>
     </div>
   );
 }

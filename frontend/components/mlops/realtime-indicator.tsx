@@ -83,7 +83,10 @@ function statusPresentation(status: MlairRealtimeUiStatus): StatusPresentation {
       return {
         icon: WifiOff,
         label: "Offline",
-        description: `Real-time connection closed (code ${status.code})`,
+        description:
+          status.code === 1008
+            ? "Real-time connection rejected — check login and project scope"
+            : `Real-time connection closed (code ${status.code})`,
         dotClass: "bg-destructive",
         textClass: "text-destructive",
       }

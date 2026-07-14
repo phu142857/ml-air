@@ -14,12 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ResourcePageHeader } from "@/components/mlops/layout";
+import { PageScrollBody, ResourcePageHeader } from "@/components/mlops/layout";
+import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/lib/app-context";
 import { createServiceAccount, listServiceAccounts } from "@/lib/identity-admin-api";
+import { formatApiClientError } from "@/lib/utils";
 
 export default function AdminServiceAccountsPage() {
   const { token } = useAppContext();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -33,54 +36,68 @@ export default function AdminServiceAccountsPage() {
 
   const createMut = useMutation({
     mutationFn: () => createServiceAccount(token, { name: name.trim(), description: description.trim() || undefined }),
-    onSuccess: async () => {
+    onSuccess: async (sa) => {
       setOpen(false);
       setName("");
       setDescription("");
       await qc.invalidateQueries({ queryKey: ["admin-sa"] });
+      toast({ title: "Service account created", description: sa.name });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Create service account failed",
+        description: formatApiClientError(e),
+      });
     },
   });
 
   return (
-    <div className="space-y-4 p-6">
-      <ResourcePageHeader
-        icon={Bot}
-        accent="zinc"
-        title="Service accounts"
-        subtitle="Machine identities (workers, scheduler, SDK)"
-        actions={
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Create
-          </Button>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <PageScrollBody
+        variant="workspace"
+        header={
+          <ResourcePageHeader
+            icon={Bot}
+            accent="zinc"
+            title="Service accounts"
+            subtitle="Machine identities (workers, scheduler, SDK)"
+            actions={
+              <Button size="sm" onClick={() => setOpen(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                Create
+              </Button>
+            }
+          />
         }
-      />
-      {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-      {error ? <p className="text-sm text-destructive">{(error as Error).message}</p> : null}
-      <div className="overflow-hidden rounded-md border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50">
-            <tr>
-              <th className="px-3 py-2 text-left">Name</th>
-              <th className="px-3 py-2 text-left">State</th>
-              <th className="px-3 py-2 text-left" />
-            </tr>
-          </thead>
-          <tbody>
-            {(data || []).map((sa) => (
-              <tr key={sa.id} className="border-t">
-                <td className="px-3 py-2">{sa.name}</td>
-                <td className="px-3 py-2">{sa.state}</td>
-                <td className="px-3 py-2 text-right">
-                  <Link href={`/admin/service-accounts/${sa.id}`} className="text-primary hover:underline">
-                    Open
-                  </Link>
-                </td>
+      >
+        {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
+        {error ? <p className="text-sm text-destructive">{(error as Error).message}</p> : null}
+        <div className="scroll-region min-h-0 flex-1 rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur-sm">
+              <tr>
+                <th className="px-3 py-2 text-left">Name</th>
+                <th className="px-3 py-2 text-left">State</th>
+                <th className="px-3 py-2 text-left" />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {(data || []).map((sa) => (
+                <tr key={sa.id} className="border-t">
+                  <td className="px-3 py-2">{sa.name}</td>
+                  <td className="px-3 py-2">{sa.state}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Link href={`/admin/service-accounts/${sa.id}`} className="text-primary hover:underline">
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </PageScrollBody>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

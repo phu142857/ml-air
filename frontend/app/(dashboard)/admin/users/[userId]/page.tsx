@@ -8,7 +8,8 @@ import { User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DetailSection, ResourcePageHeader } from "@/components/mlops/layout";
+import { DetailSection, PageScrollBody, ResourcePageHeader } from "@/components/mlops/layout";
+import { useToast } from "@/hooks/use-toast";
 import {
   AssignmentEditor,
   assignmentsToDrafts,
@@ -22,11 +23,13 @@ import {
   patchUser,
   replaceUserAssignments,
 } from "@/lib/identity-admin-api";
+import { formatApiClientError } from "@/lib/utils";
 
 export default function AdminUserDetailPage() {
   const params = useParams();
   const userId = String(params.userId || "");
   const { token } = useAppContext();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const [drafts, setDrafts] = useState<AssignmentDraft[]>([]);
   const [initialized, setInitialized] = useState(false);
@@ -55,41 +58,72 @@ export default function AdminUserDetailPage() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["admin-user-assignments", userId] });
       setInitialized(false);
+      toast({ title: "Assignments saved" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Save assignments failed",
+        description: formatApiClientError(e),
+      });
     },
   });
 
   const patchState = useMutation({
     mutationFn: (state: string) => patchUser(token, userId, { state }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-user", userId] }),
+    onSuccess: (_data, state) => {
+      qc.invalidateQueries({ queryKey: ["admin-user", userId] });
+      toast({ title: "User state updated", description: state });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Update state failed",
+        description: formatApiClientError(e),
+      });
+    },
   });
 
   const resetPassword = useMutation({
     mutationFn: () => patchUser(token, userId, { password: newPassword }),
-    onSuccess: () => setNewPassword(""),
+    onSuccess: () => {
+      setNewPassword("");
+      toast({ title: "Password updated" });
+    },
+    onError: (e) => {
+      toast({
+        variant: "destructive",
+        title: "Password reset failed",
+        description: formatApiClientError(e),
+      });
+    },
   });
 
   const user = userQuery.data;
   const isGlobalAdmin = Boolean(user?.is_global_admin);
 
   return (
-    <div className="space-y-6 p-6">
-      <ResourcePageHeader
-        icon={User}
-        accent="zinc"
-        title={user?.username ? `User: ${user.username}` : "User"}
-        subtitle={userId}
-        actions={
-          <Link href="/admin/users" className="text-sm text-muted-foreground hover:underline">
-            Back to users
-          </Link>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <PageScrollBody
+        header={
+          <ResourcePageHeader
+            icon={User}
+            accent="zinc"
+            title={user?.username ? `User: ${user.username}` : "User"}
+            subtitle={userId}
+            actions={
+              <Link href="/admin/users" className="text-sm text-muted-foreground hover:underline">
+                Back to users
+              </Link>
+            }
+          />
         }
-      />
+      >
+        {userQuery.error ? (
+          <p className="text-sm text-destructive">{(userQuery.error as Error).message}</p>
+        ) : null}
 
-      {userQuery.error ? (
-        <p className="text-sm text-destructive">{(userQuery.error as Error).message}</p>
-      ) : null}
-
-      {user ? (
+        {user ? (
         <DetailSection title="Account" description="Identity state and admin flag">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
@@ -140,13 +174,11 @@ export default function AdminUserDetailPage() {
               Save assignments
             </Button>
           </div>
-          {saveAssignments.error ? (
-            <p className="mt-2 text-sm text-destructive">{(saveAssignments.error as Error).message}</p>
-          ) : null}
         </DetailSection>
-      ) : (
-        <p className="text-sm text-muted-foreground">Global administrators do not use role assignments.</p>
-      )}
+        ) : (
+          <p className="text-sm text-muted-foreground">Global administrators do not use role assignments.</p>
+        )}
+      </PageScrollBody>
     </div>
   );
 }

@@ -275,12 +275,13 @@ async def websocket_endpoint(
     project_id: str = Query(..., min_length=1),
     token: str = Query(..., min_length=1),
 ) -> None:
-    await websocket.accept()
-    principal = decode_principal(token)
+    principal = await asyncio.to_thread(decode_principal, token)
     if not principal or not authorize_ws(principal, tenant_id, project_id, "viewer"):
-        logger.warning("ws_auth_fail reason=tenant_mismatch|project_invalid|jwt_invalid tenant_id=%s", tenant_id)
         await websocket.close(code=1008)
+        logger.warning("ws_auth_fail reason=tenant_mismatch|project_invalid|jwt_invalid tenant_id=%s", tenant_id)
         return
+
+    await websocket.accept()
 
     manager: ConnectionManager = websocket.app.state.manager
     key = f"{tenant_id}:{project_id}"

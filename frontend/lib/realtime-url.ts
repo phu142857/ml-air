@@ -38,7 +38,12 @@ export function sanitizeRealtimeWsBaseForBrowser(url: string): string {
 
     const pageHost = window.location.hostname.toLowerCase();
     const pagePort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
-    const targetPort = parsed.port || "80";
+    const targetPort = parsed.port || (parsed.protocol === "wss:" ? "443" : "80");
+    const pageIsLoopback = pageHost === "localhost" || pageHost === "127.0.0.1";
+    if (isLoopback && pageIsLoopback && host !== pageHost) {
+      const inferred = inferRealtimeWsBaseFromLocation();
+      if (inferred) return inferred;
+    }
     if (pageHost === host && targetPort === pagePort) return stripTrailingSlash(trimmed);
 
     const inferred = inferRealtimeWsBaseFromLocation();

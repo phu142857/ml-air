@@ -631,17 +631,19 @@ function applyRealtimePatch(queryClient: QueryClient, tenantId: string, projectI
  * Single WebSocket subscriber: debounced TanStack invalidation from MLAir realtime events.
  */
 export function useMlairRealtime() {
-  const { tenantId, projectId, token } = useAppContext();
+  const { tenantId, projectId, token, isBootstrapped } = useAppContext();
   const queryClient = useQueryClient();
   const seenOrder = useRef<string[]>([]);
   const seenSet = useRef<Set<string>>(new Set());
   const lastUpdated = useRef<Map<string, number>>(new Map());
   const backoffRef = useRef(BASE_BACKOFF_MS);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const shouldHaltRef = useRef(false);
   const lastSequenceRef = useRef(0);
   const reconcileTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastWsBaseRef = useRef("");
 
   useEffect(() => {
     if (tenantId === "all" || projectId === "all") {
@@ -651,7 +653,12 @@ export function useMlairRealtime() {
       };
     }
 
-    shouldHaltRef.current = false;
+    if (!isBootstrapped || !token?.trim()) {
+      setMlairRealtimeUiStatus({ kind: "polling" });
+      return () => {
+        setMlairRealtimeUiStatus({ kind: "polling" });
+      };
+    }
     useExecutionStore.getState().setScope(`${tenantId}::${projectId}`);
     lastSequenceRef.current = readLastSequence(tenantId, projectId);
 
@@ -761,13 +768,49 @@ export function useMlairRealtime() {
       }
     };
 
+    const abortPendingConnection = () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+      const ws = wsRef.current;
+      if (!ws) return;
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+      wsRef.current = null;
+    };
+
+    const scheduleReconnect = () => {
+      if (shouldHaltRef.current) return;
+      if (reconnectTimer.current) return;
+      setMlairRealtimeUiStatus({ kind: "reconnecting" });
+      const delay = backoffRef.current + Math.floor(Math.random() * 400);
+      backoffRef.current = Math.min(MAX_BACKOFF_MS, Math.floor(backoffRef.current * 1.7));
+      reconnectTimer.current = setTimeout(() => {
+        reconnectTimer.current = null;
+        connect();
+      }, delay);
+    };
+
+    shouldHaltRef.current = false;
+
     const connect = () => {
       if (shouldHaltRef.current) return;
+      if (!token?.trim()) {
+        setMlairRealtimeUiStatus({ kind: "polling" });
+        return;
+      }
       const base = getRealtimeWsBase();
       if (!isRealtimeConfigured() || !base) {
         setMlairRealtimeUiStatus({ kind: "polling" });
         return;
       }
+      abortPendingConnection();
       setMlairRealtimeUiStatus({ kind: "connecting" });
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
@@ -777,16 +820,25 @@ export function useMlairRealtime() {
       const url = buildWsUrl(base, tenantId, projectId, token);
       const ws = new WebSocket(url);
       wsRef.current = ws;
-      const connectTimeout = setTimeout(() => {
-        if (ws.readyState === WebSocket.CONNECTING) {
-          ws.close();
-          setMlairRealtimeUiStatus({ kind: "reconnecting" });
-        }
+      connectTimeoutRef.current = setTimeout(() => {
+        connectTimeoutRef.current = null;
+        if (wsRef.current !== ws || ws.readyState !== WebSocket.CONNECTING) return;
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        ws.close();
+        wsRef.current = null;
+        scheduleReconnect();
       }, CONNECT_TIMEOUT_MS);
 
       ws.onopen = () => {
-        clearTimeout(connectTimeout);
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
         backoffRef.current = BASE_BACKOFF_MS;
+        lastWsBaseRef.current = base;
         setMlairRealtimeUiStatus({ kind: "connected" });
         void replayMissedEvents();
         startReconcileTimer();
@@ -807,8 +859,11 @@ export function useMlairRealtime() {
       };
 
       ws.onclose = (ev) => {
-        clearTimeout(connectTimeout);
-        wsRef.current = null;
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
+        if (wsRef.current === ws) wsRef.current = null;
         stopReconcileTimer();
         if (shouldHaltRef.current) return;
         const fatalPolicy = ev.code === 1008;
@@ -817,22 +872,24 @@ export function useMlairRealtime() {
           setMlairRealtimeUiStatus({ kind: "fatal", code: ev.code });
           return;
         }
-        setMlairRealtimeUiStatus({ kind: "reconnecting" });
-        const delay =
-          backoffRef.current + Math.floor(Math.random() * 400);
-        backoffRef.current = Math.min(MAX_BACKOFF_MS, Math.floor(backoffRef.current * 1.7));
-        reconnectTimer.current = setTimeout(connect, delay);
+        scheduleReconnect();
       };
     };
 
     const onRuntimeConfig = () => {
+      const base = getRealtimeWsBase();
+      if (
+        base === lastWsBaseRef.current &&
+        wsRef.current?.readyState === WebSocket.OPEN
+      ) {
+        return;
+      }
       backoffRef.current = BASE_BACKOFF_MS;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
       }
-      wsRef.current?.close();
-      wsRef.current = null;
+      abortPendingConnection();
       connect();
     };
 
@@ -846,9 +903,8 @@ export function useMlairRealtime() {
       window.removeEventListener("mlair-runtime-config-updated", onRuntimeConfig);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
-      wsRef.current?.close();
-      wsRef.current = null;
+      abortPendingConnection();
       setMlairRealtimeUiStatus({ kind: "polling" });
     };
-  }, [tenantId, projectId, token, queryClient]);
+  }, [tenantId, projectId, token, isBootstrapped, queryClient]);
 }

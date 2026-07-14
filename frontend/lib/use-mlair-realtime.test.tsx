@@ -8,7 +8,8 @@ vi.mock("./app-context", () => ({
   useAppContext: () => ({
     tenantId: "t1",
     projectId: "p1",
-    token: "tok-1"
+    token: "tok-1",
+    isBootstrapped: true,
   })
 }));
 
