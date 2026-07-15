@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { useCanSeeExecutionNav, useCanSeeAdminNav } from "@/lib/hub-nav-access"
-import { useAppContext } from "@/lib/app-context"
 
 type NavItem = {
   title: string
@@ -58,14 +57,13 @@ const executionNav: NavItem[] = [
 ]
 
 const settingsNav: NavItem[] = [
-  { title: "Settings", href: "/settings/profile", icon: Settings },
+  { title: "Settings", href: "/settings", icon: Settings },
 ]
 
 const administrationNav: NavItem[] = [
   { title: "Users", href: "/admin/users", icon: Users },
   { title: "Service accounts", href: "/admin/service-accounts", icon: Shield },
   { title: "Identity audit", href: "/admin/audit", icon: Shield },
-  { title: "System settings", href: "/settings/admin/general", icon: Settings },
 ]
 
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
@@ -79,7 +77,9 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
         <SidebarMenu className="gap-0.5">
           {items.map((item) => {
             const isActive =
-              pathname === item.href || pathname.startsWith(`${item.href}/`)
+              item.href === "/settings"
+                ? pathname === "/settings" || pathname.startsWith("/settings/")
+                : pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={isActive}>
@@ -116,10 +116,6 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
   const showAdminNav = useCanSeeAdminNav()
-  const { isGlobalAdmin } = useAppContext()
-  const adminItems = isGlobalAdmin
-    ? administrationNav
-    : administrationNav.filter((item) => item.href !== "/settings/admin/general")
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
@@ -146,7 +142,7 @@ export function AppSidebar() {
         {showExecutionNav ? (
           <NavGroup label="Execution" items={executionNav} />
         ) : null}
-        {showAdminNav ? <NavGroup label="Administration" items={adminItems} /> : null}
+        {showAdminNav ? <NavGroup label="Administration" items={administrationNav} /> : null}
         <NavGroup label="Account" items={settingsNav} />
       </SidebarContent>
     </Sidebar>
