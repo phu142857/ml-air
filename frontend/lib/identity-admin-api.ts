@@ -240,8 +240,14 @@ export async function deleteServiceAccountScope(token: string, saId: string, sco
   await adminFetch<void>(token, `/service-accounts/${saId}/scopes/${scopeId}`, { method: "DELETE" });
 }
 
-export async function listIdentityAudit(token: string, limit = 100): Promise<AuditEventRow[]> {
-  const body = await adminFetch<{ items: AuditEventRow[] }>(token, `/audit?limit=${limit}`);
+export async function listIdentityAudit(
+  token: string,
+  limit = 100,
+  action?: string,
+): Promise<AuditEventRow[]> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (action?.trim()) qs.set("action", action.trim());
+  const body = await adminFetch<{ items: AuditEventRow[] }>(token, `/audit?${qs}`);
   return body.items;
 }
 

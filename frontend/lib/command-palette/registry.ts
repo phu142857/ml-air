@@ -140,7 +140,7 @@ export const PALETTE_COMMANDS: PaletteCommandDef[] = [
     kind: "nav",
     label: "Settings",
     description: "Workspace, tokens, and plugins",
-    href: "/settings",
+    href: "/settings/profile",
     icon: Settings,
     shortcut: ",",
     pinnable: true,
@@ -219,7 +219,7 @@ export const PALETTE_COMMANDS: PaletteCommandDef[] = [
     kind: "appearance",
     label: "Open settings",
     description: "Tokens, scope, and operator preferences",
-    href: "/settings",
+    href: "/settings/profile",
     icon: Settings,
   },
 ]

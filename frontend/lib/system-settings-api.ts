@@ -40,9 +40,16 @@ export type L4Settings = {
 
 export const HUB_ROUTES = ["datasets", "lifecycle", "dashboard", "models"] as const;
 
-export async function fetchSystemSettings(token: string): Promise<SystemSettingsDocument> {
+function systemSettingsPath(): string {
   const base = getApiBaseUrl();
-  const res = await fetch(`${base}/system/settings`, {
+  if (!base) return "/v1/system/settings";
+  const trimmed = base.replace(/\/$/, "");
+  if (trimmed.endsWith("/v1")) return `${trimmed}/system/settings`;
+  return `${trimmed}/v1/system/settings`;
+}
+
+export async function fetchSystemSettings(token: string): Promise<SystemSettingsDocument> {
+  const res = await fetch(systemSettingsPath(), {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
@@ -57,8 +64,7 @@ export async function patchSystemSettings(
   token: string,
   partial: Record<string, unknown>,
 ): Promise<SystemSettingsDocument> {
-  const base = getApiBaseUrl();
-  const res = await fetch(`${base}/system/settings`, {
+  const res = await fetch(systemSettingsPath(), {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,

@@ -114,7 +114,7 @@ def login(
         _audit(actor_kind="user", actor_id=user["id"] if user else None, action="auth.login", target_type="user", target_id=username, result="failure", ip=ip, user_agent=user_agent)
         raise invalid_credential()
     _ensure_login_allowed(user)
-    repo.update_user(user["id"], failed_login_count=0, clear_locked_until=True)
+    repo.update_user(user["id"], failed_login_count=0, clear_locked_until=True, last_login_at=datetime.now(timezone.utc))
     access, expires_in = issue_access_token(
         user_id=user["id"],
         username=user["username"],
@@ -192,6 +192,160 @@ def get_me_from_access_token(access_token: str) -> dict[str, Any]:
         **repo._public_user(user),
         "assignments": list_assignments_for_user(user["id"]),
     }
+
+
+PAT_PREFIX = "mlapat_"
+
+
+def change_password(*, user_id: str, current_password: str, new_password: str) -> None:
+    user = repo.get_user_by_id(user_id)
+    if not user:
+        raise not_found()
+    if not verify_password(current_password, user["password_hash"]):
+        raise invalid_credential()
+    if len(new_password.strip()) < 8:
+        raise validation_error("Password must be at least 8 characters")
+    repo.update_user(user_id, password_hash=hash_password(new_password))
+    _audit(
+        actor_kind="user",
+        actor_id=user_id,
+        action="auth.password_change",
+        target_type="user",
+        target_id=user_id,
+        result="success",
+    )
+
+
+def update_me(*, user_id: str, display_name: str | None = None, email: str | None = None) -> dict[str, Any]:
+    user = repo.get_user_by_id(user_id)
+    if not user:
+        raise not_found()
+    kwargs: dict[str, Any] = {}
+    if display_name is not None:
+        name = display_name.strip()
+        if not name:
+            kwargs["clear_display_name"] = True
+        else:
+            kwargs["display_name"] = name[:120]
+    if email is not None:
+        mail = email.strip()
+        if not mail:
+            kwargs["clear_email"] = True
+        elif "@" not in mail or len(mail) > 254:
+            raise validation_error("Invalid email")
+        else:
+            kwargs["email"] = mail
+    updated = repo.update_user(user_id, **kwargs)
+    if not updated:
+        raise not_found()
+    return {**updated, "assignments": list_assignments_for_user(user_id)}
+
+
+def list_my_sessions(*, user_id: str, current_refresh_token: str | None = None) -> list[dict[str, Any]]:
+    current_id = None
+    if current_refresh_token:
+        session = repo.get_session_by_refresh_hash(hash_opaque(current_refresh_token))
+        if session and session.get("user_id") == user_id:
+            current_id = session["id"]
+    now = datetime.now(timezone.utc)
+    out: list[dict[str, Any]] = []
+    for item in repo.list_sessions(user_id):
+        if item.get("revoked_at"):
+            continue
+        expires = item.get("expires_at")
+        expired = False
+        if expires:
+            try:
+                exp_dt = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+                expired = exp_dt < now
+            except ValueError:
+                expired = False
+        if expired:
+            continue
+        out.append({**item, "is_current": item["id"] == current_id})
+    return out
+
+
+def revoke_my_session(*, user_id: str, session_id: str) -> None:
+    if not repo.revoke_session_for_user(user_id, session_id):
+        raise not_found("Session not found")
+    _audit(
+        actor_kind="user",
+        actor_id=user_id,
+        action="auth.session_revoke",
+        target_type="session",
+        target_id=session_id,
+        result="success",
+    )
+
+
+def create_pat(*, user_id: str, description: str, expires_in_days: int | None) -> dict[str, Any]:
+    desc = description.strip()
+    if not desc:
+        raise validation_error("Description required")
+    if expires_in_days is not None and (expires_in_days < 1 or expires_in_days > 365):
+        raise validation_error("expires_in_days must be between 1 and 365")
+    from datetime import timedelta
+
+    expires_at = None
+    if expires_in_days is not None:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+    secret = f"{PAT_PREFIX}{new_opaque_token()}"
+    pat_id = new_id("pat")
+    row = repo.insert_pat(
+        pat_id=pat_id,
+        user_id=user_id,
+        description=desc[:200],
+        token_hash=hash_opaque(secret),
+        expires_at=expires_at,
+    )
+    _audit(
+        actor_kind="user",
+        actor_id=user_id,
+        action="auth.pat_create",
+        target_type="pat",
+        target_id=pat_id,
+        result="success",
+    )
+    return {**row, "token": secret}
+
+
+def list_pats(*, user_id: str) -> list[dict[str, Any]]:
+    return repo.list_pats_for_user(user_id)
+
+
+def revoke_pat(*, user_id: str, pat_id: str) -> None:
+    if not repo.revoke_pat(pat_id, user_id):
+        raise not_found("Token not found")
+    _audit(
+        actor_kind="user",
+        actor_id=user_id,
+        action="auth.pat_revoke",
+        target_type="pat",
+        target_id=pat_id,
+        result="success",
+    )
+
+
+def authenticate_pat(secret: str) -> dict[str, Any] | None:
+    if not secret.startswith(PAT_PREFIX):
+        return None
+    row = repo.lookup_pat_by_hash(hash_opaque(secret))
+    if not row or row.get("revoked_at"):
+        return None
+    expires = row.get("expires_at")
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            if exp_dt < datetime.now(timezone.utc):
+                return None
+        except ValueError:
+            pass
+    repo.touch_pat_last_used(row["id"])
+    user = repo.get_user_by_id(row["user_id"])
+    if not user or user.get("state") != "active":
+        return None
+    return {"user_id": row["user_id"], "pat_id": row["id"], "user": user}
 
 
 def require_global_admin(user_id: str) -> dict[str, Any]:

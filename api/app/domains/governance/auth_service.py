@@ -206,6 +206,40 @@ def _legacy_static_tokens_enabled() -> bool:
     return get_settings().auth.legacy_static_tokens
 
 
+def _principal_from_pat_user(token: str, user: dict) -> Principal:
+    from app.domains.governance.identity_service import accessible_scopes_for_user
+
+    user_id = str(user.get("id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="invalid_token")
+    scopes = accessible_scopes_for_user(user)
+    if user.get("is_global_admin"):
+        role = "admin"
+        tenant_id = get_settings().default_tenant
+        project_ids = ["*"]
+    elif scopes:
+        first = scopes[0]
+        role = str(first.get("role") or "viewer")
+        tenant_id = str(first.get("tenant_id") or "")
+        project_ids = list({str(s.get("project_id")) for s in scopes if s.get("tenant_id") == tenant_id})
+    else:
+        role = "viewer"
+        tenant_id = get_settings().default_tenant
+        project_ids = []
+    return Principal(
+        token=token,
+        subject=user_id,
+        token_issuer="personal_access_token",
+        scope_mapping_version=1,
+        role=role,
+        tenant_id=tenant_id,
+        project_ids=project_ids,
+        principal_kind="user",
+        user_id=user_id,
+        is_global_admin=bool(user.get("is_global_admin")),
+    )
+
+
 def _principal_from_identity_user(token: str, payload: dict) -> Principal:
     from app.domains.governance import identity_repository as identity_repo
     from app.domains.governance.identity_service import accessible_scopes_for_user
@@ -282,6 +316,11 @@ def authenticate_bearer(authorization: str | None) -> Principal:
         sa = authenticate_sa_secret(token)
         if sa:
             return _principal_from_service_account(token, sa)
+        from app.domains.governance.identity_service import authenticate_pat
+
+        pat = authenticate_pat(token)
+        if pat:
+            return _principal_from_pat_user(token, pat["user"])
         try:
             payload = decode_identity_access_token(token)
             return _principal_from_identity_user(token, payload)

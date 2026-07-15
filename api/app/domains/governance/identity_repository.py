@@ -14,6 +14,71 @@ def _is_undefined_table_error(exc: BaseException) -> bool:
     return isinstance(exc, pg_errors.UndefinedTable)
 
 
+def _is_undefined_column_error(exc: BaseException) -> bool:
+    try:
+        from psycopg import errors as pg_errors
+    except ImportError:
+        return False
+    return isinstance(exc, pg_errors.UndefinedColumn)
+
+
+_USER_COLUMNS_BASE = """
+    id, username, password_hash, state, is_global_admin,
+    failed_login_count, locked_until, created_at, updated_at, deleted_at
+"""
+
+_USER_COLUMNS_PROFILE = "display_name, email, last_login_at"
+
+_profile_columns_cache: bool | None = None
+_pat_table_cache: bool | None = None
+
+
+def profile_columns_available() -> bool:
+    """True when migration 0045 profile columns exist on users."""
+    global _profile_columns_cache
+    if _profile_columns_cache is not None:
+        return _profile_columns_cache
+    if not identity_tables_available():
+        _profile_columns_cache = False
+        return False
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT display_name, email, last_login_at FROM users LIMIT 0")
+                _profile_columns_cache = True
+            except Exception as e:
+                if _is_undefined_column_error(e):
+                    _profile_columns_cache = False
+                else:
+                    raise
+    return _profile_columns_cache
+
+
+def pat_table_available() -> bool:
+    """True when migration 0045 user_personal_access_tokens exists."""
+    global _pat_table_cache
+    if _pat_table_cache is not None:
+        return _pat_table_cache
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("SELECT 1 FROM user_personal_access_tokens LIMIT 0")
+                _pat_table_cache = True
+            except Exception as e:
+                if _is_undefined_table_error(e):
+                    _pat_table_cache = False
+                else:
+                    raise
+    return _pat_table_cache
+
+
+def _user_columns_sql() -> str:
+    base = _USER_COLUMNS_BASE.strip()
+    if profile_columns_available():
+        return f"{base}, {_USER_COLUMNS_PROFILE}"
+    return base
+
+
 def _row_user(row: tuple) -> dict[str, Any]:
     return {
         "id": str(row[0]),
@@ -26,19 +91,26 @@ def _row_user(row: tuple) -> dict[str, Any]:
         "created_at": row[7],
         "updated_at": row[8],
         "deleted_at": row[9],
+        "display_name": str(row[10]) if len(row) > 10 and row[10] is not None else None,
+        "email": str(row[11]) if len(row) > 11 and row[11] is not None else None,
+        "last_login_at": row[12] if len(row) > 12 else None,
     }
 
 
 def _public_user(row: dict[str, Any]) -> dict[str, Any]:
     created = row.get("created_at")
     updated = row.get("updated_at")
+    last_login = row.get("last_login_at")
     return {
         "id": row["id"],
         "username": row["username"],
+        "display_name": row.get("display_name"),
+        "email": row.get("email"),
         "state": row["state"],
         "is_global_admin": row["is_global_admin"],
         "created_at": created.isoformat() if created else None,
         "updated_at": updated.isoformat() if updated else None,
+        "last_login_at": last_login.isoformat() if last_login else None,
     }
 
 
@@ -72,11 +144,10 @@ def insert_user(
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 INSERT INTO users (id, username, password_hash, state, is_global_admin)
                 VALUES (%s, %s, %s, %s, %s)
-                RETURNING id, username, password_hash, state, is_global_admin,
-                          failed_login_count, locked_until, created_at, updated_at, deleted_at
+                RETURNING {_user_columns_sql()}
                 """,
                 (user_id, username, password_hash, state, is_global_admin),
             )
@@ -87,9 +158,8 @@ def get_user_by_id(user_id: str) -> dict[str, Any] | None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT id, username, password_hash, state, is_global_admin,
-                       failed_login_count, locked_until, created_at, updated_at, deleted_at
+                f"""
+                SELECT {_user_columns_sql()}
                 FROM users WHERE id = %s
                 """,
                 (user_id,),
@@ -102,9 +172,8 @@ def get_user_by_username(username: str) -> dict[str, Any] | None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT id, username, password_hash, state, is_global_admin,
-                       failed_login_count, locked_until, created_at, updated_at, deleted_at
+                f"""
+                SELECT {_user_columns_sql()}
                 FROM users WHERE username = %s
                 """,
                 (username,),
@@ -128,8 +197,7 @@ def list_users(*, state: str | None, q: str | None, limit: int) -> list[dict[str
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT id, username, password_hash, state, is_global_admin,
-                       failed_login_count, locked_until, created_at, updated_at, deleted_at
+                SELECT {_user_columns_sql()}
                 FROM users WHERE {where}
                 ORDER BY username ASC
                 LIMIT %s
@@ -148,6 +216,11 @@ def update_user(
     failed_login_count: int | None = None,
     locked_until: datetime | None = None,
     clear_locked_until: bool = False,
+    display_name: str | None = None,
+    email: str | None = None,
+    last_login_at: datetime | None = None,
+    clear_display_name: bool = False,
+    clear_email: bool = False,
 ) -> dict[str, Any] | None:
     sets: list[str] = ["updated_at = now()"]
     params: list[Any] = []
@@ -170,6 +243,20 @@ def update_user(
     elif locked_until is not None:
         sets.append("locked_until = %s")
         params.append(locked_until)
+    if profile_columns_available():
+        if clear_display_name:
+            sets.append("display_name = NULL")
+        elif display_name is not None:
+            sets.append("display_name = %s")
+            params.append(display_name)
+        if clear_email:
+            sets.append("email = NULL")
+        elif email is not None:
+            sets.append("email = %s")
+            params.append(email)
+        if last_login_at is not None:
+            sets.append("last_login_at = %s")
+            params.append(last_login_at)
     params.append(user_id)
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -177,8 +264,7 @@ def update_user(
                 f"""
                 UPDATE users SET {", ".join(sets)}
                 WHERE id = %s
-                RETURNING id, username, password_hash, state, is_global_admin,
-                          failed_login_count, locked_until, created_at, updated_at, deleted_at
+                RETURNING {_user_columns_sql()}
                 """,
                 tuple(params),
             )
@@ -776,6 +862,131 @@ def delete_sa_scope(scope_id: str) -> bool:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM service_account_scopes WHERE id = %s", (scope_id,))
             return bool(cur.rowcount)
+
+
+def get_session_by_id(session_id: str) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, user_id, created_at, last_used_at, expires_at, revoked_at, ip, user_agent
+                FROM user_sessions WHERE id = %s
+                """,
+                (session_id,),
+            )
+            row = cur.fetchone()
+            return _row_session(row) if row else None
+
+
+def revoke_session_for_user(user_id: str, session_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE user_sessions SET revoked_at = now()
+                WHERE id = %s AND user_id = %s AND revoked_at IS NULL
+                """,
+                (session_id, user_id),
+            )
+            return bool(cur.rowcount)
+
+
+def _row_pat(row: tuple) -> dict[str, Any]:
+    return {
+        "id": str(row[0]),
+        "user_id": str(row[1]),
+        "description": str(row[2]),
+        "created_at": row[3].isoformat() if row[3] else None,
+        "expires_at": row[4].isoformat() if row[4] else None,
+        "revoked_at": row[5].isoformat() if row[5] else None,
+        "last_used_at": row[6].isoformat() if row[6] else None,
+    }
+
+
+def insert_pat(
+    *,
+    pat_id: str,
+    user_id: str,
+    description: str,
+    token_hash: str,
+    expires_at: datetime | None,
+) -> dict[str, Any]:
+    if not pat_table_available():
+        raise RuntimeError("user_personal_access_tokens table unavailable — run migration 0045")
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO user_personal_access_tokens
+                    (id, user_id, description, token_hash, expires_at)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id, user_id, description, created_at, expires_at, revoked_at, last_used_at
+                """,
+                (pat_id, user_id, description, token_hash, expires_at),
+            )
+            return _row_pat(cur.fetchone())
+
+
+def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
+    if not pat_table_available():
+        return []
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, user_id, description, created_at, expires_at, revoked_at, last_used_at
+                FROM user_personal_access_tokens
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                """,
+                (user_id,),
+            )
+            return [_row_pat(r) for r in cur.fetchall() or []]
+
+
+def revoke_pat(pat_id: str, user_id: str) -> bool:
+    if not pat_table_available():
+        return False
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE user_personal_access_tokens SET revoked_at = now()
+                WHERE id = %s AND user_id = %s AND revoked_at IS NULL
+                """,
+                (pat_id, user_id),
+            )
+            return bool(cur.rowcount)
+
+
+def lookup_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
+    if not pat_table_available():
+        return None
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, user_id, description, created_at, expires_at, revoked_at, last_used_at
+                FROM user_personal_access_tokens
+                WHERE token_hash = %s
+                """,
+                (token_hash,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {**_row_pat(row), "token_hash": token_hash}
+
+
+def touch_pat_last_used(pat_id: str) -> None:
+    if not pat_table_available():
+        return
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE user_personal_access_tokens SET last_used_at = now() WHERE id = %s",
+                (pat_id,),
+            )
 
 
 def utcnow() -> datetime:

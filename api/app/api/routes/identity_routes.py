@@ -77,6 +77,21 @@ class RotateSecretIn(BaseModel):
     revoke_token_id: str | None = None
 
 
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class MePatchIn(BaseModel):
+    display_name: str | None = None
+    email: str | None = None
+
+
+class PatCreateIn(BaseModel):
+    description: str
+    expires_in_days: int | None = None
+
+
 def _client_meta(request: Request) -> tuple[str | None, str | None]:
     return request.client.host if request.client else None, request.headers.get("user-agent")
 
@@ -137,6 +152,57 @@ def logout_all_v1(authorization: str | None = Header(default=None)) -> None:
 def me_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     token = (authorization or "").removeprefix("Bearer ").strip()
     return svc.get_me_from_access_token(token)
+
+
+@router.patch("/auth/me")
+def patch_me_v1(payload: MePatchIn, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return svc.update_me(user_id=user_id, display_name=payload.display_name, email=payload.email)
+
+
+@router.post("/auth/change-password", status_code=204)
+def change_password_v1(payload: ChangePasswordIn, authorization: str | None = Header(default=None)) -> None:
+    user_id = _identity_user_id(authorization)
+    svc.change_password(user_id=user_id, current_password=payload.current_password, new_password=payload.new_password)
+
+
+@router.get("/auth/sessions")
+def list_my_sessions_v1(
+    authorization: str | None = Header(default=None),
+    x_mlair_refresh_token: str | None = Header(default=None, alias="X-MLAir-Refresh-Token"),
+) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return {
+        "items": svc.list_my_sessions(user_id=user_id, current_refresh_token=x_mlair_refresh_token),
+    }
+
+
+@router.delete("/auth/sessions/{session_id}", status_code=204)
+def revoke_my_session_v1(session_id: str, authorization: str | None = Header(default=None)) -> None:
+    user_id = _identity_user_id(authorization)
+    svc.revoke_my_session(user_id=user_id, session_id=session_id)
+
+
+@router.get("/auth/pats")
+def list_pats_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return {"items": svc.list_pats(user_id=user_id)}
+
+
+@router.post("/auth/pats", status_code=201)
+def create_pat_v1(payload: PatCreateIn, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return svc.create_pat(
+        user_id=user_id,
+        description=payload.description,
+        expires_in_days=payload.expires_in_days,
+    )
+
+
+@router.delete("/auth/pats/{pat_id}", status_code=204)
+def revoke_pat_v1(pat_id: str, authorization: str | None = Header(default=None)) -> None:
+    user_id = _identity_user_id(authorization)
+    svc.revoke_pat(user_id=user_id, pat_id=pat_id)
 
 
 @router.get("/users")

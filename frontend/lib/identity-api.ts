@@ -16,8 +16,13 @@ export type LoginResponse = {
 export type IdentityMeResponse = {
   id: string;
   username: string;
+  display_name?: string | null;
+  email?: string | null;
   state: string;
   is_global_admin: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  last_login_at?: string | null;
   assignments: Array<{
     id: string;
     tenant_id: string;
@@ -25,6 +30,32 @@ export type IdentityMeResponse = {
     all_projects: boolean;
     project_ids: string[];
   }>;
+};
+
+export type IdentitySessionRow = {
+  id: string;
+  user_id: string;
+  created_at: string | null;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  is_current?: boolean;
+};
+
+export type PersonalAccessTokenRow = {
+  id: string;
+  user_id: string;
+  description: string;
+  created_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  last_used_at: string | null;
+};
+
+export type PersonalAccessTokenCreated = PersonalAccessTokenRow & {
+  token: string;
 };
 
 const AUTH_STORAGE_KEY = "ml-air:auth-session";
@@ -106,6 +137,77 @@ export async function logoutIdentity(accessToken: string, refreshToken?: string)
 
 export async function fetchIdentityMe(accessToken: string): Promise<IdentityMeResponse> {
   return identityFetch<IdentityMeResponse>("/auth/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function patchIdentityMe(
+  accessToken: string,
+  body: { display_name?: string | null; email?: string | null },
+): Promise<IdentityMeResponse> {
+  return identityFetch<IdentityMeResponse>("/auth/me", {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function changeIdentityPassword(
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await identityFetch("/auth/change-password", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
+export async function fetchIdentitySessions(
+  accessToken: string,
+  refreshToken?: string,
+): Promise<IdentitySessionRow[]> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
+  if (refreshToken?.trim()) {
+    headers["X-MLAir-Refresh-Token"] = refreshToken.trim();
+  }
+  const body = await identityFetch<{ items: IdentitySessionRow[] }>("/auth/sessions", { headers });
+  return body.items;
+}
+
+export async function revokeIdentitySession(accessToken: string, sessionId: string): Promise<void> {
+  await identityFetch(`/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function fetchPersonalAccessTokens(accessToken: string): Promise<PersonalAccessTokenRow[]> {
+  const body = await identityFetch<{ items: PersonalAccessTokenRow[] }>("/auth/pats", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return body.items;
+}
+
+export async function createPersonalAccessToken(
+  accessToken: string,
+  description: string,
+  expiresInDays?: number | null,
+): Promise<PersonalAccessTokenCreated> {
+  return identityFetch<PersonalAccessTokenCreated>("/auth/pats", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      description,
+      expires_in_days: expiresInDays ?? null,
+    }),
+  });
+}
+
+export async function revokePersonalAccessToken(accessToken: string, patId: string): Promise<void> {
+  await identityFetch(`/auth/pats/${encodeURIComponent(patId)}`, {
+    method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }

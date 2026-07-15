@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { useCanSeeExecutionNav, useCanSeeAdminNav } from "@/lib/hub-nav-access"
+import { useAppContext } from "@/lib/app-context"
 
 type NavItem = {
   title: string
@@ -57,13 +58,14 @@ const executionNav: NavItem[] = [
 ]
 
 const settingsNav: NavItem[] = [
-  { title: "Settings", href: "/settings", icon: Settings },
+  { title: "Settings", href: "/settings/profile", icon: Settings },
 ]
 
-const adminNav: NavItem[] = [
+const administrationNav: NavItem[] = [
   { title: "Users", href: "/admin/users", icon: Users },
   { title: "Service accounts", href: "/admin/service-accounts", icon: Shield },
   { title: "Identity audit", href: "/admin/audit", icon: Shield },
+  { title: "System settings", href: "/settings/admin/general", icon: Settings },
 ]
 
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
@@ -114,6 +116,10 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
   const showAdminNav = useCanSeeAdminNav()
+  const { isGlobalAdmin } = useAppContext()
+  const adminItems = isGlobalAdmin
+    ? administrationNav
+    : administrationNav.filter((item) => item.href !== "/settings/admin/general")
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
@@ -140,8 +146,8 @@ export function AppSidebar() {
         {showExecutionNav ? (
           <NavGroup label="Execution" items={executionNav} />
         ) : null}
-        {showAdminNav ? <NavGroup label="IAM" items={adminNav} /> : null}
-        <NavGroup label="Admin" items={settingsNav} />
+        {showAdminNav ? <NavGroup label="Administration" items={adminItems} /> : null}
+        <NavGroup label="Account" items={settingsNav} />
       </SidebarContent>
     </Sidebar>
   )
