@@ -31,6 +31,7 @@ const ACTION_FILTERS = [
   "identity.sa.update",
   "identity.sa.token.regenerate",
   "identity.sa.token.revoke",
+  "system_settings.patch",
 ] as const;
 
 function formatWhen(iso: string | null | undefined): string {

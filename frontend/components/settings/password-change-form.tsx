@@ -38,7 +38,6 @@ export function PasswordChangeForm() {
   return (
     <DetailSection
       title="Password"
-      description="Change your Hub sign-in password."
       accentBorder="violet"
     >
       <div className="space-y-3 max-w-md">

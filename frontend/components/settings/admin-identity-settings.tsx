@@ -24,7 +24,6 @@ export function AdminIdentitySettings() {
     <div className="space-y-6">
       <DetailSection
         title="Identity & Access"
-        description="Password lockout and session policy. User and service account resources are managed separately."
         accentBorder="violet"
       >
         <L4Meta doc={doc} />
@@ -56,7 +55,6 @@ export function AdminIdentitySettings() {
 
       <DetailSection
         title="Bootstrap status"
-        description="Identity tables and global admin count (read-only)."
         accentBorder="none"
       >
         <p className="text-sm text-muted-foreground">

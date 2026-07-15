@@ -40,9 +40,6 @@ export default function SettingsAboutPage() {
             },
           ]}
         />
-        <p className="mt-4 text-xs text-muted-foreground">
-          Build and commit metadata are injected at deploy time via runtime config in production images.
-        </p>
       </SettingsSection>
     </SettingsPage>
   );

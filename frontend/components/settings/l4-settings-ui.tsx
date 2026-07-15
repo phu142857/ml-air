@@ -52,7 +52,7 @@ export function L4Meta({ doc }: { doc: SystemSettingsDocument }) {
 
 export function L4ErrorState({ error }: { error: unknown }) {
   return (
-    <DetailSection title="Platform settings" description="L4 policy (global admin)." accentBorder="amber">
+    <DetailSection title="Platform settings" accentBorder="amber">
       <p className="text-sm text-destructive">{String((error as Error)?.message || error)}</p>
     </DetailSection>
   );

@@ -134,7 +134,7 @@ function WaterfallBar({
 
   return (
     <div
-      className="relative h-8 cursor-crosshair overflow-hidden rounded-md border border-border bg-muted/20"
+      className="relative h-8 cursor-crosshair overflow-hidden border border-border bg-muted/20"
       onMouseDown={onZoomMouseDown}
       onMouseMove={onZoomMouseMove}
       onMouseUp={onZoomMouseUp}
@@ -142,7 +142,7 @@ function WaterfallBar({
     >
       {refAreaLeft != null && refAreaRight != null ? (
         <div
-          className="pointer-events-none absolute top-0 bottom-0 z-0 rounded bg-primary/10 ring-1 ring-primary/30"
+          className="pointer-events-none absolute top-0 bottom-0 z-0 bg-primary/10 ring-1 ring-primary/30"
           style={{
             left: `${((Math.min(refAreaLeft, refAreaRight) - zoomMin) / scaleMs) * 100}%`,
             width: `${(Math.abs(refAreaRight - refAreaLeft) / scaleMs) * 100}%`,
@@ -151,8 +151,10 @@ function WaterfallBar({
       ) : null}
       <div
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 rounded-sm transition-default",
-          step.is_instant ? "h-4 w-0.5 -translate-x-1/2" : "h-4 min-w-[3px]",
+          "absolute transition-default",
+          step.is_instant
+            ? "top-0 bottom-0 w-px -translate-x-1/2"
+            : "top-0 bottom-0 min-w-[3px]",
           fill,
           isHovered && "ring-2 ring-foreground/20",
           isSelected && "ring-2 ring-primary",

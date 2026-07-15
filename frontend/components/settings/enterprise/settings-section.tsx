@@ -23,9 +23,6 @@ export function SettingsSection({
             <h2 id={id ? `${id}-title` : undefined} className="text-sm font-semibold text-foreground">
               {title}
             </h2>
-            {description ? (
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
-            ) : null}
           </div>
           {headerActions ? <div className="shrink-0">{headerActions}</div> : null}
         </div>

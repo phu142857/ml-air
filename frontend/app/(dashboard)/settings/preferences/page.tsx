@@ -147,9 +147,6 @@ export default function SettingsPreferencesPage() {
             />
           </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Active scope: {tenantId} / {projectId} — change from the top bar.
-        </p>
       </SettingsSection>
 
       <SettingsSection
@@ -213,9 +210,7 @@ export default function SettingsPreferencesPage() {
           <div className="mt-4">
             <DesignTokensSlide />
           </div>
-        ) : (
-          <p className="mt-3 text-sm text-muted-foreground">Enable to preview semantic palette tokens.</p>
-        )}
+        ) : null}
       </SettingsSection>
     </SettingsPage>
   );

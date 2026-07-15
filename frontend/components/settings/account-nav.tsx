@@ -17,7 +17,6 @@ import {
   Server,
   Puzzle,
   Activity,
-  FileClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/lib/app-context";
@@ -52,7 +51,6 @@ const PLATFORM_NAV: NavLink[] = [
   { title: "Runtime", href: "/identity/platform/runtime", icon: Server },
   { title: "Integrations", href: "/identity/platform/integrations", icon: Puzzle },
   { title: "Observability", href: "/identity/platform/observability", icon: Activity },
-  { title: "Config audit", href: "/identity/platform/config-audit", icon: FileClock },
 ];
 
 function NavSection({ label, items }: { label: string; items: NavLink[] }) {

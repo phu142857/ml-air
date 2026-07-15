@@ -1,5 +1,5 @@
-import { ConfigAuditPanel } from "@/components/settings/config-audit-panel";
+import { redirect } from "next/navigation";
 
 export default function IdentityPlatformConfigAuditPage() {
-  return <ConfigAuditPanel />;
+  redirect("/identity/audit");
 }
