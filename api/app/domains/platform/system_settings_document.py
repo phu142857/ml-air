@@ -53,6 +53,9 @@ def build_seed_settings(profile_cfg: dict[str, Any]) -> dict[str, Any]:
         "identity": {
             "lockout_threshold": 5,
             "lockout_minutes": 15,
+            "password_min_length": 8,
+            "access_token_ttl_seconds": 900,
+            "refresh_token_ttl_seconds": 604800,
         },
         "governance": {
             "promotion_stage_order": promotion_order or ["staging", "production"],
@@ -98,12 +101,18 @@ def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> d
             raise ValueError(f"hub.default_route must be one of: {', '.join(sorted(_HUB_ROUTES))}")
         hub["default_route"] = route
 
-    identity = merged.get("identity")
+        identity = merged.get("identity")
     if isinstance(identity, dict):
         threshold = int(identity.get("lockout_threshold", 5))
         minutes = int(identity.get("lockout_minutes", 15))
         identity["lockout_threshold"] = max(1, min(threshold, 100))
         identity["lockout_minutes"] = max(1, min(minutes, 24 * 60))
+        min_pw = int(identity.get("password_min_length", 8))
+        identity["password_min_length"] = max(6, min(min_pw, 128))
+        access_ttl = int(identity.get("access_token_ttl_seconds", 900))
+        identity["access_token_ttl_seconds"] = max(60, min(access_ttl, 86400))
+        refresh_ttl = int(identity.get("refresh_token_ttl_seconds", 604800))
+        identity["refresh_token_ttl_seconds"] = max(3600, min(refresh_ttl, 90 * 24 * 3600))
 
     telemetry = merged.get("telemetry")
     if isinstance(telemetry, dict):

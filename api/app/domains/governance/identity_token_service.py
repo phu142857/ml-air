@@ -23,6 +23,12 @@ def _secret() -> str:
 
 
 def access_ttl_seconds() -> int:
+    try:
+        from app.settings import get_settings
+
+        return max(60, int(get_settings().identity.access_token_ttl_seconds))
+    except Exception:
+        pass
     raw = os.getenv("ML_AIR_ACCESS_TOKEN_TTL_SECONDS", "900").strip()
     try:
         return max(60, int(raw))
@@ -31,6 +37,12 @@ def access_ttl_seconds() -> int:
 
 
 def refresh_ttl_seconds() -> int:
+    try:
+        from app.settings import get_settings
+
+        return max(3600, int(get_settings().identity.refresh_token_ttl_seconds))
+    except Exception:
+        pass
     raw = os.getenv("ML_AIR_REFRESH_TOKEN_TTL_SECONDS", "604800").strip()
     try:
         return max(3600, int(raw))

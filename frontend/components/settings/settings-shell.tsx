@@ -4,9 +4,12 @@ import { PropsWithChildren } from "react";
 import { Settings } from "lucide-react";
 import { ResourcePageHeader } from "@/components/mlops/layout";
 import { PageScrollBody } from "@/components/mlops/layout/page-scroll-body";
-import { SettingsNav } from "@/components/settings/settings-nav";
+import { AccountNav } from "@/components/settings/account-nav";
+import { useCanSeeAdminNav } from "@/lib/hub-nav-access";
 
 export function SettingsShell({ children }: PropsWithChildren) {
+  const showIdentityNav = useCanSeeAdminNav();
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
@@ -14,10 +17,14 @@ export function SettingsShell({ children }: PropsWithChildren) {
         icon={Settings}
         accent="zinc"
         title="Settings"
-        subtitle="Your account and platform configuration"
+        subtitle={
+          showIdentityNav
+            ? "Your profile, security, and platform administration"
+            : "Your account, security, and preferences"
+        }
       />
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <SettingsNav />
+        <AccountNav />
         <PageScrollBody variant="workspace" className="min-h-0 flex-1">
           <div className="scroll-region min-h-0 flex-1">
             <div className="flex min-h-0 flex-col gap-4">{children}</div>

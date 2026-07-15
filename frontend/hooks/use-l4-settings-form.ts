@@ -30,6 +30,9 @@ export type L4FormState = {
   hubRoute: string;
   lockoutThreshold: string;
   lockoutMinutes: string;
+  passwordMinLength: string;
+  accessTokenTtlSeconds: string;
+  refreshTokenTtlSeconds: string;
   skipApproval: boolean;
   allowSkipStages: boolean;
   tenantQuotaEnforce: boolean;
@@ -50,6 +53,9 @@ export function stateFromL4(s: L4Settings): L4FormState {
     hubRoute: s.hub?.default_route || "datasets",
     lockoutThreshold: String(s.identity?.lockout_threshold ?? 5),
     lockoutMinutes: String(s.identity?.lockout_minutes ?? 15),
+    passwordMinLength: String(s.identity?.password_min_length ?? 8),
+    accessTokenTtlSeconds: String(s.identity?.access_token_ttl_seconds ?? 900),
+    refreshTokenTtlSeconds: String(s.identity?.refresh_token_ttl_seconds ?? 604800),
     skipApproval: Boolean(s.governance?.skip_approval_for_promote ?? true),
     allowSkipStages: Boolean(s.governance?.promotion_allow_skip_stages ?? true),
     tenantQuotaEnforce: Boolean(s.features?.tenant_quota_enforce ?? true),
@@ -75,6 +81,9 @@ export function partialFromForm(form: L4FormState, keys: Array<keyof L4Settings 
     partial.identity = {
       lockout_threshold: parseIntOr(form.lockoutThreshold, 5),
       lockout_minutes: parseIntOr(form.lockoutMinutes, 15),
+      password_min_length: parseIntOr(form.passwordMinLength, 8),
+      access_token_ttl_seconds: parseIntOr(form.accessTokenTtlSeconds, 900),
+      refresh_token_ttl_seconds: parseIntOr(form.refreshTokenTtlSeconds, 604800),
     };
   }
   if (keys.includes("governance")) {

@@ -1,5 +1,5 @@
-import { PluginsSettingsTab } from "@/components/settings/plugins-settings-tab";
+import { redirect } from "next/navigation";
 
-export default function SettingsAdminIntegrationsPage() {
-  return <PluginsSettingsTab />;
+export default function SettingsAdminIntegrationsRedirectPage() {
+  redirect("/identity/platform/integrations");
 }

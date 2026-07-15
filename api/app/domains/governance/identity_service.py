@@ -43,6 +43,90 @@ SA_PERMISSION_CATALOG = frozenset(
 PLATFORM_SA_PERMISSIONS = SA_PERMISSION_CATALOG
 
 
+def _password_min_length() -> int:
+    return max(6, int(get_settings().identity.password_min_length))
+
+
+def _validate_password_strength(password: str) -> None:
+    if len(password) < _password_min_length():
+        raise validation_error(f"Password must be at least {_password_min_length()} characters")
+
+
+def get_identity_dashboard() -> dict[str, Any]:
+    return {
+        "total_users": repo.count_users_total(),
+        "active_users": repo.count_users_active(),
+        "service_accounts": repo.count_service_accounts_active(),
+        "active_sessions": repo.count_active_sessions(),
+        "recent_events": repo.list_audit_events(
+            actor_id=None,
+            action=None,
+            q=None,
+            from_ts=None,
+            to_ts=None,
+            limit=15,
+        ),
+    }
+
+
+def list_admin_sessions(*, limit: int, current_refresh_token: str | None = None) -> list[dict[str, Any]]:
+    current_id = None
+    if current_refresh_token:
+        session = repo.get_session_by_refresh_hash(hash_opaque(current_refresh_token))
+        if session:
+            current_id = session["id"]
+    rows = repo.list_all_active_sessions(limit=limit)
+    return [{**row, "is_current": row["id"] == current_id} for row in rows]
+
+
+def revoke_admin_session(*, session_id: str, actor_id: str | None) -> None:
+    session = repo.get_session_by_id(session_id)
+    if not session:
+        raise not_found("Session not found")
+    repo.revoke_session(session_id)
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.session.revoke",
+        target_type="session",
+        target_id=session_id,
+        result="success",
+    )
+
+
+def revoke_all_admin_sessions(*, user_id: str | None, actor_id: str | None) -> int:
+    if user_id:
+        sessions = repo.list_sessions(user_id)
+        count = 0
+        for s in sessions:
+            if not s.get("revoked_at"):
+                repo.revoke_session(s["id"])
+                count += 1
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.session.revoke_all",
+            target_type="user",
+            target_id=user_id,
+            result="success",
+            extra={"count": count},
+        )
+        return count
+    rows = repo.list_all_active_sessions(limit=5000)
+    for row in rows:
+        repo.revoke_session(row["id"])
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.session.revoke_all",
+        target_type="platform",
+        target_id=None,
+        result="success",
+        extra={"count": len(rows)},
+    )
+    return len(rows)
+
+
 def _audit(
     *,
     actor_kind: str,
@@ -203,8 +287,7 @@ def change_password(*, user_id: str, current_password: str, new_password: str) -
         raise not_found()
     if not verify_password(current_password, user["password_hash"]):
         raise invalid_credential()
-    if len(new_password.strip()) < 8:
-        raise validation_error("Password must be at least 8 characters")
+    _validate_password_strength(new_password)
     repo.update_user(user_id, password_hash=hash_password(new_password))
     _audit(
         actor_kind="user",
@@ -363,7 +446,9 @@ def _assignment_key(tenant_id: str, role: str, all_projects: bool, project_ids: 
     return (tenant_id, role, all_projects, tuple(sorted(project_ids)) if not all_projects else ())
 
 
-def replace_user_assignments(user_id: str, assignments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def replace_user_assignments(
+    user_id: str, assignments: list[dict[str, Any]], *, actor_id: str | None = None
+) -> list[dict[str, Any]]:
     seen: set[tuple] = set()
     normalized = []
     for item in assignments:
@@ -395,10 +480,19 @@ def replace_user_assignments(user_id: str, assignments: list[dict[str, Any]]) ->
                 project_ids=project_ids,
             )
         )
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.role.replace",
+        target_type="user",
+        target_id=user_id,
+        result="success",
+        extra={"count": len(out)},
+    )
     return out
 
 
-def add_user_assignment(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def add_user_assignment(user_id: str, payload: dict[str, Any], *, actor_id: str | None = None) -> dict[str, Any]:
     tenant_id = str(payload.get("tenant_id") or "").strip()
     role = str(payload.get("role") or "").strip().lower()
     all_projects = bool(payload.get("all_projects"))
@@ -418,7 +512,7 @@ def add_user_assignment(user_id: str, payload: dict[str, Any]) -> dict[str, Any]
             existing["project_ids"],
         ) == key:
             raise duplicate_assignment()
-    return repo.insert_assignment(
+    row = repo.insert_assignment(
         assignment_id=new_id("ura"),
         user_id=user_id,
         tenant_id=tenant_id,
@@ -426,9 +520,27 @@ def add_user_assignment(user_id: str, payload: dict[str, Any]) -> dict[str, Any]
         all_projects=all_projects,
         project_ids=project_ids,
     )
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.role.assign",
+        target_type="assignment",
+        target_id=row["id"],
+        result="success",
+        extra={"user_id": user_id, "tenant_id": tenant_id, "role": role},
+    )
+    return row
 
 
-def create_user(*, username: str, password: str, state: str, is_global_admin: bool) -> dict[str, Any]:
+def create_user(
+    *,
+    username: str,
+    password: str,
+    state: str,
+    is_global_admin: bool,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    _validate_password_strength(password)
     if repo.get_user_by_username(username):
         raise validation_error("Username already exists")
     user = repo.insert_user(
@@ -438,7 +550,124 @@ def create_user(*, username: str, password: str, state: str, is_global_admin: bo
         state=state,
         is_global_admin=is_global_admin,
     )
-    return repo._public_user(user)
+    public = repo._public_user(user)
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.user.create",
+        target_type="user",
+        target_id=public["id"],
+        result="success",
+    )
+    return public
+
+
+def admin_patch_user(
+    *,
+    actor_id: str | None,
+    user_id: str,
+    state: str | None = None,
+    password: str | None = None,
+    is_global_admin: bool | None = None,
+) -> dict[str, Any]:
+    password_hash = None
+    if password:
+        _validate_password_strength(password)
+        password_hash = hash_password(password)
+    updated = repo.update_user(
+        user_id,
+        state=state,
+        password_hash=password_hash,
+        is_global_admin=is_global_admin,
+    )
+    if not updated:
+        raise not_found()
+    if state == "deleted":
+        repo.revoke_all_sessions(user_id)
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.user.delete",
+            target_type="user",
+            target_id=user_id,
+            result="success",
+        )
+    elif state in {"active", "disabled", "locked"}:
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.user.state_change",
+            target_type="user",
+            target_id=user_id,
+            result="success",
+            extra={"state": state},
+        )
+    else:
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.user.update",
+            target_type="user",
+            target_id=user_id,
+            result="success",
+        )
+    if password_hash:
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.user.password_reset",
+            target_type="user",
+            target_id=user_id,
+            result="success",
+        )
+    return updated
+
+
+def create_service_account(
+    *,
+    name: str,
+    description: str | None,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    row = repo.insert_service_account(
+        sa_id=new_id("sa"),
+        name=name.strip(),
+        description=description,
+        state="active",
+    )
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.sa.create",
+        target_type="service_account",
+        target_id=row["id"],
+        result="success",
+    )
+    return row
+
+
+def patch_service_account(
+    *,
+    sa_id: str,
+    name: str | None,
+    description: str | None,
+    state: str | None,
+    actor_id: str | None = None,
+) -> dict[str, Any]:
+    row = repo.update_service_account(sa_id, name=name, description=description, state=state)
+    if not row:
+        raise not_found()
+    action = "identity.sa.delete" if state == "revoked" else "identity.sa.update"
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action=action,
+        target_type="service_account",
+        target_id=sa_id,
+        result="success",
+        extra={"state": state} if state else None,
+    )
+    return row
 
 
 def accessible_scopes_for_user(user: dict[str, Any]) -> list[dict[str, str]]:
@@ -534,14 +763,65 @@ def authenticate_sa_secret(secret: str) -> dict[str, Any] | None:
     return repo.lookup_sa_by_secret_hash(hash_opaque(secret))
 
 
-def issue_sa_secret(sa_id: str) -> dict[str, Any]:
+def issue_sa_secret(sa_id: str, *, actor_id: str | None = None, audit: bool = True) -> dict[str, Any]:
     sa = repo.get_service_account(sa_id)
     if not sa or sa["state"] != "active":
         raise not_found("Service account not found")
     secret = new_opaque_token()
     token_id = new_id("tok")
     repo.insert_sa_credential(token_id=token_id, sa_id=sa_id, secret_hash=hash_opaque(secret))
+    if audit:
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.sa.token.issue",
+            target_type="service_account_token",
+            target_id=token_id,
+            result="success",
+            extra={"service_account_id": sa_id},
+        )
     return {"token_id": token_id, "secret": secret, "created_at": repo.utcnow().isoformat()}
+
+
+def rotate_sa_secret(
+    sa_id: str, *, revoke_token_id: str | None = None, actor_id: str | None = None
+) -> dict[str, Any]:
+    out = issue_sa_secret(sa_id, actor_id=actor_id, audit=False)
+    if revoke_token_id:
+        repo.revoke_sa_credential(revoke_token_id)
+        _audit(
+            actor_kind="user",
+            actor_id=actor_id,
+            action="identity.sa.token.revoke",
+            target_type="service_account_token",
+            target_id=revoke_token_id,
+            result="success",
+            extra={"service_account_id": sa_id},
+        )
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.sa.token.regenerate",
+        target_type="service_account_token",
+        target_id=out["token_id"],
+        result="success",
+        extra={"service_account_id": sa_id},
+    )
+    return out
+
+
+def revoke_sa_credential(token_id: str, *, sa_id: str, actor_id: str | None = None) -> None:
+    if not repo.revoke_sa_credential(token_id):
+        raise not_found()
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.sa.token.revoke",
+        target_type="service_account_token",
+        target_id=token_id,
+        result="success",
+        extra={"service_account_id": sa_id},
+    )
 
 
 def replace_sa_permissions(sa_id: str, permissions: list[str]) -> list[str]:

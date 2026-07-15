@@ -46,7 +46,7 @@ export function SessionsPanel() {
 
   return (
     <DetailSection
-      title="Active sessions"
+      title="My sessions"
       description="Devices signed in to your account. Revoke any session you do not recognize."
       accentBorder="sky"
     >

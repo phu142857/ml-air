@@ -525,6 +525,7 @@ def list_audit_events(
     *,
     actor_id: str | None,
     action: str | None,
+    q: str | None,
     from_ts: datetime | None,
     to_ts: datetime | None,
     limit: int,
@@ -537,6 +538,10 @@ def list_audit_events(
     if action:
         clauses.append("action = %s")
         params.append(action)
+    if q:
+        clauses.append("(action ILIKE %s OR target_id ILIKE %s OR actor_id ILIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like])
     if from_ts:
         clauses.append("occurred_at >= %s")
         params.append(from_ts)
@@ -987,6 +992,106 @@ def touch_pat_last_used(pat_id: str) -> None:
                 "UPDATE user_personal_access_tokens SET last_used_at = now() WHERE id = %s",
                 (pat_id,),
             )
+
+
+def count_users_total() -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM users WHERE state != 'deleted'")
+            return int((cur.fetchone() or [0])[0] or 0)
+
+
+def count_users_active() -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM users WHERE state = 'active'")
+            return int((cur.fetchone() or [0])[0] or 0)
+
+
+def count_service_accounts_active() -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM service_accounts WHERE state = 'active'")
+            return int((cur.fetchone() or [0])[0] or 0)
+
+
+def count_active_sessions() -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM user_sessions
+                WHERE revoked_at IS NULL AND expires_at > now()
+                """
+            )
+            return int((cur.fetchone() or [0])[0] or 0)
+
+
+def list_all_active_sessions(*, limit: int) -> list[dict[str, Any]]:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT s.id, s.user_id, u.username, s.created_at, s.last_used_at,
+                       s.expires_at, s.ip, s.user_agent
+                FROM user_sessions s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.revoked_at IS NULL AND s.expires_at > now()
+                ORDER BY COALESCE(s.last_used_at, s.created_at) DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            out = []
+            for r in cur.fetchall() or []:
+                out.append(
+                    {
+                        "id": str(r[0]),
+                        "user_id": str(r[1]),
+                        "username": str(r[2]),
+                        "created_at": r[3].isoformat() if r[3] else None,
+                        "last_used_at": r[4].isoformat() if r[4] else None,
+                        "expires_at": r[5].isoformat() if r[5] else None,
+                        "ip": r[6],
+                        "user_agent": r[7],
+                    }
+                )
+            return out
+
+
+def get_audit_event(event_id: str) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, occurred_at, actor_kind, actor_id, action, target_type, target_id,
+                       result, ip, user_agent, correlation_id, payload
+                FROM identity_audit_events WHERE id = %s
+                """,
+                (event_id,),
+            )
+            r = cur.fetchone()
+            if not r:
+                return None
+            import json
+
+            payload = r[11]
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            return {
+                "id": str(r[0]),
+                "occurred_at": r[1].isoformat() if r[1] else None,
+                "actor_kind": str(r[2]),
+                "actor_id": r[3],
+                "action": str(r[4]),
+                "target_type": r[5],
+                "target_id": r[6],
+                "result": str(r[7]),
+                "ip": r[8],
+                "user_agent": r[9],
+                "correlation_id": r[10],
+                "payload": payload if isinstance(payload, dict) else {},
+            }
 
 
 def utcnow() -> datetime:

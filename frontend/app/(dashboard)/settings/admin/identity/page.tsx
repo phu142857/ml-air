@@ -1,5 +1,5 @@
-import { AdminIdentitySettings } from "@/components/settings/admin-identity-settings";
+import { redirect } from "next/navigation";
 
-export default function SettingsAdminIdentityPage() {
-  return <AdminIdentitySettings />;
+export default function SettingsAdminIdentityRedirectPage() {
+  redirect("/identity/settings");
 }

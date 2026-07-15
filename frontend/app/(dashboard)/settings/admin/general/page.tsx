@@ -1,5 +1,5 @@
-import { AdminGeneralSettings } from "@/components/settings/admin-general-settings";
+import { redirect } from "next/navigation";
 
-export default function SettingsAdminGeneralPage() {
-  return <AdminGeneralSettings />;
+export default function SettingsAdminGeneralRedirectPage() {
+  redirect("/identity/platform/general");
 }

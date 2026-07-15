@@ -19,6 +19,9 @@ export type L4Settings = {
   identity?: {
     lockout_threshold?: number;
     lockout_minutes?: number;
+    password_min_length?: number;
+    access_token_ttl_seconds?: number;
+    refresh_token_ttl_seconds?: number;
   };
   governance?: {
     promotion_stage_order?: string[];

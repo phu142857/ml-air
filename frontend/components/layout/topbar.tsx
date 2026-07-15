@@ -1,17 +1,27 @@
 "use client"
 
-import { Search, Command } from "lucide-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { Search, Command, Settings } from "lucide-react"
 import { ScopeSwitcher } from "@/components/mlops/scope-switcher"
 import { RealtimeIndicator } from "@/components/mlops/realtime-indicator"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
 
 interface TopbarProps {
   onOpenCommandPalette?: () => void
 }
 
 export function Topbar({ onOpenCommandPalette }: TopbarProps) {
+  const pathname = usePathname()
+  const settingsActive =
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/identity" ||
+    pathname.startsWith("/identity/")
+
   return (
     <header className="sticky top-0 z-30 shrink-0 border-b border-border bg-background px-3 py-2 sm:px-4">
       <div className="flex h-12 items-center justify-between">
@@ -36,6 +46,19 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
               <Command className="h-3 w-3" />
               K
             </kbd>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-9 w-9 shrink-0 text-muted-foreground transition-default hover:text-foreground",
+              settingsActive && "bg-accent text-foreground",
+            )}
+            asChild
+          >
+            <Link href="/settings/profile" aria-label="Settings" title="Settings">
+              <Settings strokeWidth={1.75} className="h-4 w-4" />
+            </Link>
           </Button>
           <RealtimeIndicator />
         </div>

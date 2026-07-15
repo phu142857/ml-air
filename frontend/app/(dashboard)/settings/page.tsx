@@ -4,9 +4,9 @@ const TAB_REDIRECTS: Record<string, string> = {
   runtime: "/settings/preferences",
   api: "/settings/security",
   scope: "/settings/profile",
-  governance: "/settings/admin/runtime",
-  system: "/settings/admin/runtime",
-  plugins: "/settings/admin/integrations",
+  governance: "/identity/platform/runtime",
+  system: "/identity/platform/runtime",
+  plugins: "/identity/platform/integrations",
   "design-tokens": "/settings/preferences",
 };
 

@@ -61,6 +61,9 @@ class AuthSettings:
 class IdentitySettings:
     lockout_threshold: int
     lockout_minutes: int
+    password_min_length: int
+    access_token_ttl_seconds: int
+    refresh_token_ttl_seconds: int
 
 
 @dataclass(frozen=True, slots=True)

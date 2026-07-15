@@ -63,8 +63,52 @@ export type AuditEventRow = {
   target_type: string | null;
   target_id: string | null;
   result: string;
+  ip?: string | null;
+  user_agent?: string | null;
+  correlation_id?: string | null;
   payload: Record<string, unknown>;
 };
+
+export type IdentityDashboard = {
+  total_users: number;
+  active_users: number;
+  service_accounts: number;
+  active_sessions: number;
+  recent_events: AuditEventRow[];
+};
+
+export type AdminSessionRow = {
+  id: string;
+  user_id: string;
+  username: string;
+  created_at: string | null;
+  last_used_at: string | null;
+  expires_at: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  is_current?: boolean;
+};
+
+export const BUILTIN_ROLES = [
+  {
+    id: "global_admin",
+    name: "Global Admin",
+    description: "Full platform access. Bypasses tenant role assignments.",
+    permissions: ["platform:*", "identity:admin", "settings:admin"],
+  },
+  {
+    id: "maintainer",
+    name: "Maintainer",
+    description: "Create and manage ML resources within assigned tenant/project scope.",
+    permissions: ["datasets:write", "models:write", "runs:write", "pipelines:write", "tasks:write"],
+  },
+  {
+    id: "viewer",
+    name: "Viewer",
+    description: "Read-only access within assigned tenant/project scope.",
+    permissions: ["datasets:read", "models:read", "runs:read", "pipelines:read", "tasks:read"],
+  },
+] as const;
 
 export const SA_PERMISSION_CATALOG = [
   "tasks:lease",
@@ -102,8 +146,16 @@ async function adminFetch<T>(
   return res.json() as Promise<T>;
 }
 
-export async function listUsers(token: string): Promise<UserSummary[]> {
-  const body = await adminFetch<{ items: UserSummary[] }>(token, "/users");
+export async function listUsers(
+  token: string,
+  opts?: { state?: string; q?: string; limit?: number },
+): Promise<UserSummary[]> {
+  const qs = new URLSearchParams();
+  if (opts?.state?.trim()) qs.set("state", opts.state.trim());
+  if (opts?.q?.trim()) qs.set("q", opts.q.trim());
+  if (opts?.limit) qs.set("limit", String(opts.limit));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const body = await adminFetch<{ items: UserSummary[] }>(token, `/users${suffix}`);
   return body.items;
 }
 
@@ -170,6 +222,17 @@ export async function createServiceAccount(
 
 export async function getServiceAccount(token: string, saId: string): Promise<ServiceAccountRow> {
   return adminFetch<ServiceAccountRow>(token, `/service-accounts/${saId}`);
+}
+
+export async function patchServiceAccount(
+  token: string,
+  saId: string,
+  payload: { name?: string; description?: string; state?: string },
+): Promise<ServiceAccountRow> {
+  return adminFetch<ServiceAccountRow>(token, `/service-accounts/${saId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function revokeServiceAccount(token: string, saId: string): Promise<void> {
@@ -242,13 +305,42 @@ export async function deleteServiceAccountScope(token: string, saId: string, sco
 
 export async function listIdentityAudit(
   token: string,
-  limit = 100,
-  action?: string,
+  opts?: { limit?: number; action?: string; q?: string; actorId?: string },
 ): Promise<AuditEventRow[]> {
-  const qs = new URLSearchParams({ limit: String(limit) });
-  if (action?.trim()) qs.set("action", action.trim());
+  const qs = new URLSearchParams({ limit: String(opts?.limit ?? 100) });
+  if (opts?.action?.trim()) qs.set("action", opts.action.trim());
+  if (opts?.q?.trim()) qs.set("q", opts.q.trim());
+  if (opts?.actorId?.trim()) qs.set("actor_id", opts.actorId.trim());
   const body = await adminFetch<{ items: AuditEventRow[] }>(token, `/audit?${qs}`);
   return body.items;
+}
+
+export async function getIdentityAuditEvent(token: string, eventId: string): Promise<AuditEventRow> {
+  return adminFetch<AuditEventRow>(token, `/audit/${encodeURIComponent(eventId)}`);
+}
+
+export async function fetchIdentityDashboard(token: string): Promise<IdentityDashboard> {
+  return adminFetch<IdentityDashboard>(token, "/identity/dashboard");
+}
+
+export async function listAdminSessions(
+  token: string,
+  refreshToken?: string | null,
+  limit = 200,
+): Promise<AdminSessionRow[]> {
+  const body = await adminFetch<{ items: AdminSessionRow[] }>(token, `/identity/sessions?limit=${limit}`, {
+    headers: refreshToken?.trim() ? { "X-MLAir-Refresh-Token": refreshToken.trim() } : undefined,
+  });
+  return body.items;
+}
+
+export async function revokeAdminSession(token: string, sessionId: string): Promise<void> {
+  await adminFetch<void>(token, `/identity/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+}
+
+export async function revokeAllAdminSessions(token: string, userId?: string): Promise<void> {
+  const qs = userId?.trim() ? `?user_id=${encodeURIComponent(userId.trim())}` : "";
+  await adminFetch<void>(token, `/identity/sessions${qs}`, { method: "DELETE" });
 }
 
 export async function fetchTenantProjectsForAdmin(

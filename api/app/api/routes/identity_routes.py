@@ -226,6 +226,7 @@ def create_user_v1(payload: UserCreateIn, authorization: str | None = Header(def
         password=payload.password,
         state=payload.state,
         is_global_admin=payload.is_global_admin,
+        actor_id=_principal_user_id(principal),
     )
 
 
@@ -249,32 +250,20 @@ def patch_user_v1(
     _require_admin(principal)
     if principal.user_id == user_id and payload.is_global_admin is not None:
         raise forbidden("Cannot change own global admin flag")
-    password_hash = None
-    if payload.password:
-        from app.domains.governance.identity_password import hash_password
-
-        password_hash = hash_password(payload.password)
-    updated = repo.update_user(
-        user_id,
+    return svc.admin_patch_user(
+        actor_id=_principal_user_id(principal),
+        user_id=user_id,
         state=payload.state,
-        password_hash=password_hash,
+        password=payload.password,
         is_global_admin=payload.is_global_admin,
     )
-    if not updated:
-        raise not_found()
-    if payload.state == "deleted":
-        repo.revoke_all_sessions(user_id)
-    return updated
 
 
 @router.delete("/users/{user_id}", status_code=204)
 def delete_user_v1(user_id: str, authorization: str | None = Header(default=None)) -> None:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    updated = repo.update_user(user_id, state="deleted")
-    if not updated:
-        raise not_found()
-    repo.revoke_all_sessions(user_id)
+    svc.admin_patch_user(actor_id=_principal_user_id(principal), user_id=user_id, state="deleted")
 
 
 @router.get("/users/{user_id}/assignments")
@@ -292,7 +281,9 @@ def replace_assignments_v1(
 ) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    items = svc.replace_user_assignments(user_id, [a.model_dump() for a in payload.assignments])
+    items = svc.replace_user_assignments(
+        user_id, [a.model_dump() for a in payload.assignments], actor_id=_principal_user_id(principal)
+    )
     return {"items": items}
 
 
@@ -304,7 +295,7 @@ def add_assignment_v1(
 ) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    return svc.add_user_assignment(user_id, payload.model_dump())
+    return svc.add_user_assignment(user_id, payload.model_dump(), actor_id=_principal_user_id(principal))
 
 
 @router.get("/assignments/{assignment_id}")
@@ -336,13 +327,10 @@ def list_sa_v1(authorization: str | None = Header(default=None), limit: int = 10
 def create_sa_v1(payload: ServiceAccountCreateIn, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    from app.domains.governance.identity_ids import new_id
-
-    return repo.insert_service_account(
-        sa_id=new_id("sa"),
-        name=payload.name.strip(),
+    return svc.create_service_account(
+        name=payload.name,
         description=payload.description,
-        state="active",
+        actor_id=_principal_user_id(principal),
     )
 
 
@@ -364,9 +352,13 @@ def patch_sa_v1(
 ) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    row = repo.update_service_account(sa_id, name=payload.name, description=payload.description, state=payload.state)
-    if not row:
-        raise not_found()
+    row = svc.patch_service_account(
+        sa_id=sa_id,
+        name=payload.name,
+        description=payload.description,
+        state=payload.state,
+        actor_id=_principal_user_id(principal),
+    )
     return row
 
 
@@ -374,15 +366,20 @@ def patch_sa_v1(
 def revoke_sa_v1(sa_id: str, authorization: str | None = Header(default=None)) -> None:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    if not repo.update_service_account(sa_id, name=None, description=None, state="revoked"):
-        raise not_found()
+    svc.patch_service_account(
+        sa_id=sa_id,
+        name=None,
+        description=None,
+        state="revoked",
+        actor_id=_principal_user_id(principal),
+    )
 
 
 @router.post("/service-accounts/{sa_id}/issue-secret", status_code=201)
 def issue_secret_v1(sa_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    return svc.issue_sa_secret(sa_id)
+    return svc.issue_sa_secret(sa_id, actor_id=_principal_user_id(principal))
 
 
 @router.post("/service-accounts/{sa_id}/rotate", status_code=201)
@@ -393,9 +390,11 @@ def rotate_secret_v1(
 ) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    out = svc.issue_sa_secret(sa_id)
-    if payload and payload.revoke_token_id:
-        repo.revoke_sa_credential(payload.revoke_token_id)
+    out = svc.rotate_sa_secret(
+        sa_id,
+        revoke_token_id=payload.revoke_token_id if payload else None,
+        actor_id=_principal_user_id(principal),
+    )
     return out
 
 
@@ -414,8 +413,7 @@ def revoke_credential_v1(
 ) -> None:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    if not repo.revoke_sa_credential(token_id):
-        raise not_found()
+    svc.revoke_sa_credential(token_id, sa_id=sa_id, actor_id=_principal_user_id(principal))
 
 
 @router.get("/service-accounts/{sa_id}/permissions")
@@ -504,6 +502,7 @@ def audit_v1(
     authorization: str | None = Header(default=None),
     actor_id: str | None = None,
     action: str | None = None,
+    q: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
     limit: int = 100,
@@ -514,8 +513,62 @@ def audit_v1(
         "items": repo.list_audit_events(
             actor_id=actor_id,
             action=action,
+            q=q,
             from_ts=from_ts,
             to_ts=to_ts,
             limit=min(limit, 500),
         )
     }
+
+
+@router.get("/audit/{event_id}")
+def audit_detail_v1(event_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    principal = authenticate_bearer(authorization)
+    _require_admin(principal)
+    row = repo.get_audit_event(event_id)
+    if not row:
+        raise not_found()
+    return row
+
+
+@router.get("/identity/dashboard")
+def identity_dashboard_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    principal = authenticate_bearer(authorization)
+    _require_admin(principal)
+    return svc.get_identity_dashboard()
+
+
+@router.get("/identity/sessions")
+def list_identity_sessions_admin_v1(
+    authorization: str | None = Header(default=None),
+    x_mlair_refresh_token: str | None = Header(default=None, alias="X-MLAir-Refresh-Token"),
+    limit: int = 200,
+) -> dict[str, Any]:
+    principal = authenticate_bearer(authorization)
+    _require_admin(principal)
+    return {
+        "items": svc.list_admin_sessions(
+            limit=min(limit, 500),
+            current_refresh_token=x_mlair_refresh_token,
+        )
+    }
+
+
+@router.delete("/identity/sessions/{session_id}", status_code=204)
+def revoke_identity_session_admin_v1(
+    session_id: str,
+    authorization: str | None = Header(default=None),
+) -> None:
+    principal = authenticate_bearer(authorization)
+    _require_admin(principal)
+    svc.revoke_admin_session(session_id=session_id, actor_id=_principal_user_id(principal))
+
+
+@router.delete("/identity/sessions", status_code=204)
+def revoke_all_identity_sessions_admin_v1(
+    authorization: str | None = Header(default=None),
+    user_id: str | None = None,
+) -> None:
+    principal = authenticate_bearer(authorization)
+    _require_admin(principal)
+    svc.revoke_all_admin_sessions(user_id=user_id, actor_id=_principal_user_id(principal))

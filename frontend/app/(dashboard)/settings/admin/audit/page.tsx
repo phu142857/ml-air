@@ -1,9 +1,5 @@
-import { ConfigAuditPanel } from "@/components/settings/config-audit-panel";
+import { redirect } from "next/navigation";
 
-export default function SettingsAdminAuditPage() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <ConfigAuditPanel />
-    </div>
-  );
+export default function SettingsAdminAuditRedirectPage() {
+  redirect("/identity/platform/config-audit");
 }

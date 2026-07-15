@@ -60,13 +60,17 @@ export function AdminIdentitySettings() {
         accentBorder="none"
       >
         <p className="text-sm text-muted-foreground">
-          Manage users and service accounts from the sidebar{" "}
-          <a href="/admin/users" className="text-primary hover:underline">
-            Administration → Users
+          Manage users and service accounts from{" "}
+          <a href="/identity/users" className="text-primary hover:underline">
+            Identity → Users
           </a>{" "}
           and{" "}
-          <a href="/admin/service-accounts" className="text-primary hover:underline">
+          <a href="/identity/service-accounts" className="text-primary hover:underline">
             Service accounts
+          </a>
+          . Platform identity policy is configured at{" "}
+          <a href="/identity/settings" className="text-primary hover:underline">
+            Identity → Settings
           </a>
           .
         </p>

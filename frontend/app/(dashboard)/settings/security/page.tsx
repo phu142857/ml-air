@@ -30,7 +30,7 @@ export default function SettingsSecurityPage() {
             Sign out
           </Button>
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/settings/sessions">Manage sessions</Link>
+            <Link href="/settings/sessions">My sessions</Link>
           </Button>
         </div>
       </DetailSection>

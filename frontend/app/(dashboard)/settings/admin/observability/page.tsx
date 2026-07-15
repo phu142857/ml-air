@@ -1,5 +1,5 @@
-import { AdminObservabilitySettings } from "@/components/settings/admin-observability-settings";
+import { redirect } from "next/navigation";
 
-export default function SettingsAdminObservabilityPage() {
-  return <AdminObservabilitySettings />;
+export default function SettingsAdminObservabilityRedirectPage() {
+  redirect("/identity/platform/observability");
 }

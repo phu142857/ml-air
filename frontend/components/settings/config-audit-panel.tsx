@@ -9,7 +9,7 @@ export function ConfigAuditPanel() {
   const { token } = useAppContext();
   const { data, isLoading, error } = useQuery({
     queryKey: ["config-audit", token],
-    queryFn: () => listIdentityAudit(token, 200, "system_settings.patch"),
+    queryFn: () => listIdentityAudit(token, { limit: 200, action: "system_settings.patch" }),
     enabled: Boolean(token?.trim()),
   });
 

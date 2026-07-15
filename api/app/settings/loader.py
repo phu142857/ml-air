@@ -290,9 +290,15 @@ def load_settings() -> Settings:
 
     lockout_threshold = _IDENTITY_LOCKOUT_THRESHOLD
     lockout_minutes = _IDENTITY_LOCKOUT_MINUTES
+    password_min_length = 8
+    access_token_ttl_seconds = 900
+    refresh_token_ttl_seconds = 604800
     if l4:
         lockout_threshold = l4_int(l4, "identity", "lockout_threshold") or lockout_threshold
         lockout_minutes = l4_int(l4, "identity", "lockout_minutes") or lockout_minutes
+        password_min_length = l4_int(l4, "identity", "password_min_length") or password_min_length
+        access_token_ttl_seconds = l4_int(l4, "identity", "access_token_ttl_seconds") or access_token_ttl_seconds
+        refresh_token_ttl_seconds = l4_int(l4, "identity", "refresh_token_ttl_seconds") or refresh_token_ttl_seconds
 
     return Settings(
         profile=profile,
@@ -305,6 +311,9 @@ def load_settings() -> Settings:
         identity=IdentitySettings(
             lockout_threshold=lockout_threshold,
             lockout_minutes=lockout_minutes,
+            password_min_length=password_min_length,
+            access_token_ttl_seconds=access_token_ttl_seconds,
+            refresh_token_ttl_seconds=refresh_token_ttl_seconds,
         ),
         promotion=_resolve_promotion(profile_cfg, l4),
         observability=_resolve_observability(profile_cfg, l4),

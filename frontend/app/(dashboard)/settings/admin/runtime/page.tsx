@@ -1,5 +1,5 @@
-import { AdminRuntimeSettings } from "@/components/settings/admin-runtime-settings";
+import { redirect } from "next/navigation";
 
-export default function SettingsAdminRuntimePage() {
-  return <AdminRuntimeSettings />;
+export default function SettingsAdminRuntimeRedirectPage() {
+  redirect("/identity/platform/runtime");
 }
