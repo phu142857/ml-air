@@ -1,10 +1,17 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Monitor } from "lucide-react";
-import { DetailSection } from "@/components/mlops/layout";
-import { Button } from "@/components/ui/button";
+import { Monitor } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DangerZone,
+  DangerZoneAction,
+  SettingsEmptyState,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { fetchIdentitySessions, revokeIdentitySession } from "@/lib/identity-api";
 import { useAppContext } from "@/lib/app-context";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
@@ -45,57 +52,83 @@ export function SessionsPanel() {
   const items = sessionsQuery.data || [];
 
   return (
-    <DetailSection
-      title="My sessions"
-      description="Devices signed in to your account. Revoke any session you do not recognize."
-      accentBorder="sky"
+    <SettingsPage
+      loading={sessionsQuery.isLoading}
+      error={sessionsQuery.error ? String((sessionsQuery.error as Error).message) : null}
     >
-      {sessionsQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading sessions…
-        </div>
-      ) : null}
-      {sessionsQuery.error ? (
-        <p className="text-sm text-destructive">{String((sessionsQuery.error as Error).message)}</p>
-      ) : null}
-      <div className="space-y-3">
+      <SettingsPageHeader
+        title="Sessions"
+        description="Devices signed in to your account. Revoke any session you do not recognize."
+      />
+
+      <SettingsSection id="sessions" title="Active sessions" description="Browser and API sessions tied to your identity.">
         {items.length === 0 && !sessionsQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">No active sessions.</p>
-        ) : null}
-        {items.map((session) => (
-          <div key={session.id} className="panel-surface flex flex-wrap items-start justify-between gap-3 p-4">
-            <div className="flex min-w-0 gap-3">
-              <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{parseUserAgent(session.user_agent)}</span>
-                  {session.is_current ? (
-                    <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">
-                      Current
-                    </Badge>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {session.ip || "Unknown IP"} · Last active {formatWhen(session.last_used_at || session.created_at)}
-                </p>
-                <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/80">{session.id}</p>
-              </div>
-            </div>
-            {!session.is_current ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={revokeMutation.isPending}
-                onClick={() => revokeMutation.mutate(session.id)}
+          <SettingsEmptyState
+            title="No active sessions"
+            description="When you sign in from a new device, it will appear here."
+          />
+        ) : (
+          <div className="space-y-3">
+            {items.map((session) => (
+              <div
+                key={session.id}
+                className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border/60 bg-muted/20 p-4"
               >
-                Revoke
-              </Button>
-            ) : null}
+                <div className="flex min-w-0 gap-3">
+                  <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">{parseUserAgent(session.user_agent)}</span>
+                      {session.is_current ? (
+                        <Badge variant="outline" className="border-primary/30 text-[11px] text-primary">
+                          Current
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {session.ip || "Unknown IP"} · Last active {formatWhen(session.last_used_at || session.created_at)}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/80">{session.id}</p>
+                  </div>
+                </div>
+                {!session.is_current ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={revokeMutation.isPending}
+                    onClick={() => revokeMutation.mutate(session.id)}
+                  >
+                    Revoke
+                  </Button>
+                ) : null}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </DetailSection>
+        )}
+      </SettingsSection>
+
+      <DangerZone description="End all other sessions if you suspect unauthorized access.">
+        <DangerZoneAction
+          title="Revoke other sessions"
+          description="Keeps your current browser session. All other devices will need to sign in again."
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={items.filter((s) => !s.is_current).length === 0 || revokeMutation.isPending}
+              onClick={async () => {
+                for (const s of items) {
+                  if (!s.is_current) await revokeMutation.mutateAsync(s.id);
+                }
+              }}
+            >
+              Revoke others
+            </Button>
+          }
+        />
+      </DangerZone>
+    </SettingsPage>
   );
 }

@@ -64,11 +64,6 @@ function TracesPageContent() {
             <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
               Trace viewer
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {isAggregate
-                ? "Pin tenant and project to browse traces"
-                : "Distributed execution timeline · keyboard-first"}
-            </p>
           </div>
         </div>
       </header>

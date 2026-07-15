@@ -121,8 +121,6 @@ function TopRunsTable({ runs }: { runs: RunUsageRollupItem[] }) {
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Top runs by GPU time</p>
       <DataTable
         tableId="usage-top-runs"
-        title="Top runs"
-        description="Runs with highest GPU time in the window."
         columns={columns}
         data={runs}
         keyExtractor={(row) => row.run_id}
@@ -178,8 +176,6 @@ function ProjectsTable({ projects }: { projects: ProjectUsageRollupItem[] }) {
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">By project</p>
       <DataTable
         tableId="usage-projects"
-        title="Projects"
-        description="Project-level usage breakdown."
         columns={columns}
         data={projects}
         keyExtractor={(row) => row.project_id}
@@ -243,7 +239,6 @@ export function UsageRollupPanel({
       <MlopsEmptyState
         icon={Activity}
         title="No resource usage in window"
-        description={`No completed runs with usage data in the last ${windowLabel}.`}
         className="border-0 bg-transparent p-0"
       />
     )

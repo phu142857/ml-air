@@ -196,17 +196,11 @@ function DiffPageInner() {
         ) : diffQuery.isError ? (
           <p className="text-sm text-red-300">Failed to load diff.</p>
         ) : details.length === 0 ? (
-          <MlopsEmptyState
-            icon={FileDiff}
-            title="No differences"
-            description="Selected versions have identical top-level config keys (or no changed keys returned)."
-          />
+          <MlopsEmptyState icon={FileDiff} title="No differences" />
         ) : (
           <DetailSection title="Changed keys" accentBorder="amber" bodyClassName="p-0">
             <DataTable
               tableId={`pipeline-diff:${pipelineId}`}
-              title="Changed keys"
-              description="Top-level config differences between selected versions."
               columns={diffColumns}
               data={details}
               keyExtractor={(row) => row.key}

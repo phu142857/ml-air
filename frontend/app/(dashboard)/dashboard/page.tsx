@@ -53,10 +53,6 @@ export default function DashboardPage() {
   const blockedReadinessCount =
     typeof stats[0]?.blocked === "number" ? stats[0].blocked : 0
 
-  const scopeSubtitle = isAggregate
-    ? "Cross-project executive overview"
-    : "Operations board · fast scanning"
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
@@ -64,7 +60,6 @@ export default function DashboardPage() {
         icon={Network}
         accent="sky"
         title="Dashboard"
-        subtitle={scopeSubtitle}
       />
 
       <PageScrollBody

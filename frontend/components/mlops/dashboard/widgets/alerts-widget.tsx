@@ -96,7 +96,6 @@ export function AlertsWidget({
             <MlopsEmptyState
               icon={History}
               title="No events yet"
-              description="Lifecycle audit events will appear here."
               className="border-0 bg-transparent p-0"
             />
           ) : (

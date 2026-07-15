@@ -60,7 +60,6 @@ export function RecentTracesWidget({
       <MlopsEmptyState
         icon={Route}
         title="Pin scope for traces"
-        description="Pin tenant and project to load recent traces."
         className="border-0 bg-transparent p-0"
       />
     )
@@ -84,7 +83,6 @@ export function RecentTracesWidget({
       <MlopsEmptyState
         icon={Route}
         title="No traces yet"
-        description="Distributed traces from runs will appear here."
         className="border-0 bg-transparent p-0"
       />
     )

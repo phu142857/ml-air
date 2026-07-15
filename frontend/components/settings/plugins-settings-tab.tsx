@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Puzzle, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useAppContext } from "@/lib/app-context";
 import { fetchPlugins, reloadPlugins, togglePlugin, validatePlugin } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
@@ -11,7 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/mlops/status-badge";
-import { MlopsEmptyState, DetailSection } from "@/components/mlops/layout";
+import {
+  SettingsEmptyState,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
 import { patchListQueryItem } from "@/lib/optimistic-list";
 import type { PluginItem } from "@/lib/api";
@@ -176,17 +181,16 @@ export function PluginsSettingsTab() {
   );
 
   return (
-    <div className="w-full space-y-6">
-      <DetailSection
-        title="Loaded plugins"
-        description="Plugins registered by the API runtime."
-        accentBorder="emerald"
-        headerActions={
+    <SettingsPage>
+      <SettingsPageHeader
+        title="Integrations"
+        description="Plugin registry, lifecycle, and validation for platform extensions."
+        actions={
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="gap-2 bg-card border-border"
+            className="gap-2"
             loading={reloadMutation.isPending}
             loadingText="Reloading…"
             onClick={() => reloadMutation.mutate()}
@@ -195,7 +199,12 @@ export function PluginsSettingsTab() {
             Reload registry
           </Button>
         }
-        bodyClassName="space-y-4"
+      />
+
+      <SettingsSection
+        id="registry"
+        title="Loaded plugins"
+        description="Plugins registered by the API runtime."
       >
         {pluginsQuery.isFetching ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -226,16 +235,13 @@ export function PluginsSettingsTab() {
         {pluginsQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading plugins…</p>
         ) : items.length === 0 ? (
-          <MlopsEmptyState
-            icon={Puzzle}
+          <SettingsEmptyState
             title="No plugins loaded"
             description="The API returned an empty registry. Use Reload registry after adding plugins on the server."
           />
         ) : (
           <DataTable
             tableId="plugins-registry"
-            title="Loaded plugins"
-            description="Registry view with saved views, compatibility filters, and quick actions."
             columns={pluginColumns}
             data={items}
             keyExtractor={(p) => p.name}
@@ -248,13 +254,12 @@ export function PluginsSettingsTab() {
             onRetry={() => void pluginsQuery.refetch()}
           />
         )}
-      </DetailSection>
+      </SettingsSection>
 
-      <DetailSection
+      <SettingsSection
+        id="validate"
         title="Validate plugin"
         description="POST validation context JSON to a plugin entrypoint."
-        accentBorder="sky"
-        bodyClassName="space-y-4"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -314,7 +319,7 @@ export function PluginsSettingsTab() {
             {Object.keys(selected.inputs || {}).length}
           </p>
         ) : null}
-      </DetailSection>
-    </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

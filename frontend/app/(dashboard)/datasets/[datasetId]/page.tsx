@@ -1195,7 +1195,6 @@ export default function DatasetHubPage() {
     downloadingVersionId,
   ]);
 
-  const datasetSubtitle = dataset ? `Updated ${formatDateTimeCompact(dataset.updated_at || dataset.created_at)}` : "";
 
   const lifecycleStages = ["Buffer", "Version", "Readiness", "Eligibility"] as const;
   const lifecycleStageIndex = useMemo(() => {
@@ -1255,7 +1254,6 @@ export default function DatasetHubPage() {
         icon={Database}
         accent="emerald"
         title={dataset ? `Dataset · ${dataset.name}` : "Dataset"}
-        subtitle={datasetSubtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild className="h-8 border-border bg-card text-xs">
@@ -1416,7 +1414,6 @@ export default function DatasetHubPage() {
               title="Runs using this dataset"
               accentBorder={DATASET_SECTION_ACCENT}
               className="lg:col-span-2"
-              description="Training and pipeline runs that declared this dataset as input."
             >
               {!scopePinned ? (
                 <p className="text-sm text-muted-foreground">
@@ -1427,17 +1424,11 @@ export default function DatasetHubPage() {
               ) : datasetRunsQuery.isError ? (
                 <p className={feedbackMessageClass("failed", "sm")}>{formatApiClientError(datasetRunsQuery.error)}</p>
               ) : datasetRunsQuery.items.length === 0 ? (
-                <MlopsEmptyState
-                  icon={Play}
-                  title="No runs yet"
-                  description="Runs that consume this dataset appear here after you trigger training or pipelines."
-                />
+                <MlopsEmptyState icon={Play} title="No runs" />
               ) : (
                 <>
                   <MlopsDataTable
                     tableId="dataset-runs"
-                    title="Dataset runs"
-                    description="Search and filter runs linked to this dataset."
                     columns={datasetRunColumns}
                     data={datasetRunsQuery.items}
                     keyExtractor={(run) => run.run_id}
@@ -1785,17 +1776,11 @@ export default function DatasetHubPage() {
           {readinessEvaluationsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : evaluationItems.length === 0 ? (
-            <MlopsEmptyState
-              icon={Database}
-              title="No readiness evaluations yet"
-              description="Run evaluate from the Readiness tab controls above, or relax filters."
-            />
+            <MlopsEmptyState icon={Database} title="No evaluations" />
           ) : (
             <>
               <MlopsDataTable
                 tableId="dataset-evaluations"
-                title="Readiness evaluations"
-                description="Search and filter readiness evaluation history."
                 columns={evaluationColumns}
                 data={evaluationItems}
                 keyExtractor={(row) => row.evaluation_id}
@@ -2058,8 +2043,6 @@ export default function DatasetHubPage() {
                 />
                 <MlopsDataTable
                 tableId="dataset-versions"
-                title="Dataset versions"
-                description="Search, filter by quality/source, and sort versions."
                 columns={versionColumns}
                 data={versionsQuery.data?.items || []}
                 keyExtractor={(v) => v.version_id}

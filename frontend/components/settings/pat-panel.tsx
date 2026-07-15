@@ -3,11 +3,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Key, Loader2 } from "lucide-react";
-import { DetailSection } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  IdentityStatusBadge,
+  MetadataList,
+  SettingsEmptyState,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import {
   createPersonalAccessToken,
   fetchPersonalAccessTokens,
@@ -69,70 +76,80 @@ export function PatPanel() {
   const activePats = (patsQuery.data || []).filter((p) => !p.revoked_at);
 
   return (
-    <div className="space-y-6">
-      <DetailSection
-        title="Connect your local machine"
-        description="Use a personal access token for CLI and automation. Session JWTs are not shown here."
-        accentBorder="violet"
-      >
-        <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4 font-mono text-xs">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">CLI login (browser)</p>
-          <pre className="overflow-x-auto whitespace-pre-wrap text-foreground">{`# Sign in via Hub (recommended)
+    <SettingsPage loading={patsQuery.isLoading} error={patsQuery.error ? String((patsQuery.error as Error).message) : null}>
+      <SettingsPageHeader
+        title="CLI & API tokens"
+        description="Connect automation and local tooling to the MLAir control plane."
+      />
+
+      <SettingsSection id="configuration" title="Configuration" description="API endpoint for CLI and SDK clients.">
+        <div className="rounded-md border border-border/60 bg-muted/20 p-4 font-mono text-xs">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Recommended setup</p>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-foreground">{`# Sign in via Hub (recommended)
 open ${typeof window !== "undefined" ? window.location.origin : ""}/login
 
-# Then configure API endpoint
+# Configure API endpoint
 export MLAIR_API_URL="${apiBase}/v1"`}</pre>
-          <p className="text-[10px] text-muted-foreground">
-            Native <span className="font-mono">mlair login</span> device flow is planned — use PAT below for scripts today.
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Native <span className="font-mono">mlair login</span> device flow is planned — use personal access tokens for scripts today.
           </p>
         </div>
-      </DetailSection>
+      </SettingsSection>
 
-      <DetailSection
-        title="Personal access tokens"
-        description="Generate tokens for API clients. Copy the secret once — it cannot be shown again."
-        accentBorder="amber"
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs">Description</Label>
-            <Input
+      <SettingsSection id="general" title="General" description="Create a new personal access token.">
+        <div className="grid max-w-lg gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="pat-description">Description</Label>
+            <Textarea
+              id="pat-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="CI deploy key"
-              className="mt-1 h-8 text-xs"
+              placeholder="CI deploy key, local development, …"
+              rows={2}
+              className="resize-y text-sm"
             />
           </div>
-          <div>
-            <Label className="text-xs">Expiration (days, empty = no expiry)</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="pat-expiry">Expiration (days)</Label>
             <Input
+              id="pat-expiry"
+              inputMode="numeric"
               value={expiresDays}
               onChange={(e) => setExpiresDays(e.target.value)}
-              placeholder="90"
-              className="mt-1 h-8 font-mono text-xs"
+              placeholder="90 — leave empty for no expiry"
+              className="h-9 font-mono text-sm"
             />
           </div>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          className="mt-3"
-          disabled={!description.trim() || createMutation.isPending}
-          onClick={() => createMutation.mutate()}
-        >
-          {createMutation.isPending ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Key className="mr-2 h-3.5 w-3.5" />}
-          Generate token
-        </Button>
+        <div className="mt-4">
+          <Button
+            type="button"
+            size="sm"
+            disabled={!description.trim() || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Key className="mr-2 h-3.5 w-3.5" />
+            )}
+            Generate token
+          </Button>
+        </div>
 
         {newToken ? (
-          <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
-            <p className="text-xs font-medium text-primary">Copy your new token now</p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{newToken}</code>
+          <div className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-4">
+            <p className="text-sm font-medium text-primary">Copy your new token now</p>
+            <p className="mt-1 text-xs text-muted-foreground">This secret cannot be shown again after you leave this page.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-[11px]">
+                {newToken}
+              </code>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                aria-label="Copy token"
                 onClick={() => {
                   void copyWithToast(newToken, { successTitle: "Token copied" }).then((ok) => {
                     if (ok) {
@@ -147,44 +164,49 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
             </div>
           </div>
         ) : null}
+      </SettingsSection>
 
-        <div className="mt-6 space-y-2">
-          {patsQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading tokens…
-            </div>
-          ) : null}
-          {activePats.length === 0 && !patsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">No active tokens.</p>
-          ) : null}
-          {activePats.map((pat) => (
-            <div key={pat.id} className="panel-surface flex flex-wrap items-center justify-between gap-3 p-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{pat.description}</span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {pat.expires_at ? `expires ${formatWhen(pat.expires_at)}` : "no expiry"}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Created {formatWhen(pat.created_at)}
-                  {pat.last_used_at ? ` · Last used ${formatWhen(pat.last_used_at)}` : ""}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={revokeMutation.isPending}
-                onClick={() => revokeMutation.mutate(pat.id)}
+      <SettingsSection id="tokens" title="Active tokens" description="Tokens currently authorized for API access.">
+        {activePats.length === 0 ? (
+          <SettingsEmptyState
+            title="No active tokens"
+            description="Generate a token above to authenticate scripts and automation."
+          />
+        ) : (
+          <div className="space-y-3">
+            {activePats.map((pat) => (
+              <div
+                key={pat.id}
+                className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border/60 p-4"
               >
-                Revoke
-              </Button>
-            </div>
-          ))}
-        </div>
-      </DetailSection>
-    </div>
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">{pat.description}</span>
+                    <IdentityStatusBadge state="active" />
+                  </div>
+                  <MetadataList
+                    items={[
+                      { label: "Created", value: formatWhen(pat.created_at) },
+                      { label: "Expires", value: pat.expires_at ? formatWhen(pat.expires_at) : "Never" },
+                      { label: "Last used", value: formatWhen(pat.last_used_at) },
+                      { label: "ID", value: pat.id, mono: true },
+                    ]}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={revokeMutation.isPending}
+                  onClick={() => revokeMutation.mutate(pat.id)}
+                >
+                  Revoke
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </SettingsSection>
+    </SettingsPage>
   );
 }

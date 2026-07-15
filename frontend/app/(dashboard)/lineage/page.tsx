@@ -432,7 +432,6 @@ function LineagePageInner() {
       <div className="page-toolbar">
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Run ID</Label>
             <div className="flex gap-2">
               <Input
                 value={runInput}
@@ -455,7 +454,6 @@ function LineagePageInner() {
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Dataset version ID</Label>
             <div className="flex gap-2">
               <Input
                 value={dvInput}

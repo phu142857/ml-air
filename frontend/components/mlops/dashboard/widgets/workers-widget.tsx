@@ -29,7 +29,6 @@ export function WorkersWidget({ runs }: WorkersWidgetProps) {
       <MlopsEmptyState
         icon={Server}
         title="No active workers"
-        description="Worker hosts appear when runs are executing."
         className="border-0 bg-transparent p-0"
       />
     )

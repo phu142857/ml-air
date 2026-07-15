@@ -570,6 +570,8 @@ def admin_patch_user(
     password: str | None = None,
     is_global_admin: bool | None = None,
 ) -> dict[str, Any]:
+    if state == "deleted":
+        raise validation_error("Use DELETE /users/{user_id} to remove a user")
     password_hash = None
     if password:
         _validate_password_strength(password)
@@ -582,17 +584,7 @@ def admin_patch_user(
     )
     if not updated:
         raise not_found()
-    if state == "deleted":
-        repo.revoke_all_sessions(user_id)
-        _audit(
-            actor_kind="user",
-            actor_id=actor_id,
-            action="identity.user.delete",
-            target_type="user",
-            target_id=user_id,
-            result="success",
-        )
-    elif state in {"active", "disabled", "locked"}:
+    if state in {"active", "disabled", "locked"}:
         _audit(
             actor_kind="user",
             actor_id=actor_id,
@@ -621,6 +613,27 @@ def admin_patch_user(
             result="success",
         )
     return updated
+
+
+def admin_delete_user(*, actor_id: str | None, user_id: str) -> None:
+    if actor_id and actor_id == user_id:
+        raise forbidden("Cannot delete your own account")
+    user = repo.get_user_by_id(user_id)
+    if not user:
+        raise not_found()
+    if user.get("is_global_admin") and repo.count_global_admins() <= 1:
+        raise validation_error("Cannot delete the last global administrator")
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.user.delete",
+        target_type="user",
+        target_id=user_id,
+        result="success",
+        extra={"username": user.get("username")},
+    )
+    if not repo.delete_user(user_id):
+        raise not_found()
 
 
 def create_service_account(
@@ -657,17 +670,33 @@ def patch_service_account(
     row = repo.update_service_account(sa_id, name=name, description=description, state=state)
     if not row:
         raise not_found()
-    action = "identity.sa.delete" if state == "revoked" else "identity.sa.update"
     _audit(
         actor_kind="user",
         actor_id=actor_id,
-        action=action,
+        action="identity.sa.update",
         target_type="service_account",
         target_id=sa_id,
         result="success",
         extra={"state": state} if state else None,
     )
     return row
+
+
+def delete_service_account(*, sa_id: str, actor_id: str | None = None) -> None:
+    sa = repo.get_service_account(sa_id)
+    if not sa:
+        raise not_found()
+    _audit(
+        actor_kind="user",
+        actor_id=actor_id,
+        action="identity.sa.delete",
+        target_type="service_account",
+        target_id=sa_id,
+        result="success",
+        extra={"name": sa.get("name")},
+    )
+    if not repo.delete_service_account(sa_id):
+        raise not_found()
 
 
 def accessible_scopes_for_user(user: dict[str, Any]) -> list[dict[str, str]]:

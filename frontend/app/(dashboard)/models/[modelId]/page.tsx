@@ -878,7 +878,7 @@ export default function ModelDetailPage() {
         ) : (
       <DetailSection title="Recent runs" accentBorder="violet">
         {!(recentRunsQuery.data || []).length ? (
-          <MlopsEmptyState icon={Play} title="No recent runs" description="No runs linked from model versions yet." />
+          <MlopsEmptyState icon={Play} title="No recent runs" />
         ) : (
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
             {(recentRunsQuery.data || []).map((r) => (
@@ -986,8 +986,6 @@ export default function ModelDetailPage() {
           ) : null}
           <MlopsDataTable
             tableId="model-versions"
-            title="Model versions"
-            description="Search and filter by stage or approval status."
             columns={versionColumns}
             data={paginatedVersions}
             keyExtractor={(v) => v.version_id}

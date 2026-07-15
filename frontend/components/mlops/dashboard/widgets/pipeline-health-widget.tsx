@@ -52,7 +52,6 @@ export function PipelineHealthWidget({ pipelines, runningPipelines }: PipelineHe
         <MlopsEmptyState
           icon={GitBranch}
           title="No running pipelines"
-          description="Active pipelines will appear here."
           className="border-0 bg-transparent p-0"
         />
       ) : (

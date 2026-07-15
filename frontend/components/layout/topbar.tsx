@@ -48,10 +48,10 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
             </kbd>
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             className={cn(
-              "h-9 w-9 shrink-0 text-muted-foreground transition-default hover:text-foreground",
+              "h-9 w-9 shrink-0 border-border bg-background text-muted-foreground transition-default hover:bg-accent/40 hover:text-foreground",
               settingsActive && "bg-accent text-foreground",
             )}
             asChild

@@ -1,65 +1,117 @@
 "use client";
 
-import { DetailSection } from "@/components/mlops/layout";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAppContext } from "@/lib/app-context";
 import {
-  L4ErrorState,
-  L4LoadingState,
-  L4Meta,
-  L4SaveBar,
-} from "@/components/settings/l4-settings-ui";
+  MetadataList,
+  SettingsFormFooter,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
+import { useAppContext } from "@/lib/app-context";
+import { L4ErrorState, L4LoadingState } from "@/components/settings/l4-settings-ui";
 import { partialFromForm, useL4SettingsForm } from "@/hooks/use-l4-settings-form";
+
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 export function AdminObservabilitySettings() {
   const { token } = useAppContext();
   const { query, form, setForm, saveMutation, doc } = useL4SettingsForm(token);
+  const [baseline, setBaseline] = useState<string | null>(null);
 
-  if (query.isLoading) return <L4LoadingState />;
-  if (query.isError) return <L4ErrorState error={query.error} />;
+  useEffect(() => {
+    if (form && baseline === null) setBaseline(JSON.stringify(form));
+  }, [form, baseline]);
+
+  const dirty = baseline !== null && form ? JSON.stringify(form) !== baseline : false;
+
+  if (query.isLoading) {
+    return (
+      <SettingsPage>
+        <L4LoadingState />
+      </SettingsPage>
+    );
+  }
+  if (query.isError) {
+    return (
+      <SettingsPage error={String((query.error as Error).message)}>
+        <L4ErrorState error={query.error} />
+      </SettingsPage>
+    );
+  }
   if (!form || !doc) return null;
 
   return (
-    <DetailSection
-      title="Observability"
-      description="Grafana, tracing retention, and metrics sampling (L4 telemetry)."
-      accentBorder="sky"
-    >
-      <L4Meta doc={doc} />
-      <div className="mt-4 space-y-4">
-        <div>
-          <Label className="text-xs">Grafana URL</Label>
-          <Input
-            value={form.grafanaUrl}
-            onChange={(e) => setForm({ ...form, grafanaUrl: e.target.value })}
-            placeholder="https://grafana.example.com"
-            className="mt-1 h-8 font-mono text-xs"
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs">Trace span retention (days)</Label>
-            <Input
-              value={form.traceRetentionDays}
-              onChange={(e) => setForm({ ...form, traceRetentionDays: e.target.value })}
-              className="mt-1 h-8 font-mono text-xs"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Trace sample ratio (0–1)</Label>
-            <Input
-              value={form.traceSampleRatio}
-              onChange={(e) => setForm({ ...form, traceSampleRatio: e.target.value })}
-              className="mt-1 h-8 font-mono text-xs"
-            />
-          </div>
-        </div>
-        <L4SaveBar
-          saving={saveMutation.isPending}
-          onSave={() => saveMutation.mutate(partialFromForm(form, ["telemetry"]))}
+    <SettingsPage>
+      <SettingsPageHeader
+        title="Observability"
+        description="Grafana integration, tracing retention, and metrics sampling."
+      />
+
+      <SettingsSection id="metadata" title="Metadata" description="Last platform settings change.">
+        <MetadataList
+          items={[
+            { label: "Schema version", value: String(doc.schema_version), mono: true },
+            { label: "Last updated", value: formatWhen(doc.updated_at) },
+            { label: "Updated by", value: doc.updated_by || "—", mono: true },
+          ]}
         />
-      </div>
-    </DetailSection>
+      </SettingsSection>
+
+      <SettingsSection id="configuration" title="Configuration" description="Telemetry endpoints and retention.">
+        <div className="max-w-lg space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="grafana-url">Grafana URL</Label>
+            <Input
+              id="grafana-url"
+              value={form.grafanaUrl}
+              onChange={(e) => setForm({ ...form, grafanaUrl: e.target.value })}
+              placeholder="https://grafana.example.com"
+              className="h-9 font-mono text-sm"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trace-retention">Trace span retention (days)</Label>
+              <Input
+                id="trace-retention"
+                inputMode="numeric"
+                value={form.traceRetentionDays}
+                onChange={(e) => setForm({ ...form, traceRetentionDays: e.target.value })}
+                className="h-9 font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="trace-sample">Trace sample ratio (0–1)</Label>
+              <Input
+                id="trace-sample"
+                value={form.traceSampleRatio}
+                onChange={(e) => setForm({ ...form, traceSampleRatio: e.target.value })}
+                className="h-9 font-mono text-sm"
+              />
+            </div>
+          </div>
+        </div>
+        <SettingsFormFooter
+          dirty={dirty}
+          saving={saveMutation.isPending}
+          onSave={() => {
+            saveMutation.mutate(partialFromForm(form, ["telemetry"]), {
+              onSuccess: () => setBaseline(JSON.stringify(form)),
+            });
+          }}
+          onCancel={() => baseline && setForm(JSON.parse(baseline))}
+        />
+      </SettingsSection>
+    </SettingsPage>
   );
 }

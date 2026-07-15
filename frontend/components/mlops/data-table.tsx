@@ -82,7 +82,6 @@ import {
   defaultRowCopyText,
   deriveFilterOptions,
   formatRowsForClipboard,
-  isQuickFilterColumn,
   toggleSelectionSet,
 } from "@/lib/data-table-findability"
 import {
@@ -207,6 +206,14 @@ function compareValues(a: unknown, b: unknown): number {
 
 function headerLabel(header: React.ReactNode): string {
   return typeof header === "string" ? header : "Column"
+}
+
+function filterMenuMinWidthCh(
+  options: Array<{ label: string; value: string }>,
+  header: string,
+): number {
+  const longest = Math.max(header.length, ...options.map((option) => option.label.length), 0)
+  return Math.min(56, Math.max(14, longest + 2))
 }
 
 function alignClass(): string {
@@ -592,11 +599,6 @@ export function DataTable<T>({
 
   const filterableColumns = useMemo(
     () => filterSpecs.map((entry) => entry.column),
-    [filterSpecs],
-  )
-
-  const quickFilterSpecs = useMemo(
-    () => filterSpecs.filter((entry) => isQuickFilterColumn(entry.options)),
     [filterSpecs],
   )
 
@@ -1186,15 +1188,77 @@ export function DataTable<T>({
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
         <div className="shrink-0 border-b border-border bg-card/80 px-3 py-2.5">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-              <div className="min-w-0 flex-1">
-                {title ? <h3 className="font-heading text-sm font-semibold text-foreground">{title}</h3> : null}
-                {description ? (
-                  <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">{description}</p>
-                ) : null}
-              </div>
-              <div className="flex max-w-full flex-wrap items-center justify-start gap-1.5 sm:justify-end">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {searchable ? (
+                <label className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setPageIndex(0)
+                    }}
+                    placeholder="Search…  (/)"
+                    className="h-8 pl-8 pr-16 text-xs"
+                    aria-label="Search table rows"
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground">
+                    {searchQuery.trim()
+                      ? `${processedRows.length}/${data.length}`
+                      : `${data.length}`}
+                  </span>
+                </label>
+              ) : null}
+
+              {filterSpecs.map(({ column, options }) => {
+                  const selected = filters[column.id] ?? []
+                  const menuMinCh = filterMenuMinWidthCh(options, headerLabel(column.header))
+                  const isMonoFilter = column.id === "pipeline" || column.id === "run_id"
+                  return (
+                    <DropdownMenu key={column.id}>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" className="h-8 w-auto max-w-full shrink-0">
+                          <Filter className="h-3.5 w-3.5 shrink-0" />
+                          <span className="whitespace-nowrap">{headerLabel(column.header)}</span>
+                          {selected.length ? ` (${selected.length})` : ""}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        className="w-max max-w-[min(100vw-2rem,40rem)]"
+                        style={{ minWidth: `${menuMinCh}ch` }}
+                      >
+                        <DropdownMenuLabel>{headerLabel(column.header)}</DropdownMenuLabel>
+                        {options.map((option) => {
+                          const checked = selected.includes(option.value)
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={option.value}
+                              checked={checked}
+                              className={isMonoFilter ? "font-mono text-xs" : undefined}
+                              onCheckedChange={(next) =>
+                                updateFilter(column.id, option.value, Boolean(next))
+                              }
+                            >
+                              {option.label}
+                            </DropdownMenuCheckboxItem>
+                          )
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )
+                })}
+
+              {canResetView ? (
+                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={resetState}>
+                  <X className="h-3.5 w-3.5" />
+                  Reset
+                </Button>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
                 {tableId ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1372,110 +1436,6 @@ export function DataTable<T>({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {searchable ? (
-                <label className="relative min-w-[14rem] flex-1 sm:max-w-sm">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    ref={searchInputRef}
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value)
-                      setPageIndex(0)
-                    }}
-                    placeholder="Search this table…  (/)"
-                    className="h-8 pl-8 pr-16 text-xs"
-                    aria-label="Search table rows"
-                  />
-                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground">
-                    {searchQuery.trim()
-                      ? `${processedRows.length}/${data.length}`
-                      : `${data.length}`}
-                  </span>
-                </label>
-              ) : null}
-
-              {filterSpecs
-                .filter((entry) => !isQuickFilterColumn(entry.options))
-                .map(({ column, options }) => {
-                  const selected = filters[column.id] ?? []
-                  return (
-                    <DropdownMenu key={column.id}>
-                      <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="outline" size="sm" className="h-8 min-w-[5.5rem]">
-                          <Filter className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{headerLabel(column.header)}</span>
-                          {selected.length ? ` (${selected.length})` : ""}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuLabel>{headerLabel(column.header)}</DropdownMenuLabel>
-                        {options.map((option) => {
-                          const checked = selected.includes(option.value)
-                          return (
-                            <DropdownMenuCheckboxItem
-                              key={option.value}
-                              checked={checked}
-                              onCheckedChange={(next) =>
-                                updateFilter(column.id, option.value, Boolean(next))
-                              }
-                            >
-                              {option.label}
-                            </DropdownMenuCheckboxItem>
-                          )
-                        })}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )
-                })}
-
-              {canResetView ? (
-                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={resetState}>
-                  <X className="h-3.5 w-3.5" />
-                  Reset
-                </Button>
-              ) : null}
-            </div>
-
-            {quickFilterSpecs.length > 0 ? (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Quick filters
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {quickFilterSpecs.map(({ column, options }) => {
-                    const selected = filters[column.id] ?? []
-                    return (
-                      <div key={column.id} className="flex flex-wrap items-center gap-1">
-                        <span className="mr-0.5 text-[11px] text-muted-foreground">
-                          {headerLabel(column.header)}:
-                        </span>
-                        {options.map((option) => {
-                          const active = selected.includes(option.value)
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={cn(
-                                "inline-flex h-7 items-center rounded-md border px-2 text-[11px] transition-default",
-                                active
-                                  ? "border-primary/40 bg-primary/10 font-medium text-foreground"
-                                  : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                              )}
-                              aria-pressed={active}
-                              onClick={() => updateFilter(column.id, option.value, !active)}
-                            >
-                              {option.label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
-
             {activeFilterCount > 0 || sorts.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
                 {filterableColumns.flatMap((column) =>
@@ -1485,12 +1445,19 @@ export function DataTable<T>({
                       <button
                         key={`${column.id}-${value}`}
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground transition-default hover:bg-accent"
+                        className="inline-flex max-w-full items-center gap-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground transition-default hover:bg-accent"
                         onClick={() => updateFilter(column.id, value, false)}
                       >
-                        <span className="font-medium text-foreground">{headerLabel(column.header)}:</span>
-                        <span>{option?.label ?? value}</span>
-                        <X className="h-3 w-3" />
+                        <span className="shrink-0 font-medium text-foreground">{headerLabel(column.header)}:</span>
+                        <span
+                          className={cn(
+                            "min-w-0 whitespace-nowrap text-foreground",
+                            column.id === "pipeline" || column.id === "run_id" ? "font-mono" : undefined,
+                          )}
+                        >
+                          {option?.label ?? value}
+                        </span>
+                        <X className="h-3 w-3 shrink-0" />
                       </button>
                     )
                   }),
@@ -1599,12 +1566,7 @@ export function DataTable<T>({
           <div className="flex min-h-[16rem] flex-1 items-center justify-center p-4">
             <MlopsEmptyState
               icon={searchQuery || activeFilterCount ? Search : TableProperties}
-              title={searchQuery || activeFilterCount ? "No matching rows" : emptyTitle}
-              description={
-                searchQuery || activeFilterCount
-                  ? emptyDescription
-                  : emptyMessage
-              }
+              title={searchQuery || activeFilterCount ? "No matching rows" : emptyTitle || "No rows"}
               action={
                 searchQuery || activeFilterCount ? (
                   <Button type="button" variant="outline" size="sm" onClick={resetState}>

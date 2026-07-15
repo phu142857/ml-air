@@ -48,7 +48,6 @@ export function GpuUsageWidget({
       <MlopsEmptyState
         icon={Cpu}
         title="Pin scope for GPU"
-        description="Pin tenant and project to load GPU rollup."
         className="border-0 bg-transparent p-0"
       />
     )
@@ -75,7 +74,6 @@ export function GpuUsageWidget({
       <MlopsEmptyState
         icon={Activity}
         title="Usage tracking disabled"
-        description="Enable ML_AIR_USAGE_TRACKING_ENABLED for GPU metrics."
         className="border-0 bg-transparent p-0"
       />
     )
@@ -86,7 +84,6 @@ export function GpuUsageWidget({
       <MlopsEmptyState
         icon={Cpu}
         title="No GPU usage"
-        description="No GPU-attributed runs in the last 30 days."
         className="border-0 bg-transparent p-0"
       />
     )

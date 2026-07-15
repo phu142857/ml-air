@@ -1,10 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Monitor } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DetailSection } from "@/components/mlops/layout";
+import {
+  ConfirmDestructiveDialog,
+  DangerZone,
+  DangerZoneAction,
+  SettingsEmptyState,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { useAppContext } from "@/lib/app-context";
 import { listAdminSessions, revokeAdminSession, revokeAllAdminSessions } from "@/lib/identity-admin-api";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
@@ -27,6 +36,7 @@ function parseUserAgent(ua: string | null | undefined): string {
 export default function IdentitySessionsPage() {
   const { token, refreshToken } = useAppContext();
   const queryClient = useQueryClient();
+  const [revokeAllOpen, setRevokeAllOpen] = useState(false);
 
   const sessionsQuery = useQuery({
     queryKey: ["identity-admin-sessions", token],
@@ -46,6 +56,7 @@ export default function IdentitySessionsPage() {
   const revokeAll = useMutation({
     mutationFn: () => revokeAllAdminSessions(token),
     onSuccess: async () => {
+      setRevokeAllOpen(false);
       toastSuccess("All sessions revoked");
       await queryClient.invalidateQueries({ queryKey: ["identity-admin-sessions", token] });
     },
@@ -55,60 +66,89 @@ export default function IdentitySessionsPage() {
   const items = sessionsQuery.data || [];
 
   return (
-    <DetailSection
-      title="Active sessions"
-      description="All non-revoked user sessions across the platform"
-      headerActions={
-        <Button
-          size="sm"
-          variant="destructive"
-          disabled={revokeAll.isPending || items.length === 0}
-          onClick={() => revokeAll.mutate()}
-        >
-          Revoke all sessions
-        </Button>
-      }
+    <SettingsPage
+      loading={sessionsQuery.isLoading}
+      error={sessionsQuery.error ? String((sessionsQuery.error as Error).message) : null}
     >
-      {sessionsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-      {sessionsQuery.error ? (
-        <p className="text-sm text-destructive">{(sessionsQuery.error as Error).message}</p>
-      ) : null}
-      <div className="space-y-3">
+      <SettingsPageHeader
+        title="Sessions"
+        description="All non-revoked user sessions across the platform."
+      />
+
+      <SettingsSection id="sessions" title="Active sessions" description="Interactive login sessions by user and device.">
         {items.length === 0 && !sessionsQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">No active sessions.</p>
-        ) : null}
-        {items.map((session) => (
-          <div key={session.id} className="panel-surface flex flex-wrap items-start justify-between gap-3 rounded-md border p-4">
-            <div className="flex min-w-0 gap-3">
-              <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium">{parseUserAgent(session.user_agent)}</span>
-                  {session.is_current ? (
-                    <Badge variant="outline" className="border-primary/30 text-[10px] text-primary">
-                      Current
-                    </Badge>
-                  ) : null}
+          <SettingsEmptyState title="No active sessions" description="No users are currently signed in." />
+        ) : (
+          <div className="space-y-3">
+            {items.map((session) => (
+              <div
+                key={session.id}
+                className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border/60 bg-muted/20 p-4"
+              >
+                <div className="flex min-w-0 gap-3">
+                  <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">{parseUserAgent(session.user_agent)}</span>
+                      {session.is_current ? (
+                        <Badge variant="outline" className="border-primary/30 text-[11px] text-primary">
+                          Current
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {session.username} · {session.ip || "Unknown IP"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Login {formatWhen(session.created_at)} · Last activity{" "}
+                      {formatWhen(session.last_used_at || session.created_at)}
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {session.username} · {session.ip || "Unknown IP"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Login {formatWhen(session.created_at)} · Last activity {formatWhen(session.last_used_at || session.created_at)}
-                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={revokeOne.isPending}
+                  onClick={() => revokeOne.mutate(session.id)}
+                >
+                  Revoke
+                </Button>
               </div>
-            </div>
+            ))}
+          </div>
+        )}
+      </SettingsSection>
+
+      <DangerZone description="Immediately sign out all users. Use during a security incident.">
+        <DangerZoneAction
+          title="Revoke all sessions"
+          description="Ends every active session platform-wide. All users must sign in again."
+          action={
             <Button
               size="sm"
-              variant="outline"
-              disabled={revokeOne.isPending}
-              onClick={() => revokeOne.mutate(session.id)}
+              variant="destructive"
+              disabled={revokeAll.isPending || items.length === 0}
+              onClick={() => setRevokeAllOpen(true)}
             >
-              Revoke
+              Revoke all
             </Button>
-          </div>
-        ))}
-      </div>
-    </DetailSection>
+          }
+        />
+      </DangerZone>
+
+      <ConfirmDestructiveDialog
+        open={revokeAllOpen}
+        onOpenChange={setRevokeAllOpen}
+        title="Revoke all sessions"
+        description="This immediately signs out every user on the platform, including your current session after the next API call."
+        impact={[
+          "All interactive sessions will be invalidated.",
+          "Workers using service account tokens are not affected.",
+        ]}
+        confirmLabel="Revoke all sessions"
+        pending={revokeAll.isPending}
+        onConfirm={() => revokeAll.mutate()}
+      />
+    </SettingsPage>
   );
 }

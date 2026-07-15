@@ -115,7 +115,6 @@ export function DashboardWidgetShell({
             <h3 className="truncate font-heading text-xs font-semibold tracking-tight text-foreground">
               {meta.title}
             </h3>
-            <p className="truncate text-[10px] text-muted-foreground">{meta.description}</p>
           </div>
         </div>
         {editMode ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { DetailSection } from "@/components/mlops/layout";
+import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -9,36 +9,76 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  MetadataList,
+  SettingsFormFooter,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { HUB_ROUTES } from "@/lib/system-settings-api";
 import { useAppContext } from "@/lib/app-context";
-import {
-  L4ErrorState,
-  L4LoadingState,
-  L4Meta,
-  L4SaveBar,
-} from "@/components/settings/l4-settings-ui";
+import { L4ErrorState, L4LoadingState } from "@/components/settings/l4-settings-ui";
 import { partialFromForm, useL4SettingsForm } from "@/hooks/use-l4-settings-form";
+
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 export function AdminGeneralSettings() {
   const { token } = useAppContext();
   const { query, form, setForm, saveMutation, doc } = useL4SettingsForm(token);
+  const [baseline, setBaseline] = useState<string | null>(null);
 
-  if (query.isLoading) return <L4LoadingState />;
-  if (query.isError) return <L4ErrorState error={query.error} />;
+  useEffect(() => {
+    if (form && baseline === null) setBaseline(JSON.stringify(form));
+  }, [form, baseline]);
+
+  const dirty = baseline !== null && form ? JSON.stringify(form) !== baseline : false;
+
+  if (query.isLoading) {
+    return (
+      <SettingsPage>
+        <L4LoadingState />
+      </SettingsPage>
+    );
+  }
+  if (query.isError) {
+    return (
+      <SettingsPage error={String((query.error as Error).message)}>
+        <L4ErrorState error={query.error} />
+      </SettingsPage>
+    );
+  }
   if (!form || !doc) return null;
 
   return (
-    <DetailSection
-      title="General"
-      description="Platform-wide Hub defaults and branding placeholders."
-      accentBorder="sky"
-    >
-      <L4Meta doc={doc} />
-      <div className="mt-4 space-y-4">
-        <div>
-          <Label className="text-xs">Default Hub route</Label>
+    <SettingsPage>
+      <SettingsPageHeader
+        title="General"
+        description="Platform-wide Hub defaults and landing behavior."
+      />
+
+      <SettingsSection id="metadata" title="Metadata" description="Last platform settings change.">
+        <MetadataList
+          items={[
+            { label: "Schema version", value: String(doc.schema_version), mono: true },
+            { label: "Last updated", value: formatWhen(doc.updated_at) },
+            { label: "Updated by", value: doc.updated_by || "—", mono: true },
+          ]}
+        />
+      </SettingsSection>
+
+      <SettingsSection id="configuration" title="Configuration" description="Default experience after sign-in.">
+        <div className="max-w-xs space-y-1.5">
+          <Label>Default Hub route</Label>
           <Select value={form.hubRoute} onValueChange={(v) => setForm({ ...form, hubRoute: v })}>
-            <SelectTrigger className="mt-1 h-8 w-full max-w-xs text-xs">
+            <SelectTrigger className="h-9 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -49,13 +89,21 @@ export function AdminGeneralSettings() {
               ))}
             </SelectContent>
           </Select>
-          <p className="mt-1 text-[10px] text-muted-foreground">Landing page after sign-in for all users.</p>
+          <p className="text-xs text-muted-foreground">Landing page after sign-in for all users.</p>
         </div>
-        <L4SaveBar
+        <SettingsFormFooter
+          dirty={dirty}
           saving={saveMutation.isPending}
-          onSave={() => saveMutation.mutate(partialFromForm(form, ["hub"]))}
+          onSave={() => {
+            saveMutation.mutate(partialFromForm(form, ["hub"]), {
+              onSuccess: () => setBaseline(JSON.stringify(form)),
+            });
+          }}
+          onCancel={() => {
+            if (baseline) setForm(JSON.parse(baseline));
+          }}
         />
-      </div>
-    </DetailSection>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

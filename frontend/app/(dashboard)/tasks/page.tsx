@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useCallback } from "react"
+import { useMemo, useCallback, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { taskIdPathSegment } from "@/lib/api"
@@ -26,7 +26,7 @@ export default function TasksPage() {
   const isAggregate = !scopePinned
   const [taskId, setTaskId] = useState("")
 
-  const { items: rows, recentRuns, runsQuery, isLoading, isError, error, isFetching } = useTasksListLive(
+  const { items: rows, runsQuery, isLoading, isError, error, isFetching } = useTasksListLive(
     Boolean(token?.trim()),
   )
 
@@ -123,75 +123,27 @@ export default function TasksPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader
-        className="shrink-0"
-        icon={ListTodo}
-        accent="violet"
-        title="Tasks"
-      />
+      <ResourcePageHeader className="shrink-0" icon={ListTodo} accent="violet" title="Tasks" />
 
-      <PageScrollBody
-        variant="workspace"
-        header={
-          <>
-            {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_TASKS} /> : null}
-            <div className="max-w-xl shrink-0 panel-surface p-4">
-              <form
-                className="flex flex-wrap items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const id = taskId.trim()
-                  if (!id) return
-                  router.push(`/tasks/${taskIdPathSegment(id)}`)
-                }}
-              >
-                <Input
-                  value={taskId}
-                  onChange={(e) => setTaskId(e.target.value)}
-                  placeholder="task_id"
-                  className="h-9 max-w-xs border-border bg-background font-mono text-sm"
-                  aria-label="Task id"
-                />
-                <Button
-                  type="submit"
-                  className="h-9 bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={!taskId.trim()}
-                >
-                  Open task
-                </Button>
-              </form>
-            </div>
-            <div className="shrink-0">
-              <h3 className="text-sm font-medium text-foreground">Recent tasks</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                From {recentRuns.length} recent run{recentRuns.length === 1 ? "" : "s"}
-                {isAggregate ? " (aggregate scope)" : ""}
-                {isFetching ? " · syncing…" : ""}.
-              </p>
-            </div>
-          </>
-        }
-      >
+      <PageScrollBody variant="workspace">
         <ScopedListContent
           isLoading={isLoading}
           isError={isError}
           errorMessage={queryError ? formatApiClientError(queryError) : undefined}
           isEmpty={rows.length === 0}
           emptyIcon={ListTodo}
-          emptyTitle="No tasks in recent runs"
-          emptyDescription="Trigger a run or open a task by id above."
+          emptyTitle="No tasks"
+          emptyDescription=""
           skeletonRows={5}
         >
           <DataTable
             className="min-h-0 flex-1"
             tableId="tasks-recent"
-            title="Recent tasks"
-            description="High-density task list with quick filtering, sorting, and saved views."
             columns={taskColumns}
             data={rows}
             keyExtractor={(row) => `${row.tenant_id}:${row.project_id}:${row.task_id}`}
             onRowClick={openTask}
-            emptyMessage="No tasks in recent runs."
+            emptyMessage="No tasks."
             loading={isFetching && rows.length > 0}
             stickyFirstColumn
           />
@@ -200,4 +152,3 @@ export default function TasksPage() {
     </div>
   )
 }
-

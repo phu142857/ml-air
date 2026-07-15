@@ -1,19 +1,32 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useParams, useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DetailSection } from "@/components/mlops/layout";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
+  ConfirmDestructiveDialog,
+  DangerZone,
+  DangerZoneAction,
+  IdentityStatusBadge,
+  LifecycleAction,
+  MetadataList,
+  SettingsEmptyState,
+  SettingsFormFooter,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/lib/app-context";
 import {
   SA_PERMISSION_CATALOG,
   addServiceAccountScope,
+  deleteServiceAccount,
   deleteServiceAccountScope,
   getServiceAccount,
   getServiceAccountPermissions,
@@ -29,16 +42,30 @@ import {
 } from "@/lib/identity-admin-api";
 import { formatApiClientError } from "@/lib/utils";
 
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
 export default function IdentityServiceAccountDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const saId = String(params.saId || "");
   const { token } = useAppContext();
   const { toast } = useToast();
   const qc = useQueryClient();
+
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsBaseline, setPermissionsBaseline] = useState<string[]>([]);
   const [permInit, setPermInit] = useState(false);
   const [description, setDescription] = useState("");
+  const [descriptionBaseline, setDescriptionBaseline] = useState("");
   const [descInit, setDescInit] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [showSecret, setShowSecret] = useState<{ token_id: string; secret: string } | null>(null);
   const [scopeTenant, setScopeTenant] = useState("default");
   const [scopeAll, setScopeAll] = useState(true);
@@ -73,25 +100,35 @@ export default function IdentityServiceAccountDetailPage() {
   useEffect(() => {
     if (!permInit && permsQuery.data) {
       setPermissions(permsQuery.data);
+      setPermissionsBaseline(permsQuery.data);
       setPermInit(true);
     }
   }, [permsQuery.data, permInit]);
 
   useEffect(() => {
     if (!descInit && saQuery.data) {
-      setDescription(saQuery.data.description || "");
+      const desc = saQuery.data.description || "";
+      setDescription(desc);
+      setDescriptionBaseline(desc);
       setDescInit(true);
     }
   }, [saQuery.data, descInit]);
 
+  const descriptionDirty = description !== descriptionBaseline;
+  const permissionsDirty = useMemo(
+    () => JSON.stringify([...permissions].sort()) !== JSON.stringify([...permissionsBaseline].sort()),
+    [permissions, permissionsBaseline],
+  );
+
   const saveDescription = useMutation({
     mutationFn: () => patchServiceAccount(token, saId, { description: description.trim() || "" }),
     onSuccess: () => {
+      setDescriptionBaseline(description);
       qc.invalidateQueries({ queryKey: ["identity-sa-detail", saId] });
-      toast({ title: "Description updated" });
+      toast({ title: "Description saved" });
     },
     onError: (e) => {
-      toast({ variant: "destructive", title: "Update failed", description: formatApiClientError(e) });
+      toast({ variant: "destructive", title: "Save failed", description: formatApiClientError(e) });
     },
   });
 
@@ -106,14 +143,28 @@ export default function IdentityServiceAccountDetailPage() {
     },
   });
 
+  const deleteSa = useMutation({
+    mutationFn: () => deleteServiceAccount(token, saId),
+    onSuccess: async () => {
+      setDeleteOpen(false);
+      await qc.invalidateQueries({ queryKey: ["identity-sa"] });
+      toast({ title: "Service account deleted" });
+      router.push("/identity/service-accounts");
+    },
+    onError: (e) => {
+      toast({ variant: "destructive", title: "Delete failed", description: formatApiClientError(e) });
+    },
+  });
+
   const savePerms = useMutation({
     mutationFn: () => putServiceAccountPermissions(token, saId, permissions),
     onSuccess: () => {
+      setPermissionsBaseline(permissions);
       qc.invalidateQueries({ queryKey: ["identity-sa-perms", saId] });
       toast({ title: "Permissions saved" });
     },
     onError: (e) => {
-      toast({ variant: "destructive", title: "Save permissions failed", description: formatApiClientError(e) });
+      toast({ variant: "destructive", title: "Save failed", description: formatApiClientError(e) });
     },
   });
 
@@ -125,7 +176,7 @@ export default function IdentityServiceAccountDetailPage() {
       toast({ title: "Token generated", description: "Copy the token now — shown once." });
     },
     onError: (e) => {
-      toast({ variant: "destructive", title: "Generate token failed", description: formatApiClientError(e) });
+      toast({ variant: "destructive", title: "Generate failed", description: formatApiClientError(e) });
     },
   });
 
@@ -134,7 +185,7 @@ export default function IdentityServiceAccountDetailPage() {
     onSuccess: (data) => {
       setShowSecret({ token_id: data.token_id, secret: data.secret });
       qc.invalidateQueries({ queryKey: ["identity-sa-creds", saId] });
-      toast({ title: "Token regenerated", description: "Copy the new token now — shown once." });
+      toast({ title: "Token regenerated" });
     },
     onError: (e) => {
       toast({ variant: "destructive", title: "Regenerate failed", description: formatApiClientError(e) });
@@ -175,7 +226,7 @@ export default function IdentityServiceAccountDetailPage() {
       toast({ title: "Token revoked" });
     },
     onError: (e) => {
-      toast({ variant: "destructive", title: "Revoke token failed", description: formatApiClientError(e) });
+      toast({ variant: "destructive", title: "Revoke failed", description: formatApiClientError(e) });
     },
   });
 
@@ -194,166 +245,255 @@ export default function IdentityServiceAccountDetailPage() {
     .filter(Boolean)
     .sort()
     .pop();
+  const activeTokens = (credsQuery.data || []).filter((c) => !c.revoked_at);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">{sa?.name || "Service account"}</h2>
-          <p className="font-mono text-xs text-muted-foreground">{saId}</p>
-        </div>
-        <Link href="/identity/service-accounts" className="text-sm text-muted-foreground hover:underline">
-          Back
-        </Link>
-      </div>
+    <SettingsPage loading={saQuery.isLoading} error={saQuery.error ? (saQuery.error as Error).message : null}>
+      <SettingsPageHeader
+        title={sa?.name || "Service account"}
+        description="Machine identity for workers, schedulers, and API automation."
+        backHref="/identity/service-accounts"
+        backLabel="Service accounts"
+        badge={sa ? <IdentityStatusBadge state={sa.state} /> : null}
+      />
 
-      <DetailSection title="Account" description="Status, description, and lifecycle">
-        <div className="grid gap-3 sm:grid-cols-2 text-sm">
-          <div>
-            <span className="text-muted-foreground">Status</span>
-            <p className="capitalize">{sa?.state || "…"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Created</span>
-            <p className="font-mono text-xs">{sa?.created_at || "—"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Last used</span>
-            <p className="font-mono text-xs">{lastUsed || "—"}</p>
-          </div>
-        </div>
-        <div className="mt-4 space-y-2">
-          <Label>Description</Label>
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} />
-          <Button size="sm" variant="outline" onClick={() => saveDescription.mutate()} disabled={saveDescription.isPending}>
-            Save description
-          </Button>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={sa?.state === "active"} onClick={() => setState.mutate("active")}>
-            Enable
-          </Button>
-          <Button size="sm" variant="outline" disabled={sa?.state === "disabled"} onClick={() => setState.mutate("disabled")}>
-            Disable
-          </Button>
-          <Button size="sm" variant="destructive" disabled={sa?.state === "revoked"} onClick={() => setState.mutate("revoked")}>
-            Soft delete
-          </Button>
-        </div>
-      </DetailSection>
-
-      <DetailSection title="Permissions">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {SA_PERMISSION_CATALOG.map((perm) => (
-            <label key={perm} className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={permissions.includes(perm)}
-                onCheckedChange={(checked) => {
-                  setPermissions((prev) => (checked ? [...prev, perm] : prev.filter((p) => p !== perm)));
-                }}
+      {sa ? (
+        <>
+          <SettingsSection id="general" title="General" description="Editable account information.">
+            <div className="space-y-1.5">
+              <Label htmlFor="sa-description">Description</Label>
+              <Textarea
+                id="sa-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="min-h-[100px] resize-y text-sm"
+                placeholder="What this service account is used for…"
               />
-              <code>{perm}</code>
-            </label>
-          ))}
-        </div>
-        <Button size="sm" className="mt-3" onClick={() => savePerms.mutate()}>
-          Save permissions
-        </Button>
-      </DetailSection>
+            </div>
+            <SettingsFormFooter
+              dirty={descriptionDirty}
+              saving={saveDescription.isPending}
+              onSave={() => saveDescription.mutate()}
+              onCancel={() => setDescription(descriptionBaseline)}
+            />
+          </SettingsSection>
 
-      <DetailSection title="Scopes">
-        <ul className="mb-3 space-y-1 text-sm">
-          {(scopesQuery.data || []).map((s) => (
-            <li key={s.id} className="flex items-center justify-between rounded border px-2 py-1">
-              <span>
-                {s.tenant_id} · {s.all_projects ? "all projects" : s.project_ids.join(", ")}
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => removeScope.mutate(s.id)}>
-                Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div>
-            <Label>Tenant</Label>
-            <select
-              className="w-full rounded-md border px-2 py-1 text-sm"
-              value={scopeTenant}
-              onFocus={() => void loadTenants()}
-              onChange={(e) => setScopeTenant(e.target.value)}
-            >
-              {tenantOptions.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 pt-6 text-sm">
-            <Checkbox checked={scopeAll} onCheckedChange={(c) => setScopeAll(Boolean(c))} />
-            All projects
-          </label>
-        </div>
-        {!scopeAll ? (
-          <div className="mt-2">
-            <Button variant="outline" size="sm" onClick={() => void loadProjects()}>
-              Load projects
-            </Button>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {projectOptions.map((pid) => (
-                <label key={pid} className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={scopeProjects.includes(pid)}
-                    onChange={() =>
-                      setScopeProjects((prev) =>
-                        prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid],
-                      )
-                    }
+          <SettingsSection id="metadata" title="Metadata" description="Read-only record details.">
+            <MetadataList
+              items={[
+                { label: "Account ID", value: saId, mono: true },
+                { label: "Name", value: sa.name, mono: true },
+                { label: "Status", value: <IdentityStatusBadge state={sa.state} /> },
+                { label: "Created", value: formatWhen(sa.created_at) },
+                { label: "Last used", value: formatWhen(lastUsed) },
+                { label: "Active tokens", value: String(activeTokens.length) },
+              ]}
+            />
+          </SettingsSection>
+
+          <SettingsSection id="permissions" title="Permissions" description="API capabilities granted to this account.">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SA_PERMISSION_CATALOG.map((perm) => (
+                <label key={perm} className="flex items-center gap-2.5 rounded-md border border-border/50 px-3 py-2 text-sm">
+                  <Checkbox
+                    checked={permissions.includes(perm)}
+                    onCheckedChange={(checked) => {
+                      setPermissions((prev) => (checked ? [...prev, perm] : prev.filter((p) => p !== perm)));
+                    }}
                   />
-                  {pid}
+                  <code className="text-xs">{perm}</code>
                 </label>
               ))}
             </div>
-          </div>
-        ) : null}
-        <Button size="sm" className="mt-3" onClick={() => addScope.mutate()}>
-          Add scope
-        </Button>
-      </DetailSection>
+            <SettingsFormFooter
+              dirty={permissionsDirty}
+              saving={savePerms.isPending}
+              onSave={() => savePerms.mutate()}
+              onCancel={() => setPermissions(permissionsBaseline)}
+            />
+          </SettingsSection>
 
-      <DetailSection title="Tokens" description="Generate, reveal once, regenerate, or revoke. Tokens cannot be edited.">
-        <div className="mb-2 flex gap-2">
-          <Button size="sm" onClick={() => issue.mutate()}>
-            Generate token
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => rotate.mutate()}>
-            Regenerate token
-          </Button>
-        </div>
-        {showSecret ? (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-            <p className="font-medium">Shown once — copy now</p>
-            <p className="font-mono text-xs">token_id: {showSecret.token_id}</p>
-            <Input readOnly value={showSecret.secret} className="mt-2 font-mono text-xs" />
-          </div>
-        ) : null}
-        <ul className="mt-3 space-y-1 text-sm">
-          {(credsQuery.data || []).map((c) => (
-            <li key={c.token_id} className="flex items-center justify-between rounded border px-2 py-1">
-              <span className="font-mono text-xs">{c.token_id}</span>
-              <span className="text-muted-foreground">{c.revoked_at ? "revoked" : "active"}</span>
-              <span className="text-xs text-muted-foreground">{c.last_used_at || "never used"}</span>
-              {!c.revoked_at ? (
-                <Button variant="ghost" size="sm" onClick={() => revokeCredential.mutate(c.token_id)}>
-                  Revoke
-                </Button>
+          <SettingsSection id="scopes" title="Scopes" description="Tenant and project boundaries for this account.">
+            {(scopesQuery.data || []).length === 0 ? (
+              <SettingsEmptyState
+                title="No scopes configured"
+                description="Add a scope to limit which tenants and projects this account can access."
+                actionLabel="Add scope below"
+                onAction={() => document.getElementById("sa-scope-form")?.scrollIntoView({ behavior: "smooth" })}
+              />
+            ) : (
+              <ul className="mb-4 divide-y divide-border/60 rounded-md border border-border/60">
+                {(scopesQuery.data || []).map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <span className="font-mono text-xs">
+                      {s.tenant_id} · {s.all_projects ? "all projects" : s.project_ids.join(", ")}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={() => removeScope.mutate(s.id)}>
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div id="sa-scope-form" className="space-y-3 rounded-md border border-border/60 bg-muted/15 p-4">
+              <p className="text-xs font-medium text-muted-foreground">Add scope</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Tenant</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={scopeTenant}
+                    onFocus={() => void loadTenants()}
+                    onChange={(e) => setScopeTenant(e.target.value)}
+                  >
+                    {tenantOptions.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 pt-7 text-sm">
+                  <Checkbox checked={scopeAll} onCheckedChange={(c) => setScopeAll(Boolean(c))} />
+                  All projects in tenant
+                </label>
+              </div>
+              {!scopeAll ? (
+                <div className="space-y-2">
+                  <Button variant="outline" size="sm" type="button" onClick={() => void loadProjects()}>
+                    Load projects
+                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {projectOptions.map((pid) => (
+                      <label key={pid} className="flex items-center gap-1.5 rounded border px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={scopeProjects.includes(pid)}
+                          onChange={() =>
+                            setScopeProjects((prev) =>
+                              prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid],
+                            )
+                          }
+                        />
+                        {pid}
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ) : null}
-            </li>
-          ))}
-        </ul>
-      </DetailSection>
-    </div>
+              <Button size="sm" type="button" onClick={() => addScope.mutate()} disabled={addScope.isPending}>
+                Add scope
+              </Button>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="tokens"
+            title="API tokens"
+            description="Tokens are revealed once at creation. Existing tokens cannot be edited."
+          >
+            {activeTokens.length === 0 && !showSecret ? (
+              <SettingsEmptyState
+                title="No active tokens"
+                description="Generate a token to authenticate API requests as this service account."
+                actionLabel="Generate token"
+                onAction={() => issue.mutate()}
+              />
+            ) : (
+              <ul className="divide-y divide-border/60 rounded-md border border-border/60">
+                {(credsQuery.data || []).map((c) => (
+                  <li key={c.token_id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs">{c.token_id}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Created {formatWhen(c.created_at)} · Last used {formatWhen(c.last_used_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <IdentityStatusBadge state={c.revoked_at ? "revoked" : "active"} />
+                      {!c.revoked_at ? (
+                        <Button variant="ghost" size="sm" onClick={() => revokeCredential.mutate(c.token_id)}>
+                          Revoke
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {showSecret ? (
+              <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-4">
+                <p className="text-sm font-medium text-foreground">Copy this token now — it will not be shown again</p>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">ID: {showSecret.token_id}</p>
+                <Input readOnly value={showSecret.secret} className="mt-2 font-mono text-xs" />
+              </div>
+            ) : null}
+          </SettingsSection>
+
+          <SettingsSection id="lifecycle" title="Lifecycle" description="Operational changes that do not delete the account.">
+            <div className="space-y-3">
+              <LifecycleAction
+                title="Enable account"
+                description="Allows new API authentication with active tokens."
+                actionLabel="Enable"
+                disabled={sa.state === "active"}
+                pending={setState.isPending}
+                onAction={() => setState.mutate("active")}
+              />
+              <LifecycleAction
+                title="Disable account"
+                description="Immediately prevents API authentication. Workers using this account will fail to authenticate."
+                actionLabel="Disable"
+                disabled={sa.state === "created"}
+                pending={setState.isPending}
+                onAction={() => setState.mutate("created")}
+              />
+              <LifecycleAction
+                title="Generate token"
+                description="Creates a new credential. The secret is shown once after generation."
+                actionLabel="Generate token"
+                pending={issue.isPending}
+                onAction={() => issue.mutate()}
+              />
+              <LifecycleAction
+                title="Regenerate token"
+                description="Issues a new token without revoking existing credentials. Rotate secrets on a schedule."
+                actionLabel="Regenerate"
+                pending={rotate.isPending}
+                onAction={() => rotate.mutate()}
+              />
+            </div>
+          </SettingsSection>
+
+          <DangerZone>
+            <DangerZoneAction
+              title="Delete service account"
+              description="Permanently removes this account, all tokens, permissions, and scopes."
+              action={
+                <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+                  Delete account
+                </Button>
+              }
+            />
+          </DangerZone>
+
+          <ConfirmDestructiveDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            title={`Delete service account "${sa.name}"?`}
+            description="This action permanently removes the service account from the platform."
+            impact={[
+              "All authentication tokens are invalidated immediately.",
+              "Running workers using this account will stop authenticating.",
+              "Scopes and permissions cannot be recovered.",
+            ]}
+            confirmText={sa.name}
+            pending={deleteSa.isPending}
+            onConfirm={() => deleteSa.mutate()}
+          />
+        </>
+      ) : null}
+    </SettingsPage>
   );
 }

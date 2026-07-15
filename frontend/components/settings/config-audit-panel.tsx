@@ -1,9 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { DetailSection } from "@/components/mlops/layout";
+import {
+  IdentityStatusBadge,
+  SettingsEmptyState,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { listIdentityAudit } from "@/lib/identity-admin-api";
 import { useAppContext } from "@/lib/app-context";
+
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 export function ConfigAuditPanel() {
   const { token } = useAppContext();
@@ -13,56 +29,63 @@ export function ConfigAuditPanel() {
     enabled: Boolean(token?.trim()),
   });
 
+  const events = data || [];
+
   return (
-    <DetailSection
-      title="Configuration audit"
-      description="Platform L4 settings changes (who, when, which keys)."
-      accentBorder="amber"
-      className="flex min-h-[min(70vh,48rem)] flex-1 flex-col"
-      bodyClassName="flex min-h-0 flex-1 flex-col p-0"
-    >
-      {isLoading ? <p className="px-4 py-3 text-sm text-muted-foreground">Loading…</p> : null}
-      {error ? <p className="px-4 py-3 text-sm text-destructive">{(error as Error).message}</p> : null}
-      <div className="scroll-region min-h-0 flex-1 rounded-b-xl border-t border-border">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur-sm">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium">Time</th>
-              <th className="px-3 py-2 text-left text-xs font-medium">Actor</th>
-              <th className="px-3 py-2 text-left text-xs font-medium">Keys changed</th>
-              <th className="px-3 py-2 text-left text-xs font-medium">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data || []).map((e) => {
-              const keys = Array.isArray((e.payload?.metadata as { keys?: string[] })?.keys)
-                ? (e.payload.metadata as { keys: string[] }).keys.join(", ")
-                : JSON.stringify(e.payload || {});
-              return (
-                <tr key={e.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-mono text-xs">{e.occurred_at}</td>
-                  <td className="px-3 py-2 text-xs">
-                    {e.actor_kind}
-                    {e.actor_id ? ` / ${e.actor_id}` : ""}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{keys}</td>
-                  <td className="px-3 py-2 text-xs">{e.result}</td>
+    <SettingsPage loading={isLoading} error={error ? String((error as Error).message) : null}>
+      <SettingsPageHeader
+        title="Configuration audit"
+        description="Platform L4 settings changes — who changed what and when."
+      />
+
+      <SettingsSection id="audit-log" title="Change log" description="Filtered to system_settings.patch events.">
+        {events.length === 0 && !isLoading ? (
+          <SettingsEmptyState
+            title="No configuration changes"
+            description="Platform settings changes will appear here as they occur."
+          />
+        ) : (
+          <div className="overflow-hidden rounded-md border border-border/60">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur-sm">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Time</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Actor</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Keys changed</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Result</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {!isLoading && (data || []).length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No configuration changes recorded yet.</p>
-        ) : null}
-      </div>
-      <p className="border-t border-border px-4 py-3 text-[10px] text-muted-foreground">
-        Identity security events (login, PAT, sessions) are in{" "}
-        <a href="/admin/audit" className="text-primary hover:underline">
-          Administration → Identity audit
-        </a>
-        .
-      </p>
-    </DetailSection>
+              </thead>
+              <tbody>
+                {events.map((e) => {
+                  const keys = Array.isArray((e.payload?.metadata as { keys?: string[] })?.keys)
+                    ? (e.payload.metadata as { keys: string[] }).keys.join(", ")
+                    : JSON.stringify(e.payload || {});
+                  return (
+                    <tr key={e.id} className="border-t border-border/60 hover:bg-muted/30">
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatWhen(e.occurred_at)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {e.actor_kind}
+                        {e.actor_id ? ` / ${e.actor_id}` : ""}
+                      </td>
+                      <td className="max-w-md truncate px-4 py-3 font-mono text-xs">{keys}</td>
+                      <td className="px-4 py-3">
+                        <IdentityStatusBadge state={e.result === "success" ? "active" : "locked"} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-4 text-xs text-muted-foreground">
+          Identity security events (login, PAT, sessions) are in{" "}
+          <Link href="/identity/audit" className="text-primary hover:underline">
+            Identity audit logs
+          </Link>
+          .
+        </p>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

@@ -14,11 +14,27 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DetailSection } from "@/components/mlops/layout";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  IdentityStatusBadge,
+  SettingsEmptyState,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/lib/app-context";
 import { createServiceAccount, listServiceAccounts } from "@/lib/identity-admin-api";
 import { formatApiClientError } from "@/lib/utils";
+
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 export default function IdentityServiceAccountsPage() {
   const { token } = useAppContext();
@@ -52,70 +68,92 @@ export default function IdentityServiceAccountsPage() {
     },
   });
 
+  const accounts = data || [];
+
   return (
-    <div className="space-y-4">
-      <DetailSection
+    <SettingsPage loading={isLoading} error={error ? formatApiClientError(error) : null}>
+      <SettingsPageHeader
         title="Service accounts"
-        description="Machine identities for workers, scheduler, and SDK"
-        headerActions={
+        description="Machine identities for workers, schedulers, and SDK automation."
+        actions={
           <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Create
+            <Plus className="mr-1.5 h-4 w-4" />
+            Create service account
           </Button>
         }
-      >
-        {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-        {error ? <p className="text-sm text-destructive">{(error as Error).message}</p> : null}
-        <div className="overflow-hidden rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur-sm">
-              <tr>
-                <th className="px-3 py-2 text-left">Name</th>
-                <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Created</th>
-                <th className="px-3 py-2 text-left" />
-              </tr>
-            </thead>
-            <tbody>
-              {(data || []).map((sa) => (
-                <tr key={sa.id} className="border-t">
-                  <td className="px-3 py-2">{sa.name}</td>
-                  <td className="px-3 py-2 capitalize">{sa.state}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{sa.created_at || "—"}</td>
-                  <td className="px-3 py-2 text-right">
-                    <Link href={`/identity/service-accounts/${sa.id}`} className="text-primary hover:underline">
-                      Open
-                    </Link>
-                  </td>
+      />
+
+      <SettingsSection id="directory" title="Directory" description="Non-human principals with scoped API access.">
+        {accounts.length === 0 && !isLoading ? (
+          <SettingsEmptyState
+            title="No service accounts"
+            description="Create a service account for pipelines, workers, or integrations."
+            actionLabel="Create service account"
+            onAction={() => setOpen(true)}
+          />
+        ) : (
+          <div className="overflow-hidden rounded-md border border-border/60">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur-sm">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Created</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </DetailSection>
+              </thead>
+              <tbody>
+                {accounts.map((sa) => (
+                  <tr key={sa.id} className="border-t border-border/60 hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium">{sa.name}</td>
+                    <td className="px-4 py-3">
+                      <IdentityStatusBadge state={sa.state} />
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatWhen(sa.created_at)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Button variant="ghost" size="sm" className="h-8" asChild>
+                        <Link href={`/identity/service-accounts/${sa.id}`}>Manage</Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SettingsSection>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create service account</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="sa-name">Name</Label>
+              <Input id="sa-name" value={name} onChange={(e) => setName(e.target.value)} className="h-9" />
             </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label htmlFor="sa-description">Description</Label>
+              <Textarea
+                id="sa-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="resize-y text-sm"
+              />
             </div>
           </div>
           <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending || !name.trim()}>
               Create
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </SettingsPage>
   );
 }

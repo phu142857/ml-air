@@ -1,20 +1,32 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { useParams, useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DetailSection } from "@/components/mlops/layout";
-import { useToast } from "@/hooks/use-toast";
 import {
   AssignmentEditor,
   assignmentsToDrafts,
   draftsToAssignments,
   type AssignmentDraft,
 } from "@/components/admin/assignment-editor";
+import {
+  ConfirmDestructiveDialog,
+  DangerZone,
+  DangerZoneAction,
+  IdentityStatusBadge,
+  LifecycleAction,
+  MetadataList,
+  SettingsEmptyState,
+  SettingsFormFooter,
+  SettingsPage,
+  SettingsPageHeader,
+  SettingsSection,
+} from "@/components/settings/enterprise";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/lib/app-context";
 import {
   deleteUser,
@@ -25,17 +37,28 @@ import {
 } from "@/lib/identity-admin-api";
 import { formatApiClientError } from "@/lib/utils";
 
-const USER_STATES = ["active", "disabled", "locked", "deleted"] as const;
+function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 export default function IdentityUserDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const userId = String(params.userId || "");
   const { token } = useAppContext();
   const { toast } = useToast();
   const qc = useQueryClient();
+
   const [drafts, setDrafts] = useState<AssignmentDraft[]>([]);
-  const [initialized, setInitialized] = useState(false);
+  const [assignmentsBaseline, setAssignmentsBaseline] = useState<AssignmentDraft[]>([]);
+  const [assignmentsInit, setAssignmentsInit] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const userQuery = useQuery({
     queryKey: ["identity-user", userId, token],
@@ -50,24 +73,27 @@ export default function IdentityUserDetailPage() {
   });
 
   useEffect(() => {
-    if (!assignmentsQuery.data || initialized) return;
-    setDrafts(assignmentsToDrafts(assignmentsQuery.data));
-    setInitialized(true);
-  }, [assignmentsQuery.data, initialized]);
+    if (!assignmentsQuery.data || assignmentsInit) return;
+    const next = assignmentsToDrafts(assignmentsQuery.data);
+    setDrafts(next);
+    setAssignmentsBaseline(next);
+    setAssignmentsInit(true);
+  }, [assignmentsQuery.data, assignmentsInit]);
+
+  const assignmentsDirty = useMemo(
+    () => JSON.stringify(drafts) !== JSON.stringify(assignmentsBaseline),
+    [drafts, assignmentsBaseline],
+  );
 
   const saveAssignments = useMutation({
     mutationFn: () => replaceUserAssignments(token, userId, draftsToAssignments(drafts)),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["identity-user-assignments", userId] });
-      setInitialized(false);
+      setAssignmentsBaseline(drafts);
       toast({ title: "Role assignments saved" });
     },
     onError: (e) => {
-      toast({
-        variant: "destructive",
-        title: "Save assignments failed",
-        description: formatApiClientError(e),
-      });
+      toast({ variant: "destructive", title: "Save failed", description: formatApiClientError(e) });
     },
   });
 
@@ -75,14 +101,10 @@ export default function IdentityUserDetailPage() {
     mutationFn: (state: string) => patchUser(token, userId, { state }),
     onSuccess: (_data, state) => {
       qc.invalidateQueries({ queryKey: ["identity-user", userId] });
-      toast({ title: "User updated", description: `Status: ${state}` });
+      toast({ title: "Account status updated", description: `Status is now ${state}.` });
     },
     onError: (e) => {
-      toast({
-        variant: "destructive",
-        title: "Update failed",
-        description: formatApiClientError(e),
-      });
+      toast({ variant: "destructive", title: "Update failed", description: formatApiClientError(e) });
     },
   });
 
@@ -93,109 +115,177 @@ export default function IdentityUserDetailPage() {
       toast({ title: "Password updated" });
     },
     onError: (e) => {
-      toast({
-        variant: "destructive",
-        title: "Password change failed",
-        description: formatApiClientError(e),
-      });
+      toast({ variant: "destructive", title: "Password change failed", description: formatApiClientError(e) });
     },
   });
 
-  const softDelete = useMutation({
+  const deleteUserMut = useMutation({
     mutationFn: () => deleteUser(token, userId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["identity-user", userId] });
-      toast({ title: "User deleted" });
+    onSuccess: async () => {
+      setDeleteOpen(false);
+      await qc.invalidateQueries({ queryKey: ["identity-users"] });
+      toast({ title: "User deleted", description: "The user was permanently removed." });
+      router.push("/identity/users");
     },
     onError: (e) => {
-      toast({
-        variant: "destructive",
-        title: "Delete failed",
-        description: formatApiClientError(e),
-      });
+      toast({ variant: "destructive", title: "Delete failed", description: formatApiClientError(e) });
     },
   });
 
   const user = userQuery.data;
   const isGlobalAdmin = Boolean(user?.is_global_admin);
+  const passwordDirty = newPassword.trim().length > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">{user?.username ? `User: ${user.username}` : "User"}</h2>
-          <p className="font-mono text-xs text-muted-foreground">{userId}</p>
-        </div>
-        <Link href="/identity/users" className="text-sm text-muted-foreground hover:underline">
-          Back to users
-        </Link>
-      </div>
-
-      {userQuery.error ? (
-        <p className="text-sm text-destructive">{(userQuery.error as Error).message}</p>
-      ) : null}
+    <SettingsPage loading={userQuery.isLoading} error={userQuery.error ? (userQuery.error as Error).message : null}>
+      <SettingsPageHeader
+        title={user?.username || "User"}
+        description="Manage identity, access, and lifecycle for this human account."
+        backHref="/identity/users"
+        backLabel="Users"
+        badge={user ? <IdentityStatusBadge state={user.state} /> : null}
+        secondaryActions={
+          isGlobalAdmin ? (
+            <Badge variant="outline" className="text-[10px]">
+              Global admin
+            </Badge>
+          ) : null
+        }
+      />
 
       {user ? (
-        <DetailSection title="Account" description="Status, password, and admin flag">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <select
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm capitalize"
-                value={user.state}
-                onChange={(e) => patchState.mutate(e.target.value)}
-              >
-                {USER_STATES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1 text-sm">
-              <Label>Global admin</Label>
-              <p>{isGlobalAdmin ? "Yes — bypasses tenant assignments" : "No"}</p>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <Label>Change password</Label>
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!newPassword || resetPassword.isPending}
-              onClick={() => resetPassword.mutate()}
-            >
-              Apply password
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={user.state === "deleted" || softDelete.isPending}
-              onClick={() => softDelete.mutate()}
-            >
-              Soft delete
-            </Button>
-          </div>
-        </DetailSection>
-      ) : null}
+        <>
+          <SettingsSection id="metadata" title="Metadata" description="Read-only identity record.">
+            <MetadataList
+              items={[
+                { label: "User ID", value: userId, mono: true },
+                { label: "Username", value: user.username, mono: true },
+                { label: "Status", value: <IdentityStatusBadge state={user.state} /> },
+                { label: "Global admin", value: isGlobalAdmin ? "Yes" : "No" },
+                { label: "Created", value: formatWhen(user.created_at) },
+                { label: "Updated", value: formatWhen(user.updated_at) },
+              ]}
+            />
+          </SettingsSection>
 
-      {!isGlobalAdmin ? (
-        <DetailSection title="Role assignments" description="Assign Maintainer or Viewer per tenant/project">
-          <AssignmentEditor token={token} value={drafts} onChange={setDrafts} />
-          <div className="mt-4 flex justify-end">
-            <Button onClick={() => saveAssignments.mutate()} disabled={saveAssignments.isPending}>
-              Save assignments
-            </Button>
-          </div>
-        </DetailSection>
-      ) : (
-        <p className="text-sm text-muted-foreground">Global administrators do not use role assignments.</p>
-      )}
-    </div>
+          <SettingsSection
+            id="configuration"
+            title="Configuration"
+            description="Administrative password reset. The user is not notified automatically."
+          >
+            <div className="max-w-md space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-new-password">New password</Label>
+                <Input
+                  id="admin-new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  className="h-9"
+                />
+              </div>
+              <SettingsFormFooter
+                dirty={passwordDirty}
+                saving={resetPassword.isPending}
+                saveLabel="Update password"
+                onSave={() => resetPassword.mutate()}
+                onCancel={() => setNewPassword("")}
+              />
+            </div>
+          </SettingsSection>
+
+          {!isGlobalAdmin ? (
+            <SettingsSection
+              id="permissions"
+              title="Permissions"
+              description="Tenant and project role assignments for this user."
+            >
+              {assignmentsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading assignments…</p>
+              ) : (assignmentsQuery.data || []).length === 0 && !assignmentsDirty ? (
+                <SettingsEmptyState
+                  title="No roles assigned"
+                  description="Assign Maintainer or Viewer roles to grant tenant and project access."
+                />
+              ) : (
+                <>
+                  <AssignmentEditor token={token} value={drafts} onChange={setDrafts} />
+                  <SettingsFormFooter
+                    dirty={assignmentsDirty}
+                    saving={saveAssignments.isPending}
+                    onSave={() => saveAssignments.mutate()}
+                    onCancel={() => setDrafts(assignmentsBaseline)}
+                  />
+                </>
+              )}
+            </SettingsSection>
+          ) : (
+            <SettingsSection id="permissions" title="Permissions" description="Global administrators bypass scoped assignments.">
+              <p className="text-sm text-muted-foreground">
+                This account has platform-wide access. Role assignments do not apply.
+              </p>
+            </SettingsSection>
+          )}
+
+          <SettingsSection id="lifecycle" title="Lifecycle" description="Non-destructive account state changes.">
+            <div className="space-y-3">
+              <LifecycleAction
+                title="Enable account"
+                description="Restores sign-in and API access for this user."
+                actionLabel="Enable"
+                disabled={user.state === "active"}
+                pending={patchState.isPending}
+                onAction={() => patchState.mutate("active")}
+              />
+              <LifecycleAction
+                title="Disable account"
+                description="Prevents sign-in immediately. Existing sessions remain until they expire or are revoked."
+                actionLabel="Disable"
+                disabled={user.state === "disabled"}
+                pending={patchState.isPending}
+                onAction={() => patchState.mutate("disabled")}
+              />
+              <LifecycleAction
+                title="Lock account"
+                description="Blocks authentication until an administrator unlocks the account."
+                actionLabel="Lock"
+                disabled={user.state === "locked"}
+                pending={patchState.isPending}
+                onAction={() => patchState.mutate("locked")}
+              />
+            </div>
+          </SettingsSection>
+
+          <DangerZone>
+            <DangerZoneAction
+              title="Delete user"
+              description="Permanently removes this user, role assignments, sessions, and personal access tokens."
+              action={
+                <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+                  Delete user
+                </Button>
+              }
+            />
+          </DangerZone>
+
+          <ConfirmDestructiveDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            title={`Delete user "${user.username}"?`}
+            description="This action permanently removes the user from the platform."
+            impact={[
+              "All role assignments are deleted.",
+              "Active sessions and API tokens stop working immediately.",
+              "Audit history is retained; the user record is not recoverable.",
+            ]}
+            confirmText={user.username}
+            confirmLabel="Delete permanently"
+            pending={deleteUserMut.isPending}
+            onConfirm={() => deleteUserMut.mutate()}
+          />
+        </>
+      ) : null}
+    </SettingsPage>
   );
 }

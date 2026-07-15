@@ -152,11 +152,6 @@ export default function RunsPage() {
         icon={Play}
         accent="sky"
         title="Runs"
-        subtitle={
-          isAggregate
-            ? `Run history · ${rows.length} runs · new runs from Dataset Hub`
-            : `${rows.length} runs · observability (start from Dataset Hub → Run / Train)`
-        }
       />
 
       <TriggerRunDialog
@@ -177,14 +172,12 @@ export default function RunsPage() {
           errorMessage={runsQuery.error ? formatApiClientError(runsQuery.error) : undefined}
           isEmpty={rows.length === 0}
           emptyIcon={Play}
-          emptyTitle="No runs in this scope"
-          emptyDescription="Start a run from Dataset Hub (Run / Train) or pick a workspace in the header."
+          emptyTitle="No runs"
+          emptyDescription=""
         >
           <MlopsDataTable
             className="min-h-0 flex-1"
             tableId="runs-list"
-            title="Runs"
-            description="Search, filter by status/pipeline, and sort the run history."
             columns={runListColumns}
             data={rows}
             keyExtractor={(r) => r.run_id}

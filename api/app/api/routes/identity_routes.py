@@ -263,7 +263,7 @@ def patch_user_v1(
 def delete_user_v1(user_id: str, authorization: str | None = Header(default=None)) -> None:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    svc.admin_patch_user(actor_id=_principal_user_id(principal), user_id=user_id, state="deleted")
+    svc.admin_delete_user(actor_id=_principal_user_id(principal), user_id=user_id)
 
 
 @router.get("/users/{user_id}/assignments")
@@ -362,17 +362,18 @@ def patch_sa_v1(
     return row
 
 
+@router.delete("/service-accounts/{sa_id}", status_code=204)
+def delete_sa_v1(sa_id: str, authorization: str | None = Header(default=None)) -> None:
+    principal = authenticate_bearer(authorization)
+    _require_admin(principal)
+    svc.delete_service_account(sa_id=sa_id, actor_id=_principal_user_id(principal))
+
+
 @router.post("/service-accounts/{sa_id}/revoke", status_code=204)
 def revoke_sa_v1(sa_id: str, authorization: str | None = Header(default=None)) -> None:
     principal = authenticate_bearer(authorization)
     _require_admin(principal)
-    svc.patch_service_account(
-        sa_id=sa_id,
-        name=None,
-        description=None,
-        state="revoked",
-        actor_id=_principal_user_id(principal),
-    )
+    svc.delete_service_account(sa_id=sa_id, actor_id=_principal_user_id(principal))
 
 
 @router.post("/service-accounts/{sa_id}/issue-secret", status_code=201)

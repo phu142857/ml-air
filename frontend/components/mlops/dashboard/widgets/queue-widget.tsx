@@ -38,7 +38,6 @@ export function QueueWidget({ runs }: QueueWidgetProps) {
         <MlopsEmptyState
           icon={Clock}
           title="Queue empty"
-          description="No pending or queued runs in this scope."
           className="border-0 bg-transparent p-0"
         />
       ) : (

@@ -211,8 +211,8 @@ export default function PipelinesPage() {
           errorMessage={pipelinesQuery.error ? formatApiClientError(pipelinesQuery.error) : undefined}
           isEmpty={items.length === 0}
           emptyIcon={GitBranch}
-          emptyTitle="No pipelines in this scope"
-          emptyDescription="Create a pipeline or pick a workspace in the header."
+          emptyTitle="No pipelines"
+          emptyDescription=""
           skeletonRows={4}
         >
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -291,12 +291,7 @@ export default function PipelinesPage() {
 
             <div className="space-y-6 lg:col-span-2">
               {!displayPipeline ? (
-                <MlopsEmptyState
-                  icon={GitBranch}
-                  title="Select a pipeline"
-                  description="Choose a pipeline from the list to preview its topology."
-                  className="border-0 bg-transparent p-0"
-                />
+                <MlopsEmptyState icon={GitBranch} title="Select a pipeline" className="border-0 bg-transparent p-0" />
               ) : (
                 <>
                   <div className="flex items-center justify-between gap-4">
@@ -376,8 +371,6 @@ export default function PipelinesPage() {
                     <h3 className="mb-3 text-sm font-medium text-muted-foreground">Stages</h3>
                     <MlopsDataTable
                       tableId="pipeline-stages"
-                      title="Stages"
-                      description="Search and filter stages in the selected pipeline."
                       columns={pipelineStageColumns}
                       data={displayPipeline.stages}
                       keyExtractor={(s) => s.id}

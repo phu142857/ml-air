@@ -1,10 +1,9 @@
 "use client"
 
-import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Database, Plus, Search, Grid, List, CheckCircle2, Loader2 } from "lucide-react"
+import { Database, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,9 +16,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { PageScrollBody, PageToolbar, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
-import { cn, formatRelativeTime, formatRowCount, formatApiClientError } from "@/lib/utils"
+import { formatRelativeTime, formatRowCount, formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
 import {
   previewDatasetUpload,
@@ -91,8 +90,6 @@ const datasetTableColumns: DataTableColumn<DatasetItem>[] = [
   },
 ]
 
-type ViewMode = "table" | "grid"
-
 export default function DatasetsPage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -100,8 +97,6 @@ export default function DatasetsPage() {
   const { tenantId, projectId, token } = useAppContext()
   const scopePinned = isScopePinned(tenantId, projectId)
   const isAggregate = !scopePinned
-  const [viewMode, setViewMode] = useState<ViewMode>("table")
-  const [search, setSearch] = useState("")
   const [uploadOpen, setUploadOpen] = useState(false)
   const [datasetName, setDatasetName] = useState("")
   const [file, setFile] = useState<File | null>(null)
@@ -152,18 +147,6 @@ export default function DatasetsPage() {
     },
   })
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return items
-    return items.filter(
-      (d) =>
-        d.name.toLowerCase().includes(q) ||
-        String(d.dataset_id || "")
-          .toLowerCase()
-          .includes(q)
-    )
-  }, [items, search])
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader
@@ -171,7 +154,6 @@ export default function DatasetsPage() {
         icon={Database}
         accent="emerald"
         title="Datasets"
-        subtitle={isAggregate ? `All projects · ${items.length} datasets` : `${items.length} datasets`}
         actions={
           <Button
             type="button"
@@ -186,7 +168,6 @@ export default function DatasetsPage() {
           </Button>
         }
       />
-
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="border-border bg-card sm:max-w-md">
@@ -245,79 +226,22 @@ export default function DatasetsPage() {
         </DialogContent>
       </Dialog>
 
-      <PageToolbar>
-        {viewMode === "grid" ? (
-          <div className="relative">
-            <Search
-              strokeWidth={1.75}
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              placeholder="Search datasets"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 w-64 pl-9 text-sm"
-            />
-          </div>
-        ) : (
-          <div />
-        )}
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center overflow-hidden rounded-xl border border-border/60 bg-muted/30 p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={cn(
-                "rounded-lg p-1.5 transition-default",
-                viewMode === "table"
-                  ? "bg-card text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <List className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={cn(
-                "rounded-lg p-1.5 transition-default",
-                viewMode === "grid"
-                  ? "bg-card text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Grid className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          </div>
-        </div>
-      </PageToolbar>
-
       <PageScrollBody
-        variant={viewMode === "table" ? "workspace" : "scroll"}
+        variant="workspace"
         header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASETS} /> : null}
       >
         <ScopedListContent
           isLoading={datasetsQuery.isLoading}
           isError={datasetsQuery.isError}
           errorMessage={datasetsQuery.error ? formatApiClientError(datasetsQuery.error) : undefined}
-          isEmpty={(viewMode === "table" ? items : filtered).length === 0}
+          isEmpty={items.length === 0}
           emptyIcon={Database}
-          emptyTitle={
-            viewMode === "grid" && search ? "No matching datasets" : "No datasets in this scope"
-          }
-          emptyDescription={
-            viewMode === "grid" && search
-              ? "Try a different search term."
-              : "Upload a dataset or pick a workspace in the header."
-          }
+          emptyTitle="No datasets"
+          emptyDescription=""
         >
-        {viewMode === "table" ? (
           <MlopsDataTable
             className="min-h-0 flex-1"
             tableId="datasets-list"
-            title="Datasets"
-            description="Search, sort, and manage dataset inventory."
             columns={datasetTableColumns}
             data={items}
             keyExtractor={(d) => d.dataset_id}
@@ -326,71 +250,19 @@ export default function DatasetsPage() {
             loading={datasetsQuery.isFetching && items.length > 0}
             stickyFirstColumn
           />
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((d) => (
-              <Link
-                key={d.dataset_id}
-                href={`/datasets/${encodeURIComponent(d.dataset_id)}`}
-                className="group min-w-0 transition-default"
+          {showLoadMore ? (
+            <div className="flex justify-center border-t border-border/60 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={datasetsQuery.isFetchingNextPage}
+                onClick={() => void datasetsQuery.fetchNextPage?.()}
               >
-                <div className="h-full min-w-0 overflow-hidden rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
-                  <div className="flex h-full min-w-0 flex-col rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6">
-                    <div className="mb-4 flex min-w-0 items-start gap-2">
-                      <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
-                          <Database
-                            strokeWidth={1.75}
-                            className="h-4 w-4 text-primary"
-                          />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
-                            {d.name}
-                          </h3>
-                          <p className="truncate font-mono text-[10px] text-muted-foreground">
-                            {d.dataset_id}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] px-2 py-1 text-[10px] font-medium text-[color:var(--status-success-fg)]">
-                        <CheckCircle2 className="h-3 w-3" strokeWidth={1.75} />
-                        listed
-                      </span>
-                    </div>
-                    <div className="mt-auto space-y-2 text-xs">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Rows</span>
-                        <span className="font-mono tabular-nums text-foreground">
-                          {formatRowCount(d.current_size)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-t border-border/60 pt-2 text-muted-foreground">
-                        <span>Updated</span>
-                        <span className="tabular-nums">
-                          {formatRelativeTime(d.updated_at || d.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-        {showLoadMore ? (
-          <div className="flex justify-center border-t border-border/60 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={datasetsQuery.isFetchingNextPage}
-              onClick={() => void datasetsQuery.fetchNextPage?.()}
-            >
-              {datasetsQuery.isFetchingNextPage ? "Loading…" : "Load more datasets"}
-            </Button>
-          </div>
-        ) : null}
+                {datasetsQuery.isFetchingNextPage ? "Loading…" : "Load more datasets"}
+              </Button>
+            </div>
+          ) : null}
         </ScopedListContent>
       </PageScrollBody>
     </div>

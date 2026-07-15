@@ -129,7 +129,7 @@ def identity_tables_available() -> bool:
 def count_global_admins() -> int:
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM users WHERE is_global_admin = true AND state != 'deleted'")
+            cur.execute("SELECT COUNT(*) FROM users WHERE is_global_admin = true")
             return int((cur.fetchone() or [0])[0] or 0)
 
 
@@ -270,6 +270,13 @@ def update_user(
             )
             row = cur.fetchone()
             return _public_user(_row_user(row)) if row else None
+
+
+def delete_user(user_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            return bool(cur.rowcount)
 
 
 def _row_assignment(row: tuple, project_ids: list[str]) -> dict[str, Any]:
@@ -690,6 +697,13 @@ def update_service_account(sa_id: str, *, name: str | None, description: str | N
             )
             row = cur.fetchone()
             return _row_sa(row) if row else None
+
+
+def delete_service_account(sa_id: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM service_accounts WHERE id = %s", (sa_id,))
+            return bool(cur.rowcount)
 
 
 def insert_sa_credential(*, token_id: str, sa_id: str, secret_hash: str) -> dict[str, Any]:

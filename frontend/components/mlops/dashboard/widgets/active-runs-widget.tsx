@@ -26,7 +26,6 @@ export function ActiveRunsWidget({ runs }: ActiveRunsWidgetProps) {
       <MlopsEmptyState
         icon={Loader2}
         title="No active runs"
-        description="Executing runs will appear here in real time."
         className="border-0 bg-transparent p-0"
       />
     )
@@ -77,7 +76,6 @@ export function RecentRunsCompact({ runs }: ActiveRunsWidgetProps) {
       <MlopsEmptyState
         icon={Play}
         title="No runs yet"
-        description="Pipeline runs in this scope will appear here."
         className="border-0 bg-transparent p-0"
       />
     )

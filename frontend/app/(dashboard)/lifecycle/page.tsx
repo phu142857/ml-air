@@ -208,7 +208,6 @@ function LifecycleContent() {
           icon={History}
           accent="violet"
           title="Lifecycle & Audit"
-          subtitle="Audit trail and tracing"
         />
         
         <div className="min-h-0 flex-1 overflow-auto">
@@ -231,9 +230,6 @@ function LifecycleContent() {
         icon={History}
         accent="violet"
         title="Lifecycle & Audit"
-        subtitle={
-          isAggregate ? "Audit trail and tracing" : `${stats.total} events in this scope`
-        }
         actions={
           <>
             {/* Live indicator button */}
@@ -527,15 +523,7 @@ function LifecycleContent() {
               </div>
             ) : null}
             {filteredEvents.length === 0 ? (
-              <MlopsEmptyState
-                icon={History}
-                title="No audit events in this scope"
-                description={
-                  isAggregate
-                    ? "No events match your filters. Clear filters or refresh the stream."
-                    : "Adjust filters, refresh, or pick a workspace with recent runs and audit activity."
-                }
-              />
+              <MlopsEmptyState icon={History} title="No events" />
             ) : (
               <div
                 className={cn(

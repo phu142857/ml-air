@@ -62,14 +62,9 @@ export function StorageWidget({
         <MlopsEmptyState
           icon={Database}
           title="Pin scope for usage"
-          description="Pin tenant and project to see disk I/O rollup."
           className="border-0 bg-transparent p-0"
         />
       )}
-
-      <p className="text-[10px] text-muted-foreground">
-        Disk metrics from usage rollup when scope is pinned.
-      </p>
     </div>
   )
 }

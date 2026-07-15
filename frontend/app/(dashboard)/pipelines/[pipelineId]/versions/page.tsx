@@ -141,7 +141,6 @@ export default function PipelineVersionsPage() {
         icon={GitBranch}
         accent="amber"
         title="Pipeline versions"
-        subtitle="Immutable config snapshots"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -224,17 +223,11 @@ export default function PipelineVersionsPage() {
           {listQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : items.length === 0 ? (
-            <MlopsEmptyState
-              icon={GitBranch}
-              title="No versions yet"
-              description="Publish the first config snapshot using the create editor."
-            />
+            <MlopsEmptyState icon={GitBranch} title="No versions" />
           ) : (
             <>
               <DataTable
                 tableId={`pipeline-versions:${pipelineId}`}
-                title="All versions"
-                description="Sortable, searchable snapshot history with saved operator views."
                 columns={versionColumns}
                 data={items}
                 keyExtractor={(row) => row.version_id}

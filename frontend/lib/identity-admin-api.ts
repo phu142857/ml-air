@@ -236,7 +236,11 @@ export async function patchServiceAccount(
 }
 
 export async function revokeServiceAccount(token: string, saId: string): Promise<void> {
-  await adminFetch<void>(token, `/service-accounts/${saId}/revoke`, { method: "POST" });
+  await deleteServiceAccount(token, saId);
+}
+
+export async function deleteServiceAccount(token: string, saId: string): Promise<void> {
+  await adminFetch<void>(token, `/service-accounts/${saId}`, { method: "DELETE" });
 }
 
 export async function issueServiceAccountSecret(

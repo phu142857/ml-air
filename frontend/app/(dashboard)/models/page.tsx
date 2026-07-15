@@ -128,7 +128,6 @@ export default function ModelsPage() {
         icon={Box}
         accent="violet"
         title="Models"
-        subtitle={isAggregate ? `All projects · ${items.length} models` : `${items.length} models`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -220,15 +219,13 @@ export default function ModelsPage() {
           errorMessage={modelsQuery.error ? formatApiClientError(modelsQuery.error) : undefined}
           isEmpty={items.length === 0}
           emptyIcon={Box}
-          emptyTitle="No models in this scope"
-          emptyDescription="Import from local, register a model, or pick a workspace in the header."
+          emptyTitle="No models"
+          emptyDescription=""
           skeletonRows={5}
         >
           <MlopsDataTable
             className="min-h-0 flex-1"
             tableId="models-list"
-            title="Models"
-            description="Search and sort registered models in this scope."
             columns={modelColumns}
             data={items}
             keyExtractor={(m) => m.model_id}
