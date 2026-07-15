@@ -12,6 +12,7 @@ import { PageTransition } from "@/components/mlops/interaction"
 import { useRealtimeStatusToasts } from "@/hooks/use-realtime-status-toasts"
 import { useAppContext } from "@/lib/app-context"
 import { HubAuthGuard } from "@/components/auth/hub-auth-guard"
+import { useAuthSessionWatch } from "@/hooks/use-auth-session-watch"
 
 interface RouteShellProps {
   children: React.ReactNode
@@ -25,6 +26,7 @@ export function RouteShell({ children }: RouteShellProps) {
   const scopePinned = tenantId !== "all" && projectId !== "all"
 
   useRealtimeStatusToasts(scopePinned)
+  useAuthSessionWatch()
 
   const handleOpenTraceFromUrl = useCallback((traceId: string) => {
     setTraceDialogId(traceId)

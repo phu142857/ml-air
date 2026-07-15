@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from app.domains.governance.identity_password import hash_password, verify_password
@@ -17,11 +18,46 @@ class TestIdentityPassword(unittest.TestCase):
 
 class TestIdentityToken(unittest.TestCase):
     def test_issue_and_decode_access_token(self) -> None:
-        token, ttl = issue_access_token(user_id="usr_1", username="alice", is_global_admin=False)
+        token, ttl = issue_access_token(
+            user_id="usr_1",
+            username="alice",
+            is_global_admin=False,
+            session_id="ses_test_1",
+        )
         self.assertGreater(ttl, 0)
         payload = decode_identity_access_token(token)
         self.assertEqual(payload["sub"], "usr_1")
         self.assertEqual(payload["principal_type"], "USER")
+        self.assertEqual(payload["sid"], "ses_test_1")
+
+
+class TestAccessSessionValidation(unittest.TestCase):
+    @patch("app.domains.governance.identity_service.repo.get_session_by_id")
+    def test_revoked_session_rejected(self, mock_get) -> None:
+        from app.domains.governance.identity_service import assert_access_session_valid
+        from fastapi import HTTPException
+
+        mock_get.return_value = {
+            "id": "ses_1",
+            "user_id": "usr_1",
+            "revoked_at": "2026-01-01T00:00:00+00:00",
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+        }
+        with self.assertRaises(HTTPException) as ctx:
+            assert_access_session_valid({"sub": "usr_1", "sid": "ses_1"})
+        self.assertEqual(ctx.exception.status_code, 401)
+
+    @patch("app.domains.governance.identity_service.repo.get_session_by_id")
+    def test_active_session_allowed(self, mock_get) -> None:
+        from app.domains.governance.identity_service import assert_access_session_valid
+
+        mock_get.return_value = {
+            "id": "ses_1",
+            "user_id": "usr_1",
+            "revoked_at": None,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+        }
+        assert_access_session_valid({"sub": "usr_1", "sid": "ses_1"})
 
 
 class TestAssignmentKey(unittest.TestCase):

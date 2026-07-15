@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from app.domains.governance.identity_token_service import issue_access_token
@@ -21,13 +22,22 @@ class RealtimeAuthWsTests(unittest.TestCase):
             user_id="user-realtime-1",
             username="rt-user",
             is_global_admin=True,
+            session_id="ses_rt_1",
         )
-        with patch("app.domains.governance.identity_repository.get_user_by_id") as get_user:
+        with patch("app.domains.governance.identity_repository.get_user_by_id") as get_user, patch(
+            "app.domains.governance.identity_repository.get_session_by_id"
+        ) as get_session:
             get_user.return_value = {
                 "id": "user-realtime-1",
                 "username": "rt-user",
                 "state": "active",
                 "is_global_admin": True,
+            }
+            get_session.return_value = {
+                "id": "ses_rt_1",
+                "user_id": "user-realtime-1",
+                "revoked_at": None,
+                "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
             }
             principal = decode_principal(token)
             self.assertIsNotNone(principal)

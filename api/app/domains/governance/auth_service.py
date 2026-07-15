@@ -250,6 +250,9 @@ def _principal_from_identity_user(token: str, payload: dict) -> Principal:
         raise HTTPException(status_code=401, detail="invalid_token")
     if user.get("state") != "active" and not user.get("is_global_admin"):
         raise HTTPException(status_code=403, detail="account_disabled")
+    from app.domains.governance.identity_service import assert_access_session_valid
+
+    assert_access_session_valid(payload)
     scopes = accessible_scopes_for_user(user)
     if user.get("is_global_admin"):
         role = "admin"

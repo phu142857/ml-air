@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAppContext } from "@/lib/app-context";
 import { loadAuthSession, loginIdentity, saveAuthSession } from "@/lib/identity-api";
+import { consumeLogoutReason } from "@/lib/auth-session";
 import { resolveHubDefaultRoute, hubDefaultRoutePath } from "@/lib/hub-default-route";
 
 export default function LoginPage() {
@@ -13,7 +14,12 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setSessionNotice(consumeLogoutReason());
+  }, []);
 
   useEffect(() => {
     const session = loadAuthSession();
@@ -82,6 +88,11 @@ export default function LoginPage() {
             required
           />
         </label>
+        {sessionNotice ? (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+            {sessionNotice}
+          </p>
+        ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <button
           type="submit"

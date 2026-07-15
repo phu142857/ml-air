@@ -173,6 +173,23 @@ def _ensure_login_allowed(user: dict[str, Any]) -> None:
         raise account_disabled(f"Account state {state} cannot login")
 
 
+def assert_access_session_valid(payload: dict[str, Any]) -> None:
+    """Reject access tokens whose backing session was revoked or expired."""
+    sid = str(payload.get("sid") or "").strip()
+    if not sid:
+        raise invalid_token("Session expired — sign in again")
+    session = repo.get_session_by_id(sid)
+    if not session:
+        raise invalid_token("Session expired — sign in again")
+    if session.get("revoked_at"):
+        raise invalid_token("Session revoked — sign in again")
+    expires_at = session.get("expires_at")
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        raise invalid_token("Session expired — sign in again")
+    if str(session.get("user_id") or "") != str(payload.get("sub") or ""):
+        raise invalid_token()
+
+
 def login(
     *,
     username: str,
@@ -199,13 +216,14 @@ def login(
         raise invalid_credential()
     _ensure_login_allowed(user)
     repo.update_user(user["id"], failed_login_count=0, clear_locked_until=True, last_login_at=datetime.now(timezone.utc))
+    refresh = new_opaque_token()
+    session_id = new_id("ses")
     access, expires_in = issue_access_token(
         user_id=user["id"],
         username=user["username"],
         is_global_admin=bool(user["is_global_admin"]),
+        session_id=session_id,
     )
-    refresh = new_opaque_token()
-    session_id = new_id("ses")
     repo.insert_session(
         session_id=session_id,
         user_id=user["id"],
@@ -235,13 +253,14 @@ def refresh_session(*, refresh_token: str, ip: str | None, user_agent: str | Non
         raise invalid_token()
     _ensure_login_allowed(user)
     repo.revoke_session(session["id"])
+    new_refresh = new_opaque_token()
+    new_session_id = new_id("ses")
     access, expires_in = issue_access_token(
         user_id=user["id"],
         username=user["username"],
         is_global_admin=bool(user["is_global_admin"]),
+        session_id=new_session_id,
     )
-    new_refresh = new_opaque_token()
-    new_session_id = new_id("ses")
     repo.insert_session(
         session_id=new_session_id,
         user_id=user["id"],
@@ -268,6 +287,7 @@ def logout_session(*, refresh_token: str | None, user_id: str | None) -> None:
 
 def get_me_from_access_token(access_token: str) -> dict[str, Any]:
     payload = decode_identity_access_token(access_token)
+    assert_access_session_valid(payload)
     user = repo.get_user_by_id(str(payload["sub"]))
     if not user:
         raise invalid_token()
@@ -584,6 +604,8 @@ def admin_patch_user(
     )
     if not updated:
         raise not_found()
+    if state in {"disabled", "locked"}:
+        repo.revoke_all_sessions(user_id)
     if state in {"active", "disabled", "locked"}:
         _audit(
             actor_kind="user",
@@ -632,6 +654,7 @@ def admin_delete_user(*, actor_id: str | None, user_id: str) -> None:
         result="success",
         extra={"username": user.get("username")},
     )
+    repo.revoke_all_sessions(user_id)
     if not repo.delete_user(user_id):
         raise not_found()
 

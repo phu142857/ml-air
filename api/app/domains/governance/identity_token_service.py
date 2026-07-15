@@ -54,7 +54,13 @@ def hash_opaque(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def issue_access_token(*, user_id: str, username: str, is_global_admin: bool) -> tuple[str, int]:
+def issue_access_token(
+    *,
+    user_id: str,
+    username: str,
+    is_global_admin: bool,
+    session_id: str | None = None,
+) -> tuple[str, int]:
     now = int(time.time())
     ttl = access_ttl_seconds()
     payload = {
@@ -66,6 +72,9 @@ def issue_access_token(*, user_id: str, username: str, is_global_admin: bool) ->
         "iat": now,
         "exp": now + ttl,
     }
+    sid = str(session_id or "").strip()
+    if sid:
+        payload["sid"] = sid
     token = jwt.encode(payload, _secret(), algorithm="HS256")
     return token, ttl
 

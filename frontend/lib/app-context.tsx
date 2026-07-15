@@ -4,6 +4,11 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 import type { BootstrapContextResponse } from "@/lib/api";
 import { fetchBootstrapContext } from "@/lib/api";
 import { clearAuthSession, loadAuthSession, refreshIdentity, saveAuthSession } from "@/lib/identity-api";
+import {
+  DEFAULT_SESSION_ENDED_MESSAGE,
+  isAuthSessionFailure,
+  stashLogoutReason,
+} from "@/lib/auth-session";
 
 export type AccessibleScopeRow = { tenant_id: string; project_id: string; role: string };
 
@@ -30,6 +35,8 @@ type AppContextValue = {
   /** Re-fetch bootstrap; use `withSpinner: false` when an outer scope transaction already shows loading. */
   refreshBootstrap: (opts?: { withSpinner?: boolean }) => Promise<void>;
   logout: () => Promise<void>;
+  /** Clear local session and redirect to login (skips logout API when session is already invalid). */
+  forceLogout: (message?: string) => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -130,7 +137,9 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         const ctx = await fetchBootstrapContext(token, { signal: ac.signal });
         applyBootstrapState(ctx);
         setIsBootstrapped(true);
-      } catch {
+      } catch (err) {
+        const authFailure =
+          err instanceof Error && isAuthSessionFailure(err.message);
         if (refreshToken.trim()) {
           try {
             const refreshed = await refreshIdentity(refreshToken);
@@ -147,8 +156,17 @@ export function AppContextProvider({ children }: PropsWithChildren) {
             setIsBootstrapped(true);
             return;
           } catch {
-            // fall through
+            // fall through to forced logout on auth failure
           }
+        }
+        if (authFailure || refreshToken.trim()) {
+          clearAuthSession();
+          stashLogoutReason(DEFAULT_SESSION_ENDED_MESSAGE);
+          bootstrapKeyRef.current = "";
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+          return;
         }
         setTenantId((prev) => prev || "default");
         setProjectId((prev) => prev || "default_project");
@@ -203,6 +221,17 @@ export function AppContextProvider({ children }: PropsWithChildren) {
     }
   }, [tenantId, projectId, token, refreshToken, username, mappingVersion, bootstrapSource]);
 
+  const forceLogout = useCallback(async (message?: string) => {
+    const notice = message?.trim() || DEFAULT_SESSION_ENDED_MESSAGE;
+    stashLogoutReason(notice);
+    clearAuthSession();
+    setToken("");
+    setRefreshToken("");
+    setUsername(null);
+    bootstrapKeyRef.current = "";
+    if (typeof window !== "undefined") window.location.href = "/login";
+  }, []);
+
   const logout = useCallback(async () => {
     const { logoutIdentity } = await import("@/lib/identity-api");
     try {
@@ -241,6 +270,7 @@ export function AppContextProvider({ children }: PropsWithChildren) {
       setMappingVersion,
       refreshBootstrap,
       logout,
+      forceLogout,
     }),
     [
       tenantId,
@@ -259,6 +289,7 @@ export function AppContextProvider({ children }: PropsWithChildren) {
       isScopeLoading,
       refreshBootstrap,
       logout,
+      forceLogout,
     ]
   );
 
