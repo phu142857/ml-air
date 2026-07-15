@@ -77,10 +77,8 @@ Workers, scheduler, and executor authenticate with **Service Account** bearer se
 |---------------------|-------------------|
 | `mlair-scheduler` | `ML_AIR_SA_SCHEDULER_SECRET` |
 | `mlair-executor` | `ML_AIR_SA_EXECUTOR_SECRET` |
-| `mlair-yolo-worker` | `ML_AIR_SA_YOLO_WORKER_SECRET` |
-| `mlair-vet-worker` | `ML_AIR_SA_VET_WORKER_SECRET` |
 
-Issue and rotate credentials in **Admin → Service accounts**. See [External worker execution](./external-worker-execution.md).
+**External workers** are not bootstrapped by MLAir. Create a Service Account in **Identity → Service accounts**, grant worker permissions (`tasks:lease`, `logs:write`, etc.), issue a secret, and configure your worker with `ML_AIR_SERVICE_ACCOUNT_TOKEN` or `ML_AIR_SA_WORKER_SECRET`. See [External worker execution](./external-worker-execution.md).
 
 ## Legacy static tokens (dual-run)
 

@@ -46,9 +46,10 @@ Create a run through the normal API (for example your control plane calling MLAi
 
 ### 4. Auth
 
-Prefer **Service Account** secrets for workers ([Login and Identity](./login-and-identity.md) — Admin → Service accounts):
+Prefer **Service Account** secrets for workers ([Login and Identity](./login-and-identity.md) — Identity → Service accounts):
 
-- Issue or use bootstrap secrets such as `ML_AIR_SA_YOLO_WORKER_SECRET` / `ML_AIR_SA_VET_WORKER_SECRET`.
+- Create a Service Account, assign worker permissions and tenant/project scope, then issue a credential.
+- Configure the worker with `ML_AIR_SERVICE_ACCOUNT_TOKEN` or `ML_AIR_SA_WORKER_SECRET`.
 - Send `Authorization: Bearer <sa_secret>` for lease, heartbeat, complete, fail, logs, and trace ingest.
 
 **Legacy / transitional:**
@@ -64,7 +65,7 @@ From the repo root (requires `psutil`; sends **Resource Usage Contract v1** on c
 
 ```bash
 export MLAIR_API_BASE_URL=http://localhost:8080
-export MLAIR_WORKER_TOKEN="${ML_AIR_SA_YOLO_WORKER_SECRET:-<service-account-secret>}"
+export MLAIR_WORKER_TOKEN="${ML_AIR_SERVICE_ACCOUNT_TOKEN:-<service-account-secret>}"
 export MLAIR_CAPABILITIES=app_etl_adapter,app_train_adapter
 PYTHONPATH=. python scripts/external_worker_example.py
 ```

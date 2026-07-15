@@ -22,8 +22,6 @@ def resolve_worker_api_token() -> str:
         os.getenv("ML_AIR_SERVICE_ACCOUNT_TOKEN", "").strip()
         or os.getenv("MLAIR_SERVICE_ACCOUNT_TOKEN", "").strip()
         or os.getenv("ML_AIR_SA_WORKER_SECRET", "").strip()
-        or os.getenv("ML_AIR_SA_YOLO_WORKER_SECRET", "").strip()
-        or os.getenv("ML_AIR_SA_VET_WORKER_SECRET", "").strip()
         or os.getenv("MLAIR_WORKER_TOKEN", "").strip()
         or os.getenv("ML_AIR_WORKER_TOKEN", "").strip()
         or os.getenv("ML_AIR_TOKEN", "").strip()

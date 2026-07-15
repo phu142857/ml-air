@@ -27,8 +27,6 @@ services:
       ML_AIR_LEGACY_STATIC_TOKENS: ${ML_AIR_LEGACY_STATIC_TOKENS:-0}
       ML_AIR_SA_SCHEDULER_SECRET: ${ML_AIR_SA_SCHEDULER_SECRET:-mlair-dev-sa-scheduler-secret-change-me}
       ML_AIR_SA_EXECUTOR_SECRET: ${ML_AIR_SA_EXECUTOR_SECRET:-mlair-dev-sa-executor-secret-change-me}
-      ML_AIR_SA_YOLO_WORKER_SECRET: ${ML_AIR_SA_YOLO_WORKER_SECRET:-mlair-dev-sa-yolo-worker-secret-change-me}
-      ML_AIR_SA_VET_WORKER_SECRET: ${ML_AIR_SA_VET_WORKER_SECRET:-mlair-dev-sa-vet-worker-secret-change-me}
       ML_AIR_AUTH_TOKENS_JSON: ${ML_AIR_AUTH_TOKENS_JSON:-}
       ML_AIR_JWT_ISSUER: ${ML_AIR_JWT_ISSUER:-}
       ML_AIR_JWT_AUDIENCE: ${ML_AIR_JWT_AUDIENCE:-}

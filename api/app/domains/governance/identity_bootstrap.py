@@ -14,17 +14,6 @@ logger = logging.getLogger("mlair.identity.bootstrap")
 
 PLATFORM_SA_PERMISSIONS = sorted(SA_PERMISSION_CATALOG)
 
-WORKER_SA_PERMISSIONS = [
-    "tasks:lease",
-    "tasks:heartbeat",
-    "tasks:complete",
-    "tasks:fail",
-    "logs:write",
-    "metrics:write",
-    "artifacts:write",
-    "usage:write",
-]
-
 BOOTSTRAP_SERVICE_ACCOUNTS: tuple[dict[str, Any], ...] = (
     {
         "name": "mlair-scheduler",
@@ -37,18 +26,6 @@ BOOTSTRAP_SERVICE_ACCOUNTS: tuple[dict[str, Any], ...] = (
         "description": "Platform executor automation",
         "secret_env": "ML_AIR_SA_EXECUTOR_SECRET",
         "permissions": PLATFORM_SA_PERMISSIONS,
-    },
-    {
-        "name": "mlair-yolo-worker",
-        "description": "External YOLO CV worker",
-        "secret_env": "ML_AIR_SA_YOLO_WORKER_SECRET",
-        "permissions": WORKER_SA_PERMISSIONS,
-    },
-    {
-        "name": "mlair-vet-worker",
-        "description": "External Vet-AI worker",
-        "secret_env": "ML_AIR_SA_VET_WORKER_SECRET",
-        "permissions": WORKER_SA_PERMISSIONS,
     },
 )
 

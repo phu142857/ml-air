@@ -134,7 +134,8 @@ Identity IAM (see [Login and Identity](guides/login-and-identity.md)):
 | `ML_AIR_LEGACY_STATIC_TOKENS` | `0` = target (no static `*-token`) |
 | `ML_AIR_SA_SCHEDULER_SECRET` | Platform scheduler SA bootstrap |
 | `ML_AIR_SA_EXECUTOR_SECRET` | Platform executor SA bootstrap |
-| `ML_AIR_SA_YOLO_WORKER_SECRET` / `VET` | External worker SAs |
+
+External workers use Service Accounts you create in the Hub (no platform bootstrap). Set `ML_AIR_SERVICE_ACCOUNT_TOKEN` or `ML_AIR_SA_WORKER_SECRET` on the worker process.
 
 Boolean values accept YAML `true`/`false` or `1`/`0` in env.
 

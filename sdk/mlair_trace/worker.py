@@ -1,4 +1,4 @@
-"""OTEL bootstrap for external MLAir workers (YOLO, vet-ai, custom Python)."""
+"""OTEL bootstrap for external MLAir workers (user-managed Service Accounts)."""
 
 from __future__ import annotations
 
