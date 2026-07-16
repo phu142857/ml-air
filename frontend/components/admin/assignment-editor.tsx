@@ -13,6 +13,10 @@ import {
 
 export type AssignmentDraft = AssignmentInput & { _key: string };
 
+export function createAssignmentDraft(): AssignmentDraft {
+  return newDraft();
+}
+
 function newDraft(): AssignmentDraft {
   return {
     _key: crypto.randomUUID(),

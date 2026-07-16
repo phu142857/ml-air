@@ -69,6 +69,11 @@ export function useRunLogsLiveStream(opts: {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef(BASE_BACKOFF_MS);
   const shouldHaltRef = useRef(false);
+  const tokenRef = useRef(token);
+
+  if (token.trim()) {
+    tokenRef.current = token;
+  }
 
   useEffect(() => {
     shouldHaltRef.current = false;
@@ -93,7 +98,7 @@ export function useRunLogsLiveStream(opts: {
         reconnectTimer.current = null;
       }
 
-      const ws = new WebSocket(buildRunLogsWsUrl(tenantId, projectId, runId, token));
+      const ws = new WebSocket(buildRunLogsWsUrl(tenantId, projectId, runId, tokenRef.current));
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -114,10 +119,12 @@ export function useRunLogsLiveStream(opts: {
       };
 
       ws.onerror = () => {
+        if (wsRef.current !== ws) return;
         setLiveStatus("polling");
       };
 
       ws.onclose = () => {
+        if (wsRef.current !== ws) return;
         wsRef.current = null;
         if (shouldHaltRef.current) return;
         setLiveStatus("polling");

@@ -7,14 +7,15 @@
 One all-in-one image (Hub + API `/v1` + realtime `/ws` + scheduler + executor + Postgres + Redis) on a single port `8080`. Database migrations and every service start automatically inside the container — there is nothing else to run.
 
 ```bash
-git clone <repo-url> && cd ml-air
+git clone https://github.com/phu142857/ml-air.git
+cd ml-air
 pip install -e .                 # installs the `mlair` CLI
 
 # Option A — build the image locally, then start:
 mlair build && mlair start
 
 # Option B — pull the pre-built image (GHCR), then start:
-export MLAIR_IMAGE=ghcr.io/<owner>/ml-air:latest
+export MLAIR_IMAGE=ghcr.io/phu142857/ml-air:v1.0.0
 mlair start --pull
 
 mlair health                     # verify the stack is up
@@ -161,6 +162,18 @@ Each guide follows:
 - [Backup and Restore](./troubleshooting/backup-restore.md)
 - [Release Notes v0.6.94](./troubleshooting/release-notes-v0.6.94.md)
 
+## Runbooks (staging / production)
+
+Deploy and sign off without reading application source:
+
+- [Production deployment](./runbooks/production-deployment.md) — all-in-one, Helm, env merge, checklists
+- [Production strict lifecycle](./runbooks/production-strict-lifecycle.md) — strict pinning + L4 sync + verification
+- [Production WSS and ingress](./runbooks/production-wss-ingress.md) — realtime WebSocket behind TLS
+
+## Plugin development
+
+- [Plugin development guide](./plugin-development-guide.md) — index for create, validate, reload, integrate
+
 ## Documentation Rules
 
 - One file = one task
@@ -172,6 +185,7 @@ Each guide follows:
 ## Definition of Done (Docs)
 
 - New user completes Quickstart without asking for help
-- New user builds a plugin successfully
+- New user builds a plugin successfully ([plugin development guide](./plugin-development-guide.md))
 - Debug guide can be used to resolve a real failure
+- Production deploy follows [runbooks](./runbooks/production-deployment.md) without reading application source
 - No dependency on tribal knowledge

@@ -11,6 +11,7 @@ import { useTraceViewerUrl } from "@/hooks/use-trace-viewer-url";
 import { useAppContext } from "@/lib/app-context";
 import { fetchTraceList } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages";
 import { isScopePinned } from "@/lib/scope";
 import { formatApiClientError } from "@/lib/utils";
@@ -22,12 +23,15 @@ function TracesPageContent() {
   const url = useTraceViewerUrl();
   const [search, setSearch] = useState("");
   const autoSelectedRef = useRef(false);
+  const poll = useRealtimeQueryPolling();
 
   const listQuery = useQuery({
     queryKey: mlairKeys.trace.list(tenantId, projectId, 0),
     queryFn: () => fetchTraceList(tenantId, projectId, token, { limit: 50 }),
     enabled: scopePinned && Boolean(token?.trim()),
     staleTime: 10_000,
+    refetchInterval: poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
 
   const items = listQuery.data?.items ?? [];

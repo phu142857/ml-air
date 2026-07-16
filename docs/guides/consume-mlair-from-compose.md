@@ -48,6 +48,7 @@ Your **application** services talk to MLAir over HTTP (`/v1/...`) using URLs app
 
 - Track **image tag + changelog** for MLAir upgrades (`CHANGELOG.md` in this repo).
 - Run your integration tests against a pinned tag before moving `latest` in non-dev environments.
+- **Production deploy:** [Production deployment](../runbooks/production-deployment.md).
 
 ## Done
 

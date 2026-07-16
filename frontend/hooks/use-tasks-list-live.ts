@@ -9,22 +9,15 @@ import { useAppContext } from "@/lib/app-context";
 import { useExecutionStore } from "@/lib/execution-store";
 import { mergeTaskListRow } from "@/lib/execution-live-merge";
 import { mlairKeys } from "@/lib/query-keys";
-import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
+import {
+  resolveActiveExecutionRefetchInterval,
+  useRealtimeQueryPolling,
+} from "@/lib/realtime-query-polling";
 import { useRunsListLive } from "@/hooks/use-runs-list-live";
 import { isScopePinned } from "@/lib/scope";
 import { isActiveExecutionStatus } from "@/lib/status-style";
 
 export type TaskRow = TaskItem & { run_id: string; tenant_id: string; project_id: string };
-
-const ACTIVE_TASK_REFETCH_MS = 4000;
-
-function listHasActiveTask(items: TaskRow[], tasksByRun: Record<string, Record<string, TaskItem>>): boolean {
-  if (items.some((row) => isActiveExecutionStatus(row.status))) return true;
-  for (const taskMap of Object.values(tasksByRun)) {
-    if (Object.values(taskMap).some((t) => isActiveExecutionStatus(t.status))) return true;
-  }
-  return false;
-}
 
 /** Tasks tab: recent runs + task fan-out with WS patch, invalidation, and execution-store overlay. */
 export function useTasksListLive(enabled = true) {
@@ -84,8 +77,12 @@ export function useTasksListLive(enabled = true) {
     refetchInterval: (q) => {
       const items = q.state.data ?? [];
       const liveTasks = useExecutionStore.getState().tasksByRun;
-      if (listHasActiveTask(items, liveTasks)) return ACTIVE_TASK_REFETCH_MS;
-      return poll.refetchInterval;
+      const status =
+        items.find((row) => isActiveExecutionStatus(row.status))?.status ??
+        Object.values(liveTasks)
+          .flatMap((taskMap) => Object.values(taskMap))
+          .find((t) => isActiveExecutionStatus(t.status))?.status;
+      return resolveActiveExecutionRefetchInterval(poll, status);
     },
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });

@@ -9,17 +9,14 @@ import { useAppContext } from "@/lib/app-context";
 import { mergeRunListRow } from "@/lib/execution-live-merge";
 import { useExecutionStore } from "@/lib/execution-store";
 import { mlairKeys } from "@/lib/query-keys";
-import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
+import {
+  resolveActiveExecutionRefetchInterval,
+  useRealtimeQueryPolling,
+} from "@/lib/realtime-query-polling";
 import { isScopePinned } from "@/lib/scope";
 import { isActiveExecutionStatus } from "@/lib/status-style";
 
-const ACTIVE_RUN_REFETCH_MS = 4000;
 const RUNS_PAGE_SIZE = 50;
-
-function listHasActiveRun(items: RunItem[], storeRuns: Record<string, RunItem>): boolean {
-  if (items.some((row) => isActiveExecutionStatus(row.status))) return true;
-  return Object.values(storeRuns).some((row) => isActiveExecutionStatus(row.status));
-}
 
 function mergeRunsWithLiveStore(
   base: RunItem[],
@@ -71,8 +68,10 @@ export function useRunsListLive(enabled = true) {
 
   const refetchInterval = (items: RunItem[]) => {
     const liveRuns = useExecutionStore.getState().runs;
-    if (listHasActiveRun(items, liveRuns)) return ACTIVE_RUN_REFETCH_MS;
-    return poll.refetchInterval;
+    const status =
+      items.find((row) => isActiveExecutionStatus(row.status))?.status ??
+      Object.values(liveRuns).find((row) => isActiveExecutionStatus(row.status))?.status;
+    return resolveActiveExecutionRefetchInterval(poll, status);
   };
 
   const infiniteQuery = useInfiniteQuery({

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
+import { useRealtimeQueryPolling, resolveActiveExecutionRefetchInterval } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ListTodo, Loader2 } from "lucide-react"
 import {
@@ -40,8 +40,6 @@ import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
 import { toastError, toastSuccess } from "@/lib/toast-actions"
 import { isScopePinned } from "@/lib/scope"
 import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
-
-const ACTIVE_TASK_REFETCH_MS = 4000
 
 function TaskLogLine({ log }: { log: LogItem }) {
   return (
@@ -101,11 +99,8 @@ function TaskDetailContent() {
       }),
     enabled: Boolean(taskId?.trim() && token?.trim()),
     refetchOnMount: "always",
-    refetchInterval: (q) => {
-      const status = q.state.data?.status ?? storeTask?.status
-      if (isActiveExecutionStatus(status)) return ACTIVE_TASK_REFETCH_MS
-      return poll.refetchInterval
-    },
+    refetchInterval: (q) =>
+      resolveActiveExecutionRefetchInterval(poll, q.state.data?.status ?? storeTask?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
@@ -152,10 +147,7 @@ function TaskDetailContent() {
       }),
     enabled: Boolean(taskId?.trim() && token?.trim() && taskApiScope && taskRunId && task),
     refetchOnMount: "always",
-    refetchInterval: () => {
-      if (isActiveExecutionStatus(task?.status)) return ACTIVE_TASK_REFETCH_MS
-      return poll.refetchInterval
-    },
+    refetchInterval: () => resolveActiveExecutionRefetchInterval(poll, task?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
@@ -163,7 +155,7 @@ function TaskDetailContent() {
   const logsLive = isActiveExecutionStatus(task?.status)
   const [logSearch, setLogSearch] = useState<LogSearchParams>({})
   const [logExporting, setLogExporting] = useState(false)
-  const logsRefetchMs = logsLive ? ACTIVE_TASK_REFETCH_MS : poll.refetchInterval
+  const logsRefetchMs = resolveActiveExecutionRefetchInterval(poll, task?.status)
   const logsQuery = useTaskLogsInfinite(
     logsScope?.tenantId ?? "",
     logsScope?.projectId ?? "",
@@ -173,7 +165,7 @@ function TaskDetailContent() {
     Boolean(logsScope && task),
     {
       streamLive: logsLive,
-      refetchInterval: logsLive ? false : (typeof logsRefetchMs === "number" ? logsRefetchMs : false),
+      refetchInterval: logsLive ? false : logsRefetchMs,
       search: logSearch,
     },
   )

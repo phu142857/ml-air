@@ -56,6 +56,7 @@ import {
   statusChipKey,
   statusToMlopsBadge,
   normalizeStatus,
+  isActiveExecutionStatus,
   type StatusChipKey,
 } from "@/lib/status-style"
 import { useAppContext } from "@/lib/app-context"
@@ -88,11 +89,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { mlairKeys } from "@/lib/query-keys"
-import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
-import { useTabLoading } from "@/hooks/use-tab-loading"
+import {
+  resolveActiveExecutionRefetchInterval,
+  resolveRefetchInterval,
+  useRealtimeQueryPolling,
+} from "@/lib/realtime-query-polling"
 import { useChartTheme } from "@/hooks/use-chart-theme"
+import { useTabLoading } from "@/hooks/use-tab-loading"
+
 const RUN_USAGE_LIVE_REFRESH_MS = 1000
-const ACTIVE_RUN_REFETCH_MS = 4000
 
 const RUN_TABS = [
   { id: "overview", label: "Overview" },
@@ -277,22 +282,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const storeRun = useExecutionStore((s) => s.runs[runId])
   const storeTasks = useExecutionStore((s) => s.tasksByRun[runId])
 
-  const activeRunRefetchMs = (status: string | undefined) => {
-    const st = normalizeStatus(String(status ?? storeRun?.status ?? ""))
-    return st === "RUNNING" || st === "PENDING" || st === "QUEUED" ? ACTIVE_RUN_REFETCH_MS : false
-  }
-
-  const usageLiveRefetchMs = (status: string | undefined) => {
-    const st = normalizeStatus(String(status ?? storeRun?.status ?? ""))
-    return st === "RUNNING" || st === "PENDING" || st === "QUEUED" ? RUN_USAGE_LIVE_REFRESH_MS : false
-  }
-
   const runQuery = useQuery({
     queryKey: mlairKeys.run.detail(runId),
     queryFn: () => fetchRun(tenantId, projectId, runId, token),
     enabled,
     refetchOnMount: "always",
-    refetchInterval: (q) => activeRunRefetchMs(q.state.data?.status) || poll.refetchInterval,
+    refetchInterval: (q) =>
+      resolveActiveExecutionRefetchInterval(poll, q.state.data?.status ?? storeRun?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
@@ -301,7 +297,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryFn: () => fetchRunTasks(tenantId, projectId, runId, token),
     enabled,
     refetchOnMount: "always",
-    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchInterval: () =>
+      resolveActiveExecutionRefetchInterval(poll, runQuery.data?.status ?? storeRun?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
@@ -316,8 +313,10 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     return { ...logSearch, ...(taskId ? { taskId } : {}) }
   }, [logSearch, logTaskFilter])
 
-  const logsRefetchMs = activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval
-  const logsLive = activeRunRefetchMs(runQuery.data?.status) !== false && tab === "logs"
+  const runStatus = runQuery.data?.status ?? storeRun?.status
+  const runIsActive = isActiveExecutionStatus(runStatus)
+  const logsRefetchMs = resolveActiveExecutionRefetchInterval(poll, runStatus)
+  const logsLive = runIsActive && tab === "logs"
   const logsQuery = useRunLogsInfinite(
     tenantId,
     projectId,
@@ -326,7 +325,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     enabled && Boolean(runQuery.data),
     {
       streamLive: logsLive,
-      refetchInterval: logsLive ? false : (typeof logsRefetchMs === "number" ? logsRefetchMs : false),
+      refetchInterval: logsLive ? false : logsRefetchMs,
       search: logSearchEffective,
     },
   )
@@ -358,7 +357,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryFn: () => fetchRunTracking(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
     refetchOnMount: "always",
-    refetchInterval: () => activeRunRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchInterval: () => resolveActiveExecutionRefetchInterval(poll, runStatus),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -368,7 +367,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryFn: () => fetchRunUsage(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
     refetchOnMount: "always",
-    refetchInterval: () => usageLiveRefetchMs(runQuery.data?.status) || poll.refetchInterval,
+    refetchInterval: () =>
+      resolveRefetchInterval(poll, { active: runIsActive, activeMs: RUN_USAGE_LIVE_REFRESH_MS }),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -385,7 +385,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     refetchOnMount: "always",
     refetchInterval: () =>
       tab === "tasks" && expandedTaskId
-        ? usageLiveRefetchMs(runQuery.data?.status) || false
+        ? resolveRefetchInterval(poll, { active: runIsActive, activeMs: RUN_USAGE_LIVE_REFRESH_MS })
         : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
@@ -401,7 +401,9 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     enabled: enabled && Boolean(runQuery.data) && tab === "tasks",
     refetchOnMount: "always",
     refetchInterval: () =>
-      tab === "tasks" ? usageLiveRefetchMs(runQuery.data?.status) || false : false,
+      tab === "tasks"
+        ? resolveRefetchInterval(poll, { active: runIsActive, activeMs: RUN_USAGE_LIVE_REFRESH_MS })
+        : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
   })
@@ -798,7 +800,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         </TabsContent>
 
         <TabsContent value="logs" className={tabPanelScrollClassName()}>
-          <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.logs}>
+          <RunTabPanel loading={isTabLoading && logsQuery.isLoading} variant={RUN_TAB_SKELETON.logs}>
             <DetailSection
               title="Runner logs"
               bodyClassName="p-0"
@@ -835,7 +837,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   <ExecutionLogStream
                     items={displayedLogs}
                     isLoading={logsQuery.isLoading}
-                    isRefreshing={logsQuery.isFetching && !logsQuery.isFetchingNextPage && displayedLogs.length > 0}
+                    isRefreshing={
+                      logsQuery.isFetching &&
+                      !logsQuery.isFetchingNextPage &&
+                      displayedLogs.length > 0 &&
+                      logsQuery.liveStatus !== "live" &&
+                      logsQuery.liveStatus !== "connecting"
+                    }
                     hasMoreOlder={Boolean(logsQuery.hasNextPage)}
                     isLoadingOlder={logsQuery.isFetchingNextPage}
                     onLoadOlder={() => void logsQuery.fetchNextPage()}

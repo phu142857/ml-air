@@ -228,7 +228,7 @@ export ML_AIR_SA_SCHEDULER_SECRET=...
 mlair start --profile production
 ```
 
-Equivalent to `deploy/env/production-strict.env.example`. See **Strict lifecycle** env vars below and `deploy/env/staging-strict.env.example`.
+Equivalent to `deploy/env/production-strict.env.example`. See [Production strict lifecycle](./runbooks/production-strict-lifecycle.md) and `deploy/env/staging-strict.env.example`.
 
 ### Consume from another repo
 
@@ -238,6 +238,9 @@ Keep using pinned images and `MLAIR_API_IMAGE` — no monorepo submodule. Set pr
 
 - [Installation](./getting-started/installation.md)
 - [Quickstart](./getting-started/quickstart.md)
+- [Production deployment](./runbooks/production-deployment.md)
+- [Production strict lifecycle](./runbooks/production-strict-lifecycle.md)
+- [Production WSS and ingress](./runbooks/production-wss-ingress.md)
 - [Run environment capture](./guides/run-environment.md)
 - [CLI commands](./cli/commands.md)
 - `.env.example` — L3 deployment contract (groups A–E)

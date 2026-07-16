@@ -8,6 +8,7 @@ import type { AuditTimelineFilters } from "@/lib/audit-timeline-filters";
 import { useAppContext } from "@/lib/app-context";
 import { mlairKeys } from "@/lib/query-keys";
 import { isScopePinned } from "@/lib/scope";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -16,10 +17,12 @@ export function useAuditTimelineInfinite(
   filters: AuditTimelineFilters,
   enabled = true,
   pageSize = DEFAULT_PAGE_SIZE,
-  refetchInterval: number | false = false
+  refetchInterval?: number | false,
 ) {
   const { tenantId, projectId, token } = useAppContext();
   const scopePinned = isScopePinned(tenantId, projectId);
+  const poll = useRealtimeQueryPolling();
+  const interval = refetchInterval ?? poll.refetchInterval;
 
   const infiniteQuery = useInfiniteQuery({
     queryKey: mlairKeys.audit.timelineFilteredInfinite(tenantId, projectId, filters),
@@ -40,7 +43,8 @@ export function useAuditTimelineInfinite(
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && scopePinned && Boolean(token?.trim()),
     refetchOnMount: "always",
-    refetchInterval,
+    refetchInterval: interval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
 
   const aggregateQuery = useQuery({
@@ -54,7 +58,8 @@ export function useAuditTimelineInfinite(
     },
     enabled: enabled && !scopePinned && Boolean(token?.trim()),
     refetchOnMount: "always",
-    refetchInterval,
+    refetchInterval: interval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
 
   const query = scopePinned ? infiniteQuery : aggregateQuery;

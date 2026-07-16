@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { fetchTaskLogsPage, type LogItem, type LogSearchParams } from "@/lib/api";
@@ -56,7 +56,7 @@ export function useTaskLogsInfinite(
   });
 
   const pollInterval =
-    streamLive && liveStatus === "live" && !hasServerSearch
+    streamLive && (liveStatus === "live" || liveStatus === "connecting") && !hasServerSearch
       ? false
       : options?.refetchInterval ?? poll.refetchInterval;
 
@@ -75,7 +75,11 @@ export function useTaskLogsInfinite(
     enabled: enabled && Boolean(taskId && tenantId && projectId && token?.trim()),
     refetchOnMount: "always",
     refetchInterval: pollInterval,
-    refetchOnWindowFocus: poll.refetchOnWindowFocus,
+    refetchOnWindowFocus:
+      streamLive && (liveStatus === "live" || liveStatus === "connecting") && !hasServerSearch
+        ? false
+        : poll.refetchOnWindowFocus,
+    placeholderData: keepPreviousData,
   });
 
   const items: LogItem[] = chronologicalLogItems(query.data?.pages);

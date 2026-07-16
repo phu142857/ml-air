@@ -7,6 +7,7 @@ import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { normalizeStatus } from "@/lib/status-style"
 
 export type LoadingState = "idle" | "loading" | "success" | "error"
@@ -46,15 +47,15 @@ function parseApiErrorStatus(err: unknown): number | undefined {
 }
 
 interface UseLifecycleOptions {
-  /** Poll interval when live mode is on (ms). */
+  /** @deprecated Realtime WebSocket is primary; polling uses global fallback when WS is down. */
   livePollMs?: number
 }
 
-export function useLifecycle(options: UseLifecycleOptions = {}) {
-  const { livePollMs = 15_000 } = options
+export function useLifecycle(_options: UseLifecycleOptions = {}) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { tenantId, projectId, token } = useAppContext()
+  const poll = useRealtimeQueryPolling()
   const scopePinned = tenantId !== "all" && projectId !== "all"
   const enabled = Boolean(token?.trim())
 
@@ -83,7 +84,8 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     enabled: enabled && scopePinned,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
-    refetchInterval: isLive && enabled && scopePinned ? livePollMs : false,
+    refetchInterval: isLive && enabled && scopePinned ? poll.refetchInterval : false,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: 2,
   })
 
@@ -100,7 +102,8 @@ export function useLifecycle(options: UseLifecycleOptions = {}) {
     enabled: enabled && !scopePinned,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
-    refetchInterval: isLive && enabled && !scopePinned ? livePollMs : false,
+    refetchInterval: isLive && enabled && !scopePinned ? poll.refetchInterval : false,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: 2,
   })
 

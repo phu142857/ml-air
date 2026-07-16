@@ -408,7 +408,7 @@ Other useful targets: `make seed-demo`, `make backfill-lineage*`, `make enable-e
 - Pin image tag in consumer compose or Kubernetes (e.g. `MLAIR_IMAGE_TAG`)
 - Helm: [charts/ml-air/README.md](charts/ml-air/README.md); reference workflow `.github/workflows/deploy-helm-staging.yml`
 
-Operational runbooks: [docs/troubleshooting/](docs/troubleshooting/)
+Operational runbooks: [docs/runbooks/](docs/runbooks/) (production deploy, strict lifecycle, WSS ingress) and [docs/troubleshooting/](docs/troubleshooting/)
 
 ---
 

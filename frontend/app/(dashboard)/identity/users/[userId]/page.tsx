@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import {
   AssignmentEditor,
   assignmentsToDrafts,
+  createAssignmentDraft,
   draftsToAssignments,
   type AssignmentDraft,
 } from "@/components/admin/assignment-editor";
@@ -139,11 +140,8 @@ export default function IdentityUserDetailPage() {
   return (
     <SettingsPage loading={userQuery.isLoading} error={userQuery.error ? (userQuery.error as Error).message : null}>
       <SettingsPageHeader
-        title={user?.username || "User"}
-        description="Manage identity, access, and lifecycle for this human account."
         backHref="/identity/users"
         backLabel="Users"
-        badge={user ? <IdentityStatusBadge state={user.state} /> : null}
         secondaryActions={
           isGlobalAdmin ? (
             <Badge variant="outline" className="text-[10px]">
@@ -198,25 +196,33 @@ export default function IdentityUserDetailPage() {
           {!isGlobalAdmin ? (
             <SettingsSection
               id="permissions"
-              title="Permissions"
-              description="Tenant and project role assignments for this user."
+              title="Role assignments"
+              description="Grant Maintainer or Viewer access per tenant and project. Changes apply after you save."
             >
               {assignmentsQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading assignments…</p>
-              ) : (assignmentsQuery.data || []).length === 0 && !assignmentsDirty ? (
-                <SettingsEmptyState
-                  title="No roles assigned"
-                  description="Assign Maintainer or Viewer roles to grant tenant and project access."
-                />
               ) : (
                 <>
-                  <AssignmentEditor token={token} value={drafts} onChange={setDrafts} />
-                  <SettingsFormFooter
-                    dirty={assignmentsDirty}
-                    saving={saveAssignments.isPending}
-                    onSave={() => saveAssignments.mutate()}
-                    onCancel={() => setDrafts(assignmentsBaseline)}
-                  />
+                  {(assignmentsQuery.data || []).length === 0 && drafts.length === 0 ? (
+                    <SettingsEmptyState
+                      title="No roles assigned"
+                      description="Add a tenant/project role so this user can access Hub resources."
+                      actionLabel="Add role assignment"
+                      onAction={() => setDrafts([createAssignmentDraft()])}
+                    />
+                  ) : null}
+                  {drafts.length > 0 || (assignmentsQuery.data || []).length > 0 ? (
+                    <>
+                      <AssignmentEditor token={token} value={drafts} onChange={setDrafts} />
+                      <SettingsFormFooter
+                        dirty={assignmentsDirty}
+                        saving={saveAssignments.isPending}
+                        saveLabel="Save assignments"
+                        onSave={() => saveAssignments.mutate()}
+                        onCancel={() => setDrafts(assignmentsBaseline)}
+                      />
+                    </>
+                  ) : null}
                 </>
               )}
             </SettingsSection>

@@ -30,8 +30,8 @@ import {
 import { setMlairRealtimeUiStatus } from "./mlair-realtime-status";
 import { mlairKeys } from "./query-keys";
 
-const DEBOUNCE_MS = 300;
-const RECONCILE_MS = 60_000;
+const DEBOUNCE_MS = 150;
+const RECONCILE_MS = 30_000;
 const MAX_SEEN_IDS = 500;
 const BASE_BACKOFF_MS = 800;
 const MAX_BACKOFF_MS = 30_000;
@@ -44,10 +44,16 @@ const IMMEDIATE_INVALIDATE_KEY_HEADS = new Set([
   "runs",
   "run",
   "run-tasks",
-  "run-logs",
   "run-tracking",
   "run-readiness",
   "run-execution-graph",
+  "run-usage",
+  "run-usage-samples",
+  "task-usage",
+  "task-usage-samples",
+  "trace-detail",
+  "trace-list",
+  "audit-timeline",
   "pipelines",
   "pipeline-topology",
   "pipeline-dag",
@@ -141,6 +147,26 @@ function keysDatasetHubSurface(tenantId: string, projectId: string, datasetId: s
   ];
 }
 
+function keysRunRealtimeSurfaces(tenantId: string, projectId: string, runId: string): unknown[][] {
+  return [
+    [...mlairKeys.run.detail(runId)],
+    [...mlairKeys.run.tasks(runId)],
+    [...mlairKeys.run.tracking(runId)],
+    [...mlairKeys.run.readiness(runId)],
+    [...mlairKeys.run.executionGraph(tenantId, projectId, runId)],
+    [...mlairKeys.run.usage(runId)],
+    ["run-usage-samples", runId],
+  ];
+}
+
+function keysProjectObservabilitySurfaces(tenantId: string, projectId: string): unknown[][] {
+  return [
+    [...mlairKeys.audit.timeline(tenantId, projectId)],
+    ["trace-list", tenantId, projectId],
+    ["trace-detail", tenantId, projectId],
+  ];
+}
+
 function keysForEvent(
   tenantId: string,
   projectId: string,
@@ -154,16 +180,10 @@ function keysForEvent(
     const keys: unknown[][] = [
       [...mlairKeys.runs.list(tenantId, projectId)],
       [...mlairKeys.tasks.recentPrefix(tenantId, projectId)],
+      ...keysProjectObservabilitySurfaces(tenantId, projectId),
     ];
     if (rid) {
-      keys.push(
-        [...mlairKeys.run.detail(rid)],
-        [...mlairKeys.run.tasks(rid)],
-        [...mlairKeys.run.logs(rid)],
-        [...mlairKeys.run.tracking(rid)],
-        [...mlairKeys.run.readiness(rid)],
-        [...mlairKeys.run.executionGraph(tenantId, projectId, rid)],
-      );
+      keys.push(...keysRunRealtimeSurfaces(tenantId, projectId, rid));
     }
     return keys;
   }
@@ -178,18 +198,15 @@ function keysForEvent(
     const keys: unknown[][] = [
       [...mlairKeys.runs.list(tenantId, projectId)],
       [...mlairKeys.tasks.recentPrefix(tenantId, projectId)],
+      ...keysProjectObservabilitySurfaces(tenantId, projectId),
     ];
     if (taskId) {
       keys.push(["task", taskId]);
+      keys.push([...mlairKeys.task.usage(tenantId, projectId, taskId)]);
+      keys.push(["task-usage-samples", tenantId, projectId]);
     }
     if (r) {
-      keys.push(
-        [...mlairKeys.run.tasks(r)],
-        [...mlairKeys.run.detail(r)],
-        [...mlairKeys.run.tracking(r)],
-        [...mlairKeys.run.readiness(r)],
-        [...mlairKeys.run.executionGraph(tenantId, projectId, r)],
-      );
+      keys.push(...keysRunRealtimeSurfaces(tenantId, projectId, r));
     }
     return keys;
   }

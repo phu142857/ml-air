@@ -11,15 +11,18 @@ executor + Postgres, behind an internal nginx on one public port `8080`).
 
 ## Path A — Pull the pre-built image (no build)
 
-Published to GitHub Container Registry on every release: `ghcr.io/<owner>/ml-air`.
+Published to GitHub Container Registry on every release:
+
+- **All-in-one:** `ghcr.io/phu142857/ml-air:<tag>` (this repo — replace `phu142857/ml-air` with your `owner/repo` on a fork)
+- **Microservices:** `ghcr.io/phu142857/ml-air-{api,frontend,scheduler,executor,realtime}:<tag>`
 
 ```bash
-git clone <repo-url>          # for the `mlair` CLI, compose file and docs
+git clone https://github.com/phu142857/ml-air.git   # CLI, compose, docs
 cd ml-air
 pip install -e .
 
 # Point at the published image, pull it, and start:
-export MLAIR_IMAGE=ghcr.io/<owner>/ml-air:latest
+export MLAIR_IMAGE=ghcr.io/phu142857/ml-air:v1.0.0
 mlair start --pull
 mlair health
 ```
@@ -31,7 +34,7 @@ mlair health
 Builds the image from source (also (re)packages the SDK wheel into `dist/`):
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/phu142857/ml-air.git
 cd ml-air
 pip install -e .
 mlair doctor
@@ -61,6 +64,8 @@ Common keys (full list in [Configuration](../configuration.md)):
 | `ML_AIR_USAGE_TRACKING_ENABLED` | `1` | CPU/RAM/GPU usage capture |
 
 Optional **MinIO / Prometheus / Grafana** sidecars are **off by default**. Enable in `mlair.yaml` (see [Configuration](../configuration.md#optional-infra-sidecars-all-in-one)) or via `MLAIR_INFRA_*` in `deploy/.env.infra.example`.
+
+**Production:** see [Production deployment](../runbooks/production-deployment.md) for pinned images, Helm, and sign-off.
 
 ## Result
 

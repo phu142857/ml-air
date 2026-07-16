@@ -11,6 +11,7 @@ import { MlopsEmptyState } from "@/components/mlops/layout"
 import type { TraceSearchHit } from "@/lib/api"
 import { fetchTraceList } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { formatApiClientError } from "@/lib/utils"
 
 type RecentTracesWidgetProps = {
@@ -48,11 +49,14 @@ export function RecentTracesWidget({
   token,
   scopePinned,
 }: RecentTracesWidgetProps) {
+  const poll = useRealtimeQueryPolling()
   const tracesQ = useQuery({
     queryKey: mlairKeys.trace.list(tenantId, projectId, 0),
     queryFn: () => fetchTraceList(tenantId, projectId, token, { limit: 8 }),
     enabled: scopePinned && Boolean(token?.trim()),
     staleTime: 10_000,
+    refetchInterval: poll.refetchInterval,
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
 
   if (!scopePinned) {
