@@ -127,6 +127,26 @@ export async function refreshIdentity(refreshToken: string): Promise<{
   });
 }
 
+let refreshInFlight: ReturnType<typeof refreshIdentity> | null = null;
+let refreshInFlightKey = "";
+
+/** Coalesce concurrent refresh calls — the server rotates refresh tokens on each use. */
+export function refreshIdentityDeduped(refreshToken: string) {
+  const key = refreshToken.trim();
+  if (!key) {
+    return Promise.reject(new Error("missing refresh token"));
+  }
+  if (refreshInFlight && refreshInFlightKey === key) {
+    return refreshInFlight;
+  }
+  refreshInFlightKey = key;
+  refreshInFlight = refreshIdentity(key).finally(() => {
+    refreshInFlight = null;
+    refreshInFlightKey = "";
+  });
+  return refreshInFlight;
+}
+
 export async function logoutIdentity(accessToken: string, refreshToken?: string): Promise<void> {
   await identityFetch("/auth/logout", {
     method: "POST",

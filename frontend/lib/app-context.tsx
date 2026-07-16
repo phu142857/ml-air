@@ -3,7 +3,12 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { BootstrapContextResponse } from "@/lib/api";
 import { fetchBootstrapContext } from "@/lib/api";
-import { clearAuthSession, loadAuthSession, refreshIdentity, saveAuthSession } from "@/lib/identity-api";
+import {
+  clearAuthSession,
+  loadAuthSession,
+  refreshIdentityDeduped,
+  saveAuthSession,
+} from "@/lib/identity-api";
 import {
   DEFAULT_SESSION_ENDED_MESSAGE,
   isAuthSessionFailure,
@@ -106,20 +111,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const session = loadAuthSession();
-    if (session) {
-      setToken(session.accessToken);
-      setRefreshToken(session.refreshToken);
-      if (session.username) setUsername(session.username);
-      return;
-    }
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<Pick<AppContextValue, "tenantId" | "projectId" | "token">>;
-      if (typeof parsed.token === "string" && parsed.token.trim()) setToken(parsed.token);
-    } catch {
-      // ignore invalid localStorage payload
-    }
+    if (!session) return;
+    setToken(session.accessToken);
+    setRefreshToken(session.refreshToken);
+    if (session.username) setUsername(session.username);
   }, []);
 
   useEffect(() => {
@@ -138,11 +133,10 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         applyBootstrapState(ctx);
         setIsBootstrapped(true);
       } catch (err) {
-        const authFailure =
-          err instanceof Error && isAuthSessionFailure(err.message);
+        let authFailure = err instanceof Error && isAuthSessionFailure(err.message);
         if (refreshToken.trim()) {
           try {
-            const refreshed = await refreshIdentity(refreshToken);
+            const refreshed = await refreshIdentityDeduped(refreshToken);
             const next = {
               accessToken: refreshed.access_token,
               refreshToken: refreshed.refresh_token,
@@ -156,12 +150,15 @@ export function AppContextProvider({ children }: PropsWithChildren) {
             setIsBootstrapped(true);
             return;
           } catch {
-            // fall through to forced logout on auth failure
+            authFailure = true;
           }
         }
-        if (authFailure || refreshToken.trim()) {
-          clearAuthSession();
+        if (authFailure) {
           stashLogoutReason(DEFAULT_SESSION_ENDED_MESSAGE);
+          clearAuthSession();
+          setToken("");
+          setRefreshToken("");
+          setUsername(null);
           bootstrapKeyRef.current = "";
           if (typeof window !== "undefined") {
             window.location.href = "/login";
@@ -205,11 +202,20 @@ export function AppContextProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     try {
+      if (!token.trim()) {
+        clearAuthSession();
+      }
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tenantId, projectId, token, mappingVersion, bootstrapSource })
+        JSON.stringify({
+          tenantId,
+          projectId,
+          token: token.trim() ? token : "",
+          mappingVersion,
+          bootstrapSource,
+        })
       );
-      if (token && refreshToken) {
+      if (token.trim() && refreshToken.trim()) {
         saveAuthSession({
           accessToken: token,
           refreshToken,

@@ -1,38 +1,82 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAppContext } from "@/lib/app-context";
-import { loadAuthSession, loginIdentity, saveAuthSession } from "@/lib/identity-api";
+import {
+  clearAuthSession,
+  fetchIdentityMe,
+  loadAuthSession,
+  loginIdentity,
+  refreshIdentityDeduped,
+  saveAuthSession,
+} from "@/lib/identity-api";
 import { consumeLogoutReason } from "@/lib/auth-session";
 import { resolveHubDefaultRoute, hubDefaultRoutePath } from "@/lib/hub-default-route";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setToken, setRefreshToken, token } = useAppContext();
+  const { setToken, setRefreshToken } = useAppContext();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const redirectingRef = useRef(false);
 
   useEffect(() => {
     setSessionNotice(consumeLogoutReason());
   }, []);
 
   useEffect(() => {
-    const session = loadAuthSession();
-    if (session?.accessToken?.trim()) {
-      setToken(session.accessToken);
-      setRefreshToken(session.refreshToken);
+    let cancelled = false;
+
+    (async () => {
+      const session = loadAuthSession();
+      if (!session?.accessToken?.trim() || !session.refreshToken?.trim()) {
+        if (!cancelled) setCheckingSession(false);
+        return;
+      }
+
+      let accessToken = session.accessToken;
+      let refreshToken = session.refreshToken;
+
+      try {
+        await fetchIdentityMe(accessToken);
+      } catch {
+        try {
+          const refreshed = await refreshIdentityDeduped(refreshToken);
+          accessToken = refreshed.access_token;
+          refreshToken = refreshed.refresh_token;
+          saveAuthSession({
+            accessToken,
+            refreshToken,
+            username: session.username,
+          });
+          await fetchIdentityMe(accessToken);
+        } catch {
+          clearAuthSession();
+          setToken("");
+          setRefreshToken("");
+          if (!cancelled) setCheckingSession(false);
+          return;
+        }
+      }
+
+      if (cancelled || redirectingRef.current) return;
+      redirectingRef.current = true;
+      setToken(accessToken);
+      setRefreshToken(refreshToken);
       const next = searchParams.get("next");
       router.replace(next && next.startsWith("/") ? next : hubDefaultRoutePath(resolveHubDefaultRoute()));
-    } else if (token.trim()) {
-      const next = searchParams.get("next");
-      router.replace(next && next.startsWith("/") ? next : hubDefaultRoutePath(resolveHubDefaultRoute()));
-    }
-  }, [router, searchParams, setRefreshToken, setToken, token]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, searchParams, setRefreshToken, setToken]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -55,6 +99,14 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-sm text-muted-foreground">
+        Checking session…
+      </div>
+    );
   }
 
   return (

@@ -3,12 +3,12 @@
 import { useEffect, useRef } from "react";
 import { useAppContext } from "@/lib/app-context";
 import { DEFAULT_SESSION_ENDED_MESSAGE, isAuthSessionFailure } from "@/lib/auth-session";
-import { fetchIdentityMe, refreshIdentity } from "@/lib/identity-api";
+import { fetchIdentityMe, refreshIdentityDeduped, saveAuthSession } from "@/lib/identity-api";
 
 const SESSION_CHECK_MS = 30_000;
 
 export function useAuthSessionWatch() {
-  const { token, refreshToken, setToken, setRefreshToken, forceLogout } = useAppContext();
+  const { token, refreshToken, username, setToken, setRefreshToken, forceLogout } = useAppContext();
   const checkingRef = useRef(false);
 
   useEffect(() => {
@@ -25,7 +25,12 @@ export function useAuthSessionWatch() {
 
         if (refreshToken.trim()) {
           try {
-            const refreshed = await refreshIdentity(refreshToken);
+            const refreshed = await refreshIdentityDeduped(refreshToken);
+            saveAuthSession({
+              accessToken: refreshed.access_token,
+              refreshToken: refreshed.refresh_token,
+              username: username || undefined,
+            });
             setToken(refreshed.access_token);
             setRefreshToken(refreshed.refresh_token);
             await fetchIdentityMe(refreshed.access_token);
@@ -57,5 +62,5 @@ export function useAuthSessionWatch() {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [token, refreshToken, setToken, setRefreshToken, forceLogout]);
+  }, [token, refreshToken, username, setToken, setRefreshToken, forceLogout]);
 }
