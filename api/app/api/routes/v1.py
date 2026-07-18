@@ -797,6 +797,8 @@ def get_tenant_resource_usage_v1(
 @router.get("/tenants")
 def list_tenants_v1(limit: int = 50, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
+    if principal.is_global_admin:
+        return {"limit": limit, "items": list_tenants(limit=limit)}
     if principal.tenant_id:
         return {
             "limit": limit,
@@ -1740,36 +1742,27 @@ def bootstrap_context_v1(authorization: str | None = Header(default=None)) -> di
             scope_rows = accessible_scopes_for_user(user)
             if user.get("is_global_admin"):
                 default_tenant = os.getenv("ML_AIR_DEFAULT_TENANT", "default")
-                admin_principal = Principal(
-                    token=principal.token,
-                    subject=principal.subject,
-                    token_issuer=principal.token_issuer,
-                    scope_mapping_version=1,
-                    role="admin",
-                    tenant_id=default_tenant,
-                    project_ids=["*"],
-                    principal_kind="user",
-                    user_id=principal.user_id,
-                    is_global_admin=True,
-                )
-                project_ids = scope_context_service.list_accessible_project_ids(admin_principal, default_tenant)
-                accessible_scopes = [
-                    {"tenant_id": default_tenant, "project_id": project_id, "role": "admin"}
-                    for project_id in project_ids
-                ]
+                accessible_scopes = scope_context_service.list_catalog_accessible_scopes()
+                if not accessible_scopes:
+                    accessible_scopes = [
+                        {"tenant_id": default_tenant, "project_id": "default_project", "role": "admin"}
+                    ]
                 role = "admin"
             else:
                 accessible_scopes = scope_rows
                 role = accessible_scopes[0]["role"] if accessible_scopes else "viewer"
                 default_tenant = accessible_scopes[0]["tenant_id"] if accessible_scopes else os.getenv("ML_AIR_DEFAULT_TENANT", "default")
-                project_ids = list({s["project_id"] for s in accessible_scopes if s["tenant_id"] == default_tenant})
+            allowed_pairs = {(s["tenant_id"], s["project_id"]) for s in accessible_scopes}
+            project_ids = list({s["project_id"] for s in accessible_scopes if s["tenant_id"] == default_tenant})
+            if not project_ids:
+                project_ids = [accessible_scopes[0]["project_id"]] if accessible_scopes else ["default_project"]
             selected = scope_context_service.get_scope_override(principal.subject)
-            mapping_version = scope_context_service.resolve_mapping_version(principal, default_tenant)
             selected_tenant = str((selected or {}).get("tenant_id") or default_tenant)
-            selected_project = str((selected or {}).get("project_id") or (project_ids[0] if project_ids else "default_project"))
-            if selected_tenant != default_tenant or selected_project not in project_ids:
+            selected_project = str((selected or {}).get("project_id") or project_ids[0])
+            if (selected_tenant, selected_project) not in allowed_pairs:
                 selected_tenant = default_tenant
-                selected_project = project_ids[0] if project_ids else "default_project"
+                selected_project = project_ids[0]
+            mapping_version = scope_context_service.resolve_mapping_version(principal, selected_tenant)
             return {
                 "user": {
                     "subject": principal.subject,
@@ -1787,7 +1780,7 @@ def bootstrap_context_v1(authorization: str | None = Header(default=None)) -> di
                 },
                 "defaults": {
                     "tenant_id": default_tenant,
-                    "project_id": project_ids[0] if project_ids else "default_project",
+                    "project_id": project_ids[0],
                 },
                 "accessible_scopes": accessible_scopes,
                 "feature_flags": {"scope_switcher": True, "identity_login": True},

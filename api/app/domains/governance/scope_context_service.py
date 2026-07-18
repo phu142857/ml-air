@@ -4,7 +4,7 @@ import os
 
 from app.domains.governance.auth_service import Principal
 from app.domains.shared.db_service import db_conn
-from app.domains.governance.project_service import list_projects
+from app.domains.governance.project_service import list_projects, list_tenants
 
 _SCOPE_VERSION_SOURCES = [
     "runs",
@@ -18,6 +18,28 @@ _SCOPE_VERSION_SOURCES = [
     "dataset_training_policies",
     "tenant_projects",
 ]
+
+
+def list_catalog_accessible_scopes(
+    *,
+    role: str = "admin",
+    tenant_limit: int = 500,
+    project_limit: int = 500,
+) -> list[dict[str, str]]:
+    """All tenant/project pairs from the platform catalog (global admin Hub scope switcher)."""
+    scopes: list[dict[str, str]] = []
+    for tenant in list_tenants(tenant_limit):
+        tid = str(tenant.get("tenant_id") or "").strip()
+        if not tid:
+            continue
+        project_rows = list_projects(tenant_id=tid, limit=project_limit)
+        project_ids = [str(item.get("project_id") or "").strip() for item in project_rows]
+        project_ids = [pid for pid in project_ids if pid]
+        if not project_ids:
+            project_ids = ["default_project"]
+        for pid in project_ids:
+            scopes.append({"tenant_id": tid, "project_id": pid, "role": role})
+    return scopes
 
 
 def list_accessible_project_ids(principal: Principal, tenant_id: str, limit: int = 500) -> list[str]:
