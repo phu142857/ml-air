@@ -6,24 +6,26 @@ import subprocess
 from pathlib import Path
 
 from mlair.env import load_project_env
-from mlair.paths import default_env_file, repo_root
+from mlair.paths import default_env_file
 
 
 def compose_argv(compose_path: Path, *args: str) -> list[str]:
-    """Build ``docker compose`` argv: project dir = repo root, env file = ``.env`` there."""
-    root = repo_root()
+    """Build ``docker compose`` argv with repo-root ``.env`` for variable interpolation.
+
+    Compose project directory stays the compose file's folder (``deploy/``) so paths like
+    ``context: ..`` and ``./monitoring/...`` volumes keep working. Only ``--env-file``
+    points at the project-root ``.env`` — no copy into ``deploy/`` required.
+    """
     compose_path = compose_path.resolve()
     cmd: list[str] = [
         "docker",
         "compose",
-        "--project-directory",
-        str(root),
         "-f",
         str(compose_path),
     ]
     env_file = default_env_file()
     if env_file.is_file():
-        cmd.extend(["--env-file", str(env_file)])
+        cmd.extend(["--env-file", str(env_file.resolve())])
     cmd.extend(args)
     return cmd
 

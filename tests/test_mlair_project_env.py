@@ -32,13 +32,12 @@ class TestMlairProjectEnv(unittest.TestCase):
             compose_file = root / "deploy" / "docker-compose.allinone.yml"
             compose_file.parent.mkdir(parents=True)
             compose_file.write_text("services: {}\n", encoding="utf-8")
-            with patch("mlair.compose_cli.repo_root", return_value=root):
-                with patch("mlair.compose_cli.default_env_file", return_value=env_file):
-                    argv = compose_argv(compose_file, "config", "-q")
-            self.assertIn("--project-directory", argv)
-            self.assertEqual(argv[argv.index("--project-directory") + 1], str(root))
+            with patch("mlair.compose_cli.default_env_file", return_value=env_file):
+                argv = compose_argv(compose_file, "config", "-q")
+            self.assertNotIn("--project-directory", argv)
             self.assertIn("--env-file", argv)
-            self.assertEqual(argv[argv.index("--env-file") + 1], str(env_file))
+            self.assertEqual(argv[argv.index("--env-file") + 1], str(env_file.resolve()))
+            self.assertEqual(argv[argv.index("-f") + 1], str(compose_file.resolve()))
 
 
 if __name__ == "__main__":

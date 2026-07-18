@@ -220,7 +220,7 @@ export ML_AIR_IDENTITY_JWT_SECRET=...
 export ML_AIR_SA_SCHEDULER_SECRET=...
 ```
 
-`mlair start` creates **project-root `.env`** on first run by merging **`.env.example`** and **`deploy/.env.infra.example`**. Edit **only** `ml-air/.env` — do not copy it into `deploy/`; the CLI passes `--project-directory <repo-root> --env-file .env` to Docker Compose automatically. Policy knobs belong in Hub **System (L4)** or `MLAIR_PROFILE`, not infra env.
+`mlair start` creates **project-root `.env`** on first run by merging **`.env.example`** and **`deploy/.env.infra.example`**. Edit **only** `ml-air/.env` — do not copy it into `deploy/`; the CLI passes `--env-file <repo-root>/.env` to Docker Compose (compose paths stay under `deploy/`). Policy knobs belong in Hub **System (L4)** or `MLAIR_PROFILE`, not infra env.
 
 ### Strict lifecycle (staging / production)
 
