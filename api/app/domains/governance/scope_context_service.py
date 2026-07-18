@@ -42,6 +42,16 @@ def list_catalog_accessible_scopes(
     return scopes
 
 
+def resolve_source_tenant_for_mapping_check(subject: str, default_tenant: str) -> str:
+    """Tenant whose mapping_version the client last saw in bootstrap (override or default)."""
+    override = get_scope_override(subject)
+    if override and override.get("tenant_id"):
+        tid = str(override["tenant_id"]).strip()
+        if tid:
+            return tid
+    return str(default_tenant or "default").strip() or "default"
+
+
 def list_accessible_project_ids(principal: Principal, tenant_id: str, limit: int = 500) -> list[str]:
     if principal.project_ids and "*" not in principal.project_ids:
         return [str(pid).strip() for pid in principal.project_ids if str(pid).strip()]

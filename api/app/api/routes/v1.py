@@ -1825,7 +1825,13 @@ def switch_context_v1(payload: ScopeSwitchIn, authorization: str | None = Header
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=payload.tenant_id, project_id=payload.project_id, min_role="viewer")
     mapping_version = scope_context_service.resolve_mapping_version(principal, payload.tenant_id)
-    if payload.expected_mapping_version and int(payload.expected_mapping_version) != int(mapping_version):
+    default_tenant = os.getenv("ML_AIR_DEFAULT_TENANT", "default")
+    source_tenant = scope_context_service.resolve_source_tenant_for_mapping_check(principal.subject, default_tenant)
+    if (
+        payload.expected_mapping_version
+        and payload.tenant_id == source_tenant
+        and int(payload.expected_mapping_version) != int(mapping_version)
+    ):
         raise HTTPException(status_code=409, detail="mapping_version_stale")
     scope_context_service.upsert_scope_override(
         subject=principal.subject,

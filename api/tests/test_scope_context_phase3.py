@@ -44,10 +44,30 @@ class TestScopeContextPhase3(unittest.TestCase):
             mapping_version=42,
         )
 
+    @patch("app.api.routes.v1.scope_context_service.upsert_scope_override")
+    @patch("app.api.routes.v1.scope_context_service.resolve_source_tenant_for_mapping_check", return_value="default")
     @patch("app.api.routes.v1.scope_context_service.resolve_mapping_version", return_value=99)
     @patch("app.api.routes.v1.authorize_scope")
     @patch("app.api.routes.v1.authenticate_bearer")
-    def test_switch_context_rejects_stale_mapping_version(self, mock_auth, _authz, _resolve) -> None:
+    def test_switch_context_allows_cross_tenant_despite_stale_version(
+        self, mock_auth, _authz, _resolve, _source, mock_upsert
+    ) -> None:
+        mock_auth.return_value = SimpleNamespace(subject="user-1")
+        payload = v1.ScopeSwitchIn(
+            tenant_id="yolo",
+            project_id="yoloVN",
+            expected_mapping_version=1,
+        )
+        out = v1.switch_context_v1(payload, authorization="Bearer maintainer-token")
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["effective_scope"]["tenant_id"], "yolo")
+        mock_upsert.assert_called_once()
+
+    @patch("app.api.routes.v1.scope_context_service.resolve_mapping_version", return_value=99)
+    @patch("app.api.routes.v1.scope_context_service.resolve_source_tenant_for_mapping_check", return_value="default")
+    @patch("app.api.routes.v1.authorize_scope")
+    @patch("app.api.routes.v1.authenticate_bearer")
+    def test_switch_context_rejects_stale_mapping_version(self, mock_auth, _authz, _source, _resolve) -> None:
         mock_auth.return_value = SimpleNamespace(subject="user-1")
         payload = v1.ScopeSwitchIn(
             tenant_id="default",
