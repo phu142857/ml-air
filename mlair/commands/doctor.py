@@ -9,7 +9,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mlair.compose_cli import compose_argv
 from mlair.config.loader import apply_to_environ, infra_enabled, load_config
+from mlair.env import load_project_env
 from mlair.paths import repo_root
 
 
@@ -42,6 +44,7 @@ def run_doctor(
 ) -> int:
     root = repo_root()
     os.chdir(root)
+    load_project_env()
     cfg = load_config(config_path, profile=profile or os.getenv("MLAIR_PROFILE"))
     apply_to_environ(cfg)
 
@@ -71,8 +74,8 @@ def run_doctor(
         print("[PASS] .env file exists")
 
     compose_rel = (cfg.get("compose") or {}).get("file", "deploy/docker-compose.quickstart.yml")
-    compose_file = str(root / compose_rel)
-    rc, out = _run(["docker", "compose", "-f", compose_file, "config", "-q"])
+    compose_file = root / compose_rel
+    rc, out = _run(compose_argv(compose_file, "config", "-q"))
     if rc != 0:
         print("[FAIL] docker compose config invalid")
         print(out)

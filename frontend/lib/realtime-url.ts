@@ -33,21 +33,26 @@ export function sanitizeRealtimeWsBaseForBrowser(url: string): string {
     const parsed = new URL(normalized);
     const host = parsed.hostname.toLowerCase();
     const isLoopback = host === "localhost" || host === "127.0.0.1";
-    const isInternalPort = parsed.port === "8001" || (!parsed.port && isLoopback);
-    if (!isLoopback || !isInternalPort) return stripTrailingSlash(trimmed);
-
     const pageHost = window.location.hostname.toLowerCase();
     const pagePort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
     const targetPort = parsed.port || (parsed.protocol === "wss:" ? "443" : "80");
-    const pageIsLoopback = pageHost === "localhost" || pageHost === "127.0.0.1";
-    if (isLoopback && pageIsLoopback && host !== pageHost) {
+
+    if (isLoopback && pageHost !== host) {
       const inferred = inferRealtimeWsBaseFromLocation();
       if (inferred) return inferred;
     }
-    if (pageHost === host && targetPort === pagePort) return stripTrailingSlash(trimmed);
 
-    const inferred = inferRealtimeWsBaseFromLocation();
-    if (inferred) return inferred;
+    const isInternalPort = parsed.port === "8001" || (!parsed.port && isLoopback);
+    if (isLoopback && isInternalPort) {
+      if (pageHost === host && targetPort === pagePort) return stripTrailingSlash(trimmed);
+      const inferred = inferRealtimeWsBaseFromLocation();
+      if (inferred) return inferred;
+    }
+
+    if (isLoopback && pageHost === host && targetPort !== pagePort) {
+      const inferred = inferRealtimeWsBaseFromLocation();
+      if (inferred) return inferred;
+    }
   } catch {
     /* keep original */
   }

@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from mlair.config.loader import apply_to_environ, load_config
+from mlair.env import load_project_env
 from mlair.paths import repo_root
 
 
@@ -18,6 +19,7 @@ def run_health(
 ) -> int:
     root = repo_root()
     os.chdir(root)
+    load_project_env()
     cfg = load_config(config_path, profile=profile or os.getenv("MLAIR_PROFILE"))
     apply_to_environ(cfg)
 

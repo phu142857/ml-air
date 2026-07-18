@@ -59,7 +59,6 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
     },
     "observability": {
         "otel_enabled": True,
-        "realtime_ws": "ws://localhost:8080/ws",
     },
     "auth": {"tracking_token": ""},
 }
@@ -303,8 +302,9 @@ def to_env_mapping(cfg: dict[str, Any]) -> dict[str, str]:
         grafana_url = str(observability.get("grafana_url") or default_grafana).strip()
         if grafana_url:
             env["ML_AIR_GRAFANA_URL"] = grafana_url
-    if observability.get("realtime_ws"):
-        env["ML_AIR_RUNTIME_REALTIME_BASE_URL"] = str(observability["realtime_ws"])
+    realtime_ws = str(observability.get("realtime_ws") or "").strip()
+    if realtime_ws:
+        env["ML_AIR_RUNTIME_REALTIME_BASE_URL"] = realtime_ws
     if observability.get("otel_enabled") is not None:
         env["ML_AIR_OTEL_ENABLED"] = _bool_env(observability["otel_enabled"])
 

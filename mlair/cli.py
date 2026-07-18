@@ -13,6 +13,8 @@ from mlair.commands.health import run_health
 from mlair.commands.legacy_http import cmd_logs, cmd_run
 from mlair.commands.serve import run_build, run_rebuild, run_serve, run_start, run_stop
 from mlair.config.loader import apply_to_environ, load_config, resolved_config
+from mlair.env import load_project_env
+from mlair.paths import repo_root
 
 
 def _add_global_flags(parser: argparse.ArgumentParser) -> None:
@@ -110,6 +112,8 @@ def _profile_args(args: argparse.Namespace) -> tuple[str | None, str | None]:
 
 def _dispatch(args: argparse.Namespace) -> int:
     profile, config_path = _profile_args(args)
+    os.chdir(repo_root())
+    load_project_env()
     cfg = load_config(config_path, profile=profile)
     apply_to_environ(cfg)
 

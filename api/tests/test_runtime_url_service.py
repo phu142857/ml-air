@@ -82,6 +82,20 @@ class TestRuntimeUrlService(unittest.TestCase):
             )
         self.assertEqual(ws, "ws://localhost:8080/ws")
 
+    def test_realtime_rewrites_localhost_when_api_base_is_lan_ip(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ML_AIR_RUNTIME_REALTIME_BASE_URL": "ws://localhost:8080/ws",
+            },
+            clear=False,
+        ):
+            ws = resolve_runtime_realtime_base_url(
+                _request(host="192.168.120.182:8080", proto="http"),
+                api_base_url="http://192.168.120.182:8080",
+            )
+        self.assertEqual(ws, "ws://192.168.120.182:8080/ws")
+
     def test_realtime_keeps_explicit_when_not_internal_mismatch(self) -> None:
         with patch.dict(
             os.environ,

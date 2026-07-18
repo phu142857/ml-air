@@ -81,21 +81,23 @@ def _realtime_ws_from_api_base(api_base_url: str) -> str | None:
     return f"{ws_scheme}://{parsed.netloc}/ws"
 
 
-def _is_internal_loopback_realtime_url(url: str) -> bool:
-    host, port = _parse_netloc(url)
-    if host not in ("localhost", "127.0.0.1"):
-        return False
-    return port in _INTERNAL_REALTIME_PORTS or port is None
+def _is_loopback_realtime_url(url: str) -> bool:
+    host, _port = _parse_netloc(url)
+    return host in ("localhost", "127.0.0.1")
 
 
-def _should_rewrite_internal_realtime_url(explicit: str, api_base_url: str | None) -> bool:
-    if not _is_internal_loopback_realtime_url(explicit):
+def _should_rewrite_stale_loopback_realtime_url(explicit: str, api_base_url: str | None) -> bool:
+    """Rewrite ws://localhost[:port] when the browser reaches API on another host/port."""
+    if not _is_loopback_realtime_url(explicit):
         return False
     if not api_base_url:
-        return False
+        _host, port = _parse_netloc(explicit)
+        return port in _INTERNAL_REALTIME_PORTS or port is None
     exp_host, exp_port = _parse_netloc(explicit)
     api_host, api_port = _parse_netloc(api_base_url)
     if exp_host != api_host:
+        return True
+    if exp_port in _INTERNAL_REALTIME_PORTS:
         return True
     return exp_port != api_port
 
@@ -132,11 +134,11 @@ def resolve_runtime_realtime_base_url(
     browser_ws = _realtime_ws_from_api_base(api_base) if api_base else None
 
     if explicit:
-        if _should_rewrite_internal_realtime_url(explicit, api_base) and browser_ws:
+        if _should_rewrite_stale_loopback_realtime_url(explicit, api_base) and browser_ws:
             return browser_ws.rstrip("/")
         return explicit.rstrip("/")
     if default:
-        if _should_rewrite_internal_realtime_url(default, api_base) and browser_ws:
+        if _should_rewrite_stale_loopback_realtime_url(default, api_base) and browser_ws:
             return browser_ws.rstrip("/")
         return default.rstrip("/")
     if browser_ws:

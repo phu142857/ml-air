@@ -7,7 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mlair.compose_cli import run_compose
 from mlair.config.loader import apply_to_environ, infra_enabled, load_config
+from mlair.env import load_project_env
 from mlair.paths import default_compose_file, default_env_example, default_env_infra_example, repo_root
 
 
@@ -48,11 +50,11 @@ def _prepare(
         return None
 
     os.chdir(root)
-    cfg = load_config(config_path, profile=profile or os.getenv("MLAIR_PROFILE"))
-    apply_to_environ(cfg)
     if ensure_env:
         _ensure_env_file()
-
+    load_project_env()
+    cfg = load_config(config_path, profile=profile or os.getenv("MLAIR_PROFILE"))
+    apply_to_environ(cfg)
     compose_path = _compose_file(cfg)
     if not compose_path.is_file():
         print(f"[mlair] compose file not found: {compose_path}", file=sys.stderr)
@@ -61,8 +63,7 @@ def _prepare(
 
 
 def _compose(compose_path: Path, *args: str) -> int:
-    proc = subprocess.run(["docker", "compose", "-f", str(compose_path), *args], check=False)
-    return proc.returncode
+    return run_compose(compose_path, *args)
 
 
 def _build_sdk_wheel(root: Path) -> Path | None:

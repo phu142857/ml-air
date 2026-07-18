@@ -38,6 +38,10 @@ def profiles_dir() -> Path:
     return bundled
 
 
+def default_env_file() -> Path:
+    return repo_root() / ".env"
+
+
 def default_env_example() -> Path:
     return repo_root() / ".env.example"
 
