@@ -2,15 +2,16 @@
 
 ## Goal
 
-Compare two runs by status, duration, and tracked metrics.
+Compare two or more runs by status, duration, resource usage, and tracked metrics. Highlight regressions against a chosen baseline.
 
 ## Steps
 
-1. Collect candidate run IDs.
-2. Fetch run summaries and task metrics.
-3. Compare deltas.
+1. In **Runs**, select two or more runs with the row checkboxes.
+2. Click **Compare runs** in the bulk action bar.
+3. Optionally pick a **baseline** run (default: oldest run by start time).
+4. Review regressions: slower duration, higher CPU/GPU/RSS, worse loss/accuracy/mAP.
 
-## Command
+## API
 
 **Auth:** `$TOKEN` from [Login and Identity](./login-and-identity.md).
 
@@ -19,16 +20,22 @@ API="${ML_AIR_BASE_URL:-http://localhost:8080}"
 TENANT="${ML_AIR_TENANT_ID:-default}"
 PROJECT="${ML_AIR_PROJECT_ID:-default_project}"
 
-curl -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id_1>"
-curl -H "Authorization: Bearer $TOKEN" \
-  "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id_2>"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/compare" \
+  -d '{"run_ids":["<run_id_1>","<run_id_2>"],"baseline_run_id":"<baseline_run_id>"}'
 ```
 
-## Result
+The response includes per-run `metrics_summary`, `usage`, `duration_seconds`, and `regressions` vs the baseline.
 
-You can identify regressions in wall-time, CPU, RSS, and business metrics.
+## Export training metrics
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/<run_id>/metrics/export?format=csv" -o metrics.csv
+```
+
+Formats: `csv`, `jsonl`.
 
 ## Done
 
-Use this comparison before registering a model candidate.
+Use this comparison before registering a model candidate or promoting to production.

@@ -312,10 +312,30 @@ def emit_run_tracking_updated(
     tenant_id: str,
     project_id: str,
     run_id: str,
-    task_id: str,
+    task_id: str | None = None,
     plugin: str | None = None,
     trace_id: str | None = None,
+    kind: str | None = None,
+    key: str | None = None,
+    value: float | str | None = None,
+    step: int | None = None,
 ) -> None:
+    payload: dict[str, Any] = {
+        "run_id": run_id,
+        "updated_at": time.time(),
+    }
+    if task_id:
+        payload["task_id"] = task_id
+    if plugin:
+        payload["plugin"] = plugin
+    if kind:
+        payload["kind"] = kind
+    if key:
+        payload["key"] = key
+    if value is not None:
+        payload["value"] = value
+    if step is not None:
+        payload["step"] = step
     publish_mlair_event(
         build_event(
             event_type=EventType.RUN_TRACKING_UPDATED,
@@ -323,12 +343,7 @@ def emit_run_tracking_updated(
             project_id=project_id,
             resource_id=run_id,
             trace_id=trace_id,
-            payload={
-                "run_id": run_id,
-                "task_id": task_id,
-                "plugin": plugin,
-                "updated_at": time.time(),
-            },
+            payload=payload,
         )
     )
 

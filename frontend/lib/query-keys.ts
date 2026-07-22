@@ -83,6 +83,8 @@ export const mlairKeys = {
       ["dataset-versions", tenantId, projectId, datasetId] as const,
     versionDiff: (tenantId: string, projectId: string, datasetId: string, fromId: string, toId: string) =>
       ["dataset-version-diff", tenantId, projectId, datasetId, fromId, toId] as const,
+    versionQuality: (tenantId: string, projectId: string, datasetId: string, versionId: string) =>
+      ["dataset-version-quality", tenantId, projectId, datasetId, versionId] as const,
     versionProvenance: (tenantId: string, projectId: string, datasetId: string, versionId: string) =>
       ["dataset-version-provenance", tenantId, projectId, datasetId, versionId] as const,
     versionPreview: (tenantId: string, projectId: string, versionId: string) =>

@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { DatasetVersionDiffPanel } from "@/components/mlops/dataset-version-diff-panel";
+import { DatasetQualityPanel } from "@/components/mlops/dataset-quality-panel";
 import { DatasetVersionProvenancePanel } from "@/components/mlops/dataset-version-provenance-panel";
 import { ExecutionIntentPanel } from "@/components/mlops/execution-intent-panel";
 import {
@@ -2026,6 +2027,15 @@ export default function DatasetHubPage() {
               />
             ) : (
               <>
+                {versionsQuery.data?.items?.[0] ? (
+                  <DatasetQualityPanel
+                    tenantId={tenantId}
+                    projectId={projectId}
+                    datasetId={datasetId}
+                    token={token}
+                    version={versionsQuery.data.items[0]}
+                  />
+                ) : null}
                 <DatasetVersionDiffPanel
                   tenantId={tenantId}
                   projectId={projectId}

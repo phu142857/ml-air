@@ -39,6 +39,7 @@ import {
   SubpageBreadcrumb,
   tabPanelScrollClassName,
 } from "@/components/mlops/layout"
+import { RunMetricsSummary } from "@/components/mlops/run-metrics-summary"
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
 import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
@@ -70,6 +71,7 @@ import {
   fetchRunUsageSamples,
   fetchRunReadiness,
   downloadRunLogsExport,
+  downloadRunMetricsExport,
   type LogSearchParams,
   cancelRun,
   normalizeProjectId,
@@ -259,6 +261,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const chartTheme = useChartTheme()
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
+  const [exportingMetrics, setExportingMetrics] = useState(false)
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelRun(tenantId, projectId, runId, token),
@@ -469,6 +472,21 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const chartMetricKeys = useMemo(
     () => metricChartKeys(trackingQuery.data?.metrics ?? []),
     [trackingQuery.data],
+  )
+
+  const handleExportMetrics = useCallback(
+    async (format: "csv" | "jsonl") => {
+      setExportingMetrics(true)
+      try {
+        await downloadRunMetricsExport(tenantId, projectId, runId, token, { format })
+        toastSuccess("Metrics exported", format.toUpperCase())
+      } catch (error) {
+        toastError("Export failed", formatApiClientError(error))
+      } finally {
+        setExportingMetrics(false)
+      }
+    },
+    [projectId, runId, tenantId, token],
   )
 
   const gateColumns: DataTableColumn<GateResultRow>[] = useMemo(
@@ -867,9 +885,14 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         <TabsContent value="metrics" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.metrics}>
             <DetailSection title="Training metrics" description="Logged metrics for this run.">
+              <RunMetricsSummary
+                tracking={trackingQuery.data}
+                exporting={exportingMetrics}
+                onExport={handleExportMetrics}
+              />
               {trackingQuery.isError ? (
                 <p className="text-sm text-muted-foreground">{formatApiClientError(trackingQuery.error)}</p>
-              ) : metricsSeries.length > 1 && chartMetricKeys.length > 0 ? (
+              ) : metricsSeries.length > 0 && chartMetricKeys.length > 0 ? (
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={metricsSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>

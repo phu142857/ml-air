@@ -16,6 +16,7 @@ from app.domains.shared.pagination import (
     sql_limit_offset,
 )
 import app.domains.lifecycle.lineage_service as lineage_service
+import app.domains.lifecycle.drift_service as drift_service
 from app.domains.lifecycle.canonical_codes import attach_canonical_to_reason_row, canonical_readiness_code
 from app.domains.lifecycle.evaluation_semantics import (
     normalize_dataset_version_id,
@@ -692,6 +693,17 @@ def evaluate_dataset_readiness(
         compatibility_ok = _model_exists(tenant_id, project_id, model_id)
     approval_ok = str(selected_version_status).lower() not in {"failed", "blocked"}
     rules_ok = len(validation_rules) == 0 or approval_ok
+    drift_ok = True
+    drift_report: dict[str, Any] | None = None
+    drift_rule = drift_service.parse_drift_policy(validation_rules)
+    if selected_version_id and drift_rule:
+        drift_ok, drift_report = drift_service.evaluate_drift_gate(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            dataset_id=dataset_id,
+            dataset_version_id=selected_version_id,
+            validation_rules=validation_rules,
+        )
     criteria = [
         {
             "code": "size_threshold",
@@ -724,7 +736,16 @@ def evaluate_dataset_readiness(
             "status": "pass" if rules_ok else "fail",
         },
     ]
-    ready = size_ok and freshness_ok and compatibility_ok and approval_ok and rules_ok
+    if drift_rule:
+        criteria.append(
+            {
+                "code": "data_drift",
+                "canonical_code": canonical_readiness_code("data_drift"),
+                "label": "Data drift threshold",
+                "status": "pass" if drift_ok else "fail",
+            }
+        )
+    ready = size_ok and freshness_ok and compatibility_ok and approval_ok and rules_ok and drift_ok
     reasons: list[dict[str, Any]] = []
     if not size_ok:
         reasons.append(
@@ -750,6 +771,17 @@ def evaluate_dataset_readiness(
                 {"code": "approval", "message": f"dataset_version status is {selected_version_status}"}
             )
         )
+    if not drift_ok and drift_report:
+        psi = drift_report.get("psi")
+        max_psi = drift_report.get("max_psi")
+        reasons.append(
+            attach_canonical_to_reason_row(
+                {
+                    "code": "data_drift",
+                    "message": f"label drift PSI {psi} exceeds max_psi {max_psi}",
+                }
+            )
+        )
     if used_legacy_fallback:
         reasons.append(
             attach_canonical_to_reason_row(
@@ -771,6 +803,7 @@ def evaluate_dataset_readiness(
         "policy_id": policy.get("policy_id"),
         "dataset_version_id": selected_version_id,
         "reasons": reasons,
+        "drift": drift_report,
     }
 
 

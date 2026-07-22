@@ -62,5 +62,16 @@ Requires `ML_AIR_BASE_URL` / `MLAIR_API_BASE_URL` and `ML_AIR_TOKEN` (or `ML_AIR
 
 ## Backlog (not implemented)
 
-- **`autolog()`** for PyTorch / TensorFlow / sklearn — deferred; use explicit `log_metric` / `log_param` or framework callbacks until autolog ships.
 - Per-rank DDP usage attribution — see platform roadmap backlog.
+
+## Autolog (Phase 5.4)
+
+```python
+from sdk import autolog, start_run, log_metric
+
+autolog()  # or autolog("pytorch") / autolog("sklearn") / autolog("xgboost")
+
+with start_run(task_id=task_id, run_id=run_id, tenant_id=tenant_id, project_id=project_id, token=token):
+    # framework metrics/params are logged automatically
+    train()
+```

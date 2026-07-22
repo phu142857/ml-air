@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Play } from "lucide-react"
+import { Play, GitCompare } from "lucide-react"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
 import { TriggerRunUrlSync } from "@/components/mlops/trigger-run-url-sync"
+import { RunComparePanel } from "@/components/mlops/run-compare-panel"
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
 import { TraceLink } from "@/components/mlops/trace-link"
 import { PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
@@ -129,6 +130,8 @@ export default function RunsPage() {
   const [triggerOpen, setTriggerOpen] = useState(false)
   const [triggerPipelineId, setTriggerPipelineId] = useState<string | undefined>()
   const [triggerMode, setTriggerMode] = useState<TriggerRunMode>("simple")
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [compareRuns, setCompareRuns] = useState<RunItem[]>([])
 
   const openTrigger = (pipelineId?: string, mode: TriggerRunMode = "simple") => {
     setTriggerPipelineId(pipelineId)
@@ -162,6 +165,15 @@ export default function RunsPage() {
         onSuccess={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
       />
 
+      <RunComparePanel
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        tenantId={tenantId}
+        projectId={projectId}
+        token={token}
+        runs={compareRuns}
+      />
+
       <PageScrollBody
         variant="workspace"
         header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} /> : null}
@@ -185,6 +197,22 @@ export default function RunsPage() {
             emptyMessage="No runs."
             loading={runsQuery.isFetching && rows.length > 0}
             stickyFirstColumn
+            bulkActions={({ selectedRows }) =>
+              selectedRows.length >= 2 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setCompareRuns(selectedRows)
+                    setCompareOpen(true)
+                  }}
+                >
+                  <GitCompare className="mr-1.5 h-3.5 w-3.5" />
+                  Compare {selectedRows.length} runs
+                </Button>
+              ) : null
+            }
           />
           {showLoadMore ? (
             <div className="flex justify-center border-t border-border/60 py-4">

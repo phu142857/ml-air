@@ -185,10 +185,18 @@ export type PipelineVersionItem = {
   created_at: string;
 };
 
+export type RunMetricSummary = {
+  latest: number;
+  best: number;
+  steps: number;
+  last_step: number;
+};
+
 export type RunTracking = {
   run_id: string;
   params: Array<{ key: string; value: string; logged_at: string }>;
   metrics: Array<{ key: string; value: number; step: number; logged_at: string }>;
+  metrics_summary?: Record<string, RunMetricSummary>;
   artifacts: Array<{ artifact_id: string; path: string; uri?: string | null; logged_at: string }>;
 };
 
@@ -2020,6 +2028,29 @@ export async function fetchRunTracking(tenantId: string, projectId: string, runI
   return data as RunTracking;
 }
 
+export async function downloadRunMetricsExport(
+  tenantId: string,
+  projectId: string,
+  runId: string,
+  token: string,
+  opts?: { format?: "csv" | "jsonl" },
+): Promise<void> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const format = opts?.format ?? "csv";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/metrics/export?format=${format}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const safeRun = runId.replace(/[^\w.-]+/g, "_").slice(0, 48);
+  const { downloadBlob } = await import("@/lib/utils");
+  downloadBlob(blob, `mlair-run-${safeRun}-metrics.${format}`);
+}
+
 export async function fetchRunUsage(tenantId: string, projectId: string, runId: string, token: string) {
   const scopedProjectId = normalizeProjectId(projectId);
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/${runId}/usage`, {
@@ -2115,16 +2146,55 @@ export async function fetchTenantUsage(
   return data as TenantUsageBundle;
 }
 
-export async function compareRunMetrics(tenantId: string, projectId: string, runIds: string[], token: string) {
+export type RunCompareRegression = {
+  type: "metric" | "duration" | "resource";
+  key?: string;
+  baseline?: number;
+  value?: number;
+  delta?: number;
+  direction: string;
+};
+
+export type RunCompareItem = {
+  run_id: string;
+  status?: string;
+  pipeline_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  duration_seconds?: number | null;
+  usage?: {
+    runtime_seconds?: number | null;
+    cpu_seconds?: number | null;
+    memory_rss_peak_kb?: number | null;
+    gpu_seconds?: number | null;
+  };
+  metrics_summary?: Record<string, RunMetricSummary>;
+  is_baseline?: boolean;
+  regressions?: RunCompareRegression[];
+};
+
+export type RunCompareResponse = {
+  baseline_run_id: string | null;
+  runs: RunCompareItem[];
+  items: Array<{ run_id: string; key: string; value: number; step: number; logged_at: string }>;
+};
+
+export async function compareRunMetrics(
+  tenantId: string,
+  projectId: string,
+  runIds: string[],
+  token: string,
+  opts?: { baselineRunId?: string },
+) {
   const scopedProjectId = normalizeProjectId(projectId);
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/runs/compare`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ run_ids: runIds })
+    body: JSON.stringify({ run_ids: runIds, baseline_run_id: opts?.baselineRunId ?? null }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as { items: Array<{ run_id: string; key: string; value: number; step: number; logged_at: string }> };
+  return data as RunCompareResponse;
 }
 
 export async function fetchPlugins(token: string) {
@@ -2386,6 +2456,7 @@ export type DatasetVersionDiffResponse = {
     status?: string;
     quality_score: number;
     created_at: string;
+    quality?: DatasetQualitySummary;
   };
   to: DatasetVersionDiffResponse["from"];
   delta: {
@@ -2399,7 +2470,41 @@ export type DatasetVersionDiffResponse = {
     tags_removed: string[];
     external_refs_count_delta: number;
   };
+  drift?: {
+    psi?: number | null;
+    label_distribution_delta?: Record<string, number>;
+    from_profile?: { label_distribution?: Record<string, number> };
+    to_profile?: { label_distribution?: Record<string, number> };
+  };
 };
+
+export type DatasetQualitySummary = {
+  version_id?: string;
+  version?: string;
+  record_count: number;
+  quality_score: number;
+  sample_count: number;
+  label_count: number;
+  label_distribution: Record<string, number>;
+  null_rate?: number | null;
+};
+
+export async function fetchDatasetVersionQuality(
+  tenantId: string,
+  projectId: string,
+  datasetId: string,
+  versionId: string,
+  token: string,
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/datasets/${datasetId}/versions/${versionId}/quality`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as DatasetQualitySummary;
+}
 
 export async function fetchDatasetVersionDiff(
   tenantId: string,

@@ -96,6 +96,7 @@ from app.domains.orchestration.task_service import get_task_by_id, list_tasks_by
 from app.domains.orchestration.tracking_service import (
     compare_runs,
     create_experiment,
+    export_run_metrics,
     get_run_tracking,
     list_experiments,
     list_experiments_page,
@@ -636,6 +637,7 @@ class LogArtifactIn(BaseModel):
 
 class CompareRunsIn(BaseModel):
     run_ids: list[str] = Field(default_factory=list)
+    baseline_run_id: str | None = None
 
 
 class CreateModelIn(BaseModel):
@@ -2040,6 +2042,27 @@ def get_run_tracking_v1(
     return get_run_tracking(run_id)
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/metrics/export")
+def export_run_metrics_v1(
+    tenant_id: str,
+    project_id: str,
+    run_id: str,
+    format: str = Query(default="csv", alias="format"),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    run = get_run(run_id)
+    if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="run_not_found")
+    body, media_type, filename = export_run_metrics(run_id, format)
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}/usage")
 def get_run_usage_v1(
     tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)
@@ -2105,7 +2128,7 @@ def compare_runs_v1(
         run = get_run(run_id)
         if run and run["tenant_id"] == tenant_id and run["project_id"] == project_id:
             safe_ids.append(run_id)
-    return compare_runs(safe_ids)
+    return compare_runs(safe_ids, baseline_run_id=payload.baseline_run_id)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/search")
@@ -2600,6 +2623,24 @@ def list_dataset_versions_v1(
     if not lineage_service.get_dataset(tenant_id, project_id, dataset_id):
         raise HTTPException(status_code=404, detail="dataset_not_found")
     return {"items": lineage_service.list_dataset_versions(tenant_id, project_id, dataset_id)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/quality")
+def get_dataset_version_quality_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    from app.domains.lifecycle.drift_service import build_version_quality_summary
+
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    version = lineage_service.get_dataset_version(tenant_id, project_id, version_id)
+    if not version or str(version.get("dataset_id") or "") != dataset_id:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    return build_version_quality_summary(version)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/diff")

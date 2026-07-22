@@ -127,7 +127,25 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
                 <li>Tags removed: {diffQuery.data.delta.tags_removed.join(", ")}</li>
               ) : null}
               <li>External refs: {deltaLabel(diffQuery.data.delta.external_refs_count_delta)}</li>
+              {diffQuery.data.drift?.psi != null ? (
+                <li className={diffQuery.data.drift.psi > 0.2 ? "text-[color:var(--status-failed-fg)]" : ""}>
+                  Label drift PSI: {diffQuery.data.drift.psi.toFixed(4)}
+                </li>
+              ) : null}
             </ul>
+            {diffQuery.data.drift?.label_distribution_delta &&
+            Object.keys(diffQuery.data.drift.label_distribution_delta).length > 0 ? (
+              <div className="mt-3">
+                <p className="mb-1 font-medium text-foreground">Label delta</p>
+                <ul className="grid gap-1 sm:grid-cols-2">
+                  {Object.entries(diffQuery.data.drift.label_distribution_delta).map(([label, delta]) => (
+                    <li key={label}>
+                      {label}: {delta > 0 ? `+${delta}` : delta}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

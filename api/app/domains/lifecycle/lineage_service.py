@@ -2171,6 +2171,9 @@ def _diff_version_snapshots(from_v: dict[str, Any], to_v: dict[str, Any]) -> dic
 
 
 def _version_diff_endpoint(from_v: dict[str, Any]) -> dict[str, Any]:
+    from app.domains.lifecycle.drift_service import build_version_quality_summary
+
+    quality = build_version_quality_summary(from_v)
     return {
         "version_id": from_v["version_id"],
         "version": from_v["version"],
@@ -2181,6 +2184,7 @@ def _version_diff_endpoint(from_v: dict[str, Any]) -> dict[str, Any]:
         "status": from_v.get("status"),
         "quality_score": int(from_v.get("quality_score") or 0),
         "created_at": from_v.get("created_at"),
+        "quality": quality,
     }
 
 
@@ -2203,11 +2207,15 @@ def diff_dataset_versions(
         return None
     if str(from_v.get("dataset_id") or "") != dataset_id or str(to_v.get("dataset_id") or "") != dataset_id:
         raise ValueError("version_dataset_mismatch")
+    from app.domains.lifecycle.drift_service import compare_version_drift
+
+    drift = compare_version_drift(from_v, to_v)
     return {
         "dataset_id": dataset_id,
         "from": _version_diff_endpoint(from_v),
         "to": _version_diff_endpoint(to_v),
         "delta": _diff_version_snapshots(from_v, to_v),
+        "drift": drift,
     }
 
 
