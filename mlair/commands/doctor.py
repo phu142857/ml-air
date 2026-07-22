@@ -11,7 +11,7 @@ from pathlib import Path
 
 from mlair.compose_cli import compose_argv
 from mlair.config.loader import apply_to_environ, infra_enabled, load_config
-from mlair.env import load_project_env
+from mlair.env import find_env_issues, load_project_env
 from mlair.paths import repo_root
 
 
@@ -72,6 +72,12 @@ def run_doctor(
             print("[WARN] .env not found")
     else:
         print("[PASS] .env file exists")
+        compose_rel = str((cfg.get("compose") or {}).get("file", ""))
+        env_issues = find_env_issues(allinone="allinone" in compose_rel)
+        for msg in env_issues:
+            print(f"[WARN] .env: {msg}")
+        if env_issues and "allinone" in compose_rel:
+            print("[INFO] all-in-one: run `mlair rebuild` once after upgrade, or fix .env — see docs/configuration.md")
 
     compose_rel = (cfg.get("compose") or {}).get("file", "deploy/docker-compose.quickstart.yml")
     compose_file = root / compose_rel

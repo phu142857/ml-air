@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mlair.compose_cli import compose_argv
-from mlair.env import load_project_env
+from mlair.env import load_project_env, sanitize_env_value
 
 
 class TestMlairProjectEnv(unittest.TestCase):
@@ -38,6 +38,33 @@ class TestMlairProjectEnv(unittest.TestCase):
             self.assertIn("--env-file", argv)
             self.assertEqual(argv[argv.index("--env-file") + 1], str(env_file.resolve()))
             self.assertEqual(argv[argv.index("-f") + 1], str(compose_file.resolve()))
+
+    def test_sanitize_unexpanded_compose_default(self) -> None:
+        self.assertEqual(
+            sanitize_env_value("ML_AIR_SCHEDULER_METRICS_PORT", "${ML_AIR_SCHEDULER_METRICS_PORT:-9102}"),
+            "9102",
+        )
+
+    def test_sanitize_allinone_redis_hostname(self) -> None:
+        self.assertEqual(
+            sanitize_env_value("ML_AIR_REDIS_URL", "redis://redis:6379/0", allinone=True),
+            "redis://127.0.0.1:6379/0",
+        )
+
+    def test_load_project_env_sanitizes_for_allinone(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_file = root / ".env"
+            env_file.write_text(
+                "ML_AIR_SCHEDULER_METRICS_PORT=${ML_AIR_SCHEDULER_METRICS_PORT:-9102}\n"
+                "ML_AIR_REDIS_URL=redis://redis:6379/0\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {}, clear=True):
+                with patch("mlair.env.default_env_file", return_value=env_file):
+                    load_project_env(allinone=True)
+                self.assertEqual(os.environ.get("ML_AIR_SCHEDULER_METRICS_PORT"), "9102")
+                self.assertEqual(os.environ.get("ML_AIR_REDIS_URL"), "redis://127.0.0.1:6379/0")
 
 
 if __name__ == "__main__":

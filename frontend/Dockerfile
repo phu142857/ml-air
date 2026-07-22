@@ -11,7 +11,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY frontend/package.json frontend/package-lock.json* ./
 
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    for attempt in 1 2 3; do npm ci && break || { echo "npm ci attempt $attempt failed, retrying..."; sleep 15; }; done
 
 FROM node:20-alpine AS builder
 

@@ -243,6 +243,12 @@ class DatasetVersionMetadataPatchIn(BaseModel):
     append_external_refs: list[ExternalRefAppendIn] = Field(default_factory=list, max_length=32)
 
 
+class DatasetVersionQualityProfileIn(BaseModel):
+    label_distribution: dict[str, float] = Field(default_factory=dict)
+    null_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    sample_count: int | None = Field(default=None, ge=0)
+
+
 class DatasetVersionRowPatchIn(BaseModel):
     row_index: int = Field(ge=0)
     values: dict[str, str] = Field(default_factory=dict)
@@ -2641,6 +2647,38 @@ def get_dataset_version_quality_v1(
     if not version or str(version.get("dataset_id") or "") != dataset_id:
         raise HTTPException(status_code=404, detail="dataset_version_not_found")
     return build_version_quality_summary(version)
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/quality-profile")
+def put_dataset_version_quality_profile_v1(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    payload: DatasetVersionQualityProfileIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    if not payload.label_distribution:
+        raise HTTPException(status_code=422, detail="label_distribution_required")
+    try:
+        out = lineage_service.patch_dataset_version_quality_profile(
+            tenant_id,
+            project_id,
+            dataset_id,
+            version_id,
+            label_distribution=payload.label_distribution,
+            null_rate=payload.null_rate,
+            sample_count=payload.sample_count,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not out:
+        raise HTTPException(status_code=404, detail="dataset_version_not_found")
+    from app.domains.lifecycle.drift_service import build_version_quality_summary
+
+    return build_version_quality_summary(out)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/datasets/{dataset_id}/versions/diff")

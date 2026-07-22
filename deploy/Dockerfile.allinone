@@ -9,7 +9,11 @@ FROM ${NODE_IMAGE} AS frontend-deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    for attempt in 1 2 3; do npm ci && break || { echo "npm ci attempt $attempt failed, retrying..."; sleep 15; }; done
 
 FROM ${NODE_IMAGE} AS frontend-build
 WORKDIR /app
@@ -80,10 +84,11 @@ RUN useradd -m appuser \
     && mkdir -p /mlair/artifacts/datasets /mlair/artifacts/models /var/log/supervisor \
     && chown -R appuser:appuser /app /mlair/artifacts
 
+COPY deploy/allinone/sanitize-env.sh /sanitize-env.sh
 COPY deploy/allinone/entrypoint.sh /entrypoint.sh
 COPY deploy/allinone/supervisord.conf /etc/supervisor/conf.d/mlair.conf
 COPY deploy/allinone/nginx.conf /etc/nginx/conf.d/mlair.conf
-RUN chmod +x /entrypoint.sh \
+RUN chmod +x /entrypoint.sh /sanitize-env.sh \
     && rm -f /etc/nginx/sites-enabled/default
 
 EXPOSE 8080

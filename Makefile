@@ -261,6 +261,14 @@ seed-demo:
 	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
 	python scripts/seed_demo.py
 
+.PHONY: seed-phase5-demo
+seed-phase5-demo:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	ML_AIR_HUB_URL=$(ML_AIR_HUB_URL) \
+	python scripts/seed_phase5_demo.py
+
 .PHONY: smoke-quickstart
 smoke-quickstart:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \

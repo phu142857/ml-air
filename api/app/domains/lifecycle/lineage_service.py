@@ -2349,6 +2349,52 @@ def patch_dataset_version_additive_metadata(
     return get_dataset_version(tenant_id, project_id, version_id)
 
 
+def patch_dataset_version_quality_profile(
+    tenant_id: str,
+    project_id: str,
+    dataset_id: str,
+    version_id: str,
+    *,
+    label_distribution: dict[str, float],
+    null_rate: float | None = None,
+    sample_count: int | None = None,
+) -> dict[str, Any] | None:
+    """Merge label profile into dataset version ``details`` (demo + materialization hooks)."""
+    version = get_dataset_version(tenant_id, project_id, version_id)
+    if not version or str(version.get("dataset_id") or "") != dataset_id:
+        return None
+    dist = {str(k): float(v) for k, v in (label_distribution or {}).items()}
+    if not dist:
+        raise ValueError("label_distribution_required")
+    details = version.get("details")
+    if isinstance(details, dict):
+        merged: dict[str, Any] = dict(details)
+    elif isinstance(details, list):
+        merged = {"validation": details}
+    else:
+        merged = {}
+    profile: dict[str, Any] = {
+        "label_distribution": dist,
+        "sample_count": int(sample_count if sample_count is not None else version.get("record_count") or 0),
+    }
+    if null_rate is not None:
+        profile["null_rate"] = float(null_rate)
+    merged["profile"] = profile
+    merged["label_distribution"] = dist
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE dataset_versions
+                SET details = %s::jsonb
+                WHERE version_id = %s
+                """,
+                (json.dumps(merged), version_id),
+            )
+    _notify_dataset_updated(tenant_id, project_id, dataset_id, action="version_profile_updated")
+    return get_dataset_version(tenant_id, project_id, version_id)
+
+
 MAX_DATASET_VERSION_EDITOR_BYTES = 5 * 1024 * 1024
 DEFAULT_DATASET_VERSION_PAGE_SIZE = 50
 MAX_DATASET_VERSION_PAGE_SIZE = 100

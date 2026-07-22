@@ -49,9 +49,11 @@ services:
       ML_AIR_DATASET_ARTIFACT_ROOT: ${ML_AIR_DATASET_ARTIFACT_ROOT:-file:///mlair/artifacts/datasets}
       ML_AIR_RUNTIME_REALTIME_BASE_URL: ${ML_AIR_RUNTIME_REALTIME_BASE_URL:-}
       ML_AIR_RUNTIME_REALTIME_DEFAULT_URL: ${ML_AIR_RUNTIME_REALTIME_DEFAULT_URL:-}
-      ML_AIR_REALTIME_METRICS_PORT: ${ML_AIR_REALTIME_METRICS_PORT:-9104}
-      ML_AIR_SCHEDULER_METRICS_PORT: ${ML_AIR_SCHEDULER_METRICS_PORT:-9102}
-      ML_AIR_EXECUTOR_METRICS_PORT: ${ML_AIR_EXECUTOR_METRICS_PORT:-9103}
+      # Fixed in-container ports (not host-published). Do not use ${VAR:-default} here —
+      # podman-compose may pass the literal string and crash scheduler/realtime.
+      ML_AIR_REALTIME_METRICS_PORT: "9104"
+      ML_AIR_SCHEDULER_METRICS_PORT: "9102"
+      ML_AIR_EXECUTOR_METRICS_PORT: "9103"
     volumes:
       - mlair_pgdata:/var/lib/postgresql/data
       - mlair_dataset_artifacts:/mlair/artifacts/datasets
