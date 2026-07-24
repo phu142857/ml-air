@@ -72,6 +72,23 @@ def load_project_env(*, override_existing: bool = False, allinone: bool | None =
     return path
 
 
+def find_semantic_signing_issues() -> list[str]:
+    """Return errors when semantic event signing is enabled without a configured key."""
+    try:
+        from sdk.event_signing import signing_enabled, signing_key_configured
+    except ImportError:
+        return []
+    if not signing_enabled():
+        return []
+    if signing_key_configured():
+        return []
+    return [
+        "ML_AIR_SEMANTIC_EVENT_SIGNING=1 but no signing key is set "
+        "(set ML_AIR_SEMANTIC_EVENT_SIGNING_KEY or ML_AIR_SEMANTIC_EVENT_SIGNING_KEYS_JSON; "
+        "see .env.example) — Hub realtime events will not publish"
+    ]
+
+
 def find_env_issues(*, allinone: bool) -> list[str]:
     """Return human-readable warnings for problematic ``.env`` entries."""
     path = default_env_file()
@@ -92,4 +109,5 @@ def find_env_issues(*, allinone: bool) -> list[str]:
             issues.append(f"{key} uses quickstart hostname redis: — use redis://127.0.0.1:6379/0 for all-in-one")
         if key == "ML_AIR_DATABASE_URL" and "@postgres:" in value:
             issues.append(f"{key} uses quickstart hostname postgres: — use 127.0.0.1 for all-in-one")
+    issues.extend(find_semantic_signing_issues())
     return issues

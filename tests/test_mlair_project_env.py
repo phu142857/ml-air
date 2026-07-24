@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mlair.compose_cli import compose_argv
-from mlair.env import load_project_env, sanitize_env_value
+from mlair.env import find_semantic_signing_issues, load_project_env, sanitize_env_value
 
 
 class TestMlairProjectEnv(unittest.TestCase):
@@ -65,6 +65,27 @@ class TestMlairProjectEnv(unittest.TestCase):
                     load_project_env(allinone=True)
                 self.assertEqual(os.environ.get("ML_AIR_SCHEDULER_METRICS_PORT"), "9102")
                 self.assertEqual(os.environ.get("ML_AIR_REDIS_URL"), "redis://127.0.0.1:6379/0")
+
+    def test_find_semantic_signing_issues_when_key_missing(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"ML_AIR_SEMANTIC_EVENT_SIGNING": "1", "ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": ""},
+            clear=False,
+        ):
+            issues = find_semantic_signing_issues()
+        self.assertEqual(len(issues), 1)
+        self.assertIn("SEMANTIC_EVENT_SIGNING", issues[0])
+
+    def test_find_semantic_signing_issues_when_key_present(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ML_AIR_SEMANTIC_EVENT_SIGNING": "1",
+                "ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": "dev-key",
+            },
+            clear=False,
+        ):
+            self.assertEqual(find_semantic_signing_issues(), [])
 
 
 if __name__ == "__main__":

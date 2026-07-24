@@ -68,6 +68,9 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 @app.on_event("startup")
 def on_startup() -> None:
     assert_db_connection()
+    from sdk.event_signing import assert_semantic_event_signing_ready
+
+    assert_semantic_event_signing_ready()
     from app.domains.governance.identity_bootstrap import maybe_bootstrap_global_admin, maybe_bootstrap_service_accounts
 
     maybe_bootstrap_global_admin()

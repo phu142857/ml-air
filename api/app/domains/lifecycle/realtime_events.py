@@ -64,6 +64,11 @@ LIFECYCLE_MODEL_VERSION_APPROVAL_SET_TOTAL = _lifecycle_counter(
     "Model version approval_status updated (governance)",
     ("approval_status",),
 )
+REALTIME_PUBLISH_SKIP_TOTAL = _lifecycle_counter(
+    "mlair_realtime_publish_skip_total",
+    "Semantic realtime publishes skipped before Redis fan-out",
+    ("reason",),
+)
 
 logger = logging.getLogger("mlair.api.realtime_events")
 
@@ -146,6 +151,7 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
         try:
             event = event_signing_service.sign_event(event)
         except ValueError:
+            REALTIME_PUBLISH_SKIP_TOTAL.labels(reason="signing_key_missing").inc()
             logger.warning(
                 "realtime_publish_skip reason=signing_key_missing type=%s event_id=%s",
                 event.get("type"),
@@ -154,6 +160,7 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
             return
 
     if not validate_semantic_event_if_enabled(event):
+        REALTIME_PUBLISH_SKIP_TOTAL.labels(reason="invalid_envelope").inc()
         return
 
     event_id = str(event.get("event_id") or "").strip()
@@ -164,6 +171,7 @@ def publish_mlair_event(event: dict[str, Any]) -> None:
     project_id = str(event.get("project_id") or "").strip()
     ev_type = str(event.get("type") or "")
     if not tenant_id or not project_id or not ev_type:
+        REALTIME_PUBLISH_SKIP_TOTAL.labels(reason="invalid_envelope").inc()
         logger.warning(
             "realtime_publish_skip reason=invalid_envelope tenant_id=%s project_id=%s type=%s",
             tenant_id or None,

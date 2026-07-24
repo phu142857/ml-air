@@ -13,6 +13,25 @@ def signing_enabled() -> bool:
     return os.getenv("ML_AIR_SEMANTIC_EVENT_SIGNING", "1").strip() == "1"
 
 
+def signing_key_configured() -> bool:
+    """True when signing is off, or at least one HMAC key is available."""
+    if not signing_enabled():
+        return True
+    _, keyset = _signing_keys()
+    return bool(keyset)
+
+
+def assert_semantic_event_signing_ready() -> None:
+    """Fail fast at API startup when signing is enabled without a key."""
+    if signing_key_configured():
+        return
+    raise RuntimeError(
+        "ML_AIR_SEMANTIC_EVENT_SIGNING=1 but no signing key is configured. "
+        "Set ML_AIR_SEMANTIC_EVENT_SIGNING_KEY or ML_AIR_SEMANTIC_EVENT_SIGNING_KEYS_JSON "
+        "(see .env.example) or disable signing with ML_AIR_SEMANTIC_EVENT_SIGNING=0."
+    )
+
+
 def _canonical_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
 

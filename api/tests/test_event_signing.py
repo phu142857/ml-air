@@ -86,6 +86,27 @@ class TestEventSigning(unittest.TestCase):
             self.assertEqual(legacy["integrity"]["key_id"], "v1")
             self.assertTrue(event_signing.verify_semantic_event(legacy))
 
+    def test_assert_semantic_event_signing_ready_with_key(self) -> None:
+        with patch.dict(os.environ, {"ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": "k"}, clear=False):
+            event_signing.assert_semantic_event_signing_ready()
+
+    def test_assert_semantic_event_signing_ready_missing_key(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"ML_AIR_SEMANTIC_EVENT_SIGNING": "1", "ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": ""},
+            clear=False,
+        ):
+            with self.assertRaises(RuntimeError):
+                event_signing.assert_semantic_event_signing_ready()
+
+    def test_assert_semantic_event_signing_ready_when_disabled(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"ML_AIR_SEMANTIC_EVENT_SIGNING": "0", "ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": ""},
+            clear=False,
+        ):
+            event_signing.assert_semantic_event_signing_ready()
+
 
 if __name__ == "__main__":
     unittest.main()

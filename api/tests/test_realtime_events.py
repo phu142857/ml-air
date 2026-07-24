@@ -58,9 +58,13 @@ class TestRealtimeEvents(unittest.TestCase):
         self.assertIn("event_id", ev)
         self.assertIsInstance(ev["timestamp"], float)
 
+    @patch("app.domains.observability.event_outbox_service.outbox_writes_enabled", return_value=False)
+    @patch("app.domains.lifecycle.semantic_event_contract.validate_semantic_event_if_enabled", return_value=True)
     @patch("app.domains.lifecycle.realtime_events.realtime_enabled", return_value=True)
     @patch("app.domains.observability.redis_event_bus.publish_semantic_envelope_to_redis")
-    def test_publish_uses_redis_bus(self, mock_pub: MagicMock, _enabled: MagicMock) -> None:
+    def test_publish_uses_redis_bus(
+        self, mock_pub: MagicMock, _enabled: MagicMock, _validate: MagicMock, _outbox: MagicMock
+    ) -> None:
         mock_pub.return_value = True
         ev = build_event(
             event_type=EventType.TASK_UPDATED,
@@ -70,10 +74,41 @@ class TestRealtimeEvents(unittest.TestCase):
             payload={"status": "RUNNING", "run_id": "r1", "updated_at": 2.0},
             trace_id="t1",
         )
-        publish_mlair_event(ev)
+        with patch.dict(
+            os.environ,
+            {"ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": "test-realtime-publish-key"},
+            clear=False,
+        ):
+            publish_mlair_event(ev)
         mock_pub.assert_called_once()
         published = mock_pub.call_args[0][0]
         self.assertEqual(published["type"], "task.updated")
+
+    @patch("app.domains.lifecycle.realtime_events.REALTIME_PUBLISH_SKIP_TOTAL")
+    @patch("app.domains.lifecycle.realtime_events.realtime_enabled", return_value=True)
+    @patch("app.domains.observability.redis_event_bus.publish_semantic_envelope_to_redis")
+    def test_publish_skips_and_counts_when_signing_key_missing(
+        self, mock_pub: MagicMock, _enabled: MagicMock, mock_skip: MagicMock
+    ) -> None:
+        mock_pub.return_value = True
+        mock_skip.labels.return_value = mock_skip
+        ev = build_event(
+            event_type=EventType.TASK_UPDATED,
+            tenant_id="default",
+            project_id="default_project",
+            resource_id="task-2",
+            payload={"status": "RUNNING", "run_id": "r2", "updated_at": 2.0},
+            trace_id="t2",
+        )
+        with patch.dict(
+            os.environ,
+            {"ML_AIR_SEMANTIC_EVENT_SIGNING": "1", "ML_AIR_SEMANTIC_EVENT_SIGNING_KEY": ""},
+            clear=False,
+        ):
+            publish_mlair_event(ev)
+        mock_pub.assert_not_called()
+        mock_skip.labels.assert_called_with(reason="signing_key_missing")
+        mock_skip.inc.assert_called_once()
 
     def test_realtime_enabled_default(self) -> None:
         self.assertTrue(realtime_enabled())

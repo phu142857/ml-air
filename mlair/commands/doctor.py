@@ -74,9 +74,14 @@ def run_doctor(
         print("[PASS] .env file exists")
         compose_rel = str((cfg.get("compose") or {}).get("file", ""))
         env_issues = find_env_issues(allinone="allinone" in compose_rel)
-        for msg in env_issues:
+        signing_failures = [msg for msg in env_issues if "SEMANTIC_EVENT_SIGNING" in msg]
+        other_issues = [msg for msg in env_issues if msg not in signing_failures]
+        for msg in signing_failures:
+            print(f"[FAIL] .env: {msg}")
+            failed = True
+        for msg in other_issues:
             print(f"[WARN] .env: {msg}")
-        if env_issues and "allinone" in compose_rel:
+        if other_issues and "allinone" in compose_rel:
             print("[INFO] all-in-one: run `mlair rebuild` once after upgrade, or fix .env — see docs/configuration.md")
 
     compose_rel = (cfg.get("compose") or {}).get("file", "deploy/docker-compose.quickstart.yml")
