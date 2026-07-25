@@ -254,6 +254,14 @@ test-smoke-v03:
 	ML_AIR_TOKEN=$${ML_AIR_TOKEN:-maintainer-token} \
 	python scripts/test_smoke_v03.py
 
+.PHONY: seed-metrics-demo
+seed-metrics-demo:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	ML_AIR_HUB_URL=$(ML_AIR_HUB_URL) \
+	python scripts/seed_metrics_demo.py
+
 .PHONY: seed-demo
 seed-demo:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \

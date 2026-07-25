@@ -19,7 +19,6 @@ import {
   Activity,
   FileDown,
 } from "lucide-react"
-import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
@@ -40,6 +39,7 @@ import {
   tabPanelScrollClassName,
 } from "@/components/mlops/layout"
 import { RunMetricsSummary } from "@/components/mlops/run-metrics-summary"
+import { RunMetricsCharts } from "@/components/mlops/run-metrics-charts"
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
 import { RunExecutionGraph } from "@/components/mlops/run-execution-graph"
 import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
@@ -96,7 +96,6 @@ import {
   resolveRefetchInterval,
   useRealtimeQueryPolling,
 } from "@/lib/realtime-query-polling"
-import { useChartTheme } from "@/hooks/use-chart-theme"
 import { useTabLoading } from "@/hooks/use-tab-loading"
 
 const RUN_USAGE_LIVE_REFRESH_MS = 1000
@@ -230,24 +229,6 @@ function readinessToGateRows(readiness: RunReadiness | undefined): GateResultRow
   }))
 }
 
-function buildMetricsChartSeries(metrics: Array<{ key: string; value: number; step: number }>) {
-  const byStep = new Map<number, Record<string, number | string>>()
-  for (const m of metrics) {
-    const step = m.step ?? 0
-    if (!byStep.has(step)) byStep.set(step, { step: String(step) })
-    byStep.get(step)![m.key] = m.value
-  }
-  return [...byStep.values()].sort((a, b) => Number(a.step) - Number(b.step))
-}
-
-function metricChartKeys(metrics: Array<{ key: string; value: number; step: number }>): string[] {
-  const keys = new Set<string>()
-  for (const m of metrics) keys.add(m.key)
-  return [...keys].slice(0, 4)
-}
-
-const CHART_COLORS = ["#38bdf8", "#a78bfa", "#34d399", "#fbbf24"]
-
 export default function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = use(params)
   const router = useRouter()
@@ -258,7 +239,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const enabled = Boolean(token?.trim()) && canScope
   const [tab, setTab] = useState("overview")
   const isTabLoading = useTabLoading(tab)
-  const chartTheme = useChartTheme()
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
   const [exportingMetrics, setExportingMetrics] = useState(false)
@@ -465,15 +445,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const displayedLogs = logsQuery.items
 
   const gateResults = useMemo(() => readinessToGateRows(readinessQuery.data), [readinessQuery.data])
-  const metricsSeries = useMemo(
-    () => buildMetricsChartSeries(trackingQuery.data?.metrics ?? []),
-    [trackingQuery.data],
-  )
-  const chartMetricKeys = useMemo(
-    () => metricChartKeys(trackingQuery.data?.metrics ?? []),
-    [trackingQuery.data],
-  )
-
   const handleExportMetrics = useCallback(
     async (format: "csv" | "jsonl") => {
       setExportingMetrics(true)
@@ -892,57 +863,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               />
               {trackingQuery.isError ? (
                 <p className="text-sm text-muted-foreground">{formatApiClientError(trackingQuery.error)}</p>
-              ) : metricsSeries.length > 0 && chartMetricKeys.length > 0 ? (
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={metricsSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
-                      <XAxis dataKey="step" stroke={chartTheme.axisStroke} tick={{ fontSize: 11 }} />
-                      <YAxis stroke={chartTheme.axisStroke} tick={{ fontSize: 11 }} width={36} />
-                      <Tooltip
-                        contentStyle={{ ...chartTheme.tooltipStyle, borderRadius: 8, fontSize: 12 }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      {chartMetricKeys.map((key, i) => (
-                        <Line
-                          key={key}
-                          type="monotone"
-                          dataKey={key}
-                          name={key}
-                          stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                          strokeWidth={2}
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
               ) : (trackingQuery.data?.metrics ?? []).length > 0 ? (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border/60 bg-card text-left text-xs text-muted-foreground">
-                        <th className="px-4 py-2">Key</th>
-                        <th className="px-4 py-2">Value</th>
-                        <th className="px-4 py-2">Step</th>
-                        <th className="px-4 py-2">Logged</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(trackingQuery.data?.metrics ?? []).map((m, i) => (
-                        <tr key={`${m.key}-${m.step}-${i}`} className="border-b border-border last:border-0">
-                          <td className="px-4 py-2 font-mono text-xs">{m.key}</td>
-                          <td className="px-4 py-2 font-mono">{m.value}</td>
-                          <td className="px-4 py-2 text-muted-foreground">{m.step}</td>
-                          <td className="px-4 py-2 text-xs text-muted-foreground">
-                            {formatDateTimeCompact(m.logged_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <RunMetricsCharts
+                  metrics={trackingQuery.data?.metrics ?? []}
+                  tenantId={tenantId}
+                  projectId={projectId}
+                  runId={runId}
+                />
               ) : (
                 <MlopsEmptyState
                   icon={BarChart3}
