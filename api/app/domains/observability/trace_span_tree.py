@@ -3,19 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
 from typing import Any
 
 from app.domains.observability.trace_service import canonical_trace_id
-
-
-def _parse_ts(ts: str | None) -> datetime | None:
-    if not ts:
-        return None
-    try:
-        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except Exception:
-        return None
+from app.domains.observability.trace_timeline import apply_timeline_offsets, earliest_ts
 
 
 def finalize_span_tree(spans: list[dict[str, Any]], trace_id: str) -> dict[str, Any] | None:
@@ -61,24 +52,8 @@ def finalize_span_tree(spans: list[dict[str, Any]], trace_id: str) -> dict[str, 
     for root_id in roots:
         walk(root_id, 0, [])
 
-    starts = [s.get("start_ts") for s in ordered if s.get("start_ts")]
-    anchor_iso = min(starts) if starts else None
-    anchor_dt = _parse_ts(anchor_iso)
-
-    total_ms = 0
-    for span in ordered:
-        start_dt = _parse_ts(span.get("start_ts"))
-        end_dt = _parse_ts(span.get("end_ts")) or start_dt
-        offset_ms = int((start_dt - anchor_dt).total_seconds() * 1000) if anchor_dt and start_dt else 0
-        width_ms = span.get("duration_ms")
-        if width_ms is None and start_dt and end_dt and end_dt >= start_dt:
-            width_ms = int((end_dt - start_dt).total_seconds() * 1000)
-        width_ms = max(1, int(width_ms or 1))
-        span["offset_ms"] = offset_ms
-        span["width_ms"] = width_ms
-        span["end_offset_ms"] = offset_ms + width_ms
-        span["is_instant"] = False
-        total_ms = max(total_ms, offset_ms + width_ms)
+    anchor_dt = earliest_ts(*(s.get("start_ts") for s in ordered))
+    anchor_iso, total_ms = apply_timeline_offsets(ordered, anchor=anchor_dt)
 
     services = sorted({str(s.get("service") or "") for s in ordered if s.get("service")})
     return {

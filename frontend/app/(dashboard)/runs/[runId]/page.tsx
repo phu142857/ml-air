@@ -739,10 +739,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="graph" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.graph}>
-            <DetailSection
-              title="Execution graph"
-              accentBorder="sky"
-            >
+            <DetailSection accentBorder="sky">
               <RunExecutionGraph
                 tenantId={tenantId}
                 projectId={projectId}
@@ -757,7 +754,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="tasks" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.tasks}>
-            <DetailSection title="Tasks & resources">
+            <DetailSection>
               {tasksQuery.isError ? (
                 <p className="text-sm text-red-300">{formatApiClientError(tasksQuery.error)}</p>
               ) : (
@@ -790,10 +787,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="logs" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading && logsQuery.isLoading} variant={RUN_TAB_SKELETON.logs}>
-            <DetailSection
-              title="Runner logs"
-              bodyClassName="p-0"
-            >
+            <DetailSection bodyClassName="p-0">
               <ExecutionLogToolbar
                 search={logSearch}
                 onSearchChange={setLogSearch}
@@ -855,7 +849,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="metrics" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.metrics}>
-            <DetailSection title="Training metrics" description="Logged metrics for this run.">
+            <DetailSection>
               <RunMetricsSummary
                 tracking={trackingQuery.data}
                 exporting={exportingMetrics}
@@ -883,7 +877,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="artifacts" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.artifacts}>
-            <DetailSection title="Artifacts">
+            <DetailSection>
               {trackingQuery.isError ? (
                 <p className="text-sm text-muted-foreground">{formatApiClientError(trackingQuery.error)}</p>
               ) : (trackingQuery.data?.artifacts ?? []).length === 0 ? (
@@ -922,9 +916,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         <TabsContent value="timeline" className={tabPanelScrollClassName()}>
           <RunTabPanel loading={isTabLoading} variant={RUN_TAB_SKELETON.timeline}>
-            <DetailSection
-              title="Audit timeline"
-            >
+            <DetailSection>
               {timelineQuery.isError ? (
                 <p className="text-sm text-red-300">{formatApiClientError(timelineQuery.error)}</p>
               ) : timelineEvents.length === 0 ? (

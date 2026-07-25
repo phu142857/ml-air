@@ -245,7 +245,8 @@ export function reconcilePanels(
     }
   }
 
-  return next.length > 0 ? next : defaultPanels(allKeys);
+  if (next.length > 0) return next;
+  return assignOrphans ? defaultPanels(allKeys) : [];
 }
 
 export function assignMetricToPanel(
@@ -340,7 +341,7 @@ function normalizePrefs(raw: LegacyPrefs | undefined, allKeys: string[]): Metric
     }
   }
 
-  return { panels: defaultPanels(allKeys) };
+  return { panels: [] };
 }
 
 function loadLegacyPrefs(): LegacyPrefs | null {
@@ -366,7 +367,7 @@ function loadFromV2ProjectBucket(scope: MetricsChartScope): LegacyPrefs | null {
 }
 
 export function loadMetricsChartPrefs(scope: MetricsChartScope, allKeys: string[]): MetricsChartPrefs {
-  if (typeof window === "undefined") return { panels: defaultPanels(allKeys) };
+  if (typeof window === "undefined") return { panels: [] };
   try {
     const raw = window.localStorage.getItem(metricsChartRunKey(scope));
     if (raw) return normalizePrefs(JSON.parse(raw) as LegacyPrefs, allKeys);

@@ -25,8 +25,6 @@ import { cn, formatDateTimeCompact } from "@/lib/utils";
 const LABEL_COL = "minmax(200px, 280px)";
 const DURATION_COL = "80px";
 const STATUS_COL = "88px";
-const GRID_TEMPLATE = `${LABEL_COL} minmax(0, 1fr) ${DURATION_COL} ${STATUS_COL}`;
-
 export function formatWaterfallDuration(ms: number | null | undefined): string {
   if (ms == null || ms < 0 || Number.isNaN(ms)) return "—";
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -37,6 +35,59 @@ export function formatWaterfallDuration(ms: number | null | undefined): string {
     return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(2)}s`;
   }
   return formatRuntimeSeconds(sec);
+}
+
+const GRID_TEMPLATE = `${LABEL_COL} minmax(0, 1fr) ${DURATION_COL} ${STATUS_COL}`;
+
+export function buildTimelineTicks(zoomMin: number, zoomMax: number, segments = 4): number[] {
+  const span = Math.max(zoomMax - zoomMin, 1);
+  const count = Math.max(2, segments + 1);
+  return Array.from({ length: count }, (_, index) => zoomMin + (span * index) / segments);
+}
+
+function WaterfallTimelineRuler({
+  anchorTs,
+  zoomMin,
+  scaleMs,
+}: {
+  anchorTs: string | null | undefined;
+  zoomMin: number;
+  scaleMs: number;
+}) {
+  const ticks = useMemo(() => buildTimelineTicks(zoomMin, zoomMin + scaleMs), [scaleMs, zoomMin]);
+  const anchorMs = useMemo(() => {
+    if (!anchorTs) return null;
+    const parsed = Date.parse(anchorTs);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [anchorTs]);
+
+  return (
+    <div className="relative h-7 border-b border-border/50 bg-muted/10">
+      {ticks.map((tickMs, index) => {
+        const leftPct = ((tickMs - zoomMin) / scaleMs) * 100;
+        const clock =
+          anchorMs != null
+            ? formatDateTimeCompact(new Date(anchorMs + tickMs).toISOString())
+            : null;
+        return (
+          <div
+            key={`${tickMs}-${index}`}
+            className="pointer-events-none absolute top-0 flex h-full -translate-x-1/2 flex-col justify-end"
+            style={{ left: `${leftPct}%` }}
+          >
+            <span className="whitespace-nowrap px-1 pb-0.5 font-mono text-[10px] text-muted-foreground">
+              +{formatWaterfallDuration(tickMs)}
+            </span>
+            {clock && index % 2 === 0 ? (
+              <span className="hidden px-1 pb-1 font-mono text-[9px] text-muted-foreground/80 xl:block">
+                {clock}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function otelTraceToWaterfall(otel: TraceOtelTrace): TraceWaterfall {
@@ -700,7 +751,14 @@ export function TraceWaterfallView({
               role="row"
             >
               <span role="columnheader">Span</span>
-              <span role="columnheader">Timeline</span>
+              <div role="columnheader" className="min-w-0">
+                <span>Timeline</span>
+                <WaterfallTimelineRuler
+                  anchorTs={waterfall.anchor_ts}
+                  zoomMin={zoomMin}
+                  scaleMs={scaleMs}
+                />
+              </div>
               <span className="text-right" role="columnheader">
                 Duration
               </span>
@@ -780,7 +838,9 @@ export function TraceWaterfallView({
                           <TooltipContent side="right" className="max-w-xs space-y-1 text-left">
                             <p className="font-medium">{step.label}</p>
                             <p className="font-mono text-xs">{step.id}</p>
-                            <p>{formatDateTimeCompact(step.start_ts)}</p>
+                            <p>Start: {formatDateTimeCompact(step.start_ts)}</p>
+                            <p>Offset: +{formatWaterfallDuration(step.offset_ms)}</p>
+                            <p>Duration: {formatWaterfallDuration(step.duration_ms ?? step.width_ms)}</p>
                           </TooltipContent>
                         </Tooltip>
                         );

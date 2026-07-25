@@ -164,7 +164,7 @@ describe("metrics-chart", () => {
       ];
       saveMetricsChartPrefs(scope, { panels });
       expect(loadMetricsChartPrefs(scope, allKeys).panels).toHaveLength(2);
-      expect(loadMetricsChartPrefs({ ...scope, runId: "run-2" }, allKeys).panels).toHaveLength(3);
+      expect(loadMetricsChartPrefs({ ...scope, runId: "run-2" }, allKeys).panels).toHaveLength(0);
       expect(store.has(metricsChartRunKey(scope))).toBe(true);
     } finally {
       Object.defineProperty(globalThis, "localStorage", {

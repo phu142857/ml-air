@@ -18,7 +18,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { LayoutGrid, Plus, Search, Trash2, X } from "lucide-react";
+import { Plus, Search, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -595,37 +595,21 @@ export function RunMetricsCharts({ metrics, tenantId, projectId, runId }: Props)
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/15 p-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <LayoutGrid className="h-4 w-4" />
-          <span>
-            Add or remove <strong className="text-foreground">metric panels</strong>, then assign metrics via search.
-            Pie needs 2+ metrics (latest values).
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="relative max-w-sm flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={inventoryFilter}
+              onChange={(event) => setInventoryFilter(event.target.value)}
+              placeholder="Filter all metrics…"
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
           <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={addPanel}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             Add panel
           </Button>
-          <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={resetPanelsByPrefix}>
-            Reset (by prefix)
-          </Button>
-          <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={resetPanelsFlat}>
-            Reset (1 metric / panel)
-          </Button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={inventoryFilter}
-            onChange={(event) => setInventoryFilter(event.target.value)}
-            placeholder="Filter all metrics…"
-            className="h-8 pl-8 text-xs"
-          />
         </div>
         <AllMetricsInventory
           metrics={metrics}
@@ -634,22 +618,32 @@ export function RunMetricsCharts({ metrics, tenantId, projectId, runId }: Props)
         />
       </div>
 
-      <div className="space-y-4">
-        {prefs.panels.map((panel, index) => (
-          <MetricPanelCard
-            key={panel.id}
-            panel={panel}
-            index={index}
-            allKeys={allKeys}
-            metrics={metrics}
-            canRemove={prefs.panels.length > 1}
-            onViewTypeChange={(viewType) => updatePanel(panel.id, { viewType })}
-            onAddMetric={(metricKey) => addMetricToPanel(panel.id, metricKey)}
-            onRemoveMetric={(metricKey) => removeMetricFromPanel(panel.id, metricKey)}
-            onRemove={() => removePanel(panel.id)}
-          />
-        ))}
-      </div>
+      {prefs.panels.length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={resetPanelsByPrefix}>
+              Reset (by prefix)
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={resetPanelsFlat}>
+              Reset (1 metric / panel)
+            </Button>
+          </div>
+          {prefs.panels.map((panel, index) => (
+            <MetricPanelCard
+              key={panel.id}
+              panel={panel}
+              index={index}
+              allKeys={allKeys}
+              metrics={metrics}
+              canRemove
+              onViewTypeChange={(viewType) => updatePanel(panel.id, { viewType })}
+              onAddMetric={(metricKey) => addMetricToPanel(panel.id, metricKey)}
+              onRemoveMetric={(metricKey) => removeMetricFromPanel(panel.id, metricKey)}
+              onRemove={() => removePanel(panel.id)}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

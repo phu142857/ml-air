@@ -2,19 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
+from app.domains.observability.trace_timeline import apply_timeline_offsets
+
 _ACTIVE_STATUSES = frozenset({"RUNNING", "PENDING", "QUEUED", "IN_PROGRESS"})
-
-
-def _parse_ts(ts: str | None) -> datetime | None:
-    if not ts:
-        return None
-    try:
-        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except Exception:
-        return None
 
 
 def _status_upper(status: str | None) -> str:
@@ -119,30 +111,7 @@ def build_unified_waterfall(
     if not raw:
         return None
 
-    starts = [_parse_ts(s.get("start_ts")) for s in raw]
-    starts = [dt for dt in starts if dt is not None]
-    anchor = min(starts) if starts else None
-    anchor_iso = anchor.isoformat() if anchor else None
-
-    total_ms = 0
-    for step in raw:
-        start_dt = _parse_ts(step.get("start_ts"))
-        end_dt = _parse_ts(step.get("end_ts")) or start_dt
-        offset_ms = int((start_dt - anchor).total_seconds() * 1000) if anchor and start_dt else 0
-        width_ms = step.get("duration_ms")
-        if width_ms is None and start_dt and end_dt and end_dt >= start_dt:
-            width_ms = int((end_dt - start_dt).total_seconds() * 1000)
-        if step.get("is_instant"):
-            width_ms = 0
-        elif width_ms is None or width_ms <= 0:
-            width_ms = 1
-        else:
-            width_ms = int(width_ms)
-        end_offset_ms = offset_ms + width_ms
-        step["offset_ms"] = offset_ms
-        step["width_ms"] = width_ms
-        step["end_offset_ms"] = end_offset_ms
-        total_ms = max(total_ms, end_offset_ms)
+    anchor_iso, total_ms = apply_timeline_offsets(raw)
 
     mlair_steps = [s for s in raw if s.get("source") == "mlair"]
     otel_steps = [s for s in raw if s.get("source") == "otel"]

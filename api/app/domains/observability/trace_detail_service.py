@@ -14,27 +14,19 @@ from app.domains.observability.trace_span_service import (
     list_project_traces,
     search_stored_traces,
 )
+from app.domains.observability.trace_timeline import apply_timeline_offsets, earliest_ts, iso_ts, parse_ts, wall_duration_ms
 from app.domains.observability.trace_unified_service import build_unified_waterfall, trace_is_live
 from app.domains.shared.db_service import db_conn
 
 logger = logging.getLogger("mlair.api.trace_detail")
 
 
-def _iso(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
-
-
 def _parse_ts(ts: str | None) -> datetime | None:
-    if not ts:
-        return None
-    try:
-        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except Exception:
-        return None
+    return parse_ts(ts)
+
+
+def _iso(value: Any) -> str | None:
+    return iso_ts(value)
 
 
 def _match_trace_sql(column_expr: str) -> str:
@@ -278,9 +270,14 @@ def _build_waterfall(primary_run_id: str | None) -> dict[str, Any] | None:
 
     run_start = _parse_ts(_iso(run.get("created_at")))
     run_end = _parse_ts(_iso(run.get("updated_at"))) or run_start
-    run_duration_ms: int | None = None
-    if run_start and run_end and run_end >= run_start:
-        run_duration_ms = int((run_end - run_start).total_seconds() * 1000)
+    task_finish_times = [
+        _parse_ts(task.get("finished_at")) or _parse_ts(task.get("updated_at"))
+        for task in tasks
+    ]
+    task_finish_times = [dt for dt in task_finish_times if dt is not None]
+    if task_finish_times:
+        run_end = max(task_finish_times)
+    run_duration_ms = wall_duration_ms(run_start, run_end)
 
     steps.append(
         {
@@ -289,7 +286,7 @@ def _build_waterfall(primary_run_id: str | None) -> dict[str, Any] | None:
             "label": "Run",
             "status": str(run.get("status") or ""),
             "start_ts": _iso(run.get("created_at")),
-            "end_ts": _iso(run.get("updated_at")),
+            "end_ts": iso_ts(run_end),
             "duration_ms": run_duration_ms,
             "plugin": None,
         }
@@ -319,32 +316,7 @@ def _build_waterfall(primary_run_id: str | None) -> dict[str, Any] | None:
             }
         )
 
-    starts = [_parse_ts(s.get("start_ts")) for s in steps]
-    starts = [dt for dt in starts if dt is not None]
-    anchor = min(starts) if starts else None
-    anchor_iso = anchor.isoformat() if anchor else None
-
-    total_ms = 0
-    for step in steps:
-        start_dt = _parse_ts(step.get("start_ts"))
-        end_dt = _parse_ts(step.get("end_ts")) or start_dt
-        offset_ms = int((start_dt - anchor).total_seconds() * 1000) if anchor and start_dt else 0
-        width_ms = step.get("duration_ms")
-        if width_ms is None and start_dt and end_dt and end_dt >= start_dt:
-            width_ms = int((end_dt - start_dt).total_seconds() * 1000)
-        is_instant = bool(step.pop("is_instant", False))
-        if is_instant:
-            width_ms = 0
-        elif width_ms is None or width_ms <= 0:
-            width_ms = 1
-        else:
-            width_ms = int(width_ms)
-        end_offset_ms = offset_ms + width_ms
-        step["offset_ms"] = offset_ms
-        step["width_ms"] = width_ms
-        step["end_offset_ms"] = end_offset_ms
-        step["is_instant"] = is_instant
-        total_ms = max(total_ms, end_offset_ms)
+    anchor_iso, total_ms = apply_timeline_offsets(steps)
 
     return {
         "run_id": primary_run_id,
