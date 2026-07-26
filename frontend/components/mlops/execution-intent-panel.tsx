@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { Box, GitBranch, Loader2, Play } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { GitBranch, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { PolicyReadinessBlockDialog } from "@/components/mlops/policy-readiness-block-dialog";
@@ -14,6 +14,7 @@ import {
   fetchModels,
   fetchPipelineVersions,
   fetchPipelines,
+  putModelPipelineMapping,
   type DatasetTrainingPolicy,
   type DatasetVersionItem,
 } from "@/lib/api";
@@ -28,10 +29,16 @@ import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { feedbackMessageClass, STATUS_CHIP_TEXT } from "@/lib/status-style";
 import { mlairKeys } from "@/lib/query-keys";
 import { pickLatestPipelineVersion } from "@/lib/pipeline-config";
+import {
+  PIPELINE_RESOLVE_AUTO,
+  buildPipelineSelectOptions,
+  effectivePipelineId,
+  formatResolveSource,
+  isPipelineManualOverride,
+  pipelineIdOverrideForTrigger,
+} from "@/lib/pipeline-resolve-selection";
 import { cn } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
-
-export type ExecutionIntentMode = "model_dataset" | "pipeline_compat";
 
 type Props = {
   datasetId: string;
@@ -41,7 +48,6 @@ type Props = {
   scopePinned: boolean;
   versions: DatasetVersionItem[];
   versionsLoading?: boolean;
-  /** Active training policy from Dataset Hub Readiness tab. */
   policyId?: string;
   trainingPolicies?: DatasetTrainingPolicy[];
   className?: string;
@@ -66,10 +72,11 @@ export function ExecutionIntentPanel({
   className,
 }: Props) {
   const router = useRouter();
-  const [mode, setMode] = useState<ExecutionIntentMode>("model_dataset");
+  const queryClient = useQueryClient();
   const [selectedModelId, setSelectedModelId] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("");
-  const [selectedPipelineId, setSelectedPipelineId] = useState("");
+  const [pipelinePick, setPipelinePick] = useState(PIPELINE_RESOLVE_AUTO);
+  const [saveMappingOnTrain, setSaveMappingOnTrain] = useState(false);
   const [msg, setMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [readinessBlock, setReadinessBlock] = useState<TrainGateBlock | null>(null);
@@ -93,16 +100,29 @@ export function ExecutionIntentPanel({
     enabled: scopePinned && Boolean(selectedModelId && token),
   });
 
+  const resolvedPipelineId = resolvedPipelineQuery.data?.pipeline_id || null;
+  const effectivePipeline = effectivePipelineId(pipelinePick, resolvedPipelineId);
+  const manualOverride = isPipelineManualOverride(pipelinePick, resolvedPipelineId);
+
+  useEffect(() => {
+    setPipelinePick(PIPELINE_RESOLVE_AUTO);
+    setSaveMappingOnTrain(false);
+  }, [selectedModelId]);
+
   const trainPipelineVersionsQuery = useQuery({
-    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, resolvedPipelineQuery.data?.pipeline_id || ""),
-    queryFn: () => fetchPipelineVersions(tenantId, projectId, resolvedPipelineQuery.data!.pipeline_id!, token),
-    enabled: scopePinned && Boolean(resolvedPipelineQuery.data?.pipeline_id && token),
+    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, effectivePipeline),
+    queryFn: () => fetchPipelineVersions(tenantId, projectId, effectivePipeline, token),
+    enabled: scopePinned && Boolean(effectivePipeline && token),
   });
 
-  const runPipelineVersionsQuery = useQuery({
-    queryKey: mlairKeys.pipelines.versions(tenantId, projectId, selectedPipelineId),
-    queryFn: () => fetchPipelineVersions(tenantId, projectId, selectedPipelineId, token),
-    enabled: scopePinned && Boolean(selectedPipelineId && token),
+  const saveMappingMutation = useMutation({
+    mutationFn: (pipelineId: string) =>
+      putModelPipelineMapping(tenantId, projectId, selectedModelId, token, { pipeline_id: pipelineId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mlairKeys.models.resolvedPipeline(tenantId, projectId, selectedModelId),
+      });
+    },
   });
 
   const modelOptions = useMemo(
@@ -124,26 +144,34 @@ export function ExecutionIntentPanel({
     [versions, versionsLoading],
   );
 
-  const pipelineOptions = useMemo(() => {
-    const items = pipelinesQuery.data?.items || [];
-    const withVersions = items.filter((p) => p.pipeline_id);
-    return [
-      { value: "", label: "Select pipeline…" },
-      ...withVersions.map((p) => ({
-        value: p.pipeline_id,
-        label: p.pipeline_id,
-      })),
-    ];
-  }, [pipelinesQuery.data?.items]);
+  const pipelineOptions = useMemo(
+    () => buildPipelineSelectOptions(pipelinesQuery.data?.items || [], resolvedPipelineQuery.data),
+    [pipelinesQuery.data?.items, resolvedPipelineQuery.data],
+  );
 
-  const effectiveTrainPipeline = resolvedPipelineQuery.data?.pipeline_id || "";
+  const pipelineDropdownValue = useMemo(() => {
+    if (pipelinePick === PIPELINE_RESOLVE_AUTO) {
+      return resolvedPipelineId ? PIPELINE_RESOLVE_AUTO : "";
+    }
+    if (pipelineOptions.some((o) => o.value === pipelinePick)) {
+      return pipelinePick;
+    }
+    return pipelinePick;
+  }, [pipelinePick, pipelineOptions, resolvedPipelineId]);
 
   const pluginPrecheck = useMemo(() => {
-    if (!effectiveTrainPipeline) return { ok: false, reason: "Select a model with a mapped pipeline" };
+    if (!effectivePipeline) {
+      return {
+        ok: false,
+        reason: resolvedPipelineId
+          ? "Select a pipeline"
+          : "No resolved pipeline — pick one from the dropdown",
+      };
+    }
     const items = trainPipelineVersionsQuery.data?.items || [];
-    if (!items.length) return { ok: false, reason: "Mapped pipeline has no active version" };
+    if (!items.length) return { ok: false, reason: "Pipeline has no active version" };
     const latest = pickLatestPipelineVersion(items);
-    if (!latest) return { ok: false, reason: "Mapped pipeline has no active version" };
+    if (!latest) return { ok: false, reason: "Pipeline has no active version" };
     const cfg = (latest.config || {}) as Record<string, unknown>;
     const tasks = cfg.tasks;
     if (!Array.isArray(tasks) || tasks.length === 0) {
@@ -155,14 +183,7 @@ export function ExecutionIntentPanel({
     });
     if (!hasPlugin) return { ok: false, reason: "Task plugin is missing in pipeline config" };
     return { ok: true, reason: "" };
-  }, [effectiveTrainPipeline, trainPipelineVersionsQuery.data]);
-
-  const pipelineRunnable = useMemo(() => {
-    if (!selectedPipelineId) return { ok: false, reason: "Select a pipeline" };
-    const items = runPipelineVersionsQuery.data?.items || [];
-    if (!items.length) return { ok: false, reason: "Pipeline has no version — sync or publish a config version first" };
-    return { ok: true, reason: "" };
-  }, [selectedPipelineId, runPipelineVersionsQuery.data]);
+  }, [effectivePipeline, resolvedPipelineId, trainPipelineVersionsQuery.data]);
 
   const selectedVersion = versions.find((v) => v.version_id === selectedVersionId);
   const versionFailed = selectedVersion && String(selectedVersion.status || "").toUpperCase() === "FAILED";
@@ -172,27 +193,29 @@ export function ExecutionIntentPanel({
     scopePinned &&
     selectedModelId &&
     selectedVersionId &&
+    effectivePipeline &&
     hasTrainingPolicy &&
     !versionFailed &&
     pluginPrecheck.ok &&
     !trainPipelineVersionsQuery.isLoading &&
     !submitting;
 
-  const canRunPipeline =
-    scopePinned &&
-    selectedPipelineId &&
-    selectedVersionId &&
-    hasTrainingPolicy &&
-    pipelineRunnable.ok &&
-    !runPipelineVersionsQuery.isLoading &&
-    !submitting;
-
   const pipelineGateContext = useMemo(() => {
     if (readinessBlock?.kind !== "not_ready") return null;
-    const pipelineId = mode === "model_dataset" ? effectiveTrainPipeline : selectedPipelineId;
-    if (!pipelineId?.trim()) return null;
-    return { pipelineId, tenantId, projectId, token };
-  }, [readinessBlock, mode, effectiveTrainPipeline, selectedPipelineId, tenantId, projectId, token]);
+    if (!effectivePipeline?.trim()) return null;
+    return { pipelineId: effectivePipeline, tenantId, projectId, token };
+  }, [readinessBlock, effectivePipeline, tenantId, projectId, token]);
+
+  const onPipelineChange = (next: string) => {
+    if (!next) {
+      setPipelinePick(PIPELINE_RESOLVE_AUTO);
+      return;
+    }
+    setPipelinePick(next);
+    if (next !== PIPELINE_RESOLVE_AUTO) {
+      setSaveMappingOnTrain(false);
+    }
+  };
 
   const onSubmit = async () => {
     setMsg("");
@@ -205,7 +228,7 @@ export function ExecutionIntentPanel({
       datasetVersionId: selectedVersionId,
       policies: trainingPolicies,
       policyId,
-      modelId: mode === "model_dataset" ? selectedModelId : undefined,
+      modelId: selectedModelId,
     });
     if (!assessment.ok) {
       setReadinessBlock(assessment.block);
@@ -213,12 +236,10 @@ export function ExecutionIntentPanel({
       return;
     }
 
-    const pipelineId =
-      mode === "model_dataset" ? effectiveTrainPipeline : selectedPipelineId;
     const pipelineAssessment = await assessPipelineInputsReadiness({
       tenantId,
       projectId,
-      pipelineId,
+      pipelineId: effectivePipeline,
       token,
       datasetVersionId: selectedVersionId,
       policyId: assessment.policyId,
@@ -231,42 +252,30 @@ export function ExecutionIntentPanel({
 
     setSubmitting(true);
     try {
-      const policyPayload = { policy_id: assessment.policyId };
-      if (mode === "model_dataset") {
-        const res = await executeTrainingIntent(tenantId, projectId, token, {
-          kind: "model_dataset",
-          modelId: selectedModelId,
-          datasetId,
-          datasetVersionId: selectedVersionId,
-          policyId: assessment.policyId,
-          idempotencyKey: `hub-train-${Date.now()}`,
-          overrideConfig: policyPayload,
-          context: buildRunContext(selectedModelId),
-        });
-        if (res.run_id) {
-          toastSuccess("Run started", res.run_id);
-          router.push(`/runs/${encodeURIComponent(res.run_id)}`);
-        }
-        return;
+      const overrideId = pipelineIdOverrideForTrigger(pipelinePick, resolvedPipelineId);
+      if (saveMappingOnTrain && overrideId) {
+        await saveMappingMutation.mutateAsync(overrideId);
       }
+
       const res = await executeTrainingIntent(tenantId, projectId, token, {
-        kind: "pipeline_compat",
-        pipelineId: selectedPipelineId,
+        kind: "model_dataset",
+        modelId: selectedModelId,
         datasetId,
         datasetVersionId: selectedVersionId,
-        useLatestPipelineVersion: true,
-        idempotencyKey: `hub-pipeline-run-${Date.now()}`,
-        overrideConfig: policyPayload,
-        context: buildRunContext(),
+        policyId: assessment.policyId,
+        pipelineIdOverride: overrideId,
+        idempotencyKey: `hub-train-${Date.now()}`,
+        overrideConfig: { policy_id: assessment.policyId },
+        context: buildRunContext(selectedModelId),
       });
       if (res.run_id) {
         toastSuccess("Run started", res.run_id);
         router.push(`/runs/${encodeURIComponent(res.run_id)}`);
       }
     } catch (err) {
-      const msg = describeTrainError(err);
-      setMsg(msg);
-      toastError("Run failed", msg);
+      const errMsg = describeTrainError(err);
+      setMsg(errMsg);
+      toastError("Run failed", errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -280,67 +289,22 @@ export function ExecutionIntentPanel({
     );
   }
 
+  const latestConfigVersion = pickLatestPipelineVersion(trainPipelineVersionsQuery.data?.items ?? []);
+
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={mode === "model_dataset" ? "default" : "outline"}
-          className={cn(
-            "h-8 gap-2",
-            mode === "model_dataset"
-              ? "bg-primary text-primary-foreground hover:bg-primary/90"
-              : "border-border bg-card text-foreground/90",
-          )}
-          onClick={() => setMode("model_dataset")}
-        >
-          <Box className="h-3.5 w-3.5" />
-          Train with model
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={mode === "pipeline_compat" ? "default" : "outline"}
-          className={cn(
-            "h-8 gap-2",
-            mode === "pipeline_compat"
-              ? "bg-primary text-primary-foreground hover:bg-primary/90"
-              : "border-border bg-card text-foreground/90",
-          )}
-          onClick={() => setMode("pipeline_compat")}
-        >
-          <GitBranch className="h-3.5 w-3.5" />
-          Run with pipeline
-        </Button>
-      </div>
-
       <div className="grid gap-3 md:grid-cols-2">
-        {mode === "model_dataset" ? (
-          <label className="text-xs text-muted-foreground">
-            Model
-            <SelectDropdown
-              value={selectedModelId}
-              onChange={setSelectedModelId}
-              options={modelOptions}
-              className="mt-1"
-              buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
-              aria-label="Model to train"
-            />
-          </label>
-        ) : (
-          <label className="text-xs text-muted-foreground">
-            Pipeline
-            <SelectDropdown
-              value={selectedPipelineId}
-              onChange={setSelectedPipelineId}
-              options={pipelineOptions}
-              className="mt-1"
-              buttonClassName="panel-surface bg-muted/20 px-3 py-2 font-mono text-sm"
-              aria-label="Pipeline to run"
-            />
-          </label>
-        )}
+        <label className="text-xs text-muted-foreground">
+          Model
+          <SelectDropdown
+            value={selectedModelId}
+            onChange={setSelectedModelId}
+            options={modelOptions}
+            className="mt-1"
+            buttonClassName="panel-surface bg-muted/20 px-3 py-2 text-sm"
+            aria-label="Model to train"
+          />
+        </label>
         <label className="text-xs text-muted-foreground">
           Dataset version
           <SelectDropdown
@@ -354,40 +318,78 @@ export function ExecutionIntentPanel({
         </label>
       </div>
 
-      {mode === "model_dataset" ? (
-        <div className="panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          Resolved pipeline:{" "}
-          <span className="font-mono text-foreground">{effectiveTrainPipeline || "—"}</span>
-          {resolvedPipelineQuery.data?.source ? (
-            <span className="text-muted-foreground"> ({resolvedPipelineQuery.data.source})</span>
-          ) : null}
-          {resolvedPipelineQuery.isLoading ? (
-            <span className="ml-2 inline-flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> resolving…
-            </span>
-          ) : null}
-          {!pluginPrecheck.ok && effectiveTrainPipeline ? (
-            <p className={cn("mt-1", STATUS_CHIP_TEXT.failed)}>{pluginPrecheck.reason}</p>
-          ) : null}
-        </div>
-      ) : (
-        <div className="panel-surface bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          {runPipelineVersionsQuery.isLoading ? (
-            <span className="inline-flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Checking pipeline versions…
-            </span>
-          ) : pipelineRunnable.ok ? (
-            <span>
-              Active config:{" "}
-              <span className="font-mono text-foreground">
-                {formatVersionLabel(pickLatestPipelineVersion(runPipelineVersionsQuery.data?.items ?? [])?.version)}
+      <label className="block text-xs text-muted-foreground">
+        Pipeline
+        <SelectDropdown
+          value={pipelineDropdownValue}
+          onChange={onPipelineChange}
+          options={pipelineOptions}
+          className="mt-1"
+          buttonClassName="panel-surface bg-muted/20 px-3 py-2 font-mono text-sm"
+          aria-label="Training pipeline"
+          disabled={!selectedModelId || resolvedPipelineQuery.isLoading}
+          placeholder={
+            resolvedPipelineQuery.isLoading ? "Resolving pipeline…" : "Select pipeline…"
+          }
+        />
+      </label>
+
+      <div className="panel-surface space-y-2 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        {resolvedPipelineQuery.isLoading ? (
+          <span className="inline-flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" /> Resolving default pipeline for model…
+          </span>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <GitBranch className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Effective:{" "}
+                <span className="font-mono text-foreground">{effectivePipeline || "—"}</span>
               </span>
-            </span>
-          ) : (
-            <span className={STATUS_CHIP_TEXT.failed}>{pipelineRunnable.reason}</span>
-          )}
-        </div>
-      )}
+              {manualOverride ? (
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                  manual override
+                </span>
+              ) : resolvedPipelineId ? (
+                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                  auto · {formatResolveSource(resolvedPipelineQuery.data?.source)}
+                </span>
+              ) : null}
+            </div>
+            {trainPipelineVersionsQuery.isLoading ? (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Checking pipeline config…
+              </span>
+            ) : latestConfigVersion ? (
+              <span>
+                Config version:{" "}
+                <span className="font-mono text-foreground">
+                  {formatVersionLabel(latestConfigVersion.version)}
+                </span>
+              </span>
+            ) : null}
+            {!pluginPrecheck.ok && effectivePipeline ? (
+              <p className={cn("mt-1", STATUS_CHIP_TEXT.failed)}>{pluginPrecheck.reason}</p>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      {manualOverride ? (
+        <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={saveMappingOnTrain}
+            onChange={(e) => setSaveMappingOnTrain(e.target.checked)}
+          />
+          <span>
+            Save <span className="font-mono text-foreground">{effectivePipeline}</span> as default
+            pipeline for this model
+          </span>
+        </label>
+      ) : null}
 
       {msg ? <p className={feedbackMessageClass("failed")}>{msg}</p> : null}
 
@@ -396,38 +398,25 @@ export function ExecutionIntentPanel({
         onOpenChange={setReadinessDialogOpen}
         block={readinessBlock}
         datasetId={datasetId}
-        intentLabel={mode === "model_dataset" ? "Train with model" : "Run with pipeline"}
+        intentLabel="Train with model"
         pipelineGateContext={pipelineGateContext}
       />
 
       <Button
         type="button"
-        className={cn(
-          "gap-2",
-          mode === "model_dataset"
-            ? "bg-primary hover:bg-primary/90"
-            : "bg-primary hover:bg-primary/90",
-        )}
-        disabled={mode === "model_dataset" ? !canTrain : !canRunPipeline}
+        className="gap-2 bg-primary hover:bg-primary/90"
+        disabled={!canTrain}
         title={
-          mode === "model_dataset"
-            ? !hasTrainingPolicy
-              ? "Create a training policy on the Readiness tab"
-              : pluginPrecheck.ok
-                ? "Train model"
-                : pluginPrecheck.reason
-            : !hasTrainingPolicy
-              ? "Create a training policy on the Readiness tab"
-              : !selectedVersionId
-                ? "Select a dataset version"
-                : pipelineRunnable.ok
-                  ? "Run pipeline"
-                  : pipelineRunnable.reason
+          !hasTrainingPolicy
+            ? "Create a training policy on the Readiness tab"
+            : pluginPrecheck.ok
+              ? "Train model"
+              : pluginPrecheck.reason
         }
         onClick={() => void onSubmit()}
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-        {mode === "model_dataset" ? "Train model" : "Run pipeline"}
+        Train model
       </Button>
     </div>
   );

@@ -1,0 +1,6 @@
+inputs:
+  - dataset: demo_dataset
+    required_size: 50
+tasks:
+  - id: train
+    plugin: echo_tracking

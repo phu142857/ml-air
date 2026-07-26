@@ -67,6 +67,7 @@ import { formatVersionLabel } from "@/lib/version-label";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
+import { ModelPipelineMappingCard } from "@/components/mlops/model-pipeline-mapping-card";
 import { ModelProvenancePanel } from "@/components/mlops/model-provenance-panel";
 import {
   ModelApprovalHistory,
@@ -666,13 +667,21 @@ export default function ModelDetailPage() {
             ]}
           />
           {scopePinned ? (
-            <ModelProvenancePanel
-              tenantId={tenantId}
-              projectId={projectId}
-              modelId={modelId}
-              token={token}
-              version={productionVersion}
-            />
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <ModelPipelineMappingCard
+                tenantId={tenantId}
+                projectId={projectId}
+                modelId={modelId}
+                token={token}
+              />
+              <ModelProvenancePanel
+                tenantId={tenantId}
+                projectId={projectId}
+                modelId={modelId}
+                token={token}
+                version={productionVersion}
+              />
+            </div>
           ) : null}
           {scopePinned && versionsQuery.data?.items?.length ? (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">

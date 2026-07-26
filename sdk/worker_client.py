@@ -43,6 +43,23 @@ def _post_json(url: str, token: str, body: dict[str, Any], *, timeout: float = 6
         return json.loads(raw) if raw else {}
 
 
+def post_task_heartbeat(
+    task_id: str,
+    *,
+    worker_id: str,
+    usage: dict[str, Any] | None = None,
+    token: str | None = None,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    tok = (token or worker_bearer_token()).strip()
+    if not tok:
+        raise RuntimeError("worker token required (MLAIR_WORKER_TOKEN or ML_AIR_WORKER_TOKEN)")
+    body: dict[str, Any] = {"worker_id": worker_id}
+    if usage:
+        body["usage"] = usage
+    return _post_json(_task_url(task_id, "heartbeat", base_url=base_url), tok, body)
+
+
 def post_task_logs(
     task_id: str,
     *,

@@ -1,0 +1,2 @@
+pipeline_id: multi_step_demo
+config_file: pipeline/multi-step-demo.yaml

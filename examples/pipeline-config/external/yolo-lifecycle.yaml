@@ -1,0 +1,21 @@
+inputs:
+  - dataset: cv-traffic-frames
+    required_size: 50
+tasks:
+  - id: split
+    plugin: cv_yolo_split
+  - id: detect
+    plugin: cv_yolo_detect
+    depends_on: [split]
+  - id: prepare
+    plugin: cv_yolo_prepare
+    depends_on: [detect]
+  - id: train
+    plugin: cv_yolo_train
+    depends_on: [prepare]
+  - id: eval
+    plugin: cv_yolo_eval
+    depends_on: [train]
+  - id: gate
+    plugin: cv_yolo_gate
+    depends_on: [eval]

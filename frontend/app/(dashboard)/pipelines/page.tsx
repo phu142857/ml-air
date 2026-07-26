@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { PipelineDAG } from "@/components/mlops/pipeline-dag"
-import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table"
-import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { formatVersionLabel } from "@/lib/version-label"
@@ -19,95 +18,13 @@ import { pickLatestPipelineVersion } from "@/lib/pipeline-config"
 import { usePipelineTopology } from "@/hooks/use-pipeline-topology"
 import { usePipelinesList } from "@/hooks/use-pipelines-list"
 import { mlairKeys } from "@/lib/query-keys"
-import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { normalizePipelineForDag } from "@/lib/adapt-pipeline-dag"
-import type { Pipeline, PipelineStage } from "@/lib/pipeline-types"
-
-import type { StatusChipKey } from "@/lib/status-style"
-
-function mapStageStatus(raw: string): StatusChipKey | "idle" {
-  const u = String(raw || "").toUpperCase()
-  if (u.includes("RUN")) return "running"
-  if (u.includes("FAIL")) return "failed"
-  if (u.includes("SUCCESS") || u.includes("OK") || u.includes("DONE") || u.includes("COMPLETE"))
-    return "success"
-  if (u.includes("PEND") || u.includes("QUEUE") || u.includes("WAIT")) return "pending"
-  return "idle"
-}
-
-const pipelineStageColumns: DataTableColumn<PipelineStage>[] = [
-  {
-    id: "stage",
-    header: "Stage",
-    width: 200,
-    canHide: false,
-    getSearchValue: (stage) => stage.name,
-    getSortValue: (stage) => stage.name,
-    cell: (stage) => <span className="text-sm text-foreground">{stage.name}</span>,
-  },
-  {
-    id: "type",
-    header: "Type",
-    width: 140,
-    getSearchValue: (stage) => stage.type,
-    getSortValue: (stage) => stage.type,
-    getFilterValue: (stage) => stage.type,
-    cell: (stage) => (
-      <span className="font-mono text-xs capitalize text-muted-foreground">{stage.type}</span>
-    ),
-  },
-  {
-    id: "status",
-    header: "Status",
-    width: 140,
-    getSortValue: (stage) => mapStageStatus(stage.status),
-    getFilterValue: (stage) => mapStageStatus(stage.status),
-    filterOptions: [
-      { label: "Running", value: "running" },
-      { label: "Failed", value: "failed" },
-      { label: "Success", value: "success" },
-      { label: "Pending", value: "pending" },
-      { label: "Idle", value: "idle" },
-    ],
-    cell: (stage) => {
-      const sk = mapStageStatus(stage.status)
-      if (sk === "idle") {
-        return <StatusBadge status="cancelled" label="Idle" size="sm" />
-      }
-      return <StatusBadge value={stage.status} size="sm" />
-    },
-  },
-  {
-    id: "dependencies",
-    header: "Dependencies",
-    width: 240,
-    wrap: true,
-    getSearchValue: (stage) => stage.dependencies.join(" "),
-    getSortValue: (stage) => stage.dependencies.length,
-    cell: (stage) =>
-      stage.dependencies.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {stage.dependencies.map((dep) => (
-            <Badge
-              key={dep}
-              variant="outline"
-              className="border-border font-mono text-[10px] text-muted-foreground"
-            >
-              {dep}
-            </Badge>
-          ))}
-        </div>
-      ) : (
-        <span className="text-xs text-muted-foreground/80">None</span>
-      ),
-  },
-]
+import type { Pipeline } from "@/lib/pipeline-types"
 
 export default function PipelinesPage() {
   const { tenantId, projectId, token } = useAppContext()
   const scopePinned = isScopePinned(tenantId, projectId)
-  const isAggregate = !scopePinned
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const pipelinesQuery = usePipelinesList(Boolean(token?.trim()))
@@ -201,6 +118,16 @@ export default function PipelinesPage() {
         icon={GitBranch}
         accent="amber"
         title="Pipelines"
+        actions={
+          scopePinned ? (
+            <Button asChild size="sm" className="gap-2">
+              <Link href="/pipelines/new">
+                <Plus className="h-4 w-4" />
+                Import pipeline
+              </Link>
+            </Button>
+          ) : null
+        }
       />
 
       <PageScrollBody
@@ -212,7 +139,7 @@ export default function PipelinesPage() {
           isEmpty={items.length === 0}
           emptyIcon={GitBranch}
           emptyTitle="No pipelines"
-          emptyDescription=""
+          emptyDescription="Import a YAML or JSON pipeline config to get started."
           skeletonRows={4}
         >
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -365,17 +292,6 @@ export default function PipelinesPage() {
                   <div>
                     <h3 className="mb-3 text-sm font-medium text-muted-foreground">Pipeline topology</h3>
                     <PipelineDAG key={selectedId} pipeline={displayPipeline} />
-                  </div>
-
-                  <div>
-                    <h3 className="mb-3 text-sm font-medium text-muted-foreground">Stages</h3>
-                    <MlopsDataTable
-                      tableId="pipeline-stages"
-                      columns={pipelineStageColumns}
-                      data={displayPipeline.stages}
-                      keyExtractor={(s) => s.id}
-                      emptyMessage="No stages in this view."
-                    />
                   </div>
                 </>
               )}

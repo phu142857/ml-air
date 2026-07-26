@@ -66,6 +66,20 @@ def _compose(compose_path: Path, *args: str) -> int:
     return run_compose(compose_path, *args)
 
 
+def _compose_up_recreate(compose_path: Path, *, detach: bool = True) -> int:
+    """Stop stale containers then start with a fresh recreate (fixes fixed ``container_name`` conflicts on Podman)."""
+    _compose(compose_path, "down", "--remove-orphans")
+    args = ["up", "--force-recreate", "--remove-orphans"]
+    if detach:
+        args.append("-d")
+    rc = _compose(compose_path, *args)
+    if rc == 0:
+        return 0
+    # Mixed podman-compose / docker compose can leave ``mlair`` outside project scope.
+    subprocess.run(["docker", "rm", "-f", "mlair"], capture_output=True, check=False)
+    return _compose(compose_path, *args)
+
+
 def _build_sdk_wheel(root: Path) -> Path | None:
     """(Re)generate the distributable SDK wheel into ``dist/``.
 
@@ -246,10 +260,7 @@ def run_rebuild(
     rc = _compose(compose_path, *build_args)
     if rc != 0:
         return rc
-    args = ["up"]
-    if detach:
-        args.append("-d")
-    rc = _compose(compose_path, *args)
+    rc = _compose_up_recreate(compose_path, detach=detach)
     if rc != 0:
         return rc
     _print_endpoints(cfg)

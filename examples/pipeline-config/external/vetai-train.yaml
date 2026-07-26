@@ -1,0 +1,12 @@
+inputs:
+  - dataset: veterinary_curated
+    required_size: 100
+tasks:
+  - id: data_prep
+    plugin: vetai_data_prep
+  - id: train
+    plugin: vetai_train
+    depends_on: [data_prep]
+  - id: evaluate
+    plugin: vetai_evaluate
+    depends_on: [train]

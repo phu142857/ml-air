@@ -12,6 +12,7 @@ interface ScopedListContentProps {
   emptyIcon: LucideIcon
   emptyTitle: string
   emptyDescription: string
+  emptyContent?: React.ReactNode
   skeletonRows?: number
   children: React.ReactNode
 }
@@ -24,6 +25,7 @@ export function ScopedListContent({
   emptyIcon: EmptyIcon,
   emptyTitle,
   emptyDescription,
+  emptyContent,
   skeletonRows = 6,
   children,
 }: ScopedListContentProps) {
@@ -46,11 +48,13 @@ export function ScopedListContent({
         </div>
       )}
       {isEmpty ? (
-        <MlopsEmptyState
-          icon={EmptyIcon}
-          title={emptyTitle}
-          description={emptyDescription}
-        />
+        emptyContent ?? (
+          <MlopsEmptyState
+            icon={EmptyIcon}
+            title={emptyTitle}
+            description={emptyDescription}
+          />
+        )
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       )}

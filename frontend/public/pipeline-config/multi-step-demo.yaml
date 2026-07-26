@@ -1,0 +1,12 @@
+inputs:
+  - dataset: demo_dataset
+    required_size: 50
+tasks:
+  - id: prepare
+    plugin: echo_tracking
+  - id: train
+    plugin: echo_tracking
+    depends_on: [prepare]
+  - id: validate
+    plugin: echo_tracking
+    depends_on: [train]

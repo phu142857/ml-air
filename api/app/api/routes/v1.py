@@ -1335,6 +1335,19 @@ def validate_pipeline_contract_v1(payload: ValidatePipelineIn, authorization: st
     return {"status": "VALID"}
 
 
+@router.post("/tenants/{tenant_id}/projects/{project_id}/pipelines/validate")
+def validate_pipeline_scoped_v1(
+    tenant_id: str,
+    project_id: str,
+    payload: ValidatePipelineIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    _validate_pipeline_plugin_contract(payload.config, require_plugin_exists=True)
+    return {"status": "VALID"}
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/runs/{run_id}")
 def get_run_v1(tenant_id: str, project_id: str, run_id: str, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
@@ -3851,7 +3864,10 @@ def create_pipeline_version_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
     strict_exists = os.getenv("ML_AIR_VALIDATE_PLUGIN_EXISTS_ON_CREATE", "1") == "1"
-    _validate_pipeline_plugin_contract(payload.config, require_plugin_exists=strict_exists)
+    _validate_pipeline_plugin_contract(
+        payload.config,
+        require_plugin_exists=strict_exists,
+    )
     return pipeline_version_service.create_pipeline_version(tenant_id, project_id, pipeline_id, payload.config)
 
 

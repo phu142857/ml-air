@@ -3951,19 +3951,39 @@ export async function listPipelineVersionsApi(
   return fetchPipelineVersions(tenantId, projectId, pipelineId, token);
 }
 
+export async function validatePipelineApi(
+  token: string,
+  config: Record<string, unknown>,
+  options?: { tenantId?: string; projectId?: string }
+) {
+  const scoped =
+    options?.tenantId?.trim() && options?.projectId?.trim()
+      ? `${API_BASE}/v1/tenants/${options.tenantId}/projects/${normalizeProjectId(options.projectId)}/pipelines/validate`
+      : `${API_BASE}/v1/pipelines/validate`;
+  const res = await fetch(scoped, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({ config }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { status: string };
+}
+
 export async function createPipelineVersionApi(
   tenantId: string,
   projectId: string,
   pipelineId: string,
   token: string,
-  config: Record<string, unknown>
+  config: Record<string, unknown>,
 ) {
+  const body: Record<string, unknown> = { config };
   const res = await fetch(
     `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/pipelines/${encodeURIComponent(pipelineId)}/versions`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(token) },
-      body: JSON.stringify({ config })
+      body: JSON.stringify(body),
     }
   );
   const data = await res.json();
