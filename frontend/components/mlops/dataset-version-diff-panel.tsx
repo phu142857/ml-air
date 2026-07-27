@@ -43,7 +43,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
   if (versions.length < 2) return null;
 
   return (
-    <div className="mb-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <GitCompare className="h-4 w-4 text-muted-foreground" aria-hidden />
         <span className="text-sm font-semibold text-foreground">Compare versions</span>

@@ -1324,30 +1324,34 @@ export default function DatasetHubPage() {
         ) : (
         <>
         {activeTab === "overview" ? (
-          <div className="grid min-w-0 w-full grid-cols-1 gap-4 lg:grid-cols-2">
-            <DetailSection title="Lifecycle layers" accentBorder={DATASET_SECTION_ACCENT}>
-              <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 w-full flex-col gap-4">
+            <DetailSection accentBorder={DATASET_SECTION_ACCENT} bodyClassName="py-6 sm:py-8">
+              <div className="flex items-center justify-center gap-3 overflow-x-auto px-2 sm:gap-5 md:gap-8">
                 {lifecycleStages.map((label, i) => (
-                  <div key={label} className="flex items-center gap-2">
+                  <div key={label} className="flex shrink-0 items-center gap-3 sm:gap-5">
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[11px] font-medium",
+                        "whitespace-nowrap px-4 py-2 text-sm font-semibold sm:px-5 sm:py-2.5 sm:text-base",
                         i <= lifecycleStageIndex ? STATUS_CHIP_CLASS.success : "border-border text-muted-foreground/80"
                       )}
                     >
                       {label}
                     </Badge>
                     {i < lifecycleStages.length - 1 ? (
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/80" aria-hidden />
+                      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground/80 sm:h-6 sm:w-6" aria-hidden />
                     ) : null}
                   </div>
                 ))}
               </div>
             </DetailSection>
 
-            <DetailSection title="Dataset summary" accentBorder={DATASET_SECTION_ACCENT}>
-              <MetadataGrid columns={2} items={overviewSummaryItems} />
+            <DetailSection accentBorder={DATASET_SECTION_ACCENT}>
+              <MetadataGrid
+                columns={2}
+                className="grid-flow-col auto-cols-[minmax(8.5rem,1fr)] grid-cols-none gap-3 overflow-x-auto pb-1"
+                items={overviewSummaryItems}
+              />
               {bufferMaterializationHints ? (
                 <div className="mt-4 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
                   <p className="font-medium text-foreground">Buffer / materialization</p>
@@ -1407,7 +1411,6 @@ export default function DatasetHubPage() {
             <DetailSection
               title="Runs using this dataset"
               accentBorder={DATASET_SECTION_ACCENT}
-              className="lg:col-span-2"
             >
               {!scopePinned ? (
                 <p className="text-sm text-muted-foreground">
@@ -2007,9 +2010,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "versions" ? (
-        <div
-          className="min-w-0"
-        >
+        <div className="flex min-w-0 flex-col gap-4">
             {versionsQuery.isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (versionsQuery.data?.items || []).length === 0 ? (

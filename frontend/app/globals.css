@@ -589,3 +589,74 @@
     animation: none;
   }
 }
+
+/* Design system showcase pages — scoped to avoid clashing with Hub layout utilities */
+@layer components {
+  .ds-page-wrapper {
+    @apply flex min-h-screen flex-col bg-background text-foreground;
+  }
+
+  .ds-page-header {
+    @apply border-b border-border bg-card px-6 py-4;
+  }
+
+  .ds-page-body {
+    @apply flex-1 overflow-auto;
+  }
+
+  .ds-page-content {
+    @apply mx-auto w-full max-w-7xl px-6 py-8;
+  }
+
+  .ds-page-section {
+    @apply mb-8 space-y-4;
+  }
+
+  .ds-section-header {
+    @apply border-b border-border pb-4;
+  }
+
+  .ds-section-header h2 {
+    @apply text-xl font-semibold text-foreground;
+  }
+
+  .ds-section-header p {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .card-panel {
+    @apply rounded-lg border border-border bg-card p-6 shadow-sm;
+  }
+
+  .card-panel-sm {
+    @apply rounded-lg border border-border bg-card p-4 shadow-sm;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium;
+  }
+
+  .status-badge-running {
+    @apply bg-[color:var(--status-running-bg)] text-[color:var(--status-running-fg)] ring-1 ring-[color:var(--status-running-border)];
+  }
+
+  .status-badge-success {
+    @apply bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)] ring-1 ring-[color:var(--status-success-border)];
+  }
+
+  .status-badge-warning {
+    @apply bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)] ring-1 ring-[color:var(--status-pending-border)];
+  }
+
+  .status-badge-error {
+    @apply bg-[color:var(--status-failed-bg)] text-[color:var(--status-failed-fg)] ring-1 ring-[color:var(--status-failed-border)];
+  }
+
+  .ds-input-field {
+    @apply rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring;
+  }
+
+  .grid-cols-auto {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+}

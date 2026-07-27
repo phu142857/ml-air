@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { ChevronDown, Building2, FolderKanban, Globe, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +17,7 @@ import { switchScopeWithRetry } from "@/lib/scope-switch"
 import { useToast } from "@/hooks/use-toast"
 
 export function ScopeSwitcher() {
+  const router = useRouter()
   const { toast } = useToast()
   const [isSwitching, setIsSwitching] = useState(false)
   const {
@@ -54,6 +56,10 @@ export function ScopeSwitcher() {
 
   const busy = isSwitching || isScopeLoading
 
+  const goToDashboard = () => {
+    router.replace("/dashboard")
+  }
+
   const applyScopeChange = async (nextTenant: string, nextProject: string) => {
     if (!token.trim()) {
       toast({
@@ -69,6 +75,7 @@ export function ScopeSwitcher() {
         { token, tenant_id: nextTenant, project_id: nextProject, expected_mapping_version: mappingVersion },
         { refreshBootstrap, getMappingVersion: () => mappingVersion },
       )
+      goToDashboard()
     } catch (e) {
       const msg = String((e as Error)?.message || e).slice(0, 480)
       toast({
@@ -87,6 +94,7 @@ export function ScopeSwitcher() {
     if (aggregateActive) return
     setTenantId("all")
     setProjectId("all")
+    goToDashboard()
     toast({
       title: "Aggregate scope",
       description: "Lists fan out across tenants/projects. Pin a scope for triggers, search, and exports.",
@@ -115,6 +123,7 @@ export function ScopeSwitcher() {
         return
       }
       setProjectId("all")
+      goToDashboard()
       toast({
         title: "All projects in tenant",
         description: `Aggregating projects under ${tenantId}.`,

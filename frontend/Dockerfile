@@ -14,7 +14,13 @@ RUN --mount=type=cache,target=/root/.npm \
     npm config set fetch-retries 5 && \
     npm config set fetch-retry-mintimeout 20000 && \
     npm config set fetch-retry-maxtimeout 120000 && \
-    for attempt in 1 2 3; do npm ci && break || { echo "npm ci attempt $attempt failed, retrying..."; sleep 15; }; done
+    for attempt in 1 2 3; do \
+      npm ci && exit 0; \
+      echo "npm ci attempt $attempt failed, retrying..."; \
+      sleep 15; \
+    done; \
+    echo "npm ci failed after 3 attempts" >&2; \
+    exit 1
 
 FROM node:20-alpine AS builder
 

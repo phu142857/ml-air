@@ -85,17 +85,7 @@ export function ExecutionLogToolbar({
         {extra}
       </div>
       <div className="flex min-w-0 items-center gap-2">
-        {liveStatus === "live" ? (
-          <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-            Live
-          </span>
-        ) : liveStatus === "connecting" ? (
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Connecting
-          </span>
-        ) : showRefreshing ? (
+        {showRefreshing ? (
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             Refreshing

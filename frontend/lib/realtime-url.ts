@@ -15,7 +15,7 @@ export function inferRealtimeWsBaseFromLocation(): string | null {
   if (!host) return null;
 
   const wsProto = protocol === "https:" ? "wss" : "ws";
-  return `${wsProto}://${host}/ws`;
+  return `${wsProto}://${host}`;
 }
 
 /**
@@ -71,7 +71,7 @@ export function resolveRealtimeWsBase(
   if (explicit) return sanitizeRealtimeWsBaseForBrowser(stripTrailingSlash(explicit));
   const inferred = inferRealtimeWsBaseFromLocation();
   if (inferred) return stripTrailingSlash(inferred);
-  return "ws://localhost:8080/ws";
+  return "ws://localhost:8080";
 }
 
 export function isRealtimeConfigured(
