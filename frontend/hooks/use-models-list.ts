@@ -25,14 +25,12 @@ export function useModelsList(enabled = true) {
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
   });
 
   const aggregateQuery = useQuery({
     queryKey: mlairKeys.models.list(tenantId, projectId),
     queryFn: () => fetchModels(tenantId, projectId, token),
     enabled: enabled && !scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
   });
 
   const query = scopePinned ? infiniteQuery : aggregateQuery;

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
-import { Copy, Download, Link2, List, Loader2, PanelRight, Play, RefreshCw, Route, ScanSearch } from "lucide-react";
+import { Copy, Download, Link2, List, Loader2, Maximize2, Minimize2, Minus, PanelRight, Play, Plus, RefreshCw, RotateCcw, Route, ScanSearch, Search } from "lucide-react";
 
 import { MlopsEmptyState } from "@/components/mlops/layout";
 import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
@@ -559,28 +559,82 @@ export function TraceExplorerWorkspace({
   const centerContent = useMemo(
     () => (
       <div className="flex h-full min-h-0 flex-col border-x border-border bg-card">
-        <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card px-3 py-2">
-          <label htmlFor="span-filter" className="sr-only">
-            Search spans
-          </label>
-          <Input
-            id="span-filter"
-            ref={spanFilterRef}
-            value={spanFilter}
-            onChange={(e) => setSpanFilter(e.target.value)}
-            placeholder="Search spans… name, service, status, attributes (F3)"
-            className="h-8 text-xs"
-            disabled={!waterfall}
-            aria-keyshortcuts="F3"
-          />
-          {debouncedSpanFilter.trim() ? (
-            <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
-              {searchMatchIds.length
-                ? `${searchMatchIndex + 1} of ${searchMatchIds.length} matches`
-                : "No matches"}
-            </p>
-          ) : null}
+        <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1.5 border-b border-border bg-muted/20 px-2 py-1.5">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <label htmlFor="span-filter" className="sr-only">
+              Search spans
+            </label>
+            <Input
+              id="span-filter"
+              ref={spanFilterRef}
+              value={spanFilter}
+              onChange={(e) => setSpanFilter(e.target.value)}
+              placeholder="Search spans… (F3)"
+              className="h-8 border-border/70 bg-background pl-8 text-xs"
+              disabled={!waterfall}
+              aria-keyshortcuts="F3"
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="h-8 w-8"
+              disabled={!waterfall}
+              onClick={() => zoomHandlersRef.current?.zoomOut()}
+              aria-label="Zoom out"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="h-8 w-8"
+              disabled={!waterfall}
+              onClick={() => zoomHandlersRef.current?.zoomIn()}
+              aria-label="Zoom in"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 px-2 text-[11px]"
+              disabled={!waterfall || !zoomDomain}
+              onClick={() => zoomHandlersRef.current?.resetZoom()}
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 px-2 text-[11px]"
+              disabled={!waterfall}
+              onClick={toggleFullscreen}
+              aria-pressed={workspace.waterfallFullscreen}
+            >
+              {workspace.waterfallFullscreen ? (
+                <Minimize2 className="h-3 w-3" />
+              ) : (
+                <Maximize2 className="h-3 w-3" />
+              )}
+              {workspace.waterfallFullscreen ? "Exit" : "Full"}
+            </Button>
+          </div>
         </div>
+        {debouncedSpanFilter.trim() ? (
+          <p className="shrink-0 border-b border-border/50 bg-card px-3 py-0.5 text-[11px] text-muted-foreground" aria-live="polite">
+            {searchMatchIds.length
+              ? `${searchMatchIndex + 1} of ${searchMatchIds.length} matches · ↑↓ navigate · F3 next`
+              : "No matches"}
+          </p>
+        ) : null}
         <div className="min-h-0 flex-1 overflow-hidden">
           {!normalized ? (
             <div className="flex h-full items-center justify-center p-6">
@@ -629,8 +683,6 @@ export function TraceExplorerWorkspace({
               onZoomHandlersReady={(handlers) => {
                 zoomHandlersRef.current = handlers;
               }}
-              waterfallFullscreen={workspace.waterfallFullscreen}
-              onToggleFullscreen={toggleFullscreen}
               waterfallRegionRef={waterfallRegionRef}
             />
           )}
@@ -677,18 +729,20 @@ export function TraceExplorerWorkspace({
       <div
         ref={toolbarRef}
         data-trace-region="toolbar"
-        className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4"
+        className="sticky top-0 z-20 flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border bg-background/95 px-3 backdrop-blur-sm sm:px-4"
       >
-        <Route className="h-4 w-4 text-primary" aria-hidden />
-        <code className="inline-block max-w-[min(40vw,20rem)] truncate font-mono text-xs text-foreground">
-          {normalized || "Select a trace"}
-        </code>
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <Route className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <code className="truncate font-mono text-xs font-medium text-foreground">
+            {normalized || "Select a trace"}
+          </code>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             type="button"
-            variant={inspector.inspectorEnabled ? "secondary" : "ghost"}
+            variant={inspector.inspectorEnabled ? "secondary" : "outline"}
             size="sm"
-            className="h-8 min-w-[5.75rem] justify-center"
+            className="h-8 gap-1.5 px-2.5 text-xs"
             aria-pressed={inspector.inspectorEnabled}
             aria-label="Toggle inspector mode"
             title="Inspect spans: hover to preview, click to lock, Esc to unlock"
@@ -699,9 +753,9 @@ export function TraceExplorerWorkspace({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 min-w-[6.5rem] justify-center"
+            className="h-8 gap-1.5 px-2.5 text-xs"
             disabled={workspace.waterfallFullscreen}
             onClick={workspace.resetLayout}
           >
@@ -709,9 +763,9 @@ export function TraceExplorerWorkspace({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 min-w-[3.75rem] justify-center"
+            className="h-8 gap-1.5 px-2.5 text-xs"
             disabled={!normalized}
             onClick={() => void copyTraceId()}
           >
@@ -720,9 +774,9 @@ export function TraceExplorerWorkspace({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 min-w-[4.75rem] justify-center"
+            className="h-8 gap-1.5 px-2.5 text-xs"
             disabled={!normalized}
             onClick={() => void copyShareLink()}
           >
@@ -731,9 +785,9 @@ export function TraceExplorerWorkspace({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 min-w-[5.5rem] justify-center"
+            className="h-8 gap-1.5 px-2.5 text-xs"
             disabled={exporting || !data}
             onClick={() => void handleExport()}
           >
@@ -746,9 +800,9 @@ export function TraceExplorerWorkspace({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="default"
             size="sm"
-            className="h-8 min-w-[5.75rem] justify-center"
+            className="h-8 gap-1.5 px-2.5 text-xs"
             disabled={!normalized || isFetching}
             onClick={() => void refetch()}
           >
@@ -824,6 +878,7 @@ export function TraceExplorerWorkspace({
                 searchInputRef={traceListSearchRef}
                 onCollapse={workspace.toggleLeftCollapsed}
                 listEmptyAction={listEmptyAction}
+                liveTraceId={data?.is_live ? normalized : null}
               />
             )}
           </ResizablePanel>

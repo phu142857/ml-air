@@ -231,7 +231,7 @@ export default function ModelsPage() {
             keyExtractor={(m) => m.model_id}
             onRowClick={(m) => router.push(`/models/${encodeURIComponent(m.model_id)}`)}
             emptyMessage="No models."
-            loading={modelsQuery.isFetching && items.length > 0}
+            loading={modelsQuery.isRefetching && items.length > 0}
             stickyFirstColumn
           />
           {showLoadMore ? (

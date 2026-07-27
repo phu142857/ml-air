@@ -42,6 +42,8 @@ import { useTraceSearch } from "@/hooks/use-trace-detail"
 import { useAppContext } from "@/lib/app-context"
 import { TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { formatRelativeTime } from "@/lib/utils"
+import { computeTraceSearchDurationMs } from "@/lib/trace-duration"
+import { formatDurationMs } from "@/lib/usage-format"
 import { normalizeStatus } from "@/lib/status-style"
 import { normalizeSearchHref } from "@/lib/search-href"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
@@ -470,11 +472,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }
 
     for (const hit of traceSearchQuery.data?.items ?? []) {
+      const traceDuration = formatDurationMs(computeTraceSearchDurationMs(hit))
       entries.push({
         id: `trace-hit:${hit.trace_id}`,
         section: "search",
         label: hit.trace_id.slice(0, 24),
-        sublabel: `${hit.root_service || hit.source}${hit.duration_ms != null ? ` · ${hit.duration_ms}ms` : ""}`,
+        sublabel: `${hit.root_service || hit.source}${traceDuration !== "—" ? ` · ${traceDuration}` : ""}`,
         keywords: [hit.trace_id, hit.root_service ?? "", hit.source ?? ""].join(" "),
         icon: Hash,
         onSelect: () => openTrace(hit.trace_id),

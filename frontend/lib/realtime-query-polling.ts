@@ -9,14 +9,14 @@ import {
   type MlairRealtimeUiStatus,
 } from "./mlair-realtime-status";
 
-/** HTTP polling interval when WebSocket realtime is unavailable. */
-export const POLL_FALLBACK_MS = 8_000;
+/** HTTP polling when WebSocket realtime is unavailable. */
+export const POLL_FALLBACK_MS = 15_000;
 
-/** Reconcile poll while WebSocket is connected (timeline, trace list, idle queries). */
-export const POLL_RECONCILE_MS = 5_000;
+/** @deprecated WebSocket primary — reconcile polling disabled; kept for tests/migration. */
+export const POLL_RECONCILE_MS = 30_000;
 
-/** Faster poll for active runs/tasks while WebSocket is connected. */
-export const POLL_ACTIVE_EXECUTION_MS = 4_000;
+/** Active run/task polling when WebSocket is down. */
+export const POLL_ACTIVE_EXECUTION_MS = 8_000;
 
 export type RealtimeQueryPollingOptions = {
   refetchInterval: number | false;
@@ -46,9 +46,9 @@ export function realtimeQueryPollingOptions(
   status: MlairRealtimeUiStatus = getMlairRealtimeUiStatus(),
 ): RealtimeQueryPollingOptions {
   if (isRealtimeWsPrimary(status)) {
-    return { refetchInterval: POLL_RECONCILE_MS, refetchOnWindowFocus: false };
+    return { refetchInterval: false, refetchOnWindowFocus: false };
   }
-  return { refetchInterval: POLL_FALLBACK_MS, refetchOnWindowFocus: true };
+  return { refetchInterval: POLL_FALLBACK_MS, refetchOnWindowFocus: false };
 }
 
 /**
@@ -59,6 +59,9 @@ export function resolveRefetchInterval(
   poll: RealtimeQueryPollingOptions,
   opts?: { active?: boolean; activeMs?: number },
 ): number | false {
+  if (poll.refetchInterval === false) {
+    return false;
+  }
   if (opts?.active && opts.activeMs) return opts.activeMs;
   return poll.refetchInterval;
 }

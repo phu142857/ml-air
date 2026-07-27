@@ -98,7 +98,6 @@ function TaskDetailContent() {
         runId: hint.runId,
       }),
     enabled: Boolean(taskId?.trim() && token?.trim()),
-    refetchOnMount: "always",
     refetchInterval: (q) =>
       resolveActiveExecutionRefetchInterval(poll, q.state.data?.status ?? storeTask?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
@@ -146,7 +145,6 @@ function TaskDetailContent() {
         limit: 2000,
       }),
     enabled: Boolean(taskId?.trim() && token?.trim() && taskApiScope && taskRunId && task),
-    refetchOnMount: "always",
     refetchInterval: () => resolveActiveExecutionRefetchInterval(poll, task?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   })
@@ -398,7 +396,7 @@ function TaskDetailContent() {
                     search={logSearch}
                     onSearchChange={setLogSearch}
                     liveStatus={logsQuery.liveStatus}
-                    isFetching={logsQuery.isFetching}
+                    isFetching={logsQuery.isRefetching}
                     onExport={taskRunId ? handleLogExport : undefined}
                     exporting={logExporting}
                   />
@@ -406,7 +404,6 @@ function TaskDetailContent() {
                     <ExecutionLogStream
                       items={logsQuery.items}
                       isLoading={logsQuery.isLoading}
-                      isRefreshing={logsQuery.isFetching && !logsQuery.isFetchingNextPage && logsQuery.items.length > 0}
                       hasMoreOlder={Boolean(logsQuery.hasNextPage)}
                       isLoadingOlder={logsQuery.isFetchingNextPage}
                       onLoadOlder={() => void logsQuery.fetchNextPage()}

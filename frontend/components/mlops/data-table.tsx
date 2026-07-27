@@ -107,6 +107,7 @@ import {
 } from "@/lib/data-table-workspace"
 import { copyWithToast } from "@/lib/toast-actions"
 import { cn } from "@/lib/utils"
+import { useDebouncedTrue } from "@/hooks/use-debounced-true"
 
 export type { DataTableDensity, DataTableRowAction }
 
@@ -844,7 +845,7 @@ export function DataTable<T>({
     [resizedWidths],
   )
 
-  const softLoading = loading && data.length > 0 && !error
+  const softLoading = useDebouncedTrue(loading && data.length > 0 && !error, 800)
   const hardLoading = loading && data.length === 0 && !error
 
   const resetState = () => {
@@ -1581,15 +1582,12 @@ export function DataTable<T>({
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             {softLoading ? (
               <div
-                className="pointer-events-none absolute inset-0 z-40 flex items-start justify-center bg-background/40 pt-10 backdrop-blur-[1px] motion-safe:animate-in motion-safe:fade-in-0"
+                className="pointer-events-none absolute inset-x-0 top-0 z-40 h-0.5 overflow-hidden bg-border"
                 role="status"
                 aria-live="polite"
                 aria-label="Refreshing table"
               >
-                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
-                  <RefreshCw className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
-                  Updating…
-                </span>
+                <div className="h-full w-1/3 animate-pulse bg-primary/70" />
               </div>
             ) : null}
             <div

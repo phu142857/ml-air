@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { HighlightText } from "@/components/mlops/trace-explorer/highlight-text";
 import { TraceSpanContextMenu, TraceSpanRowMenu } from "@/components/mlops/trace-explorer/trace-span-context-menu";
@@ -19,76 +18,22 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TraceDetailResponse, TraceOtelTrace, TraceWaterfall, TraceWaterfallStep } from "@/lib/api";
 import { statusToMlopsBadge } from "@/lib/status-style";
-import { formatRuntimeSeconds } from "@/lib/usage-format";
+import {
+  buildTraceDurationContext,
+  computeWaterfallStepDurationMs,
+  type TraceDurationContext,
+} from "@/lib/trace-duration";
+import { formatDurationMs } from "@/lib/usage-format";
+import { useWallClockNow } from "@/hooks/use-wall-clock-now";
 import { cn, formatDateTimeCompact } from "@/lib/utils";
+
+export { formatDurationMs as formatWaterfallDuration } from "@/lib/usage-format";
 
 const LABEL_COL = "minmax(200px, 280px)";
 const DURATION_COL = "80px";
 const STATUS_COL = "88px";
-export function formatWaterfallDuration(ms: number | null | undefined): string {
-  if (ms == null || ms < 0 || Number.isNaN(ms)) return "—";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  const sec = ms / 1000;
-  if (sec < 60) {
-    if (sec >= 10) return `${Math.round(sec)}s`;
-    const rounded = Math.round(sec * 100) / 100;
-    return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(2)}s`;
-  }
-  return formatRuntimeSeconds(sec);
-}
 
 const GRID_TEMPLATE = `${LABEL_COL} minmax(0, 1fr) ${DURATION_COL} ${STATUS_COL}`;
-
-export function buildTimelineTicks(zoomMin: number, zoomMax: number, segments = 4): number[] {
-  const span = Math.max(zoomMax - zoomMin, 1);
-  const count = Math.max(2, segments + 1);
-  return Array.from({ length: count }, (_, index) => zoomMin + (span * index) / segments);
-}
-
-function WaterfallTimelineRuler({
-  anchorTs,
-  zoomMin,
-  scaleMs,
-}: {
-  anchorTs: string | null | undefined;
-  zoomMin: number;
-  scaleMs: number;
-}) {
-  const ticks = useMemo(() => buildTimelineTicks(zoomMin, zoomMin + scaleMs), [scaleMs, zoomMin]);
-  const anchorMs = useMemo(() => {
-    if (!anchorTs) return null;
-    const parsed = Date.parse(anchorTs);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, [anchorTs]);
-
-  return (
-    <div className="relative h-7 border-b border-border/50 bg-muted/10">
-      {ticks.map((tickMs, index) => {
-        const leftPct = ((tickMs - zoomMin) / scaleMs) * 100;
-        const clock =
-          anchorMs != null
-            ? formatDateTimeCompact(new Date(anchorMs + tickMs).toISOString())
-            : null;
-        return (
-          <div
-            key={`${tickMs}-${index}`}
-            className="pointer-events-none absolute top-0 flex h-full -translate-x-1/2 flex-col justify-end"
-            style={{ left: `${leftPct}%` }}
-          >
-            <span className="whitespace-nowrap px-1 pb-0.5 font-mono text-[10px] text-muted-foreground">
-              +{formatWaterfallDuration(tickMs)}
-            </span>
-            {clock && index % 2 === 0 ? (
-              <span className="hidden px-1 pb-1 font-mono text-[9px] text-muted-foreground/80 xl:block">
-                {clock}
-              </span>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export function otelTraceToWaterfall(otel: TraceOtelTrace): TraceWaterfall {
   return {
@@ -185,7 +130,7 @@ function WaterfallBar({
 
   return (
     <div
-      className="relative h-8 cursor-crosshair overflow-hidden border border-border bg-muted/20"
+      className="relative h-5 cursor-crosshair overflow-hidden rounded-md border border-border/60 bg-muted/25"
       onMouseDown={onZoomMouseDown}
       onMouseMove={onZoomMouseMove}
       onMouseUp={onZoomMouseUp}
@@ -204,12 +149,13 @@ function WaterfallBar({
         className={cn(
           "absolute transition-default",
           step.is_instant
-            ? "top-0 bottom-0 w-px -translate-x-1/2"
-            : "top-0 bottom-0 min-w-[3px]",
-          fill,
-          isHovered && "ring-2 ring-foreground/20",
+            ? "top-0.5 bottom-0.5 w-1 -translate-x-1/2 rounded-sm bg-[color:var(--status-pending-fg)] shadow-[0_0_8px_color-mix(in_srgb,var(--status-pending-fg)_50%,transparent)]"
+            : "top-0.5 bottom-0.5 min-w-[3px] rounded-sm border border-white/10",
+          !step.is_instant && fill,
+          isRunning && !step.is_instant && "shadow-[0_0_10px_color-mix(in_srgb,var(--status-running-fg)_35%,transparent)]",
+          isHovered && "ring-2 ring-foreground/15",
           isSelected && "ring-2 ring-primary",
-          isFocused && !isSelected && "ring-2 ring-ring/50",
+          isFocused && !isSelected && "ring-2 ring-ring/40",
         )}
         style={
           step.is_instant
@@ -242,6 +188,7 @@ function WaterfallRow({
   refAreaLeft,
   refAreaRight,
   rowMenu,
+  durationContext,
 }: {
   step: RowModel;
   scaleMs: number;
@@ -263,16 +210,20 @@ function WaterfallRow({
   refAreaLeft?: number | null;
   refAreaRight?: number | null;
   rowMenu?: ReactNode;
+  durationContext: TraceDurationContext;
 }) {
   const href = stepHref(step);
-  const duration = step.is_instant ? null : (step.duration_ms ?? (step.width_ms > 0 ? step.width_ms : null));
-  const rowLabel = `${step.label}, ${step.is_instant ? "instant" : formatWaterfallDuration(duration)}, ${step.status}`;
+  const duration = step.is_instant
+    ? null
+    : computeWaterfallStepDurationMs(step, durationContext);
+  const rowLabel = `${step.label}, ${step.is_instant ? "instant" : formatDurationMs(duration)}, ${step.status}`;
 
   return (
     <div
       className={cn(
-        "group/row grid items-center gap-2 border-b border-border px-3 py-2 transition-default",
-        isSelected && "bg-primary/8",
+        "group/row grid items-center gap-2 border-b border-border/50 px-3 py-2 transition-default",
+        isSelected && "border-l-2 border-l-primary bg-primary/8",
+        !isSelected && "border-l-2 border-l-transparent",
         isCurrentSearchMatch && "bg-primary/12 ring-1 ring-inset ring-primary/40",
         isInspectorLocked && "ring-2 ring-primary ring-offset-1 ring-offset-card",
         isSearchMatch && !isCurrentSearchMatch && !isSelected && !isInspectorLocked && "bg-primary/5",
@@ -353,12 +304,17 @@ function WaterfallRow({
         {step.is_instant ? (
           <span className="text-muted-foreground">instant</span>
         ) : (
-          formatWaterfallDuration(duration)
+          formatDurationMs(duration)
         )}
       </div>
 
-      <div className="relative z-10 flex shrink-0 justify-end bg-inherit" role="gridcell">
-        <StatusBadge value={step.status} size="sm" showIcon={false} />
+      <div className="relative z-10 flex shrink-0 justify-center bg-inherit" role="gridcell">
+        <StatusBadge
+          value={step.status}
+          size="sm"
+          showIcon={false}
+          live={statusToMlopsBadge(step.status) === "running"}
+        />
       </div>
     </div>
   );
@@ -395,9 +351,8 @@ export type TraceWaterfallViewProps = {
   onZoomDomainChange?: (domain: [number, number] | null) => void;
   inspectorEnabled?: boolean;
   inspectorLockedSpanId?: string | null;
-  waterfallFullscreen?: boolean;
-  onToggleFullscreen?: () => void;
   waterfallRegionRef?: React.RefObject<HTMLDivElement | null>;
+  durationContext?: TraceDurationContext;
 };
 
 export function TraceWaterfallView({
@@ -427,12 +382,17 @@ export function TraceWaterfallView({
   onZoomDomainChange,
   inspectorEnabled = false,
   inspectorLockedSpanId = null,
-  waterfallFullscreen = false,
-  onToggleFullscreen,
   waterfallRegionRef,
+  durationContext: durationContextProp,
 }: TraceWaterfallViewProps) {
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
   const [internalHoveredId, setInternalHoveredId] = useState<string | null>(null);
+  const isLive = traceDetail?.is_live ?? false;
+  const wallClockNowMs = useWallClockNow(isLive);
+  const durationContext = useMemo(
+    () => durationContextProp ?? buildTraceDurationContext(traceDetail, wallClockNowMs),
+    [durationContextProp, traceDetail, wallClockNowMs],
+  );
   const selectedStepId =
     selectedStep?.id ??
     (controlledSelectedId !== undefined ? controlledSelectedId : internalSelectedId);
@@ -685,49 +645,6 @@ export function TraceWaterfallView({
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex h-full min-h-0 flex-col bg-card">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
-          <div className="flex items-center gap-1">
-            <Button type="button" variant="outline" size="icon-sm" onClick={zoomOut} aria-label="Zoom out">
-              <Minus className="h-3.5 w-3.5" />
-            </Button>
-            <Button type="button" variant="outline" size="icon-sm" onClick={zoomIn} aria-label="Zoom in">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={resetZoom}
-              disabled={!zoomDomain}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset
-            </Button>
-            {onToggleFullscreen ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={onToggleFullscreen}
-                aria-pressed={waterfallFullscreen}
-                aria-label={waterfallFullscreen ? "Exit fullscreen" : "Fullscreen waterfall"}
-              >
-                {waterfallFullscreen ? (
-                  <Minimize2 className="h-3.5 w-3.5" />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" />
-                )}
-                {waterfallFullscreen ? "Exit fullscreen" : "Fullscreen"}
-              </Button>
-            ) : null}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Drag timeline to zoom · ↑↓ navigate · ←→ tree · F3 next match
-          </p>
-        </div>
-
         <TraceSpanBreadcrumb
           steps={allSteps}
           selectedStep={selectedStep}
@@ -740,34 +657,6 @@ export function TraceWaterfallView({
           data-trace-region="waterfall"
           className="flex min-h-0 flex-1 flex-col outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <div
-            className="sticky top-0 z-10 shrink-0 border-b border-border bg-card"
-            role="rowgroup"
-            aria-label="Timeline header"
-          >
-            <div
-              className="grid items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-              style={{ gridTemplateColumns: GRID_TEMPLATE }}
-              role="row"
-            >
-              <span role="columnheader">Span</span>
-              <div role="columnheader" className="min-w-0">
-                <span>Timeline</span>
-                <WaterfallTimelineRuler
-                  anchorTs={waterfall.anchor_ts}
-                  zoomMin={zoomMin}
-                  scaleMs={scaleMs}
-                />
-              </div>
-              <span className="text-right" role="columnheader">
-                Duration
-              </span>
-              <span className="text-right" role="columnheader">
-                Status
-              </span>
-            </div>
-          </div>
-
           <div className="scroll-region min-h-0 flex-1" role="grid" aria-label="Trace waterfall" aria-rowcount={rows.length}>
           {rows.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No spans match the current filter.</p>
@@ -780,7 +669,7 @@ export function TraceWaterfallView({
                   {showHeader ? (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-default hover:bg-muted"
+                      className="flex w-full items-center gap-2 border-b border-border/60 bg-muted/25 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-default hover:bg-muted/50"
                       onClick={() =>
                         setCollapsedSections((prev) => ({ ...prev, [section.id]: !prev[section.id] }))
                       }
@@ -790,7 +679,9 @@ export function TraceWaterfallView({
                         className={cn("h-3.5 w-3.5 shrink-0 transition-default", collapsed && "-rotate-90")}
                       />
                       <span>{section.title}</span>
-                      <span className="font-mono font-normal normal-case">{section.count}</span>
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] font-normal normal-case text-muted-foreground">
+                        {section.count}
+                      </span>
                     </button>
                   ) : null}
                   {!collapsed
@@ -832,6 +723,7 @@ export function TraceWaterfallView({
                                 refAreaLeft={refAreaLeft}
                                 refAreaRight={refAreaRight}
                                 rowMenu={<TraceSpanRowMenu context={buildRowActionContext(step)} />}
+                                durationContext={durationContext}
                               />
                             </TraceSpanContextMenu>
                           </TooltipTrigger>
@@ -839,8 +731,15 @@ export function TraceWaterfallView({
                             <p className="font-medium">{step.label}</p>
                             <p className="font-mono text-xs">{step.id}</p>
                             <p>Start: {formatDateTimeCompact(step.start_ts)}</p>
-                            <p>Offset: +{formatWaterfallDuration(step.offset_ms)}</p>
-                            <p>Duration: {formatWaterfallDuration(step.duration_ms ?? step.width_ms)}</p>
+                            <p>Offset: +{formatDurationMs(step.offset_ms)}</p>
+                            <p>
+                              Duration:{" "}
+                              {formatDurationMs(
+                                step.is_instant
+                                  ? null
+                                  : computeWaterfallStepDurationMs(step, durationContext),
+                              )}
+                            </p>
                           </TooltipContent>
                         </Tooltip>
                         );

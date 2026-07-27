@@ -11,6 +11,16 @@ export function formatRuntimeSeconds(sec: number | null | undefined): string {
   return `${r}s`
 }
 
+/** Unified duration label for runs, tasks, and trace spans (ms input). */
+export function formatDurationMs(ms: number | null | undefined): string {
+  if (ms == null || ms < 0 || Number.isNaN(ms)) return "—"
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return formatRuntimeSeconds(ms / 1000)
+}
+
+/** @deprecated Use {@link formatDurationMs}. */
+export const formatWaterfallDuration = formatDurationMs
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || bytes <= 0) return "—"
   const units = ["B", "KB", "MB", "GB", "TB"] as const

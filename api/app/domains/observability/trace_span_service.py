@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import json
+from typing import Any
 
 from app.domains.observability.trace_service import canonical_trace_id, trace_id_lookup_candidates
 from app.domains.observability.trace_span_tree import finalize_span_tree
@@ -19,6 +20,22 @@ def _iso(value: Any) -> str | None:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _trace_wall_duration_ms(start_ts: Any, end_ts: Any, stored_duration_ms: Any) -> int | None:
+    """Trace wall-clock duration; prefer MIN(start) → MAX(end) over max span duration_ms."""
+    if start_ts is not None and end_ts is not None:
+        try:
+            return max(0, int((end_ts - start_ts).total_seconds() * 1000))
+        except Exception:
+            pass
+    if stored_duration_ms is not None:
+        try:
+            stored = int(stored_duration_ms)
+            return stored if stored > 0 else None
+        except (TypeError, ValueError):
+            pass
+    return None
 
 
 def _scope_clause(*, tenant_id: str | None, project_id: str | None) -> tuple[str, dict[str, Any]]:
@@ -262,12 +279,7 @@ def search_stored_traces(
     out: list[dict[str, Any]] = []
     for trace_id, root_service, root_name, start_ts, end_ts, duration_ms, run_id, pipeline_id in rows:
         tid = canonical_trace_id(str(trace_id)) or str(trace_id)
-        dur = int(duration_ms) if duration_ms else None
-        if dur is None and start_ts and end_ts:
-            try:
-                dur = int((end_ts - start_ts).total_seconds() * 1000)
-            except Exception:
-                dur = None
+        dur = _trace_wall_duration_ms(start_ts, end_ts, duration_ms)
         out.append(
             {
                 "trace_id": tid,
@@ -325,12 +337,7 @@ def list_project_traces(
     out: list[dict[str, Any]] = []
     for trace_id, root_service, root_name, start_ts, end_ts, duration_ms, run_id, pipeline_id in rows:
         tid = canonical_trace_id(str(trace_id)) or str(trace_id)
-        dur = int(duration_ms) if duration_ms else None
-        if dur is None and start_ts and end_ts:
-            try:
-                dur = int((end_ts - start_ts).total_seconds() * 1000)
-            except Exception:
-                dur = None
+        dur = _trace_wall_duration_ms(start_ts, end_ts, duration_ms)
         out.append(
             {
                 "trace_id": tid,

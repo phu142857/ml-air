@@ -73,7 +73,6 @@ export function useTaskLogsInfinite(
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && Boolean(taskId && tenantId && projectId && token?.trim()),
-    refetchOnMount: "always",
     refetchInterval: pollInterval,
     refetchOnWindowFocus:
       streamLive && (liveStatus === "live" || liveStatus === "connecting") && !hasServerSearch

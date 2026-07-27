@@ -232,7 +232,7 @@ export default function PipelineVersionsPage() {
                 data={items}
                 keyExtractor={(row) => row.version_id}
                 emptyMessage="No versions yet."
-                loading={listQuery.isFetching && items.length > 0}
+                loading={listQuery.isRefetching && items.length > 0}
                 error={listQuery.isError}
                 errorMessage={listQuery.error ? formatApiClientError(listQuery.error) : undefined}
                 onRetry={() => void listQuery.refetch()}

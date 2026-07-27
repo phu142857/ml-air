@@ -27,7 +27,6 @@ export function useDatasetRuns(datasetId: string, enabled = true) {
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && scopePinned && Boolean(datasetId && token?.trim()),
-    refetchOnMount: "always",
     ...poll,
   });
 

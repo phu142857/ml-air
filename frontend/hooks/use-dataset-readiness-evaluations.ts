@@ -46,7 +46,6 @@ export function useDatasetReadinessEvaluations(
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && Boolean(datasetId && token?.trim()),
-    refetchOnMount: "always",
     ...poll,
   });
 

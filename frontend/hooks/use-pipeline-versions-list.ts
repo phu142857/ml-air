@@ -23,7 +23,6 @@ export function usePipelineVersionsList(pipelineId: string, enabled = true) {
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && Boolean(pipelineId && token?.trim()),
-    refetchOnMount: "always",
   });
 
   const items: PipelineVersionItem[] = query.data?.pages.flatMap((p) => p.items) ?? [];

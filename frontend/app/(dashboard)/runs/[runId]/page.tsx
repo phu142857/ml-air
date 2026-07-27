@@ -50,6 +50,8 @@ import { mergeRunListRow } from "@/lib/execution-live-merge"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
 import { toastError, toastSuccess } from "@/lib/toast-actions"
 import { formatRuntimeSeconds } from "@/lib/usage-format"
+import { computeRunWallDurationSeconds } from "@/lib/run-duration"
+import { useWallClockNow } from "@/hooks/use-wall-clock-now"
 import { isScopePinned } from "@/lib/scope"
 import { SCOPE_AGGREGATE_RUN_DETAIL } from "@/lib/scope-messages"
 import {
@@ -187,13 +189,6 @@ const runStatusMeta: Record<
   cancelled: { icon: Ban, label: "Cancelled", animate: false },
 }
 
-function runDuration(r: RunItem): string {
-  const c = r.created_at ? Date.parse(r.created_at) : NaN
-  const u = r.updated_at ? Date.parse(r.updated_at) : NaN
-  if (!Number.isFinite(c) || !Number.isFinite(u) || u < c) return "—"
-  return formatRuntimeSeconds((u - c) / 1000)
-}
-
 function pickTraceId(run: RunItem): string | null {
   const c = run.config_snapshot
   if (!c || typeof c !== "object" || Array.isArray(c)) return null
@@ -269,7 +264,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryKey: mlairKeys.run.detail(runId),
     queryFn: () => fetchRun(tenantId, projectId, runId, token),
     enabled,
-    refetchOnMount: "always",
     refetchInterval: (q) =>
       resolveActiveExecutionRefetchInterval(poll, q.state.data?.status ?? storeRun?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
@@ -279,7 +273,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryKey: mlairKeys.run.tasks(runId),
     queryFn: () => fetchRunTasks(tenantId, projectId, runId, token),
     enabled,
-    refetchOnMount: "always",
     refetchInterval: () =>
       resolveActiveExecutionRefetchInterval(poll, runQuery.data?.status ?? storeRun?.status),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
@@ -339,7 +332,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryKey: mlairKeys.run.tracking(runId),
     queryFn: () => fetchRunTracking(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
-    refetchOnMount: "always",
     refetchInterval: () => resolveActiveExecutionRefetchInterval(poll, runStatus),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: false,
@@ -349,7 +341,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     queryKey: mlairKeys.run.usage(runId),
     queryFn: () => fetchRunUsage(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(runQuery.data),
-    refetchOnMount: "always",
     refetchInterval: () =>
       resolveRefetchInterval(poll, { active: runIsActive, activeMs: RUN_USAGE_LIVE_REFRESH_MS }),
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
@@ -365,7 +356,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       }),
     enabled:
       enabled && Boolean(runQuery.data) && tab === "tasks" && Boolean(expandedTaskId),
-    refetchOnMount: "always",
     refetchInterval: () =>
       tab === "tasks" && expandedTaskId
         ? resolveRefetchInterval(poll, { active: runIsActive, activeMs: RUN_USAGE_LIVE_REFRESH_MS })
@@ -382,7 +372,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         limit: 2000,
       }),
     enabled: enabled && Boolean(runQuery.data) && tab === "tasks",
-    refetchOnMount: "always",
     refetchInterval: () =>
       tab === "tasks"
         ? resolveRefetchInterval(poll, { active: runIsActive, activeMs: RUN_USAGE_LIVE_REFRESH_MS })
@@ -429,6 +418,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     if (fromStore.length) return fromStore
     return tasksQuery.data?.items ?? []
   }, [storeTasks, tasksQuery.data?.items])
+
+  const runWallClockNowMs = useWallClockNow(runIsActive)
+  const runDurationLabel = useMemo(() => {
+    if (!run) return "—"
+    const seconds = computeRunWallDurationSeconds(run, tasks, runWallClockNowMs)
+    return seconds == null ? "—" : formatRuntimeSeconds(seconds)
+  }, [run, tasks, runWallClockNowMs])
 
   const logTaskOptions = useMemo(() => {
     const ids = new Set<string>()
@@ -599,7 +595,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           title={runId}
           subtitle={
             run
-              ? `${run.pipeline_id} · started ${run.created_at ? formatDateTimeCompact(run.created_at) : "—"} · ${runDuration(run)}`
+              ? `${run.pipeline_id} · started ${run.created_at ? formatDateTimeCompact(run.created_at) : "—"} · ${runDurationLabel}`
               : runQuery.isLoading
                 ? "Loading run…"
                 : "Pipeline run detail"
@@ -792,7 +788,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 search={logSearch}
                 onSearchChange={setLogSearch}
                 liveStatus={logsQuery.liveStatus}
-                isFetching={logsQuery.isFetching}
+                isFetching={logsQuery.isRefetching}
                 onExport={handleLogExport}
                 exporting={logExporting}
                 extra={
@@ -820,13 +816,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                   <ExecutionLogStream
                     items={displayedLogs}
                     isLoading={logsQuery.isLoading}
-                    isRefreshing={
-                      logsQuery.isFetching &&
-                      !logsQuery.isFetchingNextPage &&
-                      displayedLogs.length > 0 &&
-                      logsQuery.liveStatus !== "live" &&
-                      logsQuery.liveStatus !== "connecting"
-                    }
                     hasMoreOlder={Boolean(logsQuery.hasNextPage)}
                     isLoadingOlder={logsQuery.isFetchingNextPage}
                     onLoadOlder={() => void logsQuery.fetchNextPage()}

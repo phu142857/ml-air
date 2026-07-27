@@ -496,12 +496,6 @@ function LifecycleContent() {
             />
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground/80">
-            {isRefreshing ? (
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                <RefreshCw className="h-3 w-3 animate-spin" />
-                Updating…
-              </span>
-            ) : null}
             <span>
               Showing <span className="text-muted-foreground font-medium">{filteredEvents.length}</span> of{" "}
               <span className="text-muted-foreground">{(Array.isArray(events) ? events : []).length}</span> events

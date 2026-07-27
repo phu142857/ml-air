@@ -26,7 +26,6 @@ export function useRunExecutionGraph(
     queryKey: mlairKeys.run.executionGraph(tenantId, projectId, runId),
     queryFn: () => fetchRunExecutionGraph(tenantId, projectId, runId, token),
     enabled: enabled && Boolean(token?.trim()) && Boolean(runId),
-    refetchOnMount: "always",
     ...poll,
   });
 

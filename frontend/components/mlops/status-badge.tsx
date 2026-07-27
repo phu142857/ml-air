@@ -11,6 +11,8 @@ interface StatusBadgeProps {
   label?: string
   size?: "sm" | "md"
   showIcon?: boolean
+  /** Pulse dot for live running states (trace waterfall). */
+  live?: boolean
   className?: string
 }
 
@@ -96,6 +98,7 @@ export function StatusBadge({
   label,
   size = "sm",
   showIcon = true,
+  live = false,
   className,
 }: StatusBadgeProps) {
   const resolvedStatus: StatusType = value != null
@@ -112,11 +115,11 @@ export function StatusBadge({
         config.bg,
         config.text,
         config.border,
-        size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm",
+        size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-sm",
         className,
       )}
     >
-      {showIcon && (
+      {showIcon ? (
         <Icon
           strokeWidth={1.75}
           className={cn(
@@ -124,7 +127,9 @@ export function StatusBadge({
             config.iconClass,
           )}
         />
-      )}
+      ) : live && resolvedStatus === "running" ? (
+        <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-current" aria-hidden />
+      ) : null}
       {displayLabel}
     </span>
   )

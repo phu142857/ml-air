@@ -27,7 +27,6 @@ export function usePipelinesList(enabled = true) {
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
     ...poll,
   });
 
@@ -35,7 +34,6 @@ export function usePipelinesList(enabled = true) {
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token),
     enabled: enabled && !scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
     ...poll,
   });
 

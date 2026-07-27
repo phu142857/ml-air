@@ -230,7 +230,6 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.detail(tenantId, projectId, datasetId),
     queryFn: () => fetchDataset(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token),
-    refetchOnMount: "always",
     ...poll,
   });
   const dataset = datasetQuery.data ?? null;
@@ -239,7 +238,6 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.versions(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetVersions(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token),
-    refetchOnMount: "always",
     ...poll,
   });
 
@@ -247,7 +245,6 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.retentionPolicy(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetRetentionPolicy(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && !scopePinned),
-    refetchOnMount: "always",
     ...poll,
   });
 
@@ -381,14 +378,12 @@ export default function DatasetHubPage() {
     queryFn: () =>
       fetchDatasetReadiness(tenantId, projectId, datasetId, token, 1000, selectedVersionForReadiness, selectedPolicyId || undefined),
     enabled: Boolean(datasetId && token && dataset && selectedPolicyId && selectedVersionForReadiness),
-    refetchOnMount: "always",
     ...poll,
   });
   const bufferQuery = useQuery({
     queryKey: mlairKeys.datasets.buffer(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetBuffer(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
-    refetchOnMount: "always",
     ...poll,
   });
 
@@ -560,7 +555,6 @@ export default function DatasetHubPage() {
     queryKey: mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId),
     queryFn: () => fetchDatasetTrainingPolicies(tenantId, projectId, datasetId, token),
     enabled: Boolean(datasetId && token && dataset),
-    refetchOnMount: "always",
     ...poll,
   });
   const evaluationPolicyFilterOptions = useMemo(() => {
@@ -588,7 +582,6 @@ export default function DatasetHubPage() {
         (policiesQuery.data?.items?.length ?? 0) > 0 &&
         selectedVersionForReadiness
     ),
-    refetchOnMount: "always",
     ...poll,
   });
 

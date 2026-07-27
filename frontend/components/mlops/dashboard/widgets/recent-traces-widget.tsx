@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query"
 import { WidgetSkeleton } from "@/components/mlops/interaction"
 import { Route } from "lucide-react"
 
-import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall"
+import { formatDurationMs } from "@/lib/usage-format"
+import { computeTraceSearchDurationMs } from "@/lib/trace-duration"
 import { TraceLink } from "@/components/mlops/trace-link"
 import { MlopsEmptyState } from "@/components/mlops/layout"
 import type { TraceSearchHit } from "@/lib/api"
@@ -129,7 +130,7 @@ export function RecentTracesWidget({
                 </div>
               </div>
               <span className="shrink-0 pt-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
-                {formatWaterfallDuration(trace.duration_ms)}
+                {formatDurationMs(computeTraceSearchDurationMs(trace))}
               </span>
             </div>
           </li>

@@ -10,7 +10,13 @@ import {
   AuditEventCard,
   SemanticEventCard,
 } from "@/components/mlops/trace-explorer/trace-secondary-panels";
-import { formatWaterfallDuration } from "@/components/mlops/trace-waterfall";
+import { formatDurationMs } from "@/lib/usage-format";
+import {
+  buildTraceDurationContext,
+  computeWaterfallStepDurationMs,
+  type TraceDurationContext,
+} from "@/lib/trace-duration";
+import { useWallClockNow } from "@/hooks/use-wall-clock-now";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,7 +54,11 @@ function stringifyValue(value: unknown): string {
   }
 }
 
-export function groupSpanAttributes(step: TraceWaterfallStep): AttributeGroup[] {
+export function groupSpanAttributes(
+  step: TraceWaterfallStep,
+  durationContext?: TraceDurationContext,
+): AttributeGroup[] {
+  const ctx = durationContext ?? buildTraceDurationContext(null);
   const groups: AttributeGroup[] = [];
 
   const identity: Array<{ key: string; value: string }> = [
@@ -76,9 +86,9 @@ export function groupSpanAttributes(step: TraceWaterfallStep): AttributeGroup[] 
         key: "Duration",
         value: step.is_instant
           ? "Instant"
-          : formatWaterfallDuration(step.duration_ms ?? step.width_ms),
+          : formatDurationMs(computeWaterfallStepDurationMs(step, ctx)),
       },
-      { key: "Offset", value: formatWaterfallDuration(step.offset_ms) },
+      { key: "Offset", value: formatDurationMs(step.offset_ms) },
     ],
   });
 
@@ -152,8 +162,14 @@ function CopyableRow({ label, value, mono = false }: { label: string; value: str
   );
 }
 
-function AttributesTab({ step }: { step: TraceWaterfallStep }) {
-  const groups = groupSpanAttributes(step);
+function AttributesTab({
+  step,
+  durationContext,
+}: {
+  step: TraceWaterfallStep;
+  durationContext: TraceDurationContext;
+}) {
+  const groups = groupSpanAttributes(step, durationContext);
 
   return (
     <div className="space-y-4">
@@ -210,11 +226,13 @@ function SpanDetailsTabs({
   data,
   activeTab,
   onTabChange,
+  durationContext,
 }: {
   step: TraceWaterfallStep;
   data: TraceDetailResponse;
   activeTab: SpanDetailTab;
   onTabChange: (tab: SpanDetailTab) => void;
+  durationContext: TraceDurationContext;
 }) {
   return (
     <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as SpanDetailTab)} className="min-h-0 flex-1">
@@ -234,7 +252,7 @@ function SpanDetailsTabs({
       </div>
 
       <TabsContent value="attributes" className="mt-0 px-0 py-4">
-        <AttributesTab step={step} />
+        <AttributesTab step={step} durationContext={durationContext} />
       </TabsContent>
       <TabsContent value="events" className="mt-0 px-0 py-4">
         <EventsTab step={step} data={data} />
@@ -283,6 +301,12 @@ export const TraceSpanDetailsPane = forwardRef<
   useEffect(() => {
     setActiveTab("attributes");
   }, [selectedStep?.id]);
+
+  const wallClockNowMs = useWallClockNow(Boolean(data?.is_live));
+  const durationContext = useMemo(
+    () => buildTraceDurationContext(data, wallClockNowMs),
+    [data, wallClockNowMs],
+  );
 
   const resolvedActionContext = useMemo<TraceSpanActionContext>(
     () => ({
@@ -399,6 +423,7 @@ export const TraceSpanDetailsPane = forwardRef<
             data={data}
             activeTab={activeTab}
             onTabChange={setActiveTab}
+            durationContext={durationContext}
           />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">

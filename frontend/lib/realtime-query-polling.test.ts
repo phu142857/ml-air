@@ -29,10 +29,10 @@ describe("realtimeQueryPollingOptions", () => {
     mockedGetRealtimeWsBase.mockReturnValue("");
   });
 
-  it("uses reconcile polling when WebSocket is connected", () => {
+  it("disables HTTP polling when WebSocket is connected", () => {
     mockedGetRealtimeWsBase.mockReturnValue("ws://localhost:8080/ws");
     const opts = realtimeQueryPollingOptions({ kind: "connected" });
-    expect(opts.refetchInterval).toBe(POLL_RECONCILE_MS);
+    expect(opts.refetchInterval).toBe(false);
     expect(opts.refetchOnWindowFocus).toBe(false);
   });
 
@@ -40,7 +40,7 @@ describe("realtimeQueryPollingOptions", () => {
     mockedGetRealtimeWsBase.mockReturnValue("ws://localhost:8080/ws");
     const opts = realtimeQueryPollingOptions({ kind: "reconnecting" });
     expect(opts.refetchInterval).toBe(POLL_FALLBACK_MS);
-    expect(opts.refetchOnWindowFocus).toBe(true);
+    expect(opts.refetchOnWindowFocus).toBe(false);
   });
 
   it("uses fallback polling when WS is not configured", () => {
@@ -58,16 +58,16 @@ describe("resolveRefetchInterval", () => {
     expect(resolveRefetchInterval(live, { active: true, activeMs: 1000 })).toBe(1000);
   });
 
-  it("uses reconcile interval for idle queries while connected", () => {
+  it("disables idle polling while WebSocket is connected", () => {
     mockedGetRealtimeWsBase.mockReturnValue("ws://localhost:8080/ws");
     const connected = realtimeQueryPollingOptions({ kind: "connected" });
-    expect(resolveRefetchInterval(connected)).toBe(POLL_RECONCILE_MS);
+    expect(resolveRefetchInterval(connected)).toBe(false);
   });
 
-  it("uses active interval for running executions", () => {
+  it("uses active interval for running executions when polling fallback is active", () => {
     mockedGetRealtimeWsBase.mockReturnValue("ws://localhost:8080/ws");
     const connected = realtimeQueryPollingOptions({ kind: "connected" });
-    expect(resolveActiveExecutionRefetchInterval(connected, "RUNNING")).toBe(POLL_ACTIVE_EXECUTION_MS);
+    expect(resolveActiveExecutionRefetchInterval(connected, "RUNNING")).toBe(false);
     expect(resolveActiveExecutionRefetchInterval(fallback, "RUNNING", 4000)).toBe(4000);
     expect(resolveActiveExecutionRefetchInterval(fallback, "SUCCESS", 4000)).toBe(POLL_FALLBACK_MS);
   });

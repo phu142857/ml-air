@@ -143,7 +143,6 @@ export const DatasetVersionScrollEditor = forwardRef<
     initialPageParam: null as string | null,
     getNextPageParam: (last) => (last.has_more && last.next_cursor ? last.next_cursor : undefined),
     enabled: Boolean(versionId && token),
-    refetchOnMount: "always",
   });
 
   const previewColumns = previewQuery.data?.pages[0]?.columns ?? [];

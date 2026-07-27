@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useMemo } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import type { TaskItem, TaskLiveUsage, TaskUsageRecord, UsageSamplePoint, RunUsageRecord } from "@/lib/api"
@@ -22,10 +22,10 @@ import {
   formatRuntimeSeconds,
   taskUsageLabel,
 } from "@/lib/usage-format"
+import { computeTaskElapsedSeconds, hasRunningTask } from "@/lib/task-elapsed"
+import { useWallClockNow } from "@/hooks/use-wall-clock-now"
 import { statusToMlopsBadge } from "@/lib/status-style"
 import { cn } from "@/lib/utils"
-
-const ELAPSED_TICK_MS = 1000
 
 type RunTasksUsageTableProps = {
   tasks: TaskItem[]
@@ -49,56 +49,6 @@ type RunTasksUsageTableProps = {
 }
 
 const TABLE_COL_COUNT = 7
-
-const TERMINAL_STATUSES = new Set([
-  "SUCCESS",
-  "SUCCEEDED",
-  "FAILED",
-  "FAILURE",
-  "CANCELLED",
-  "CANCELED",
-])
-
-function isTerminalStatus(status: string) {
-  return TERMINAL_STATUSES.has(String(status || "").toUpperCase())
-}
-
-function terminalEndMs(task: TaskItem): number | null {
-  if (task.finished_at) return new Date(task.finished_at).getTime()
-  if (task.updated_at) return new Date(task.updated_at).getTime()
-  return null
-}
-
-function taskElapsedSeconds(
-  task: TaskItem,
-  usage: TaskUsageRecord | undefined,
-  live: TaskLiveUsage | undefined,
-  nowMs: number,
-): number | null {
-  const status = String(task.status || "").toUpperCase()
-
-  if (isTerminalStatus(status)) {
-    if (live?.runtime_seconds != null) return live.runtime_seconds
-    if (usage?.runtime_seconds != null) return usage.runtime_seconds
-    if (task.duration_ms != null && task.duration_ms > 0) return task.duration_ms / 1000
-    if (task.started_at) {
-      const endMs = terminalEndMs(task)
-      if (endMs != null) {
-        return Math.max(0, (endMs - new Date(task.started_at).getTime()) / 1000)
-      }
-    }
-    return null
-  }
-
-  if (status === "RUNNING") {
-    if (task.started_at) {
-      return Math.max(0, (nowMs - new Date(task.started_at).getTime()) / 1000)
-    }
-    if (live?.runtime_seconds != null) return live.runtime_seconds
-  }
-
-  return null
-}
 
 function latestMetrics(live?: TaskLiveUsage, usage?: TaskUsageRecord) {
   return {
@@ -136,8 +86,6 @@ export function RunTasksUsageTable({
   samples,
   samplesLoading = false,
 }: RunTasksUsageTableProps) {
-  const [nowMs, setNowMs] = useState(() => Date.now())
-
   const rows = useMemo(
     () =>
       [...tasks].sort((a, b) => {
@@ -148,16 +96,7 @@ export function RunTasksUsageTable({
     [tasks],
   )
 
-  const hasRunningTask = useMemo(
-    () => rows.some((task) => String(task.status || "").toUpperCase() === "RUNNING"),
-    [rows],
-  )
-
-  useEffect(() => {
-    if (!hasRunningTask) return
-    const id = window.setInterval(() => setNowMs(Date.now()), ELAPSED_TICK_MS)
-    return () => window.clearInterval(id)
-  }, [hasRunningTask])
+  const wallClockNowMs = useWallClockNow(hasRunningTask(rows))
 
   if (rows.length === 0) {
     return <p className="py-10 text-center text-sm text-muted-foreground">No tasks returned for this run.</p>
@@ -218,7 +157,7 @@ export function RunTasksUsageTable({
                 const label = taskUsageLabel(task.task_id, usage?.plugin)
                 const statusUpper = String(task.status || "").toUpperCase()
                 const isRunning = statusUpper === "RUNNING"
-                const elapsed = formatRuntimeSeconds(taskElapsedSeconds(task, usage, live, nowMs))
+                const elapsed = formatRuntimeSeconds(computeTaskElapsedSeconds(task, wallClockNowMs))
                 const taskHref = buildTaskDetailHref(task.task_id, {
                   tenant_id: tenantId,
                   project_id: projectId,

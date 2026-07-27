@@ -246,7 +246,7 @@ export function PluginsSettingsTab() {
             data={items}
             keyExtractor={(p) => p.name}
             emptyMessage="No plugins returned from the API."
-            loading={pluginsQuery.isFetching && items.length > 0}
+            loading={pluginsQuery.isRefetching && items.length > 0}
             error={pluginsQuery.isError}
             errorMessage={
               pluginsQuery.error ? String((pluginsQuery.error as Error).message || pluginsQuery.error) : undefined

@@ -85,7 +85,6 @@ export function useRunsListLive(enabled = true) {
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
     refetchInterval: (q) => {
       const items = q.state.data?.pages.flatMap((p) => p.items) ?? [];
       return refetchInterval(items);
@@ -97,7 +96,6 @@ export function useRunsListLive(enabled = true) {
     queryKey: mlairKeys.runs.list(tenantId, projectId),
     queryFn: () => fetchRuns(tenantId, projectId, token),
     enabled: enabled && !scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
     refetchInterval: (q) => {
       const items = q.state.data?.items ?? [];
       return refetchInterval(items);

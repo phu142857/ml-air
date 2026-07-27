@@ -12,7 +12,6 @@ type ExecutionLogStreamProps<T> = {
   isLoadingOlder: boolean;
   onLoadOlder: () => void;
   isLoading: boolean;
-  isRefreshing?: boolean;
   emptyMessage?: string;
   className?: string;
 };
@@ -24,7 +23,6 @@ export function ExecutionLogStream<T>({
   isLoadingOlder,
   onLoadOlder,
   isLoading,
-  isRefreshing = false,
   emptyMessage = "No log lines yet.",
   className,
 }: ExecutionLogStreamProps<T>) {
@@ -127,9 +125,6 @@ export function ExecutionLogStream<T>({
       ) : (
         items.map((item, index) => renderLine(item, index))
       )}
-      {isRefreshing && items.length > 0 ? (
-        <p className="pt-2 text-[10px] text-muted-foreground">Refreshing…</p>
-      ) : null}
     </div>
   );
 }

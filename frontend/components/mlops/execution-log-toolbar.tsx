@@ -3,6 +3,7 @@
 import { Download, Loader2, Search } from "lucide-react";
 import { useCallback, useState } from "react";
 
+import { useDebouncedTrue } from "@/hooks/use-debounced-true";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -37,6 +38,10 @@ export function ExecutionLogToolbar({
   extra,
 }: ExecutionLogToolbarProps) {
   const [draftQ, setDraftQ] = useState(search.q ?? "");
+  const showRefreshing = useDebouncedTrue(
+    isFetching && liveStatus !== "live" && liveStatus !== "connecting",
+    800,
+  );
 
   const applySearch = useCallback(() => {
     onSearchChange({ ...search, q: draftQ.trim() || undefined });
@@ -90,7 +95,7 @@ export function ExecutionLogToolbar({
             <Loader2 className="h-3 w-3 animate-spin" />
             Connecting
           </span>
-        ) : isFetching ? (
+        ) : showRefreshing ? (
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             Refreshing

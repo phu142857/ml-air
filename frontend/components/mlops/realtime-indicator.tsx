@@ -42,7 +42,6 @@ function statusPresentation(status: MlairRealtimeUiStatus): StatusPresentation {
         description: "Real-time updates via WebSocket",
         dotClass: "bg-[color:var(--status-success-fg)]",
         textClass: "text-[color:var(--status-success-fg)]",
-        pulse: true,
       }
     case "polling":
       return {
@@ -109,14 +108,6 @@ export function RealtimeIndicator() {
           >
             <div className="relative shrink-0">
               <div className={cn("h-2 w-2 rounded-full", config.dotClass)} />
-              {config.pulse ? (
-                <div
-                  className={cn(
-                    "absolute inset-0 h-2 w-2 animate-ping rounded-full opacity-75",
-                    config.dotClass,
-                  )}
-                />
-              ) : null}
             </div>
             <Icon
               strokeWidth={1.75}

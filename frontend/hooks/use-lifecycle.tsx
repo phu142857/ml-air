@@ -7,6 +7,7 @@ import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
+import { useDebouncedTrue } from "@/hooks/use-debounced-true"
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { normalizeStatus } from "@/lib/status-style"
 
@@ -128,10 +129,12 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
       ? infiniteLifecycleQuery.isLoading && events.length === 0
       : aggregateLifecycleQuery.isLoading && events.length === 0
 
-  const isRefreshing =
+  const isRefreshingRaw =
     scopePinned
-      ? infiniteLifecycleQuery.isFetching && events.length > 0
-      : aggregateLifecycleQuery.isFetching && events.length > 0
+      ? infiniteLifecycleQuery.isRefetching && events.length > 0
+      : aggregateLifecycleQuery.isRefetching && events.length > 0
+
+  const isRefreshing = useDebouncedTrue(isRefreshingRaw, 800)
 
   useEffect(() => {
     const data = events

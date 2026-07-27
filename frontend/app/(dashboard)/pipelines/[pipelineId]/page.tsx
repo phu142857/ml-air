@@ -44,7 +44,6 @@ export default function PipelineDetailPage() {
     queryKey: mlairKeys.pipelines.list(tenantId, projectId),
     queryFn: () => fetchPipelines(tenantId, projectId, token),
     enabled: Boolean(token?.trim()) && scopePinned,
-    refetchOnMount: "always",
     ...poll,
   });
 

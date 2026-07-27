@@ -23,7 +23,6 @@ export function usePipelineTopology(
     queryKey: mlairKeys.pipelines.topology(tenantId, projectId, pipelineId),
     queryFn: () => fetchPipelineTopology(tenantId, projectId, pipelineId, token),
     enabled: enabled && Boolean(token?.trim()) && Boolean(pipelineId),
-    refetchOnMount: "always",
     ...poll,
   });
 

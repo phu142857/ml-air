@@ -42,7 +42,6 @@ export function useAuditTimelineInfinite(
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
     refetchInterval: interval,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
@@ -57,7 +56,6 @@ export function useAuditTimelineInfinite(
       return { events: mapAuditTimelineItems(items) };
     },
     enabled: enabled && !scopePinned && Boolean(token?.trim()),
-    refetchOnMount: "always",
     refetchInterval: interval,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });

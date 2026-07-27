@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Play, GitCompare } from "lucide-react"
 import { TriggerRunDialog, type TriggerRunMode } from "@/components/mlops/trigger-run-dialog"
@@ -13,25 +13,15 @@ import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { formatDateTimeCompact, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { formatRuntimeSeconds } from "@/lib/usage-format"
+import { computeRunWallDurationSeconds } from "@/lib/run-duration"
+import { useWallClockNow } from "@/hooks/use-wall-clock-now"
 import { useAppContext } from "@/lib/app-context"
 import { Button } from "@/components/ui/button"
 import type { RunItem } from "@/lib/api"
 import { useRunsListLive } from "@/hooks/use-runs-list-live"
 import { SCOPE_AGGREGATE_RUNS } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
-import { normalizeStatus } from "@/lib/status-style"
-
-function runDurationSeconds(r: RunItem): number | null {
-  const c = r.created_at ? Date.parse(r.created_at) : NaN
-  const u = r.updated_at ? Date.parse(r.updated_at) : NaN
-  if (!Number.isFinite(c) || !Number.isFinite(u) || u < c) return null
-  return (u - c) / 1000
-}
-
-function runDuration(r: RunItem): string {
-  const seconds = runDurationSeconds(r)
-  return seconds == null ? "—" : formatRuntimeSeconds(seconds)
-}
+import { isActiveExecutionStatus, normalizeStatus } from "@/lib/status-style"
 
 function pickTraceId(run: RunItem): string | null {
   const c = run.config_snapshot
@@ -41,7 +31,8 @@ function pickTraceId(run: RunItem): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null
 }
 
-const runListColumns: DataTableColumn<RunItem>[] = [
+function buildRunListColumns(nowMs: number): DataTableColumn<RunItem>[] {
+  return [
   {
     id: "run_id",
     header: "Run ID",
@@ -98,8 +89,15 @@ const runListColumns: DataTableColumn<RunItem>[] = [
     id: "duration",
     header: "Duration",
     width: 120,
-    getSortValue: (run) => runDurationSeconds(run) ?? -1,
-    cell: (run) => <span className="font-mono text-sm text-muted-foreground">{runDuration(run)}</span>,
+    getSortValue: (run) => computeRunWallDurationSeconds(run, undefined, nowMs) ?? -1,
+    cell: (run) => {
+      const seconds = computeRunWallDurationSeconds(run, undefined, nowMs)
+      return (
+        <span className="font-mono text-sm text-muted-foreground">
+          {seconds == null ? "—" : formatRuntimeSeconds(seconds)}
+        </span>
+      )
+    },
   },
   {
     id: "trace",
@@ -120,7 +118,8 @@ const runListColumns: DataTableColumn<RunItem>[] = [
       )
     },
   },
-]
+  ]
+}
 
 export default function RunsPage() {
   const router = useRouter()
@@ -142,6 +141,12 @@ export default function RunsPage() {
   const runsQuery = useRunsListLive(Boolean(token?.trim()))
   const rows = runsQuery.items
   const showLoadMore = runsQuery.scopePinned && runsQuery.hasNextPage
+  const hasActiveRun = useMemo(
+    () => rows.some((run) => isActiveExecutionStatus(run.status)),
+    [rows],
+  )
+  const wallClockNowMs = useWallClockNow(hasActiveRun)
+  const runListColumns = useMemo(() => buildRunListColumns(wallClockNowMs), [wallClockNowMs])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -195,7 +200,7 @@ export default function RunsPage() {
             keyExtractor={(r) => r.run_id}
             onRowClick={(run) => router.push(`/runs/${encodeURIComponent(run.run_id)}`)}
             emptyMessage="No runs."
-            loading={runsQuery.isFetching && rows.length > 0}
+            loading={runsQuery.isRefetching && rows.length > 0}
             stickyFirstColumn
             bulkActions={({ selectedRows }) =>
               selectedRows.length >= 2 ? (

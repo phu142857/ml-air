@@ -26,7 +26,7 @@ export default function TasksPage() {
   const isAggregate = !scopePinned
   const [taskId, setTaskId] = useState("")
 
-  const { items: rows, runsQuery, isLoading, isError, error, isFetching } = useTasksListLive(
+  const { items: rows, runsQuery, isLoading, isError, error, isRefetching } = useTasksListLive(
     Boolean(token?.trim()),
   )
 
@@ -144,7 +144,7 @@ export default function TasksPage() {
             keyExtractor={(row) => `${row.tenant_id}:${row.project_id}:${row.task_id}`}
             onRowClick={openTask}
             emptyMessage="No tasks."
-            loading={isFetching && rows.length > 0}
+            loading={isRefetching && rows.length > 0}
             stickyFirstColumn
           />
         </ScopedListContent>

@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -287,12 +287,36 @@ def _parse_iso_dt(value: Any) -> datetime | None:
     return None
 
 
+_ACTIVE_RUN_STATUSES = frozenset({"RUNNING", "PENDING", "QUEUED"})
+
+
 def _run_duration_seconds(run: dict[str, Any]) -> float | None:
+    """Wall-clock run duration aligned with trace waterfall: created_at → max(task.finished_at)."""
     created = _parse_iso_dt(run.get("created_at"))
-    updated = _parse_iso_dt(run.get("updated_at"))
-    if not created or not updated:
+    if not created:
         return None
-    delta = (updated - created).total_seconds()
+
+    run_id = str(run.get("run_id") or "").strip()
+    tasks: list[dict[str, Any]] = []
+    if run_id:
+        from app.domains.orchestration.task_service import list_tasks_by_run
+
+        tasks = list_tasks_by_run(run_id)
+
+    status = str(run.get("status") or "").upper()
+    if status in _ACTIVE_RUN_STATUSES:
+        ended = datetime.now(timezone.utc)
+    else:
+        task_ends = [_parse_iso_dt(task.get("finished_at")) for task in tasks]
+        task_ends = [dt for dt in task_ends if dt is not None]
+        if task_ends:
+            ended = max(task_ends)
+        else:
+            ended = _parse_iso_dt(run.get("updated_at"))
+
+    if not ended:
+        return None
+    delta = (ended - created).total_seconds()
     return float(delta) if delta >= 0 else None
 
 

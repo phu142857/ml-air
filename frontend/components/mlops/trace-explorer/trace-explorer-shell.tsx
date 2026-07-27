@@ -90,27 +90,57 @@ export function TraceExplorerShell({
       onValueChange={setActiveTab}
       className={cn("flex min-h-0 flex-1 flex-col", className)}
     >
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
-        <TabsList className="h-auto min-w-0 flex-1 flex-wrap justify-start gap-1 bg-transparent p-0">
-          <TabsTrigger value="spans" className="h-8 text-xs">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/30 px-3 py-1.5">
+        <TabsList className="h-auto min-w-0 flex-1 flex-wrap justify-start gap-0.5 bg-transparent p-0">
+          <TabsTrigger
+            value="spans"
+            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+          >
             Spans
           </TabsTrigger>
-          <TabsTrigger value="events" className="h-8 text-xs" disabled={!detailEnabled || (!data && !isLoading)}>
-            Events ({timelineCount})
+          <TabsTrigger
+            value="events"
+            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            disabled={!detailEnabled || (!data && !isLoading)}
+          >
+            Events
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+              {timelineCount}
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="logs" className="h-8 text-xs" disabled={!detailEnabled || (!data && !isLoading)}>
-            Logs ({logCount})
+          <TabsTrigger
+            value="logs"
+            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            disabled={!detailEnabled || (!data && !isLoading)}
+          >
+            Logs
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+              {logCount}
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="runs" className="h-8 text-xs" disabled={!detailEnabled || (!data && !isLoading)}>
-            Runs ({runCount})
+          <TabsTrigger
+            value="runs"
+            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            disabled={!detailEnabled || (!data && !isLoading)}
+          >
+            Runs
+            <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+              {runCount}
+            </span>
           </TabsTrigger>
           {hasServiceGraph ? (
-            <TabsTrigger value="services" className="h-8 text-xs">
+            <TabsTrigger
+              value="services"
+              className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
               Services
             </TabsTrigger>
           ) : null}
           {hasExecutionGraph ? (
-            <TabsTrigger value="graph" className="h-8 text-xs">
+            <TabsTrigger
+              value="graph"
+              className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            >
               Execution graph
             </TabsTrigger>
           ) : null}

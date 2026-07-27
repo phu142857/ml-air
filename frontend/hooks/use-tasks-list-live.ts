@@ -73,7 +73,6 @@ export function useTasksListLive(enabled = true) {
         .slice(0, 28);
     },
     enabled: enabled && Boolean(token?.trim()) && recentRuns.length > 0,
-    refetchOnMount: "always",
     refetchInterval: (q) => {
       const items = q.state.data ?? [];
       const liveTasks = useExecutionStore.getState().tasksByRun;
@@ -124,5 +123,6 @@ export function useTasksListLive(enabled = true) {
     items,
     isLoading: runsQuery.isLoading || (recentRuns.length > 0 && recentTasksQuery.isLoading && items.length === 0),
     isFetching: runsQuery.isFetching || recentTasksQuery.isFetching,
+    isRefetching: runsQuery.isRefetching || recentTasksQuery.isRefetching,
   };
 }
