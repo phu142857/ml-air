@@ -1,15 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Key, Loader2 } from "lucide-react";
+import { Check, Copy, Key, Loader2, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   IdentityStatusBadge,
-  MetadataList,
   SettingsEmptyState,
   SettingsPage,
   SettingsPageHeader,
@@ -31,6 +30,31 @@ function formatWhen(iso: string | null | undefined): string {
   } catch {
     return iso;
   }
+}
+
+function formatRemaining(expiresAt: string | null | undefined): string {
+  if (!expiresAt) return "Never";
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return "Expired";
+  const days = Math.ceil(ms / 86_400_000);
+  if (days >= 365) return `${Math.ceil(days / 365)}y left`;
+  if (days >= 30) return `${Math.ceil(days / 30)}mo left`;
+  if (days >= 1) return `${days}d left`;
+  const hours = Math.ceil(ms / 3_600_000);
+  return `${Math.max(1, hours)}h left`;
+}
+
+function expiresInDaysFromPat(expiresAt: string | null | undefined): number | null {
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return 1;
+  return Math.max(1, Math.ceil(ms / 86_400_000));
+}
+
+function shortToken(token: string): string {
+  const trimmed = token.trim();
+  if (trimmed.length <= 16) return trimmed;
+  return `${trimmed.slice(0, 8)}...${trimmed.slice(-6)}`;
 }
 
 export function PatPanel() {
@@ -72,8 +96,28 @@ export function PatPanel() {
     onError: (e) => toastError("Revoke failed", String((e as Error)?.message || e)),
   });
 
+  const rotateMutation = useMutation({
+    mutationFn: async (pat: { id: string; description: string; expires_at: string | null }) => {
+      const created = await createPersonalAccessToken(
+        token,
+        pat.description,
+        expiresInDaysFromPat(pat.expires_at),
+      );
+      await revokePersonalAccessToken(token, pat.id);
+      return created;
+    },
+    onSuccess: async (created) => {
+      setNewToken(created.token);
+      setCopied(false);
+      toastSuccess("Token rotated", "Copy the replacement token now. The previous token has been revoked.");
+      await queryClient.invalidateQueries({ queryKey: ["identity-pats", token] });
+    },
+    onError: (e) => toastError("Rotate failed", String((e as Error)?.message || e)),
+  });
+
   const apiBase = getApiBaseUrl();
   const activePats = (patsQuery.data || []).filter((p) => !p.revoked_at);
+  const revealTokenPreview = useMemo(() => (newToken ? shortToken(newToken) : null), [newToken]);
 
   return (
     <SettingsPage loading={patsQuery.isLoading} error={patsQuery.error ? String((patsQuery.error as Error).message) : null}>
@@ -143,7 +187,7 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
             <p className="mt-1 text-xs text-muted-foreground">This secret cannot be shown again after you leave this page.</p>
             <div className="mt-3 flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-[11px]">
-                {newToken}
+                {revealTokenPreview}
               </code>
               <Button
                 type="button"
@@ -177,31 +221,46 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
             {activePats.map((pat) => (
               <div
                 key={pat.id}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border/60 p-4"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-4"
               >
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-sm font-medium">{pat.description}</span>
                     <IdentityStatusBadge state="active" />
+                    <code className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                      {pat.id.slice(0, 8)}...{pat.id.slice(-4)}
+                    </code>
+                    <span className="text-xs text-muted-foreground">{formatRemaining(pat.expires_at)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Last used {formatWhen(pat.last_used_at)}
+                    </span>
                   </div>
-                  <MetadataList
-                    items={[
-                      { label: "Created", value: formatWhen(pat.created_at) },
-                      { label: "Expires", value: pat.expires_at ? formatWhen(pat.expires_at) : "Never" },
-                      { label: "Last used", value: formatWhen(pat.last_used_at) },
-                      { label: "ID", value: pat.id, mono: true },
-                    ]}
-                  />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={revokeMutation.isPending}
-                  onClick={() => revokeMutation.mutate(pat.id)}
-                >
-                  Revoke
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={rotateMutation.isPending || revokeMutation.isPending}
+                    onClick={() => rotateMutation.mutate(pat)}
+                  >
+                    {rotateMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="h-3.5 w-3.5" />
+                    )}
+                    Rotate
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={rotateMutation.isPending || revokeMutation.isPending}
+                    onClick={() => revokeMutation.mutate(pat.id)}
+                  >
+                    Revoke
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
