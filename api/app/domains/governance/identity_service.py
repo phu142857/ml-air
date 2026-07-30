@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import secrets
+import struct
 from datetime import datetime, timezone
 from typing import Any
 
@@ -41,6 +46,12 @@ SA_PERMISSION_CATALOG = frozenset(
 )
 
 PLATFORM_SA_PERMISSIONS = SA_PERMISSION_CATALOG
+MFA_RECOVERY_CODE_COUNT = 10
+MFA_CHALLENGE_TTL_SECONDS = 300
+MFA_VERIFY_WINDOW_SECONDS = 300
+MFA_VERIFY_MAX_ATTEMPTS = 5
+MFA_CHALLENGE_VERIFY_MAX_ATTEMPTS = 5
+_MFA_VERIFY_STATE_FALLBACK: dict[str, tuple[int, float]] = {}
 
 
 def _password_min_length() -> int:
@@ -50,6 +61,148 @@ def _password_min_length() -> int:
 def _validate_password_strength(password: str) -> None:
     if len(password) < _password_min_length():
         raise validation_error(f"Password must be at least {_password_min_length()} characters")
+
+
+def _mfa_cipher_key() -> bytes:
+    secret = str(get_settings().auth.mfa_secret_key or "").strip()
+    if not secret:
+        # Backward-compatible fallback for dev environments.
+        secret = str(get_settings().auth.jwt_hs256_secret or "").strip() or "mlair-dev-mfa-key-change-me"
+    return hashlib.sha256(secret.encode("utf-8")).digest()
+
+
+def _encrypt_mfa_secret(secret: str) -> str:
+    raw = secret.encode("utf-8")
+    key = _mfa_cipher_key()
+    data = bytes((b ^ key[i % len(key)]) for i, b in enumerate(raw))
+    return base64.urlsafe_b64encode(data).decode("ascii")
+
+
+def _decrypt_mfa_secret(ciphertext: str) -> str:
+    raw = base64.urlsafe_b64decode(ciphertext.encode("ascii"))
+    key = _mfa_cipher_key()
+    data = bytes((b ^ key[i % len(key)]) for i, b in enumerate(raw))
+    return data.decode("utf-8")
+
+
+def _totp_secret() -> str:
+    # 160-bit secret as Base32, no padding.
+    return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+
+
+def _totp_code(secret: str, for_counter: int) -> str:
+    padded = secret + "=" * ((8 - len(secret) % 8) % 8)
+    key = base64.b32decode(padded, casefold=True)
+    msg = struct.pack(">Q", for_counter)
+    digest = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    binary = (
+        ((digest[offset] & 0x7F) << 24)
+        | (digest[offset + 1] << 16)
+        | (digest[offset + 2] << 8)
+        | digest[offset + 3]
+    )
+    return f"{binary % 1_000_000:06d}"
+
+
+def _verify_totp_code(secret: str, code: str, *, window: int = 1, period: int = 30) -> bool:
+    normalized = "".join(ch for ch in str(code or "") if ch.isdigit())
+    if len(normalized) != 6:
+        return False
+    now_counter = int(datetime.now(timezone.utc).timestamp()) // period
+    for delta in range(-window, window + 1):
+        if _totp_code(secret, now_counter + delta) == normalized:
+            return True
+    return False
+
+
+def _normalize_recovery_code(code: str) -> str:
+    return "".join(ch for ch in str(code or "").upper() if ch.isalnum())
+
+
+def _new_recovery_codes() -> list[str]:
+    out: list[str] = []
+    for _ in range(MFA_RECOVERY_CODE_COUNT):
+        token = secrets.token_hex(4).upper()
+        out.append(f"{token[:4]}-{token[4:]}")
+    return out
+
+
+def _mfa_rate_limit_key(user_id: str, ip: str | None) -> str:
+    now = int(datetime.now(timezone.utc).timestamp() // MFA_VERIFY_WINDOW_SECONDS)
+    bucket_ip = (ip or "unknown").strip() or "unknown"
+    return f"{user_id}:{bucket_ip}:{now}"
+
+
+def _mfa_allow_attempt(user_id: str, ip: str | None) -> bool:
+    key = _mfa_rate_limit_key(user_id, ip)
+    redis_key = f"mlair:mfa:verify:{key}"
+    try:
+        from app.domains.shared.queue_service import redis_client
+
+        client = redis_client()
+        attempts = int(client.incr(redis_key))
+        ttl = int(client.ttl(redis_key))
+        if attempts == 1 or ttl < 0:
+            client.expire(redis_key, MFA_VERIFY_WINDOW_SECONDS)
+        return attempts <= MFA_VERIFY_MAX_ATTEMPTS
+    except Exception:
+        now = datetime.now(timezone.utc).timestamp()
+        attempts, expires_at = _MFA_VERIFY_STATE_FALLBACK.get(key, (0, now + MFA_VERIFY_WINDOW_SECONDS))
+        if now > expires_at:
+            attempts = 0
+            expires_at = now + MFA_VERIFY_WINDOW_SECONDS
+        if attempts >= MFA_VERIFY_MAX_ATTEMPTS:
+            _MFA_VERIFY_STATE_FALLBACK[key] = (attempts, expires_at)
+            return False
+        _MFA_VERIFY_STATE_FALLBACK[key] = (attempts + 1, expires_at)
+        return True
+
+
+def _mfa_reset_attempts(user_id: str, ip: str | None) -> None:
+    key = _mfa_rate_limit_key(user_id, ip)
+    redis_key = f"mlair:mfa:verify:{key}"
+    try:
+        from app.domains.shared.queue_service import redis_client
+
+        redis_client().delete(redis_key)
+    except Exception:
+        _MFA_VERIFY_STATE_FALLBACK.pop(key, None)
+
+
+def _mfa_allow_challenge_attempt(challenge_id: str) -> bool:
+    redis_key = f"mlair:mfa:verify:challenge:{challenge_id}"
+    try:
+        from app.domains.shared.queue_service import redis_client
+
+        client = redis_client()
+        attempts = int(client.incr(redis_key))
+        ttl = int(client.ttl(redis_key))
+        if attempts == 1 or ttl < 0:
+            client.expire(redis_key, MFA_VERIFY_WINDOW_SECONDS)
+        return attempts <= MFA_CHALLENGE_VERIFY_MAX_ATTEMPTS
+    except Exception:
+        now = datetime.now(timezone.utc).timestamp()
+        key = f"challenge:{challenge_id}"
+        attempts, expires_at = _MFA_VERIFY_STATE_FALLBACK.get(key, (0, now + MFA_VERIFY_WINDOW_SECONDS))
+        if now > expires_at:
+            attempts = 0
+            expires_at = now + MFA_VERIFY_WINDOW_SECONDS
+        if attempts >= MFA_CHALLENGE_VERIFY_MAX_ATTEMPTS:
+            _MFA_VERIFY_STATE_FALLBACK[key] = (attempts, expires_at)
+            return False
+        _MFA_VERIFY_STATE_FALLBACK[key] = (attempts + 1, expires_at)
+        return True
+
+
+def _mfa_reset_challenge_attempts(challenge_id: str) -> None:
+    redis_key = f"mlair:mfa:verify:challenge:{challenge_id}"
+    try:
+        from app.domains.shared.queue_service import redis_client
+
+        redis_client().delete(redis_key)
+    except Exception:
+        _MFA_VERIFY_STATE_FALLBACK.pop(f"challenge:{challenge_id}", None)
 
 
 def get_identity_dashboard() -> dict[str, Any]:
@@ -67,6 +220,240 @@ def get_identity_dashboard() -> dict[str, Any]:
             limit=15,
         ),
     }
+
+
+def get_mfa_status(*, user_id: str) -> dict[str, Any]:
+    totp = repo.get_active_totp_for_user(user_id)
+    return {
+        "enabled": bool(totp),
+        "method": "totp" if totp else None,
+        "enabled_at": totp.get("enabled_at") if totp else None,
+        "last_used_at": totp.get("last_used_at") if totp else None,
+        "recovery_codes_remaining": repo.count_unused_recovery_codes(user_id) if totp else 0,
+    }
+
+
+def start_totp_enroll(*, user_id: str, username: str) -> dict[str, Any]:
+    secret = _totp_secret()
+    issuer = "MLAir"
+    label = f"{issuer}:{username}"
+    otpauth = f"otpauth://totp/{label}?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
+    return {"secret": secret, "otpauth_url": otpauth}
+
+
+def verify_totp_enroll(*, user_id: str, secret: str, code: str) -> dict[str, Any]:
+    if not _verify_totp_code(secret, code):
+        raise invalid_credential("Invalid MFA code")
+    row = repo.upsert_active_totp(
+        mfa_id=new_id("mfa"),
+        user_id=user_id,
+        secret_ciphertext=_encrypt_mfa_secret(secret),
+    )
+    recovery_codes = _new_recovery_codes()
+    repo.replace_recovery_codes(
+        user_id=user_id,
+        items=[(new_id("rcv"), hash_opaque(_normalize_recovery_code(v))) for v in recovery_codes],
+    )
+    _audit(
+        actor_kind="user",
+        actor_id=user_id,
+        action="auth.mfa.enable",
+        target_type="user",
+        target_id=user_id,
+        result="success",
+        extra={"method": "totp"},
+    )
+    return {
+        "enabled": True,
+        "method": "totp",
+        "enabled_at": row.get("enabled_at"),
+        "recovery_codes": recovery_codes,
+    }
+
+
+def disable_totp(*, user_id: str) -> None:
+    count = repo.disable_totp_for_user(user_id)
+    repo.replace_recovery_codes(user_id=user_id, items=[])
+    if count:
+        _audit(
+            actor_kind="user",
+            actor_id=user_id,
+            action="auth.mfa.disable",
+            target_type="user",
+            target_id=user_id,
+            result="success",
+        )
+
+
+def regenerate_recovery_codes(*, user_id: str) -> dict[str, Any]:
+    totp = repo.get_active_totp_for_user(user_id)
+    if not totp:
+        raise validation_error("MFA is not enabled")
+    recovery_codes = _new_recovery_codes()
+    repo.replace_recovery_codes(
+        user_id=user_id,
+        items=[(new_id("rcv"), hash_opaque(_normalize_recovery_code(v))) for v in recovery_codes],
+    )
+    _audit(
+        actor_kind="user",
+        actor_id=user_id,
+        action="auth.mfa.recovery_codes.regenerate",
+        target_type="user",
+        target_id=user_id,
+        result="success",
+        extra={"count": len(recovery_codes)},
+    )
+    return {"recovery_codes": recovery_codes}
+
+
+def _issue_user_session_tokens(*, user: dict[str, Any], ip: str | None, user_agent: str | None) -> dict[str, Any]:
+    refresh = new_opaque_token()
+    session_id = new_id("ses")
+    access, expires_in = issue_access_token(
+        user_id=user["id"],
+        username=user["username"],
+        is_global_admin=bool(user["is_global_admin"]),
+        session_id=session_id,
+    )
+    repo.insert_session(
+        session_id=session_id,
+        user_id=user["id"],
+        refresh_token_hash=hash_opaque(refresh),
+        expires_at=refresh_expires_at(),
+        ip=ip,
+        user_agent=user_agent,
+    )
+    _audit(
+        actor_kind="user",
+        actor_id=user["id"],
+        action="auth.login",
+        target_type="session",
+        target_id=session_id,
+        result="success",
+        ip=ip,
+        user_agent=user_agent,
+    )
+    return {
+        "access_token": access,
+        "token_type": "Bearer",
+        "expires_in": expires_in,
+        "refresh_token": refresh,
+        "user": repo._public_user(user),
+    }
+
+
+def _create_mfa_challenge(*, user_id: str, ip: str | None, user_agent: str | None) -> str:
+    challenge = new_opaque_token()
+    from datetime import timedelta
+
+    repo.create_mfa_challenge(
+        challenge_id=new_id("mfac"),
+        user_id=user_id,
+        challenge_hash=hash_opaque(challenge),
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=MFA_CHALLENGE_TTL_SECONDS),
+        ip=ip,
+        user_agent=user_agent,
+    )
+    return challenge
+
+
+def complete_mfa_login(
+    *,
+    challenge_token: str,
+    otp_code: str | None,
+    recovery_code: str | None,
+    ip: str | None,
+    user_agent: str | None,
+) -> dict[str, Any]:
+    token = str(challenge_token or "").strip()
+    if not token:
+        raise invalid_token("MFA challenge expired")
+    challenge = repo.consume_open_mfa_challenge(hash_opaque(token))
+    if not challenge:
+        raise invalid_token("MFA challenge expired")
+    user = repo.get_user_by_id(challenge["user_id"])
+    if not user:
+        raise invalid_token()
+    _ensure_login_allowed(user)
+    totp = repo.get_active_totp_for_user(user["id"])
+    if not totp:
+        raise invalid_token("MFA not configured")
+    if not _mfa_allow_challenge_attempt(str(challenge.get("id") or "")):
+        _audit(
+            actor_kind="user",
+            actor_id=user["id"],
+            action="auth.mfa.verify",
+            target_type="user",
+            target_id=user["id"],
+            result="failure",
+            ip=ip,
+            user_agent=user_agent,
+            extra={"reason": "challenge_rate_limited", "challenge_id": challenge.get("id")},
+        )
+        raise invalid_credential("Too many MFA attempts for this challenge. Start login again.")
+    if not _mfa_allow_attempt(user["id"], ip):
+        _audit(
+            actor_kind="user",
+            actor_id=user["id"],
+            action="auth.mfa.verify",
+            target_type="user",
+            target_id=user["id"],
+            result="failure",
+            ip=ip,
+            user_agent=user_agent,
+            extra={"reason": "rate_limited", "challenge_id": challenge.get("id")},
+        )
+        raise invalid_credential("Too many MFA attempts. Try again in 5 minutes.")
+
+    verified = False
+    if otp_code and _verify_totp_code(_decrypt_mfa_secret(totp["secret_ciphertext"]), otp_code):
+        verified = True
+        _mfa_reset_attempts(user["id"], ip)
+        _mfa_reset_challenge_attempts(str(challenge.get("id") or ""))
+        repo.touch_totp_last_used(totp["id"])
+        _audit(
+            actor_kind="user",
+            actor_id=user["id"],
+            action="auth.mfa.verify",
+            target_type="user",
+            target_id=user["id"],
+            result="success",
+            ip=ip,
+            user_agent=user_agent,
+            extra={"method": "totp", "challenge_id": challenge.get("id")},
+        )
+    elif recovery_code and repo.consume_recovery_code(
+        user_id=user["id"], code_hash=hash_opaque(_normalize_recovery_code(recovery_code))
+    ):
+        verified = True
+        _mfa_reset_attempts(user["id"], ip)
+        _mfa_reset_challenge_attempts(str(challenge.get("id") or ""))
+        _audit(
+            actor_kind="user",
+            actor_id=user["id"],
+            action="auth.mfa.verify",
+            target_type="user",
+            target_id=user["id"],
+            result="success",
+            ip=ip,
+            user_agent=user_agent,
+            extra={"method": "recovery_code", "challenge_id": challenge.get("id")},
+        )
+    if not verified:
+        _audit(
+            actor_kind="user",
+            actor_id=user["id"],
+            action="auth.mfa.verify",
+            target_type="user",
+            target_id=user["id"],
+            result="failure",
+            ip=ip,
+            user_agent=user_agent,
+            extra={"reason": "invalid_code", "challenge_id": challenge.get("id")},
+        )
+        raise invalid_credential("Invalid MFA code")
+
+    return _issue_user_session_tokens(user=user, ip=ip, user_agent=user_agent)
 
 
 def list_admin_sessions(*, limit: int, current_refresh_token: str | None = None) -> list[dict[str, Any]]:
@@ -216,30 +603,26 @@ def login(
         raise invalid_credential()
     _ensure_login_allowed(user)
     repo.update_user(user["id"], failed_login_count=0, clear_locked_until=True, last_login_at=datetime.now(timezone.utc))
-    refresh = new_opaque_token()
-    session_id = new_id("ses")
-    access, expires_in = issue_access_token(
-        user_id=user["id"],
-        username=user["username"],
-        is_global_admin=bool(user["is_global_admin"]),
-        session_id=session_id,
-    )
-    repo.insert_session(
-        session_id=session_id,
-        user_id=user["id"],
-        refresh_token_hash=hash_opaque(refresh),
-        expires_at=refresh_expires_at(),
-        ip=ip,
-        user_agent=user_agent,
-    )
-    _audit(actor_kind="user", actor_id=user["id"], action="auth.login", target_type="session", target_id=session_id, result="success", ip=ip, user_agent=user_agent)
-    return {
-        "access_token": access,
-        "token_type": "Bearer",
-        "expires_in": expires_in,
-        "refresh_token": refresh,
-        "user": repo._public_user(user),
-    }
+    totp = repo.get_active_totp_for_user(user["id"])
+    if totp:
+        challenge_token = _create_mfa_challenge(user_id=user["id"], ip=ip, user_agent=user_agent)
+        _audit(
+            actor_kind="user",
+            actor_id=user["id"],
+            action="auth.login.mfa_required",
+            target_type="user",
+            target_id=user["id"],
+            result="success",
+            ip=ip,
+            user_agent=user_agent,
+        )
+        return {
+            "mfa_required": True,
+            "challenge_token": challenge_token,
+            "challenge_expires_in": MFA_CHALLENGE_TTL_SECONDS,
+            "user": {"id": user["id"], "username": user["username"]},
+        }
+    return _issue_user_session_tokens(user=user, ip=ip, user_agent=user_agent)
 
 
 def refresh_session(*, refresh_token: str, ip: str | None, user_agent: str | None) -> dict[str, Any]:

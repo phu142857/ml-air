@@ -157,6 +157,7 @@ def _resolve_auth(profile_cfg: dict[str, Any], l4: dict[str, Any] | None) -> Aut
     return AuthSettings(
         auth_tokens_json=os.getenv("ML_AIR_AUTH_TOKENS_JSON", "").strip(),
         jwt_hs256_secret=os.getenv("ML_AIR_JWT_HS256_SECRET", "").strip(),
+        mfa_secret_key=os.getenv("ML_AIR_MFA_SECRET_KEY", "").strip(),
         jwt_issuer=os.getenv("ML_AIR_JWT_ISSUER", "").strip(),
         jwt_audience=os.getenv("ML_AIR_JWT_AUDIENCE", "").strip(),
         jwt_jwks_url=os.getenv("ML_AIR_JWT_JWKS_URL", "").strip(),

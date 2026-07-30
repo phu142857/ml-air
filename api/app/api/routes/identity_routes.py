@@ -92,6 +92,17 @@ class PatCreateIn(BaseModel):
     expires_in_days: int | None = None
 
 
+class TotpEnrollVerifyIn(BaseModel):
+    secret: str
+    code: str
+
+
+class MfaVerifyIn(BaseModel):
+    challenge_token: str
+    otp_code: str | None = None
+    recovery_code: str | None = None
+
+
 def _client_meta(request: Request) -> tuple[str | None, str | None]:
     return request.client.host if request.client else None, request.headers.get("user-agent")
 
@@ -122,6 +133,18 @@ def _principal_user_id(principal: Principal) -> str | None:
 def login_v1(payload: LoginIn, request: Request) -> dict[str, Any]:
     ip, ua = _client_meta(request)
     return svc.login(username=payload.username, password=payload.password, ip=ip, user_agent=ua)
+
+
+@router.post("/auth/mfa/verify")
+def mfa_verify_v1(payload: MfaVerifyIn, request: Request) -> dict[str, Any]:
+    ip, ua = _client_meta(request)
+    return svc.complete_mfa_login(
+        challenge_token=payload.challenge_token,
+        otp_code=payload.otp_code,
+        recovery_code=payload.recovery_code,
+        ip=ip,
+        user_agent=ua,
+    )
 
 
 @router.post("/auth/refresh")
@@ -203,6 +226,42 @@ def create_pat_v1(payload: PatCreateIn, authorization: str | None = Header(defau
 def revoke_pat_v1(pat_id: str, authorization: str | None = Header(default=None)) -> None:
     user_id = _identity_user_id(authorization)
     svc.revoke_pat(user_id=user_id, pat_id=pat_id)
+
+
+@router.get("/auth/mfa/status")
+def mfa_status_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return svc.get_mfa_status(user_id=user_id)
+
+
+@router.post("/auth/mfa/totp/enroll/start")
+def mfa_totp_enroll_start_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    user = repo.get_user_by_id(user_id)
+    if not user:
+        raise not_found()
+    return svc.start_totp_enroll(user_id=user_id, username=str(user.get("username") or "user"))
+
+
+@router.post("/auth/mfa/totp/enroll/verify")
+def mfa_totp_enroll_verify_v1(
+    payload: TotpEnrollVerifyIn,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return svc.verify_totp_enroll(user_id=user_id, secret=payload.secret, code=payload.code)
+
+
+@router.post("/auth/mfa/totp/disable", status_code=204)
+def mfa_totp_disable_v1(authorization: str | None = Header(default=None)) -> None:
+    user_id = _identity_user_id(authorization)
+    svc.disable_totp(user_id=user_id)
+
+
+@router.post("/auth/mfa/recovery-codes/regenerate")
+def mfa_recovery_codes_regenerate_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user_id = _identity_user_id(authorization)
+    return svc.regenerate_recovery_codes(user_id=user_id)
 
 
 @router.get("/users")

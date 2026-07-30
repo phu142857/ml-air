@@ -33,6 +33,13 @@ function parseUserAgent(ua: string | null | undefined): string {
   return `${ua.slice(0, 60)}…`;
 }
 
+function isSessionExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return false;
+  const ms = Date.parse(expiresAt);
+  if (!Number.isFinite(ms)) return false;
+  return ms <= Date.now();
+}
+
 export default function IdentitySessionsPage() {
   const { token, refreshToken } = useAppContext();
   const queryClient = useQueryClient();
@@ -63,7 +70,9 @@ export default function IdentitySessionsPage() {
     onError: (e) => toastError("Revoke all failed", String((e as Error)?.message || e)),
   });
 
-  const items = sessionsQuery.data || [];
+  const rawItems = sessionsQuery.data || [];
+  const items = rawItems.filter((session) => !isSessionExpired(session.expires_at));
+  const expiredCount = Math.max(0, rawItems.length - items.length);
 
   return (
     <SettingsPage
@@ -76,6 +85,11 @@ export default function IdentitySessionsPage() {
       />
 
       <SettingsSection id="sessions" title="Active sessions" description="Interactive login sessions by user and device.">
+        {expiredCount > 0 ? (
+          <p className="mb-3 text-xs text-muted-foreground">
+            Hidden {expiredCount} expired session{expiredCount > 1 ? "s" : ""} from the list.
+          </p>
+        ) : null}
         {items.length === 0 && !sessionsQuery.isLoading ? (
           <SettingsEmptyState title="No active sessions" description="No users are currently signed in." />
         ) : (
@@ -103,6 +117,7 @@ export default function IdentitySessionsPage() {
                       Login {formatWhen(session.created_at)} · Last activity{" "}
                       {formatWhen(session.last_used_at || session.created_at)}
                     </p>
+                    <p className="text-xs text-muted-foreground">Session expires {formatWhen(session.expires_at)}</p>
                   </div>
                 </div>
                 <Button

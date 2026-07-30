@@ -897,6 +897,168 @@ def get_session_by_id(session_id: str) -> dict[str, Any] | None:
             return _row_session(row) if row else None
 
 
+def get_active_totp_for_user(user_id: str) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, user_id, secret_ciphertext, enabled_at, disabled_at, last_used_at, created_at, updated_at
+                FROM user_mfa_totp
+                WHERE user_id = %s AND disabled_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": str(row[0]),
+                "user_id": str(row[1]),
+                "secret_ciphertext": str(row[2]),
+                "enabled_at": row[3].isoformat() if row[3] else None,
+                "disabled_at": row[4].isoformat() if row[4] else None,
+                "last_used_at": row[5].isoformat() if row[5] else None,
+                "created_at": row[6].isoformat() if row[6] else None,
+                "updated_at": row[7].isoformat() if row[7] else None,
+            }
+
+
+def upsert_active_totp(*, mfa_id: str, user_id: str, secret_ciphertext: str) -> dict[str, Any]:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE user_mfa_totp SET disabled_at = now(), updated_at = now() WHERE user_id = %s AND disabled_at IS NULL",
+                (user_id,),
+            )
+            cur.execute(
+                """
+                INSERT INTO user_mfa_totp (id, user_id, secret_ciphertext)
+                VALUES (%s, %s, %s)
+                RETURNING id, user_id, secret_ciphertext, enabled_at, disabled_at, last_used_at, created_at, updated_at
+                """,
+                (mfa_id, user_id, secret_ciphertext),
+            )
+            row = cur.fetchone()
+            return {
+                "id": str(row[0]),
+                "user_id": str(row[1]),
+                "secret_ciphertext": str(row[2]),
+                "enabled_at": row[3].isoformat() if row[3] else None,
+                "disabled_at": row[4].isoformat() if row[4] else None,
+                "last_used_at": row[5].isoformat() if row[5] else None,
+                "created_at": row[6].isoformat() if row[6] else None,
+                "updated_at": row[7].isoformat() if row[7] else None,
+            }
+
+
+def disable_totp_for_user(user_id: str) -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE user_mfa_totp
+                SET disabled_at = now(), updated_at = now()
+                WHERE user_id = %s AND disabled_at IS NULL
+                """,
+                (user_id,),
+            )
+            return int(cur.rowcount or 0)
+
+
+def touch_totp_last_used(mfa_id: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE user_mfa_totp SET last_used_at = now(), updated_at = now() WHERE id = %s",
+                (mfa_id,),
+            )
+
+
+def replace_recovery_codes(*, user_id: str, items: list[tuple[str, str]]) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_recovery_codes WHERE user_id = %s", (user_id,))
+            for code_id, code_hash in items:
+                cur.execute(
+                    """
+                    INSERT INTO user_recovery_codes (id, user_id, code_hash)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (code_id, user_id, code_hash),
+                )
+
+
+def count_unused_recovery_codes(user_id: str) -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM user_recovery_codes WHERE user_id = %s AND used_at IS NULL",
+                (user_id,),
+            )
+            return int((cur.fetchone() or [0])[0] or 0)
+
+
+def consume_recovery_code(*, user_id: str, code_hash: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE user_recovery_codes
+                SET used_at = now()
+                WHERE user_id = %s AND code_hash = %s AND used_at IS NULL
+                """,
+                (user_id, code_hash),
+            )
+            return bool(cur.rowcount)
+
+
+def create_mfa_challenge(
+    *,
+    challenge_id: str,
+    user_id: str,
+    challenge_hash: str,
+    expires_at: datetime,
+    ip: str | None,
+    user_agent: str | None,
+) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO identity_mfa_challenges (id, user_id, challenge_hash, expires_at, ip, user_agent)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (challenge_id, user_id, challenge_hash, expires_at, ip, user_agent),
+            )
+
+
+def consume_open_mfa_challenge(challenge_hash: str) -> dict[str, Any] | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE identity_mfa_challenges
+                SET consumed_at = now()
+                WHERE challenge_hash = %s
+                  AND consumed_at IS NULL
+                  AND expires_at > now()
+                RETURNING id, user_id, expires_at, created_at
+                """,
+                (challenge_hash,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": str(row[0]),
+                "user_id": str(row[1]),
+                "expires_at": row[2].isoformat() if row[2] else None,
+                "created_at": row[3].isoformat() if row[3] else None,
+            }
+
+
 def revoke_session_for_user(user_id: str, session_id: str) -> bool:
     with db_conn() as conn:
         with conn.cursor() as cur:

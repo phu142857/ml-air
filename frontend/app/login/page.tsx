@@ -10,6 +10,7 @@ import {
   loginIdentity,
   refreshIdentityDeduped,
   saveAuthSession,
+  verifyIdentityMfa,
 } from "@/lib/identity-api";
 import { consumeLogoutReason } from "@/lib/auth-session";
 import { resolveHubDefaultRoute, hubDefaultRoutePath } from "@/lib/hub-default-route";
@@ -24,6 +25,10 @@ export default function LoginPage() {
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const redirectingRef = useRef(false);
 
   useEffect(() => {
@@ -83,7 +88,23 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await loginIdentity(username.trim(), password);
+      const res = mfaChallengeToken
+        ? await verifyIdentityMfa(
+            mfaChallengeToken,
+            useRecoveryCode ? undefined : otpCode.trim(),
+            useRecoveryCode ? recoveryCode.trim() : undefined,
+          )
+        : await loginIdentity(username.trim(), password);
+      if (res.mfa_required && res.challenge_token) {
+        setMfaChallengeToken(res.challenge_token);
+        setOtpCode("");
+        setRecoveryCode("");
+        setUseRecoveryCode(false);
+        return;
+      }
+      if (!res.access_token?.trim() || !res.refresh_token?.trim()) {
+        throw new Error("Authentication did not return a valid session");
+      }
       saveAuthSession({
         accessToken: res.access_token,
         refreshToken: res.refresh_token,
@@ -126,6 +147,7 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
+            disabled={Boolean(mfaChallengeToken)}
             required
           />
         </label>
@@ -137,9 +159,50 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
+            disabled={Boolean(mfaChallengeToken)}
             required
           />
         </label>
+        {mfaChallengeToken ? (
+          <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3">
+            <p className="text-sm font-medium">Multi-factor authentication required</p>
+            {!useRecoveryCode ? (
+              <label className="block space-y-1 text-sm">
+                <span>Authenticator code</span>
+                <input
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="123456"
+                  required
+                />
+              </label>
+            ) : (
+              <label className="block space-y-1 text-sm">
+                <span>Recovery code</span>
+                <input
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono"
+                  value={recoveryCode}
+                  onChange={(e) => setRecoveryCode(e.target.value)}
+                  placeholder="ABCD-1234"
+                  required
+                />
+              </label>
+            )}
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={() => {
+                setUseRecoveryCode((v) => !v);
+                setOtpCode("");
+                setRecoveryCode("");
+              }}
+            >
+              {useRecoveryCode ? "Use authenticator code instead" : "Use a recovery code instead"}
+            </button>
+          </div>
+        ) : null}
         {sessionNotice ? (
           <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
             {sessionNotice}
@@ -151,8 +214,22 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          {loading ? "Signing in…" : "Sign in"}
+          {loading ? "Signing in…" : mfaChallengeToken ? "Verify and sign in" : "Sign in"}
         </button>
+        {mfaChallengeToken ? (
+          <button
+            type="button"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm"
+            onClick={() => {
+              setMfaChallengeToken(null);
+              setOtpCode("");
+              setRecoveryCode("");
+              setUseRecoveryCode(false);
+            }}
+          >
+            Start over
+          </button>
+        ) : null}
       </form>
     </div>
   );

@@ -31,6 +31,13 @@ function parseUserAgent(ua: string | null | undefined): string {
   return `${ua.slice(0, 60)}…`;
 }
 
+function isSessionExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return false;
+  const ms = Date.parse(expiresAt);
+  if (!Number.isFinite(ms)) return false;
+  return ms <= Date.now();
+}
+
 export function SessionsPanel() {
   const { token, refreshToken } = useAppContext();
   const queryClient = useQueryClient();
@@ -49,7 +56,8 @@ export function SessionsPanel() {
     onError: (e) => toastError("Revoke failed", String((e as Error)?.message || e)),
   });
 
-  const items = sessionsQuery.data || [];
+  const rawItems = sessionsQuery.data || [];
+  const items = rawItems.filter((session) => !isSessionExpired(session.expires_at));
 
   return (
     <SettingsPage
@@ -88,6 +96,7 @@ export function SessionsPanel() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {session.ip || "Unknown IP"} · Last active {formatWhen(session.last_used_at || session.created_at)}
                     </p>
+                    <p className="text-xs text-muted-foreground">Session expires {formatWhen(session.expires_at)}</p>
                     <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/80">{session.id}</p>
                   </div>
                 </div>

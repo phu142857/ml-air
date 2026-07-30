@@ -49,6 +49,7 @@ class FeatureFlags:
 class AuthSettings:
     auth_tokens_json: str
     jwt_hs256_secret: str
+    mfa_secret_key: str
     jwt_issuer: str
     jwt_audience: str
     jwt_jwks_url: str

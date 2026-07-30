@@ -1,15 +1,18 @@
 import { getApiBaseUrl } from "./api";
 
 export type LoginResponse = {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token: string;
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  refresh_token?: string;
+  mfa_required?: boolean;
+  challenge_token?: string;
+  challenge_expires_in?: number;
   user: {
     id: string;
     username: string;
-    is_global_admin: boolean;
-    state: string;
+    is_global_admin?: boolean;
+    state?: string;
   };
 };
 
@@ -56,6 +59,14 @@ export type PersonalAccessTokenRow = {
 
 export type PersonalAccessTokenCreated = PersonalAccessTokenRow & {
   token: string;
+};
+
+export type MfaStatusResponse = {
+  enabled: boolean;
+  method: "totp" | null;
+  enabled_at: string | null;
+  last_used_at: string | null;
+  recovery_codes_remaining: number;
 };
 
 const AUTH_STORAGE_KEY = "ml-air:auth-session";
@@ -112,6 +123,21 @@ export async function loginIdentity(username: string, password: string): Promise
   return identityFetch<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function verifyIdentityMfa(
+  challengeToken: string,
+  otpCode?: string,
+  recoveryCode?: string,
+): Promise<LoginResponse> {
+  return identityFetch<LoginResponse>("/auth/mfa/verify", {
+    method: "POST",
+    body: JSON.stringify({
+      challenge_token: challengeToken,
+      otp_code: otpCode || null,
+      recovery_code: recoveryCode || null,
+    }),
   });
 }
 
@@ -228,6 +254,41 @@ export async function createPersonalAccessToken(
 export async function revokePersonalAccessToken(accessToken: string, patId: string): Promise<void> {
   await identityFetch(`/auth/pats/${encodeURIComponent(patId)}`, {
     method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function fetchMfaStatus(accessToken: string): Promise<MfaStatusResponse> {
+  return identityFetch<MfaStatusResponse>("/auth/mfa/status", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function startTotpEnroll(accessToken: string): Promise<{ secret: string; otpauth_url: string }> {
+  return identityFetch<{ secret: string; otpauth_url: string }>("/auth/mfa/totp/enroll/start", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function verifyTotpEnroll(accessToken: string, secret: string, code: string): Promise<{ recovery_codes: string[] }> {
+  return identityFetch<{ recovery_codes: string[] }>("/auth/mfa/totp/enroll/verify", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ secret, code }),
+  });
+}
+
+export async function disableTotp(accessToken: string): Promise<void> {
+  await identityFetch("/auth/mfa/totp/disable", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function regenerateRecoveryCodes(accessToken: string): Promise<{ recovery_codes: string[] }> {
+  return identityFetch<{ recovery_codes: string[] }>("/auth/mfa/recovery-codes/regenerate", {
+    method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
