@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  LifecycleAction,
   SettingsFormFooter,
   SettingsPage,
   SettingsPageHeader,
@@ -19,7 +16,7 @@ import { useAppContext } from "@/lib/app-context";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
 
 export default function SettingsSecurityPage() {
-  const { username, logout, token } = useAppContext();
+  const { token } = useAppContext();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -47,25 +44,8 @@ export default function SettingsSecurityPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="Security"
-        description="Authentication, credentials, and session hygiene for your account."
+        description="Password, multi-factor authentication, and account recovery."
       />
-
-      <SettingsSection id="authentication" title="Authentication" description="Current Hub session.">
-        <p className="text-sm text-foreground">
-          Signed in as <span className="font-medium">{username || "—"}</span>
-        </p>
-        <div className="mt-4 space-y-3">
-          <LifecycleAction
-            title="Sign out"
-            description="Ends your current browser session on this device."
-            actionLabel="Sign out"
-            onAction={() => logout()}
-          />
-          <Button variant="outline" size="sm" asChild className="w-fit">
-            <Link href="/settings/sessions">View sessions</Link>
-          </Button>
-        </div>
-      </SettingsSection>
 
       <SettingsSection id="password" title="Password" description="Update your Hub sign-in password.">
         <div className="grid max-w-md gap-4">
@@ -109,7 +89,7 @@ export default function SettingsSecurityPage() {
         <SettingsFormFooter
           dirty={dirty}
           saving={mutation.isPending}
-          saveLabel="Update password"
+          saveLabel="Change password"
           onSave={() => {
             if (canSave) mutation.mutate();
           }}
@@ -128,13 +108,21 @@ export default function SettingsSecurityPage() {
       </SettingsSection>
 
       <SettingsSection id="mfa" title="Multi-factor authentication" description="Additional verification at sign-in.">
-        <p className="text-sm text-muted-foreground">
-          MFA is not enabled on this deployment. Support for TOTP and WebAuthn is planned.
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">Status</p>
+          <p className="text-sm font-medium text-foreground">Not configured</p>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          MFA is currently informational. Configuration will be available in a future release.
         </p>
       </SettingsSection>
 
       <SettingsSection id="recovery" title="Recovery" description="Options if you lose access.">
-        <p className="text-sm text-muted-foreground">
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">Recovery methods</p>
+          <p className="text-sm font-medium text-foreground">Not configured</p>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
           Contact your platform administrator to reset access if you are locked out.
         </p>
       </SettingsSection>

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Search, Command, Settings } from "lucide-react"
+import { AccountMenu } from "@/components/layout/account-menu"
 import { ScopeSwitcher } from "@/components/mlops/scope-switcher"
 import { RealtimeIndicator } from "@/components/mlops/realtime-indicator"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -61,6 +62,7 @@ export function Topbar({ onOpenCommandPalette }: TopbarProps) {
             </Link>
           </Button>
           <RealtimeIndicator />
+          <AccountMenu />
         </div>
       </div>
     </header>

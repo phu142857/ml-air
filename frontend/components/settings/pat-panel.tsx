@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Key, Loader2, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,12 @@ import {
   createPersonalAccessToken,
   fetchPersonalAccessTokens,
   revokePersonalAccessToken,
+  type PersonalAccessTokenRow,
 } from "@/lib/identity-api";
 import { useAppContext } from "@/lib/app-context";
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 import { getApiBaseUrl } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 function formatWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -57,12 +59,17 @@ function shortToken(token: string): string {
   return `${trimmed.slice(0, 8)}...${trimmed.slice(-6)}`;
 }
 
+type RevealedPat = {
+  id: string;
+  token: string;
+};
+
 export function PatPanel() {
   const { token } = useAppContext();
   const queryClient = useQueryClient();
   const [description, setDescription] = useState("");
   const [expiresDays, setExpiresDays] = useState("90");
-  const [newToken, setNewToken] = useState<string | null>(null);
+  const [revealedPat, setRevealedPat] = useState<RevealedPat | null>(null);
   const [copied, setCopied] = useState(false);
 
   const patsQuery = useQuery({
@@ -79,7 +86,8 @@ export function PatPanel() {
         expiresDays.trim() ? Number.parseInt(expiresDays, 10) : null,
       ),
     onSuccess: async (created) => {
-      setNewToken(created.token);
+      setRevealedPat({ id: created.id, token: created.token });
+      setCopied(false);
       setDescription("");
       toastSuccess("Personal access token created");
       await queryClient.invalidateQueries({ queryKey: ["identity-pats", token] });
@@ -89,7 +97,8 @@ export function PatPanel() {
 
   const revokeMutation = useMutation({
     mutationFn: (patId: string) => revokePersonalAccessToken(token, patId),
-    onSuccess: async () => {
+    onSuccess: async (_data, patId) => {
+      setRevealedPat((prev) => (prev?.id === patId ? null : prev));
       toastSuccess("Token revoked");
       await queryClient.invalidateQueries({ queryKey: ["identity-pats", token] });
     },
@@ -97,7 +106,7 @@ export function PatPanel() {
   });
 
   const rotateMutation = useMutation({
-    mutationFn: async (pat: { id: string; description: string; expires_at: string | null }) => {
+    mutationFn: async (pat: PersonalAccessTokenRow) => {
       const created = await createPersonalAccessToken(
         token,
         pat.description,
@@ -107,7 +116,7 @@ export function PatPanel() {
       return created;
     },
     onSuccess: async (created) => {
-      setNewToken(created.token);
+      setRevealedPat({ id: created.id, token: created.token });
       setCopied(false);
       toastSuccess("Token rotated", "Copy the replacement token now. The previous token has been revoked.");
       await queryClient.invalidateQueries({ queryKey: ["identity-pats", token] });
@@ -117,16 +126,24 @@ export function PatPanel() {
 
   const apiBase = getApiBaseUrl();
   const activePats = (patsQuery.data || []).filter((p) => !p.revoked_at);
-  const revealTokenPreview = useMemo(() => (newToken ? shortToken(newToken) : null), [newToken]);
+
+  const handleCopy = (secret: string) => {
+    void copyWithToast(secret, { successTitle: "Token copied" }).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    });
+  };
 
   return (
     <SettingsPage loading={patsQuery.isLoading} error={patsQuery.error ? String((patsQuery.error as Error).message) : null}>
       <SettingsPageHeader
-        title="CLI & API tokens"
-        description="Connect automation and local tooling to the MLAir control plane."
+        title="CLI & API"
+        description="CLI configuration, personal access tokens, and API authentication."
       />
 
-      <SettingsSection id="configuration" title="Configuration" description="API endpoint for CLI and SDK clients.">
+      <SettingsSection id="cli-configuration" title="CLI configuration" description="API endpoint for CLI and SDK clients.">
         <div className="rounded-md border border-border/60 bg-muted/20 p-4 font-mono text-xs">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Recommended setup</p>
           <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-foreground">{`# Sign in via Hub (recommended)
@@ -140,7 +157,11 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
         </div>
       </SettingsSection>
 
-      <SettingsSection id="general" title="General" description="Create a new personal access token.">
+      <SettingsSection
+        id="personal-access-tokens"
+        title="Personal access tokens"
+        description="Personal access tokens allow CLI and API access on behalf of your account."
+      >
         <div className="grid max-w-lg gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="pat-description">Description</Label>
@@ -181,36 +202,8 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
           </Button>
         </div>
 
-        {newToken ? (
-          <div className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-4">
-            <p className="text-sm font-medium text-primary">Copy your new token now</p>
-            <p className="mt-1 text-xs text-muted-foreground">This secret cannot be shown again after you leave this page.</p>
-            <div className="mt-3 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-[11px]">
-                {revealTokenPreview}
-              </code>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-label="Copy token"
-                onClick={() => {
-                  void copyWithToast(newToken, { successTitle: "Token copied" }).then((ok) => {
-                    if (ok) {
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }
-                  });
-                }}
-              >
-                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </SettingsSection>
-
-      <SettingsSection id="tokens" title="Active tokens" description="Tokens currently authorized for API access.">
+        <div className="mt-6 space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active tokens</p>
         {activePats.length === 0 ? (
           <SettingsEmptyState
             title="No active tokens"
@@ -218,53 +211,80 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
           />
         ) : (
           <div className="space-y-3">
-            {activePats.map((pat) => (
-              <div
-                key={pat.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-sm font-medium">{pat.description}</span>
-                    <IdentityStatusBadge state="active" />
-                    <code className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-                      {pat.id.slice(0, 8)}...{pat.id.slice(-4)}
-                    </code>
-                    <span className="text-xs text-muted-foreground">{formatRemaining(pat.expires_at)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      Last used {formatWhen(pat.last_used_at)}
-                    </span>
+            {activePats.map((pat) => {
+              const isRevealed = revealedPat?.id === pat.id;
+              const secret = isRevealed ? revealedPat.token : null;
+
+              return (
+                <div
+                  key={pat.id}
+                  className={cn(
+                    "rounded-md border p-4",
+                    isRevealed ? "border-primary/40 bg-primary/5" : "border-border/60",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0 flex flex-1 flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium">{pat.description}</span>
+                      <IdentityStatusBadge state="active" />
+                      {isRevealed && secret ? (
+                        <code className="rounded bg-background px-2 py-0.5 font-mono text-[11px] text-foreground">
+                          {shortToken(secret)}
+                        </code>
+                      ) : (
+                        <code className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                          {pat.id.slice(0, 8)}...{pat.id.slice(-4)}
+                        </code>
+                      )}
+                      <span className="text-xs text-muted-foreground">{formatRemaining(pat.expires_at)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Last used {formatWhen(pat.last_used_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isRevealed && secret ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label="Copy token"
+                          onClick={() => handleCopy(secret)}
+                        >
+                          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          Copy
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={rotateMutation.isPending || revokeMutation.isPending}
+                        onClick={() => rotateMutation.mutate(pat)}
+                      >
+                        {rotateMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCcw className="h-3.5 w-3.5" />
+                        )}
+                        Rotate
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={rotateMutation.isPending || revokeMutation.isPending}
+                        onClick={() => revokeMutation.mutate(pat.id)}
+                      >
+                        Revoke
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={rotateMutation.isPending || revokeMutation.isPending}
-                    onClick={() => rotateMutation.mutate(pat)}
-                  >
-                    {rotateMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCcw className="h-3.5 w-3.5" />
-                    )}
-                    Rotate
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={rotateMutation.isPending || revokeMutation.isPending}
-                    onClick={() => revokeMutation.mutate(pat.id)}
-                  >
-                    Revoke
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+        </div>
       </SettingsSection>
     </SettingsPage>
   );

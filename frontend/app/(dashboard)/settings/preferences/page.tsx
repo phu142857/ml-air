@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -71,25 +72,42 @@ export default function SettingsPreferencesPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="system">System</SelectItem>
               <SelectItem value="light">Light</SelectItem>
               <SelectItem value="dark">Dark</SelectItem>
-              <SelectItem value="system">System</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="mt-4 flex max-w-md items-center justify-between gap-4 rounded-md border border-border/60 px-4 py-3">
           <div>
-            <p className="text-sm font-medium">Compact density</p>
-            <p className="text-xs text-muted-foreground">Tighter tables and panels (preview).</p>
+            <p className="text-sm font-medium">Density</p>
+            <p className="text-xs text-muted-foreground">
+              {prefs.density === "compact" ? "Compact" : "Comfortable"} — tighter tables and panels.
+            </p>
           </div>
           <Switch
             checked={prefs.density === "compact"}
             onCheckedChange={(v) => setPrefs(saveUserPreferences({ density: v ? "compact" : "comfortable" }))}
           />
         </div>
+        <div className="mt-4 flex max-w-md items-center justify-between gap-4 rounded-md border border-border/60 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Design tokens</p>
+            <p className="text-xs text-muted-foreground">Developer preview of design system tokens.</p>
+          </div>
+          <Switch
+            checked={prefs.experimentalUi}
+            onCheckedChange={(v) => setPrefs(saveUserPreferences({ experimentalUi: v }))}
+          />
+        </div>
+        {prefs.experimentalUi ? (
+          <div className="mt-4">
+            <DesignTokensSlide />
+          </div>
+        ) : null}
       </SettingsSection>
 
-      <SettingsSection id="locale" title="Locale" description="Language and timezone preferences.">
+      <SettingsSection id="localization" title="Localization" description="Language and timezone preferences.">
         <div className="grid max-w-lg gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Language</Label>
@@ -149,11 +167,11 @@ export default function SettingsPreferencesPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection
-        id="api-override"
-        title="Operator API override"
-        description="Browser-local API base URL for split-host previews."
-      >
+      <SettingsSection id="advanced" title="Advanced" description="Technical overrides for this browser.">
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-sm text-muted-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          <p>Changing this value can connect MLAir to a different API environment.</p>
+        </div>
         <div className="max-w-md space-y-1.5">
           <Label htmlFor="api-url">API base URL</Label>
           <Input
@@ -186,29 +204,14 @@ export default function SettingsPreferencesPage() {
         {hasLocalOverride ? (
           <div className="mt-4">
             <LifecycleAction
-            title="Reset to deploy defaults"
-            description="Clears the browser override and reloads with server configuration."
-            actionLabel="Reset override"
-            onAction={() => {
-              clearRuntimeConfigOverride();
-              window.location.reload();
-            }}
-          />
-          </div>
-        ) : null}
-      </SettingsSection>
-
-      <SettingsSection id="experimental" title="Experimental UI" description="Developer and design previews.">
-        <div className="flex max-w-md items-center justify-between gap-4 rounded-md border border-border/60 px-4 py-3">
-          <p className="text-sm font-medium">Show design tokens panel</p>
-          <Switch
-            checked={prefs.experimentalUi}
-            onCheckedChange={(v) => setPrefs(saveUserPreferences({ experimentalUi: v }))}
-          />
-        </div>
-        {prefs.experimentalUi ? (
-          <div className="mt-4">
-            <DesignTokensSlide />
+              title="Reset to default"
+              description="Clears the browser override and reloads with server configuration."
+              actionLabel="Reset to default"
+              onAction={() => {
+                clearRuntimeConfigOverride();
+                window.location.reload();
+              }}
+            />
           </div>
         ) : null}
       </SettingsSection>

@@ -54,7 +54,7 @@ export default function IdentitySettingsPage() {
   return (
     <SettingsPage>
       <SettingsPageHeader
-        title="Identity policy"
+        title="Authentication Policy"
         description="Platform-wide authentication, session, and lockout rules."
       />
 

@@ -37,7 +37,7 @@ export default function IdentityAuditDetailPage() {
       <SettingsPageHeader
         title={data?.action || "Audit event"}
         description="Immutable identity and access event record."
-        backHref="/identity/audit"
+        backHref="/identity/dashboard"
         backLabel="Audit logs"
         badge={data ? <IdentityStatusBadge state={data.result === "success" ? "active" : "locked"} /> : undefined}
       />
