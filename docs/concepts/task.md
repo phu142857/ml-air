@@ -1,7 +1,19 @@
 # Task
 
-A task is the smallest execution unit in a pipeline.
+A **task** is one node execution inside a run (one plugin or HTTP step, one attempt).
 
-Each task captures status, attempts, logs, and resource usage telemetry. **Who runs the task** depends on [task execution mode](./task-execution-mode.md) (internal executor vs external worker) — not on whether the plugin is a demo or your own code.
+## What it is
 
-Next: [Task execution mode](./task-execution-mode.md), [Retry a Failed Task](../guides/retry-failed-task.md), [Debug Run in UI](../guides/debug-run-ui.md), [Resource usage attribution](../guides/usage-attribution.md).
+- Carries `task_key`, attempt number, payload, logs, and optional resource usage.
+- May run on the **internal** executor or an **external** leased worker.
+- Failures can retry, land in DLQ, or be partially replayed depending on policy.
+
+## When to use
+
+- Debug a failed step on Hub **Tasks** or via API/CLI logs.
+- Implement custom behavior as a [Plugin](./plugin.md) or [HTTP pipeline task](../guides/http-pipeline-tasks.md).
+
+## Related
+
+- Guides: [Retry a Failed Task](../guides/retry-failed-task.md), [Debug a Failed Task](../guides/debug-failure.md), [External Worker Execution](../guides/external-worker-execution.md)
+- Concepts: [Task execution mode](./task-execution-mode.md), [Run](./run.md), [Pipeline](./pipeline.md)

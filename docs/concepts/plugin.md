@@ -1,7 +1,20 @@
 # Plugin
 
-A plugin is the **name and contract** of a pipeline step (for example `app_train_adapter`, `custom_train`). It identifies which capability or adapter executes that step.
+A **plugin** is a named pipeline step capability registered in the API/executor environment (`meta.name` ↔ YAML `plugin:`).
 
-Plugins define task behavior while MLAir provides orchestration, tracking, and retries. The **runtime location** is separate: with **internal** mode the built-in [executor](../concepts/task-execution-mode.md) runs the plugin subprocess; with **external** mode your worker implements the leased plugin name.
+## What it is
 
-Next: [Create a Plugin](../guides/create-plugin.md), [Validate a Plugin](../guides/validate-plugin.md), [Task execution mode](./task-execution-mode.md).
+- Python package entry point under `mlair.plugins` (or HTTP tasks without Python).
+- Contract: `meta`, `validate()`, `run(context)` — MLAir owns orchestration; the plugin owns step logic.
+- Hot-reloadable via `POST /v1/plugins/reload` when installed in the runtime image.
+
+## When to use
+
+- Custom train/ETL/adapters that must participate in retries, tracking, and lineage.
+- External workers that execute the same plugin name from a lease payload.
+
+## Related
+
+- [Plugin development guide](../plugin-development-guide.md)
+- Guides: [Create a Plugin](../guides/create-plugin.md), [Plugin versioning](../guides/plugin-versioning.md), [Integrate App with Plugin](../guides/integrate-app-with-plugin.md)
+- Concepts: [Pipeline](./pipeline.md), [Task](./task.md)

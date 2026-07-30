@@ -611,6 +611,10 @@ paths:
     post:
       tags: [Identity]
       summary: Human login (username + password)
+      description: |
+        Returns tokens when MFA is not required. When MFA is enabled, returns
+        `mfa_required` + `challenge_token` (no access token) — complete with
+        `POST /v1/auth/mfa/verify`.
       requestBody:
         required: true
         content:
@@ -619,7 +623,7 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Access and refresh tokens
+          description: Access/refresh tokens, or MFA challenge
           content:
             application/json:
               schema:
@@ -675,6 +679,277 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JsonValue"
+    patch:
+      tags: [Identity]
+      summary: Update display name and email
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                  nullable: true
+                email:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonValue"
+
+  /v1/auth/change-password:
+    post:
+      tags: [Identity]
+      summary: Change password for the current user
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+      responses:
+        "204":
+          description: Password updated
+
+  /v1/auth/logout-all:
+    post:
+      tags: [Identity]
+      summary: Revoke all refresh sessions for the current user
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: All sessions revoked
+
+  /v1/auth/mfa/verify:
+    post:
+      tags: [Identity]
+      summary: Complete MFA login challenge (TOTP or recovery code)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaVerifyRequest"
+      responses:
+        "200":
+          description: Access and refresh tokens after MFA
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: invalid_mfa_or_challenge
+
+  /v1/auth/mfa/status:
+    get:
+      tags: [Identity]
+      summary: MFA enrollment status for the current user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: MFA status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaStatus"
+
+  /v1/auth/mfa/totp/enroll/start:
+    post:
+      tags: [Identity]
+      summary: Start TOTP enrollment (secret + otpauth URL)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Enrollment challenge
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret:
+                    type: string
+                  otpauth_url:
+                    type: string
+
+  /v1/auth/mfa/totp/enroll/verify:
+    post:
+      tags: [Identity]
+      summary: Confirm TOTP enrollment; returns recovery codes once
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret, code]
+              properties:
+                secret:
+                  type: string
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Enrollment complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes:
+                    type: array
+                    items:
+                      type: string
+
+  /v1/auth/mfa/totp/disable:
+    post:
+      tags: [Identity]
+      summary: Disable TOTP MFA for the current user
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: MFA disabled
+
+  /v1/auth/mfa/recovery-codes/regenerate:
+    post:
+      tags: [Identity]
+      summary: Regenerate MFA recovery codes (invalidates previous unused codes)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: New recovery codes (show once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes:
+                    type: array
+                    items:
+                      type: string
+
+  /v1/auth/sessions:
+    get:
+      tags: [Identity]
+      summary: List refresh sessions for the current user
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-MLAir-Refresh-Token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional current refresh token so the API can set is_current
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IdentitySession"
+
+  /v1/auth/sessions/{session_id}:
+    delete:
+      tags: [Identity]
+      summary: Revoke one of the current user's refresh sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session revoked
+
+  /v1/auth/pats:
+    get:
+      tags: [Identity]
+      summary: List personal access tokens (metadata only)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: PAT list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PersonalAccessToken"
+    post:
+      tags: [Identity]
+      summary: Create a personal access token (secret returned once)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                expires_in_days:
+                  type: integer
+                  nullable: true
+      responses:
+        "201":
+          description: Created PAT including token secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalAccessTokenCreated"
+
+  /v1/auth/pats/{pat_id}:
+    delete:
+      tags: [Identity]
+      summary: Revoke a personal access token
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pat_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: PAT revoked
 
   /v1/users:
     get:
@@ -3260,12 +3535,121 @@ components:
           type: string
 
     LoginResponse:
+      type: object
+      description: |
+        Either a full token pair (`access_token` + `refresh_token`) or an MFA
+        challenge (`mfa_required` + `challenge_token`).
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+        mfa_required:
+          type: boolean
+        challenge_token:
+          type: string
+        challenge_expires_in:
+          type: integer
+        user:
+          $ref: "#/components/schemas/JsonValue"
+
+    MfaVerifyRequest:
+      type: object
+      required: [challenge_token]
+      properties:
+        challenge_token:
+          type: string
+        otp_code:
+          type: string
+          nullable: true
+          description: 6-digit TOTP code
+        recovery_code:
+          type: string
+          nullable: true
+          description: Recovery code (XXXX-XXXX); normalized server-side
+
+    MfaStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        method:
+          type: string
+          nullable: true
+          enum: [totp]
+        enabled_at:
+          type: string
+          nullable: true
+        last_used_at:
+          type: string
+          nullable: true
+        recovery_codes_remaining:
+          type: integer
+
+    IdentitySession:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        created_at:
+          type: string
+          nullable: true
+        last_used_at:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          nullable: true
+        revoked_at:
+          type: string
+          nullable: true
+        ip:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        is_current:
+          type: boolean
+
+    PersonalAccessToken:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          nullable: true
+        revoked_at:
+          type: string
+          nullable: true
+        last_used_at:
+          type: string
+          nullable: true
+
+    PersonalAccessTokenCreated:
       allOf:
-        - $ref: "#/components/schemas/TokenResponse"
+        - $ref: "#/components/schemas/PersonalAccessToken"
         - type: object
+          required: [token]
           properties:
-            user:
-              $ref: "#/components/schemas/JsonValue"
+            token:
+              type: string
+              description: Secret shown once at creation
 
     UserCreateRequest:
       type: object

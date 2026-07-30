@@ -10,7 +10,7 @@ Extend MLAir with custom pipeline steps (plugins) using **documented contracts o
 |------|---------|
 | **Plugin** | Named task capability (`meta.name` in pipeline YAML) |
 | **Entry point** | Python package exposes classes via `mlair.plugins` group |
-| **Execution mode** | **internal** (built-in executor) or **external** (leased worker) — [Task execution mode](../concepts/task-execution-mode.md) |
+| **Execution mode** | **internal** (built-in executor) or **external** (leased worker) — [Task execution mode](./concepts/task-execution-mode.md) |
 
 MLAir owns orchestration, retries, tracking, and lineage; your plugin owns the step logic.
 

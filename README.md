@@ -54,7 +54,7 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 - Redis-backed queues; stateless executor; dedicated scheduler
 - Run/task lifecycle with retries, DLQ replay, transition guards
 - Tenant / project scoping on APIs and stored entities
-- Auth: dev bearer tokens, JWT (HS256), OAuth2 issuer / JWKS (RS256) where configured
+- Auth: login-first identity (JWT access + refresh), optional MFA (TOTP + recovery codes), PATs, self-service sessions; legacy static bearer tokens when `ML_AIR_LEGACY_STATIC_TOKENS=1`; OAuth2 issuer / JWKS (RS256) where configured
 - RBAC enforcement on sensitive paths
 
 ### ML tracking & registry
@@ -74,8 +74,9 @@ Use this as a quick “what exists today” view. Notable shipped changes are su
 
 ### Operator UI (Next.js)
 
-- Scope context: tenant / project / token + env-based API base URL
-- Routes: `/dashboard`, `/runs`, `/runs/[runId]`, `/pipelines`, `/pipelines/[pipelineId]`, `/pipelines/.../versions`, `/pipelines/.../diff`, `/tasks/[taskId]`, `/models`, `/models/[modelId]`, `/datasets`, `/datasets/[datasetId]`, `/lifecycle`, `/lineage`, `/search`, `/settings`
+- Scope context: tenant / project via topbar + bootstrap; env-based API base URL
+- Routes: `/dashboard`, `/runs`, `/runs/[runId]`, `/pipelines`, `/pipelines/[pipelineId]`, `/pipelines/.../versions`, `/pipelines/.../diff`, `/tasks/[taskId]`, `/models`, `/models/[modelId]`, `/datasets`, `/datasets/[datasetId]`, `/lifecycle`, `/lineage`, `/search`, `/login`, `/settings/*` (profile, security, sessions, CLI/PATs, preferences, about), `/identity/*` (users, service accounts, audit, sessions, auth policy, platform)
+- Account menu (topbar avatar): Profile + Sign out
 - DAG visualization, run detail, logs / timeline, error handling patterns
 - Custom **SelectDropdown** controls where native `<select>` broke under layout (overflow / sticky / blur); topbar tenant/project pickers use the same pattern
 

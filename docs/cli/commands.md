@@ -67,3 +67,4 @@ Environment (optional overrides):
 ## Done
 
 See [Quickstart](../getting-started/quickstart.md) for first pipeline run.
+Detail pages: [`mlair run`](./run.md), [`mlair logs`](./logs.md), [CLI local development](./dev.md).

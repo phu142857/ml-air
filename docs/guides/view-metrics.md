@@ -47,7 +47,7 @@ curl -sG "http://localhost:39090/api/v1/query" --data-urlencode 'query=sum by (b
 
 **Tenant-aware alerts:** Prometheus group `mlair-lifecycle-semantic-tenant` fires per `tenant_id`; route in Alertmanager — see [Production maturity](./production-maturity.md).
 
-Stable internal → canonical → `reason` mapping: [Readiness and gating — Canonical readiness reason codes](./readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair).
+Stable internal → canonical → `reason` mapping: [Readiness and gating — Canonical readiness reason codes](../api/readiness-and-gating.md#canonical-readiness-reason-codes-global-contract-for-mlair).
 
 Example:
 
