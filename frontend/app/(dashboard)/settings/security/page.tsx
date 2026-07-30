@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { VerificationCodeInput } from "@/components/auth/verification-code-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -206,22 +207,22 @@ export default function SettingsSecurityPage() {
                 <code className="block rounded bg-background px-2 py-1 font-mono text-xs text-foreground">
                   {enrollSecret}
                 </code>
-                <div className="max-w-xs space-y-1.5">
-                  <Label htmlFor="mfa-code">Verification code</Label>
-                  <Input
-                    id="mfa-code"
-                    value={enrollOtp}
-                    onChange={(e) => setEnrollOtp(e.target.value)}
-                    placeholder="123456"
-                    className="h-9 font-mono"
-                  />
-                </div>
+                <VerificationCodeInput
+                  id="mfa-code"
+                  length={6}
+                  mode="numeric"
+                  label="Verification code"
+                  value={enrollOtp}
+                  onChange={setEnrollOtp}
+                  disabled={enrollVerifyMutation.isPending}
+                  autoFocus
+                />
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     size="sm"
                     onClick={() => enrollVerifyMutation.mutate()}
-                    disabled={enrollVerifyMutation.isPending || enrollOtp.trim().length < 6}
+                    disabled={enrollVerifyMutation.isPending || enrollOtp.length < 6}
                   >
                     {enrollVerifyMutation.isPending ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
                     Verify and enable

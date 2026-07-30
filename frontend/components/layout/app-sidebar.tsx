@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Route,
 } from "lucide-react"
+import { MlairLogo } from "@/components/brand/mlair-logo"
 import {
   Sidebar,
   SidebarContent,
@@ -102,19 +103,14 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <Link href="/datasets" className="group flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Network
-              strokeWidth={1.75}
-              className="h-4 w-4 text-primary-foreground"
-            />
-          </div>
+        <Link href="/datasets" className="group flex min-w-0 items-center gap-2.5">
+          <MlairLogo size="sm" className="shrink-0" alt="" />
           <div className="flex min-w-0 flex-col">
             <span className="font-heading truncate text-sm font-semibold tracking-tight text-foreground">
-              ML-Air Hub
+              MLAir Hub
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              lifecycle-first
+            <span className="truncate text-[10px] tracking-wide text-muted-foreground">
+              MLOps · Anywhere
             </span>
           </div>
         </Link>

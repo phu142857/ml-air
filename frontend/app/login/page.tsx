@@ -12,6 +12,8 @@ import {
   saveAuthSession,
   verifyIdentityMfa,
 } from "@/lib/identity-api";
+import { VerificationCodeInput } from "@/components/auth/verification-code-input";
+import { MlairLogo } from "@/components/brand/mlair-logo";
 import { consumeLogoutReason } from "@/lib/auth-session";
 import { resolveHubDefaultRoute, hubDefaultRoutePath } from "@/lib/hub-default-route";
 
@@ -136,9 +138,12 @@ export default function LoginPage() {
         onSubmit={onSubmit}
         className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-6 shadow-sm"
       >
-        <div>
-          <h1 className="text-xl font-semibold font-heading">MLAir Hub</h1>
-          <p className="text-sm text-muted-foreground">Sign in with your account</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <MlairLogo size="hero" priority alt="MLAir" />
+          <div>
+            <h1 className="sr-only">MLAir Hub</h1>
+            <p className="text-sm text-muted-foreground">Sign in with your account</p>
+          </div>
         </div>
         <label className="block space-y-1 text-sm">
           <span>Username</span>
@@ -167,28 +172,27 @@ export default function LoginPage() {
           <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3">
             <p className="text-sm font-medium">Multi-factor authentication required</p>
             {!useRecoveryCode ? (
-              <label className="block space-y-1 text-sm">
-                <span>Authenticator code</span>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 font-mono"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="123456"
-                  required
-                />
-              </label>
+              <VerificationCodeInput
+                id="login-mfa-otp"
+                length={6}
+                mode="numeric"
+                label="Authenticator code"
+                value={otpCode}
+                onChange={setOtpCode}
+                disabled={loading}
+                autoFocus
+              />
             ) : (
-              <label className="block space-y-1 text-sm">
-                <span>Recovery code</span>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 font-mono"
-                  value={recoveryCode}
-                  onChange={(e) => setRecoveryCode(e.target.value)}
-                  placeholder="ABCD-1234"
-                  required
-                />
-              </label>
+              <VerificationCodeInput
+                id="login-mfa-recovery"
+                length={8}
+                mode="alphanumeric"
+                label="Recovery code"
+                value={recoveryCode}
+                onChange={setRecoveryCode}
+                disabled={loading}
+                autoFocus
+              />
             )}
             <button
               type="button"
@@ -211,7 +215,11 @@ export default function LoginPage() {
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <button
           type="submit"
-          disabled={loading}
+          disabled={
+            loading ||
+            (Boolean(mfaChallengeToken) &&
+              (useRecoveryCode ? recoveryCode.length < 8 : otpCode.length < 6))
+          }
           className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
           {loading ? "Signing in…" : mfaChallengeToken ? "Verify and sign in" : "Sign in"}

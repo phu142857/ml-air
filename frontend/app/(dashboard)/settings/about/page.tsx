@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MlairLogo } from "@/components/brand/mlair-logo";
 import { MetadataList, SettingsPage, SettingsPageHeader, SettingsSection } from "@/components/settings/enterprise";
 import { getApiBaseUrl } from "@/lib/api";
 import { getRuntimeConfig } from "@/lib/runtime-config";
@@ -22,10 +23,22 @@ export default function SettingsAboutPage() {
         description="Product, deployment, and documentation references."
       />
 
+      <SettingsSection id="brand" title="Brand" description="Official product mark.">
+        <div className="flex items-center gap-4">
+          <MlairLogo size="lg" alt="MLAir logo" />
+          <div className="min-w-0 space-y-1">
+            <p className="font-heading text-sm font-semibold text-foreground">MLAir</p>
+            <p className="text-xs text-muted-foreground">
+              MLOps · Anywhere · Intelligent · Reliable
+            </p>
+          </div>
+        </div>
+      </SettingsSection>
+
       <SettingsSection id="metadata" title="Metadata" description="Read-only deployment information.">
         <MetadataList
           items={[
-            { label: "Product", value: "ML-Air Hub (control plane)" },
+            { label: "Product", value: "MLAir Hub (control plane)" },
             { label: "Environment", value: env, mono: true },
             { label: "API endpoint", value: `${apiBase}/v1`, mono: true },
             { label: "Frontend", value: "Next.js Hub UI", mono: true },

@@ -24,8 +24,12 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ML-Air Hub | MLOps Control Plane",
+  title: "MLAir Hub | MLOps Control Plane",
   description: "Enterprise MLOps Control Plane & Governance Surface",
+  icons: {
+    icon: [{ url: "/brand/mlair-logo-512.png", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
