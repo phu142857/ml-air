@@ -49,7 +49,16 @@ def parse_env_keys(path: Path) -> set[str]:
 
 def parse_compose_refs(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8")
-    return set(ENV_REF_RE.findall(text))
+    # Ignore YAML comments so examples like `${VAR:-default}` in prose do not become required keys.
+    lines = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        if " #" in line:
+            line = line.split(" #", 1)[0]
+        lines.append(line)
+    return set(ENV_REF_RE.findall("\n".join(lines)))
 
 
 def _is_contract_excluded(key: str) -> bool:

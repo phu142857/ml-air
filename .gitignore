@@ -66,7 +66,13 @@ pip-wheel-metadata/
 .venv/
 venv/
 ENV/
-env/
+/env/
+# Keep deploy/env/*.example tracked (strict lifecycle overlays); ignore local copies.
+deploy/env/*
+!deploy/env/*.example
+!deploy/env/*.example.*
+!deploy/env/README.md
+!deploy/env/.gitkeep
 
 # Tools / test caches
 .pytest_cache/
