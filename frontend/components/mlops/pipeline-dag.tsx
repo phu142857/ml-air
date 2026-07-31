@@ -18,6 +18,7 @@ import "@xyflow/react/dist/style.css"
 import { Download, GitBranch, Cpu, CheckCircle2, FlaskConical, Rocket, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChartTheme } from "@/hooks/use-chart-theme"
+import { dagFlowEdgeTypes, type DagFlowEdgeData } from "@/components/mlops/dag-flow-edge"
 import {
   Tooltip,
   TooltipContent,
@@ -157,7 +158,7 @@ interface PipelineDAGProps {
 
 export function PipelineDAG({ pipeline, taskScope }: PipelineDAGProps) {
   const router = useRouter()
-  const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme()
+  const { flowBackground, flowColorMode } = useChartTheme()
 
   const stages = Array.isArray(pipeline?.stages) ? pipeline.stages : []
 
@@ -179,28 +180,33 @@ export function PipelineDAG({ pipeline, taskScope }: PipelineDAGProps) {
       data: { stage, clickable: Boolean(taskScope?.runId?.trim()) },
     }))
 
-    const initialEdges: Edge[] = stages.flatMap((stage) =>
-      (Array.isArray(stage.dependencies) ? stage.dependencies : []).map((depId) => ({
-        id: `${depId}-${stage.id}`,
-        source: depId,
-        target: stage.id,
-        animated: stageMap.get(depId)?.status === "running",
-        style: {
-          stroke:
-            stageMap.get(depId)?.status === "success"
-              ? "#10b981"
-              : stageMap.get(depId)?.status === "running"
-                ? "#0ea5e9"
-                : flowEdgeStroke,
-          strokeWidth: 2,
-        },
-      }))
+    const initialEdges: Edge<DagFlowEdgeData>[] = stages.flatMap((stage) =>
+      (Array.isArray(stage.dependencies) ? stage.dependencies : []).map((depId) => {
+        const depStatus = stageMap.get(depId)?.status
+        const accentStroke =
+          depStatus === "success"
+            ? "#10b981"
+            : depStatus === "running"
+              ? "#0ea5e9"
+              : depStatus === "failed"
+                ? "#ef4444"
+                : undefined
+        return {
+          id: `${depId}-${stage.id}`,
+          source: depId,
+          target: stage.id,
+          type: "dag",
+          animated: false,
+          data: accentStroke ? { accentStroke } : {},
+          style: { strokeWidth: 2.25 },
+        }
+      }),
     )
 
     const canvasHeight = estimateDagCanvasHeight(nodeIds, dagEdges, { minHeight: 260 })
 
     return { nodes: initialNodes, edges: initialEdges, canvasHeight }
-  }, [stages, flowEdgeStroke, taskScope?.runId])
+  }, [stages, taskScope?.runId])
 
   const [nodesState, setNodes, onNodesChange] = useNodesState(nodes)
   const [edgesState, setEdges, onEdgesChange] = useEdgesState(edges)
@@ -225,7 +231,7 @@ export function PipelineDAG({ pipeline, taskScope }: PipelineDAGProps) {
   return (
     <TooltipProvider delayDuration={200}>
       <div
-        className="w-full overflow-hidden inset-surface"
+        className="mlair-dag-flow w-full overflow-hidden inset-surface"
         style={{ height: canvasHeight }}
       >
         <ReactFlow
@@ -235,8 +241,8 @@ export function PipelineDAG({ pipeline, taskScope }: PipelineDAGProps) {
           onEdgesChange={onEdgesChange}
           onNodeClick={taskScope?.runId ? handleNodeClick : undefined}
           nodeTypes={nodeTypes}
+          edgeTypes={dagFlowEdgeTypes}
           colorMode={flowColorMode}
-          defaultMarkerColor={flowEdgeStroke}
           fitView
           fitViewOptions={{ padding: 0.35, minZoom: 0.4, maxZoom: 1.2 }}
           minZoom={0.25}

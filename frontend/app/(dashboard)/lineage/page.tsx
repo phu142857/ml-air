@@ -3,25 +3,19 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  Handle,
-  Position,
-  useNodesState,
-  useEdgesState,
-  type Node,
-  type Edge,
-  type NodeProps,
-} from "@xyflow/react"
-import "@xyflow/react/dist/style.css"
-import { Network, Database, GitBranch, Box, Layers, Loader2 } from "lucide-react"
+import { Network, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { ResourcePageHeader, ScopePinnedInline, MlopsEmptyState } from "@/components/mlops/layout"
-import { cn, formatApiClientError } from "@/lib/utils"
+import {
+  LineageGraph,
+  LineageLegend,
+  inferDatasetKind,
+  taskDisplayName,
+  type LineageGraphEdge,
+  type LineageGraphNode,
+} from "@/components/mlops/lineage-graph"
+import { formatApiClientError } from "@/lib/utils"
 import { useAppContext } from "@/lib/app-context"
 import { SCOPE_AGGREGATE_LINEAGE } from "@/lib/scope-messages"
 import {
@@ -31,75 +25,6 @@ import {
   type DatasetVersionItem,
 } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
-import { useChartTheme } from "@/hooks/use-chart-theme"
-
-const nodeTypeConfig = {
-  dataset: {
-    icon: Database,
-    iconClass: "bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]",
-    border: "border-[color:var(--status-success-border)]",
-    bg: "bg-card",
-  },
-  pipeline: {
-    icon: GitBranch,
-    iconClass: "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
-    border: "border-[color:var(--status-pending-border)]",
-    bg: "bg-card",
-  },
-  model: {
-    icon: Box,
-    iconClass: "bg-primary/10 text-primary",
-    border: "border-primary/30",
-    bg: "bg-card",
-  },
-  feature: {
-    icon: Layers,
-    iconClass: "bg-muted text-foreground",
-    border: "border-border/60",
-    bg: "bg-card",
-  },
-}
-
-type LineageGraphNode = {
-  id: string
-  type: keyof typeof nodeTypeConfig
-  name: string
-  version?: string
-}
-
-interface LineageNodeData {
-  node: LineageGraphNode
-  [key: string]: unknown
-}
-
-function LineageNode({ data }: NodeProps<Node<LineageNodeData>>) {
-  const node = data.node
-  const config = nodeTypeConfig[node.type]
-  const Icon = config.icon
-
-  return (
-    <>
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-border !bg-muted-foreground/50" />
-      <div className={cn("min-w-[140px] rounded-xl border px-4 py-3", config.border, config.bg)}>
-        <div className="mb-1 flex items-center gap-2">
-          <div className={cn("rounded-lg p-1.5", config.iconClass)}>
-            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-          </div>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{node.type}</span>
-        </div>
-        <div className="text-sm font-medium text-foreground">{node.name}</div>
-        {node.version ? <div className="mt-1 font-mono text-[10px] text-muted-foreground">{node.version}</div> : null}
-      </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-border !bg-muted-foreground/50" />
-    </>
-  )
-}
-
-const nodeTypes = {
-  lineage: LineageNode,
-}
-
-type RfEdge = { id: string; source: string; target: string }
 
 function dvId(versionId: string) {
   return `dv:${versionId}`
@@ -122,62 +47,6 @@ function versionMeta(
   return { name: short }
 }
 
-function layerDepth(nodeIds: string[], edges: Array<{ source: string; target: string }>): Map<string, number> {
-  const adj = new Map<string, string[]>()
-  const indeg = new Map<string, number>()
-  for (const id of nodeIds) {
-    indeg.set(id, 0)
-    adj.set(id, [])
-  }
-  for (const e of edges) {
-    if (!adj.has(e.source) || !indeg.has(e.target)) continue
-    adj.get(e.source)!.push(e.target)
-    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1)
-  }
-  const depth = new Map<string, number>()
-  const rem = new Map(indeg)
-  let frontier = nodeIds.filter((id) => (rem.get(id) ?? 0) === 0)
-  let d = 0
-  while (frontier.length && d < 24) {
-    const next = new Set<string>()
-    for (const u of frontier) {
-      if (depth.has(u)) continue
-      depth.set(u, d)
-      for (const v of adj.get(u) || []) {
-        rem.set(v, (rem.get(v) ?? 1) - 1)
-        if ((rem.get(v) ?? 0) === 0) next.add(v)
-      }
-    }
-    frontier = [...next]
-    d++
-  }
-  let i = 0
-  for (const id of nodeIds) {
-    if (!depth.has(id)) depth.set(id, d + (i++ % 3))
-  }
-  return depth
-}
-
-function layoutPositions(
-  nodeIds: string[],
-  edges: Array<{ source: string; target: string }>,
-): Record<string, { x: number; y: number }> {
-  const layers = layerDepth(nodeIds, edges)
-  const byLayer = new Map<number, string[]>()
-  for (const id of nodeIds) {
-    const L = layers.get(id) ?? 0
-    if (!byLayer.has(L)) byLayer.set(L, [])
-    byLayer.get(L)!.push(id)
-  }
-  const pos: Record<string, { x: number; y: number }> = {}
-  for (const [L, list] of byLayer) {
-    list.forEach((id, i) => {
-      pos[id] = { x: L * 300, y: i * 120 }
-    })
-  }
-  return pos
-}
-
 function buildFromRunLineage(
   edges: Array<{
     edge_id: string
@@ -190,9 +59,9 @@ function buildFromRunLineage(
     output_version?: string | null
   }>,
   versions: DatasetVersionItem[] | undefined,
-): { nodes: LineageGraphNode[]; rfEdges: RfEdge[] } {
+): { nodes: LineageGraphNode[]; edges: LineageGraphEdge[] } {
   const nodeMap = new Map<string, LineageGraphNode>()
-  const rfEdges: RfEdge[] = []
+  const rfEdges: LineageGraphEdge[] = []
   const seen = new Set<string>()
 
   const addDv = (vid: string | null, name: string | null | undefined, ver: string | null | undefined) => {
@@ -200,11 +69,13 @@ function buildFromRunLineage(
     const id = dvId(vid)
     if (nodeMap.has(id)) return
     const meta = versionMeta(vid, versions)
+    const displayName = name?.trim() || meta.name
     nodeMap.set(id, {
       id,
-      type: "dataset",
-      name: name?.trim() || meta.name,
-      version: ver?.trim() || meta.version,
+      kind: inferDatasetKind(displayName),
+      label: displayName,
+      subtitle: ver?.trim() || meta.version,
+      detail: vid,
     })
   }
 
@@ -213,25 +84,32 @@ function buildFromRunLineage(
     addDv(e.output_version_id, e.output_dataset_name, e.output_version)
     const tid = taskNodeId(e.task_id)
     if (!nodeMap.has(tid)) {
-      nodeMap.set(tid, { id: tid, type: "pipeline", name: e.task_id })
+      const { label, detail } = taskDisplayName(e.task_id)
+      nodeMap.set(tid, {
+        id: tid,
+        kind: "task",
+        label,
+        subtitle: "operator",
+        detail,
+      })
     }
     if (e.input_version_id) {
       const key = `${e.edge_id}-in`
       if (!seen.has(key)) {
         seen.add(key)
-        rfEdges.push({ id: key, source: dvId(e.input_version_id), target: tid })
+        rfEdges.push({ id: key, source: dvId(e.input_version_id), target: tid, label: "reads" })
       }
     }
     if (e.output_version_id) {
       const key = `${e.edge_id}-out`
       if (!seen.has(key)) {
         seen.add(key)
-        rfEdges.push({ id: key, source: tid, target: dvId(e.output_version_id) })
+        rfEdges.push({ id: key, source: tid, target: dvId(e.output_version_id), label: "writes" })
       }
     }
   }
 
-  return { nodes: [...nodeMap.values()], rfEdges }
+  return { nodes: [...nodeMap.values()], edges: rfEdges }
 }
 
 function buildFromNeighborhood(
@@ -243,7 +121,7 @@ function buildFromNeighborhood(
     output_dataset_version_id: string | null
   }>,
   versions: DatasetVersionItem[] | undefined,
-): { nodes: LineageGraphNode[]; rfEdges: RfEdge[] } {
+): { nodes: LineageGraphNode[]; edges: LineageGraphEdge[] } {
   const mapped = edges.map((e) => ({
     edge_id: e.edge_id,
     task_id: e.task_id,
@@ -255,32 +133,6 @@ function buildFromNeighborhood(
     output_version: null as string | null,
   }))
   return buildFromRunLineage(mapped, versions)
-}
-
-function toReactFlow(
-  nodes: LineageGraphNode[],
-  rfEdges: RfEdge[],
-  edgeStroke: string,
-): { nodes: Node<LineageNodeData>[]; edges: Edge[] } {
-  const ids = nodes.map((n) => n.id)
-  const pos = layoutPositions(
-    ids,
-    rfEdges.map((e) => ({ source: e.source, target: e.target })),
-  )
-  const rfNodes: Node<LineageNodeData>[] = nodes.map((n) => ({
-    id: n.id,
-    type: "lineage",
-    position: pos[n.id] || { x: 0, y: 0 },
-    data: { node: n },
-  }))
-  const rfEdgesOut: Edge[] = rfEdges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    animated: true,
-    style: { stroke: edgeStroke, strokeWidth: 2 },
-  }))
-  return { nodes: rfNodes, edges: rfEdgesOut }
 }
 
 function pickLatestVersionId(items: DatasetVersionItem[]): string | null {
@@ -297,11 +149,10 @@ function LineagePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { tenantId, projectId, token } = useAppContext()
-  const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme()
   const canScope = tenantId !== "all" && projectId !== "all"
   const enabled = Boolean(token?.trim()) && canScope
 
-  const runParam = (searchParams.get("run") || "").trim()
+  const runParam = (searchParams.get("run") || searchParams.get("run_id") || "").trim()
   const datasetVersionParam = (
     searchParams.get("datasetVersion") ||
     searchParams.get("datasetVersionId") ||
@@ -369,18 +220,8 @@ function LineagePageInner() {
     if (mode === "datasetVersion" && lineageNbQuery.data) {
       return buildFromNeighborhood(lineageNbQuery.data.edges, lineageNbQuery.data.dataset_versions)
     }
-    return { nodes: [] as LineageGraphNode[], rfEdges: [] as RfEdge[] }
+    return { nodes: [] as LineageGraphNode[], edges: [] as LineageGraphEdge[] }
   }, [mode, lineageRunQuery.data, lineageNbQuery.data])
-
-  const rf = useMemo(() => toReactFlow(graph.nodes, graph.rfEdges, flowEdgeStroke), [graph, flowEdgeStroke])
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(rf.nodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(rf.edges)
-
-  useEffect(() => {
-    setNodes(rf.nodes)
-    setEdges(rf.edges)
-  }, [rf, setNodes, setEdges])
 
   const activeError =
     mode === "run"
@@ -439,6 +280,9 @@ function LineagePageInner() {
                 placeholder="run_…"
                 className="h-8 min-w-[200px] border-border bg-card font-mono text-xs"
                 disabled={!canScope}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyRun()
+                }}
               />
               <Button
                 type="button"
@@ -461,6 +305,9 @@ function LineagePageInner() {
                 placeholder="dataset_versions.version_id"
                 className="h-8 min-w-[220px] border-border bg-card font-mono text-xs"
                 disabled={!canScope}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyDatasetVersion()
+                }}
               />
               <Button
                 type="button"
@@ -479,20 +326,7 @@ function LineagePageInner() {
       </div>
 
       <div className="page-toolbar">
-        <div className="flex flex-wrap items-center gap-6">
-          <span className="text-xs font-medium text-muted-foreground">Node types</span>
-          {Object.entries(nodeTypeConfig).map(([type, config]) => {
-            const Icon = config.icon
-            return (
-              <div key={type} className="flex items-center gap-1.5">
-                <div className={cn("rounded-lg p-1", config.iconClass)}>
-                  <Icon className="h-3 w-3" strokeWidth={1.75} />
-                </div>
-                <span className="text-xs capitalize text-muted-foreground">{type}</span>
-              </div>
-            )
-          })}
-        </div>
+        <LineageLegend />
       </div>
 
       {activeError ? (
@@ -534,35 +368,18 @@ function LineagePageInner() {
           </div>
         ) : null}
         <div className="relative min-h-0 flex-1 scroll-region">
-        {!mode ? (
-          <div className="flex h-full items-center justify-center p-8">
-            <MlopsEmptyState
-              icon={Network}
-              title="No graph loaded"
-              description="Enter a run ID or dataset version ID above, use ?datasetId= for the latest version of a dataset, or open lineage from a run or dataset page."
-              className="max-w-lg border-0 bg-transparent"
-            />
-          </div>
-        ) : (
-          <ReactFlow
-            className="h-full w-full"
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            nodeTypes={nodeTypes}
-            colorMode={flowColorMode}
-            defaultMarkerColor={flowEdgeStroke}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
-            minZoom={0.25}
-            maxZoom={1.5}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background color={flowBackground} gap={20} size={1} />
-            <Controls className="!bg-card !border-border !rounded-lg [&>button]:!bg-muted [&>button]:!border-border [&>button]:!text-muted-foreground [&>button:hover]:!bg-accent" />
-          </ReactFlow>
-        )}
+          {!mode ? (
+            <div className="flex h-full items-center justify-center p-8">
+              <MlopsEmptyState
+                icon={Network}
+                title="No graph loaded"
+                description="Enter a run ID or dataset version ID above, use ?datasetId= for the latest version of a dataset, or open lineage from a run or dataset page."
+                className="max-w-lg border-0 bg-transparent"
+              />
+            </div>
+          ) : (
+            <LineageGraph nodes={graph.nodes} edges={graph.edges} />
+          )}
         </div>
       </div>
     </div>

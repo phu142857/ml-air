@@ -133,16 +133,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-background to-muted/30 px-4 py-10">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-6 shadow-sm"
+        className="w-full max-w-md space-y-5 rounded-xl border border-border/70 bg-card p-8 shadow-sm"
       >
-        <div className="flex flex-col items-center gap-3 text-center">
-          <MlairLogo size="hero" priority alt="MLAir" />
-          <div>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <MlairLogo size="hero" priority alt="MLAir" className="rounded-xl p-1" />
+          <div className="space-y-1">
             <h1 className="sr-only">MLAir Hub</h1>
-            <p className="text-sm text-muted-foreground">Sign in with your account</p>
+            <p className="text-sm font-medium text-foreground">Sign in to MLAir Hub</p>
+            <p className="text-xs text-muted-foreground">Lifecycle control plane for datasets, runs, and models</p>
           </div>
         </div>
         <label className="block space-y-1 text-sm">

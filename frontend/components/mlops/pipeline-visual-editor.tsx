@@ -22,6 +22,7 @@ import type { NormalizedPipelineConfig, PipelineTaskConfig } from "@/lib/pipelin
 import { inferStageTypeFromLabel } from "@/lib/pipeline/infer-stage-type";
 import { estimateDagCanvasHeight, layoutDagPositions } from "@/lib/pipeline-dag-layout";
 import { useChartTheme } from "@/hooks/use-chart-theme";
+import { dagFlowEdgeTypes } from "@/components/mlops/dag-flow-edge";
 import { cn } from "@/lib/utils";
 import type { PipelineStage } from "@/lib/pipeline-types";
 
@@ -81,7 +82,7 @@ function applyDependsOn(tasks: PipelineTaskConfig[], depends: Map<string, string
 }
 
 export function PipelineVisualEditor({ pipelineId, config, onChange, className }: Props) {
-  const { flowBackground, flowEdgeStroke, flowColorMode } = useChartTheme();
+  const { flowBackground, flowColorMode } = useChartTheme();
   const [selectedId, setSelectedId] = useState<string | null>(config.tasks[0]?.id ?? null);
 
   const preview = useMemo(() => configToPreviewPipeline(pipelineId, config), [pipelineId, config]);
@@ -105,7 +106,9 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
         id: `${depId}-${stage.id}`,
         source: depId,
         target: stage.id,
-        style: { stroke: flowEdgeStroke, strokeWidth: 2 },
+        type: "dag",
+        animated: false,
+        style: { strokeWidth: 2.25 },
       })),
     );
     return {
@@ -113,7 +116,7 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
       edges: initialEdges,
       canvasHeight: estimateDagCanvasHeight(nodeIds, dagEdges, { minHeight: 280 }),
     };
-  }, [preview.stages, flowEdgeStroke, selectedId]);
+  }, [preview.stages, selectedId]);
 
   const [nodesState, setNodes, onNodesChange] = useNodesState(nodes);
   const [edgesState, setEdges, onEdgesChange] = useEdgesState(edges);
@@ -137,7 +140,9 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
         id: `${connection.source}-${connection.target}`,
         source: connection.source,
         target: connection.target,
-        style: { stroke: flowEdgeStroke, strokeWidth: 2 },
+        type: "dag",
+        animated: false,
+        style: { strokeWidth: 2.25 },
       },
     ];
     setEdges(nextEdges);
@@ -199,7 +204,7 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="overflow-hidden rounded-xl border border-border/70" style={{ height: canvasHeight }}>
+        <div className="mlair-dag-flow overflow-hidden rounded-xl border border-border/70" style={{ height: canvasHeight }}>
           <ReactFlow
             nodes={nodesState}
             edges={edgesState}
@@ -209,10 +214,11 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
             onEdgesDelete={onEdgesDelete}
             onNodeClick={(_, node) => setSelectedId(node.id)}
             nodeTypes={nodeTypes}
+            edgeTypes={dagFlowEdgeTypes}
             colorMode={flowColorMode}
-            defaultMarkerColor={flowEdgeStroke}
             fitView
             deleteKeyCode={["Backspace", "Delete"]}
+            proOptions={{ hideAttribution: true }}
           >
             <Background color={flowBackground} gap={16} />
             <Controls />

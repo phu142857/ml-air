@@ -19,7 +19,7 @@ const sizeClass: Record<NonNullable<MlairLogoProps["size"]>, string> = {
   sm: "h-9 w-9",
   md: "h-12 w-12",
   lg: "h-16 w-16",
-  hero: "h-28 w-28 sm:h-32 sm:w-32",
+  hero: "h-36 w-36 sm:h-40 sm:w-40",
 };
 
 /**

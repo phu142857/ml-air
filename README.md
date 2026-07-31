@@ -40,6 +40,28 @@ flowchart LR
 **Operator path:** Dataset Hub → **Run / Train** → Hub Runs / lineage.  
 **Maintainer path:** Execution nav (pipelines, runs, tasks) for observability.
 
+### Hub at a glance
+
+<p align="center">
+  <img src="docs/assets/hub-runs.png" alt="MLAir Hub — Runs list (SUCCESS, FAILED, RUNNING)" width="820" />
+</p>
+<p align="center"><em>Runs — filterable execution list with SUCCESS, FAILED, and RUNNING</em></p>
+
+<p align="center">
+  <img src="docs/assets/hub-lineage.png" alt="MLAir Hub — Lineage graph" width="820" />
+</p>
+<p align="center"><em>Lineage — dataset → task → model / artifact graph</em></p>
+
+<p align="center">
+  <img src="docs/assets/hub-dataset.png" alt="MLAir Hub — Dataset overview" width="820" />
+</p>
+<p align="center"><em>Dataset Hub — versions, readiness, and runs on a pinned snapshot</em></p>
+
+<p align="center">
+  <img src="docs/assets/hub-model.png" alt="MLAir Hub — Model registry" width="820" />
+</p>
+<p align="center"><em>Models — registry overview, stage timeline, and approvals</em></p>
+
 ---
 
 ## Get started in 3 steps
