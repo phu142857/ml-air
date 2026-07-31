@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **README:** visitor-facing rewrite (logo, badges, 3-step start, capability pillars); deep status/env/sequence content deferred to docs / ARCHITECTURE.
 - **Identity / security:** rewritten [`docs/guides/login-and-identity.md`](docs/guides/login-and-identity.md); new [`mfa-and-recovery-codes.md`](docs/guides/mfa-and-recovery-codes.md), [`personal-access-tokens.md`](docs/guides/personal-access-tokens.md), [`manage-sessions.md`](docs/guides/manage-sessions.md); OpenAPI draft paths for MFA/PATs/sessions.
 - **Docs index / hygiene:** orphaned guides and API pages linked from [`docs/index.md`](docs/index.md); concept stubs expanded; broken links fixed in plugin-development-guide and view-metrics; [`docs/evaluation/README.md`](docs/evaluation/README.md) placeholder.
 - **Hub / gating guides:** [`docs/guides/dataset-hub-and-readiness.md`](docs/guides/dataset-hub-and-readiness.md), [`model-page-governance-mode.md`](docs/guides/model-page-governance-mode.md), [`configure-data-readiness-gating.md`](docs/guides/configure-data-readiness-gating.md), [`manage-datasets-and-train-from-model.md`](docs/guides/manage-datasets-and-train-from-model.md), [`model-centric-pipeline-mapping-and-trigger.md`](docs/guides/model-centric-pipeline-mapping-and-trigger.md) — aligned with observability-only pipeline UI and Run / Train intents.
