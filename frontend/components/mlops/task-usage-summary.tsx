@@ -38,7 +38,6 @@ export function TaskUsageSummary({ usage, enabled = true, loading }: TaskUsageSu
       <MlopsEmptyState
         icon={Activity}
         title="Usage tracking disabled"
-        description="Set ML_AIR_USAGE_TRACKING_ENABLED=1 on the API and scheduler to collect task metrics."
       />
     )
   }
@@ -48,7 +47,6 @@ export function TaskUsageSummary({ usage, enabled = true, loading }: TaskUsageSu
       <MlopsEmptyState
         icon={Activity}
         title="No resource usage yet"
-        description="Full CPU, memory, and GPU attribution appears here after the task completes."
       />
     )
   }

@@ -81,17 +81,16 @@ export default function IdentitySessionsPage() {
     >
       <SettingsPageHeader
         title="Sessions"
-        description="All non-revoked user sessions across the platform."
       />
 
-      <SettingsSection id="sessions" title="Active sessions" description="Interactive login sessions by user and device.">
+      <SettingsSection id="sessions" title="Active sessions">
         {expiredCount > 0 ? (
           <p className="mb-3 text-xs text-muted-foreground">
             Hidden {expiredCount} expired session{expiredCount > 1 ? "s" : ""} from the list.
           </p>
         ) : null}
         {items.length === 0 && !sessionsQuery.isLoading ? (
-          <SettingsEmptyState title="No active sessions" description="No users are currently signed in." />
+          <SettingsEmptyState title="No active sessions" />
         ) : (
           <div className="space-y-3">
             {items.map((session) => (
@@ -134,10 +133,9 @@ export default function IdentitySessionsPage() {
         )}
       </SettingsSection>
 
-      <DangerZone description="Immediately sign out all users. Use during a security incident.">
+      <DangerZone>
         <DangerZoneAction
           title="Revoke all sessions"
-          description="Ends every active session platform-wide. All users must sign in again."
           action={
             <Button
               size="sm"

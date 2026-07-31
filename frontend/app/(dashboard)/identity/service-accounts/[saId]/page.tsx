@@ -251,7 +251,6 @@ export default function IdentityServiceAccountDetailPage() {
     <SettingsPage loading={saQuery.isLoading} error={saQuery.error ? (saQuery.error as Error).message : null}>
       <SettingsPageHeader
         title={sa?.name || "Service account"}
-        description="Machine identity for workers, schedulers, and API automation."
         backHref="/identity/service-accounts"
         backLabel="Service accounts"
         badge={sa ? <IdentityStatusBadge state={sa.state} /> : null}
@@ -259,7 +258,7 @@ export default function IdentityServiceAccountDetailPage() {
 
       {sa ? (
         <>
-          <SettingsSection id="general" title="General" description="Editable account information.">
+          <SettingsSection id="general" title="General">
             <div className="space-y-1.5">
               <Label htmlFor="sa-description">Description</Label>
               <Textarea
@@ -279,7 +278,7 @@ export default function IdentityServiceAccountDetailPage() {
             />
           </SettingsSection>
 
-          <SettingsSection id="metadata" title="Metadata" description="Read-only record details.">
+          <SettingsSection id="metadata" title="Metadata">
             <MetadataList
               items={[
                 { label: "Account ID", value: saId, mono: true },
@@ -292,7 +291,7 @@ export default function IdentityServiceAccountDetailPage() {
             />
           </SettingsSection>
 
-          <SettingsSection id="permissions" title="Permissions" description="API capabilities granted to this account.">
+          <SettingsSection id="permissions" title="Permissions">
             <div className="grid gap-2 sm:grid-cols-2">
               {SA_PERMISSION_CATALOG.map((perm) => (
                 <label key={perm} className="flex items-center gap-2.5 rounded-md border border-border/50 px-3 py-2 text-sm">
@@ -314,11 +313,10 @@ export default function IdentityServiceAccountDetailPage() {
             />
           </SettingsSection>
 
-          <SettingsSection id="scopes" title="Scopes" description="Tenant and project boundaries for this account.">
+          <SettingsSection id="scopes" title="Scopes">
             {(scopesQuery.data || []).length === 0 ? (
               <SettingsEmptyState
                 title="No scopes configured"
-                description="Add a scope to limit which tenants and projects this account can access."
                 actionLabel="Add scope below"
                 onAction={() => document.getElementById("sa-scope-form")?.scrollIntoView({ behavior: "smooth" })}
               />
@@ -391,12 +389,10 @@ export default function IdentityServiceAccountDetailPage() {
           <SettingsSection
             id="tokens"
             title="API tokens"
-            description="Tokens are revealed once at creation. Existing tokens cannot be edited."
           >
             {activeTokens.length === 0 && !showSecret ? (
               <SettingsEmptyState
                 title="No active tokens"
-                description="Generate a token to authenticate API requests as this service account."
                 actionLabel="Generate token"
                 onAction={() => issue.mutate()}
               />
@@ -431,11 +427,10 @@ export default function IdentityServiceAccountDetailPage() {
             ) : null}
           </SettingsSection>
 
-          <SettingsSection id="lifecycle" title="Lifecycle" description="Operational changes that do not delete the account.">
+          <SettingsSection id="lifecycle" title="Lifecycle">
             <div className="space-y-3">
               <LifecycleAction
                 title="Enable account"
-                description="Allows new API authentication with active tokens."
                 actionLabel="Enable"
                 disabled={sa.state === "active"}
                 pending={setState.isPending}
@@ -443,7 +438,6 @@ export default function IdentityServiceAccountDetailPage() {
               />
               <LifecycleAction
                 title="Disable account"
-                description="Immediately prevents API authentication. Workers using this account will fail to authenticate."
                 actionLabel="Disable"
                 disabled={sa.state === "created"}
                 pending={setState.isPending}
@@ -451,14 +445,12 @@ export default function IdentityServiceAccountDetailPage() {
               />
               <LifecycleAction
                 title="Generate token"
-                description="Creates a new credential. The secret is shown once after generation."
                 actionLabel="Generate token"
                 pending={issue.isPending}
                 onAction={() => issue.mutate()}
               />
               <LifecycleAction
                 title="Regenerate token"
-                description="Issues a new token without revoking existing credentials. Rotate secrets on a schedule."
                 actionLabel="Regenerate"
                 pending={rotate.isPending}
                 onAction={() => rotate.mutate()}
@@ -469,7 +461,6 @@ export default function IdentityServiceAccountDetailPage() {
           <DangerZone>
             <DangerZoneAction
               title="Delete service account"
-              description="Permanently removes this account, all tokens, permissions, and scopes."
               action={
                 <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
                   Delete account

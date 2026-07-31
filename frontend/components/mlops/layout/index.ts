@@ -1,4 +1,4 @@
-export { ResourcePageHeader, type ResourceAccent } from "./resource-page-header"
+export { ResourcePageHeader, pageHeaderActionClass, type ResourceAccent } from "./resource-page-header"
 export { SubpageBreadcrumb, type BreadcrumbSegment } from "./subpage-breadcrumb"
 export { DetailSection } from "./detail-section"
 export { MetadataGrid, type MetadataItem } from "./metadata-grid"

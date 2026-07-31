@@ -15,10 +15,12 @@ import {
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  pageHeaderActionClass,
 } from "@/components/mlops/layout";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
+import { Button } from "@/components/ui/button";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { cn } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
@@ -127,22 +129,14 @@ function DiffPageInner() {
         icon={FileDiff}
         accent="amber"
         title="Config diff"
-        subtitle="Top-level config keys"
         actions={
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Link
-              href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}
-              className="text-primary hover:text-primary/80 hover:underline"
-            >
-              ← Versions
-            </Link>
-            <span className="text-muted-foreground/80">|</span>
-            <Link
-              href={`/pipelines/${encodeURIComponent(pipelineId)}`}
-              className="text-muted-foreground hover:text-foreground/90 hover:underline"
-            >
-              DAG
-            </Link>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button variant="outline" size="sm" className={pageHeaderActionClass} asChild>
+              <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>Versions</Link>
+            </Button>
+            <Button variant="outline" size="sm" className={pageHeaderActionClass} asChild>
+              <Link href={`/pipelines/${encodeURIComponent(pipelineId)}`}>DAG</Link>
+            </Button>
           </div>
         }
       />

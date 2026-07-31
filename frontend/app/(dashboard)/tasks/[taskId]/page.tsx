@@ -29,6 +29,7 @@ import {
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  pageHeaderActionClass,
 } from "@/components/mlops/layout"
 import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
 import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
@@ -198,7 +199,6 @@ function TaskDetailContent() {
           <MlopsEmptyState
             icon={ListTodo}
             title="Task not found"
-            description="This task could not be resolved. Return to the list or pin tenant/project scope."
             action={
               <Button asChild size="sm" variant="outline" className="border-border bg-card">
                 <Link href="/tasks">Back to tasks</Link>
@@ -236,13 +236,13 @@ function TaskDetailContent() {
                 : taskId
         }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {taskRunId ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
+                className={pageHeaderActionClass}
                 asChild
               >
                 <Link href={`/runs/${encodeURIComponent(taskRunId)}`}>View run</Link>
@@ -252,7 +252,7 @@ function TaskDetailContent() {
               type="button"
               variant="outline"
               size="sm"
-              className="border-border bg-card text-foreground/90 hover:bg-muted hover:text-foreground"
+              className={pageHeaderActionClass}
               onClick={() => router.push("/tasks")}
             >
               All tasks
@@ -267,13 +267,12 @@ function TaskDetailContent() {
               <ScopePinnedInline message="Task resolution may span multiple workspaces." />
             ) : null}
             {!scopePinned && resolved?.method === "fan-out" ? (
-              <p className="text-sm text-[color:var(--status-pending-fg)]/90">
-                Scope was resolved automatically across projects. For faster loads next time, pin{" "}
-                <span className="font-mono text-[color:var(--status-pending-fg)]">
-                  {resolved.tenant_id} / {resolved.project_id}
+              <p className="text-xs text-muted-foreground">
+                Resolved via fan-out — pin{" "}
+                <span className="font-mono">
+                  {resolved.tenant_id}/{resolved.project_id}
                 </span>{" "}
-                in the header or use a link with{" "}
-                <span className="font-mono text-[color:var(--status-pending-fg)]/80">?tenant=&amp;project=</span>.
+                for faster loads.
               </p>
             ) : null}
           </>

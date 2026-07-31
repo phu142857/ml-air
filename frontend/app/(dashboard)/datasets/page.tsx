@@ -237,7 +237,6 @@ export default function DatasetsPage() {
           isEmpty={items.length === 0}
           emptyIcon={Database}
           emptyTitle="No datasets"
-          emptyDescription=""
         >
           <MlopsDataTable
             className="min-h-0 flex-1"

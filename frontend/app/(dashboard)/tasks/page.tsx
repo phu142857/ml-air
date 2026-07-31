@@ -133,7 +133,6 @@ export default function TasksPage() {
           isEmpty={rows.length === 0}
           emptyIcon={ListTodo}
           emptyTitle="No tasks"
-          emptyDescription=""
           skeletonRows={5}
         >
           <DataTable

@@ -7,6 +7,7 @@ import {
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  pageHeaderActionClass,
 } from "@/components/mlops/layout";
 
 import { useEffect, useMemo, useState } from "react";
@@ -117,16 +118,12 @@ export default function PipelineDetailPage() {
       : undefined;
 
   const headerSubtitle = pipelineRow
-    ? `${pipelineRow.total_runs} total runs · last ${String(pipelineRow.latest_status || "—")}${pipelineRow.updated_at ? ` · updated ${formatRelativeTime(pipelineRow.updated_at)}` : ""}`
-    : "Orchestration and observability — run and train from Dataset Hub";
+    ? `${pipelineRow.total_runs} runs · ${String(pipelineRow.latest_status || "—")}${pipelineRow.updated_at ? ` · ${formatRelativeTime(pipelineRow.updated_at)}` : ""}`
+    : undefined
 
-  const pageSubtitle = [
-    pipelineId,
-    selectedConfigVersion ? `config ${formatVersionLabel(selectedConfigVersion.version)}` : null,
-    headerSubtitle,
-  ]
+  const pageSubtitle = [pipelineId, selectedConfigVersion ? `config ${formatVersionLabel(selectedConfigVersion.version)}` : null, headerSubtitle]
     .filter(Boolean)
-    .join(" · ");
+    .join(" · ")
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -142,18 +139,18 @@ export default function PipelineDetailPage() {
         title="Pipeline"
         subtitle={pageSubtitle}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 border-border bg-card text-foreground/90 hover:bg-muted"
+              className={pageHeaderActionClass}
               asChild
             >
               <Link href="/pipelines">All pipelines</Link>
             </Button>
             <Button
               size="sm"
-              className="h-8 gap-2"
+              className="h-8 gap-1.5 text-xs"
               disabled={!scopePinned}
               title={!scopePinned ? "Pin tenant and project to open Dataset Hub." : undefined}
               asChild={scopePinned}
@@ -251,11 +248,6 @@ export default function PipelineDetailPage() {
 
         <DetailSection
           title="Pipeline topology"
-          description={
-            dagView === "latest-run" && latestRunId
-              ? `Task status overlay from latest run ${latestRunId.slice(0, 12)}… — click a node to open task detail.`
-              : "Static stages and dependencies from the latest pipeline config."
-          }
           accentBorder="amber"
           headerActions={
             latestRunId ? (

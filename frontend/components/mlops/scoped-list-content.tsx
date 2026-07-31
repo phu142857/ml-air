@@ -11,7 +11,6 @@ interface ScopedListContentProps {
   errorMessage?: string
   emptyIcon: LucideIcon
   emptyTitle: string
-  emptyDescription: string
   emptyContent?: React.ReactNode
   skeletonRows?: number
   children: React.ReactNode
@@ -21,10 +20,9 @@ export function ScopedListContent({
   isLoading,
   isError,
   isEmpty,
-  errorMessage = "Failed to load data. Check API base URL in Settings or use mock mode.",
+  errorMessage = "Failed to load data.",
   emptyIcon: EmptyIcon,
   emptyTitle,
-  emptyDescription,
   emptyContent,
   skeletonRows = 6,
   children,
@@ -42,7 +40,7 @@ export function ScopedListContent({
       {isError && (
         <div
           role="alert"
-          className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {errorMessage}
         </div>
@@ -52,7 +50,6 @@ export function ScopedListContent({
           <MlopsEmptyState
             icon={EmptyIcon}
             title={emptyTitle}
-            description={emptyDescription}
           />
         )
       ) : (

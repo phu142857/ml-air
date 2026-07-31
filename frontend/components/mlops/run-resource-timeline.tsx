@@ -190,7 +190,6 @@ export function RunResourceTimeline({
       <MlopsEmptyState
         icon={Activity}
         title="Usage tracking disabled"
-        description="Set ML_AIR_USAGE_TRACKING_ENABLED=1 on API and executor to capture resource timelines."
       />
     )
   }
@@ -226,7 +225,6 @@ export function RunResourceTimeline({
         <MlopsEmptyState
           icon={Cpu}
           title="No resource samples yet"
-          description="Samples appear while tasks run (heartbeat flush) and after task complete. Run a training job for 10+ seconds to populate the chart."
         />
       ) : (
         <div className="relative h-[min(360px,45vh)] w-full select-none rounded-lg border border-border/70 bg-card/40 p-2">

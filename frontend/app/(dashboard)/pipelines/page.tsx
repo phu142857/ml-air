@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { PipelineDAG } from "@/components/mlops/pipeline-dag"
-import { MlopsEmptyState, PageScrollBody, ResourcePageHeader } from "@/components/mlops/layout"
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, pageHeaderActionClass } from "@/components/mlops/layout"
 import { ScopedListContent } from "@/components/mlops/scoped-list-content"
 import { cn, formatRelativeTime, formatApiClientError } from "@/lib/utils"
 import { formatVersionLabel } from "@/lib/version-label"
@@ -120,9 +120,9 @@ export default function PipelinesPage() {
         title="Pipelines"
         actions={
           scopePinned ? (
-            <Button asChild size="sm" className="gap-2">
+            <Button asChild size="sm" className={pageHeaderActionClass}>
               <Link href="/pipelines/new">
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
                 Import pipeline
               </Link>
             </Button>
@@ -139,7 +139,6 @@ export default function PipelinesPage() {
           isEmpty={items.length === 0}
           emptyIcon={GitBranch}
           emptyTitle="No pipelines"
-          emptyDescription="Import a YAML or JSON pipeline config to get started."
           skeletonRows={4}
         >
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

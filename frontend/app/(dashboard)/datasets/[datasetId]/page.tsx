@@ -1325,21 +1325,21 @@ export default function DatasetHubPage() {
         <>
         {activeTab === "overview" ? (
           <div className="flex min-w-0 w-full flex-col gap-4">
-            <DetailSection accentBorder={DATASET_SECTION_ACCENT} bodyClassName="py-6 sm:py-8">
-              <div className="flex items-center justify-center gap-3 overflow-x-auto px-2 sm:gap-5 md:gap-8">
+            <DetailSection accentBorder={DATASET_SECTION_ACCENT}>
+              <div className="flex flex-wrap items-center gap-1.5">
                 {lifecycleStages.map((label, i) => (
-                  <div key={label} className="flex shrink-0 items-center gap-3 sm:gap-5">
+                  <div key={label} className="flex items-center gap-1.5">
                     <Badge
                       variant="outline"
                       className={cn(
-                        "whitespace-nowrap px-4 py-2 text-sm font-semibold sm:px-5 sm:py-2.5 sm:text-base",
-                        i <= lifecycleStageIndex ? STATUS_CHIP_CLASS.success : "border-border text-muted-foreground/80"
+                        "h-6 px-2 text-[10px] font-medium",
+                        i <= lifecycleStageIndex ? STATUS_CHIP_CLASS.success : "border-border text-muted-foreground"
                       )}
                     >
                       {label}
                     </Badge>
                     {i < lifecycleStages.length - 1 ? (
-                      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground/80 sm:h-6 sm:w-6" aria-hidden />
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
                     ) : null}
                   </div>
                 ))}
@@ -1387,25 +1387,6 @@ export default function DatasetHubPage() {
                   ) : null}
                 </div>
               ) : null}
-              {(readinessQuery.data?.eligibility_criteria || []).length ? (
-                <div className="mt-4 space-y-2 border-t border-border pt-3">
-                  <p className="text-[11px] font-medium text-foreground">Gates (current policy / version)</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(readinessQuery.data?.eligibility_criteria || []).map((c) => (
-                      <Badge
-                        key={c.code}
-                        variant="outline"
-                        className={cn(
-                          "text-[11px]",
-                          c.status === "pass" ? STATUS_CHIP_CLASS.success : STATUS_CHIP_CLASS.failed
-                        )}
-                      >
-                        {c.status === "pass" ? "PASS" : "FAIL"} · {c.label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </DetailSection>
 
             <DetailSection
@@ -1413,9 +1394,7 @@ export default function DatasetHubPage() {
               accentBorder={DATASET_SECTION_ACCENT}
             >
               {!scopePinned ? (
-                <p className="text-sm text-muted-foreground">
-                  Pin a tenant and project in the header to list runs for this dataset.
-                </p>
+                <p className="text-sm text-muted-foreground">Pin tenant and project to list runs.</p>
               ) : datasetRunsQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading runs…</p>
               ) : datasetRunsQuery.isError ? (
@@ -1454,7 +1433,6 @@ export default function DatasetHubPage() {
               <DetailSection
                 title="Version retention"
                 accentBorder={DATASET_SECTION_ACCENT}
-                description="Keep newest snapshots; purge older versions when policy is enabled. Referenced versions are skipped when protection is on."
               >
                 <div className="space-y-3 text-xs">
                   <label className="flex items-center gap-2">
@@ -2017,7 +1995,6 @@ export default function DatasetHubPage() {
               <MlopsEmptyState
                 icon={Database}
                 title="No versions yet"
-                description="Materialize or import a dataset version to see immutable snapshots here."
               />
             ) : (
               <>

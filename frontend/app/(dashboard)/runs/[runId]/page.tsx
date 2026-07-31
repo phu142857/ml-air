@@ -567,7 +567,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           <MlopsEmptyState
             icon={Activity}
             title="Run not found"
-            description="This run id could not be loaded. Check scope pinning and open Runs to pick a listed execution."
             action={
               <Button asChild size="sm" variant="outline" className="border-border bg-card">
                 <Link href="/runs">Back to runs</Link>
@@ -597,8 +596,8 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
             run
               ? `${run.pipeline_id} · started ${run.created_at ? formatDateTimeCompact(run.created_at) : "—"} · ${runDurationLabel}`
               : runQuery.isLoading
-                ? "Loading run…"
-                : "Pipeline run detail"
+                ? "Loading…"
+                : undefined
           }
           className="border-b-0"
           actions={
@@ -716,7 +715,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 {readinessQuery.isSuccess && gateResults.length > 0 ? (
                   <DetailSection
                     title="Readiness gates"
-                    description="Dataset readiness evaluated for this run."
                     accentBorder="sky"
                   >
                     <DataTable
@@ -857,7 +855,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 <MlopsEmptyState
                   icon={BarChart3}
                   title="No metrics"
-                  description="No logged metrics for this run yet."
                 />
               )}
             </DetailSection>
@@ -873,7 +870,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 <MlopsEmptyState
                   icon={FileBox}
                   title="No artifacts"
-                  description="No artifacts recorded for this run."
                 />
               ) : (
                 <ul className="space-y-2">
@@ -912,7 +908,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 <MlopsEmptyState
                   icon={Clock}
                   title="No timeline events"
-                  description="No audit events matched this run id."
                 />
               ) : (
                 <>

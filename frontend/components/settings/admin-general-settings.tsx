@@ -61,10 +61,9 @@ export function AdminGeneralSettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="General"
-        description="Platform-wide Hub defaults and landing behavior."
       />
 
-      <SettingsSection id="metadata" title="Metadata" description="Last platform settings change.">
+      <SettingsSection id="metadata" title="Metadata">
         <MetadataList
           items={[
             { label: "Schema version", value: String(doc.schema_version), mono: true },
@@ -74,7 +73,7 @@ export function AdminGeneralSettings() {
         />
       </SettingsSection>
 
-      <SettingsSection id="configuration" title="Configuration" description="Default experience after sign-in.">
+      <SettingsSection id="configuration" title="Configuration">
         <div className="max-w-xs space-y-1.5">
           <Label>Default Hub route</Label>
           <Select value={form.hubRoute} onValueChange={(v) => setForm({ ...form, hubRoute: v })}>
@@ -89,7 +88,6 @@ export function AdminGeneralSettings() {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Landing page after sign-in for all users.</p>
         </div>
         <SettingsFormFooter
           dirty={dirty}

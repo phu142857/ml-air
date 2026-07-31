@@ -66,14 +66,12 @@ export function SessionsPanel() {
     >
       <SettingsPageHeader
         title="Sessions"
-        description="Devices signed in to your account. Revoke any session you do not recognize."
       />
 
-      <SettingsSection id="sessions" title="Active sessions" description="Browser and API sessions tied to your identity.">
+      <SettingsSection id="sessions" title="Active sessions">
         {items.length === 0 && !sessionsQuery.isLoading ? (
           <SettingsEmptyState
             title="No active sessions"
-            description="When you sign in from a new device, it will appear here."
           />
         ) : (
           <div className="space-y-3">
@@ -117,10 +115,9 @@ export function SessionsPanel() {
         )}
       </SettingsSection>
 
-      <DangerZone description="End all other sessions if you suspect unauthorized access.">
+      <DangerZone>
         <DangerZoneAction
           title="Revoke other sessions"
-          description="Keeps your current browser session. All other devices will need to sign in again."
           action={
             <Button
               type="button"

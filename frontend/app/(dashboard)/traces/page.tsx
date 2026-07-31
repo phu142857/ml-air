@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Route } from "lucide-react";
 
 import { TraceExplorerShell } from "@/components/mlops/trace-explorer/trace-explorer-shell";
-import { ScopePinnedInline } from "@/components/mlops/layout";
+import { ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
 import { ScopedListContent } from "@/components/mlops/scoped-list-content";
 import { useTraceViewerUrl } from "@/hooks/use-trace-viewer-url";
 import { useAppContext } from "@/lib/app-context";
@@ -59,18 +59,7 @@ function TracesPageContent() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-border bg-background px-4 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-primary/10">
-            <Route className="h-5 w-5 text-primary" aria-hidden />
-          </div>
-          <div>
-            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
-              Trace viewer
-            </h1>
-          </div>
-        </div>
-      </header>
+      <ResourcePageHeader icon={Route} accent="sky" title="Traces" />
 
       {isAggregate ? (
         <div className="shrink-0 px-4 py-3 sm:px-6">
@@ -86,7 +75,6 @@ function TracesPageContent() {
           isEmpty={false}
           emptyIcon={Route}
           emptyTitle=""
-          emptyDescription=""
         >
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <TraceExplorerShell

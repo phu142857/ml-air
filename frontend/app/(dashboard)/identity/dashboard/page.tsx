@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Monitor, UserCheck, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   IdentityStatusBadge,
@@ -46,19 +45,14 @@ function formatWhen(iso: string | null | undefined): string {
 function StatCard({
   label,
   value,
-  icon: Icon,
 }: {
   label: string;
   value: number;
-  icon: typeof Users;
 }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
-      </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+    <div className="rounded-md border border-border bg-card px-3 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 }
@@ -96,21 +90,20 @@ export default function IdentityAuditLogsPage() {
     >
       <SettingsPageHeader
         title="Audit Logs"
-        description="Append-only identity and access events for compliance and incident response."
       />
 
       {dashboardQuery.data ? (
-        <SettingsSection id="dashboard" title="Dashboard" description="Current identity inventory.">
+        <SettingsSection id="dashboard" title="Dashboard">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Total users" value={dashboardQuery.data.total_users} icon={Users} />
-            <StatCard label="Active users" value={dashboardQuery.data.active_users} icon={UserCheck} />
-            <StatCard label="Service accounts" value={dashboardQuery.data.service_accounts} icon={Bot} />
-            <StatCard label="Active sessions" value={dashboardQuery.data.active_sessions} icon={Monitor} />
+            <StatCard label="Total users" value={dashboardQuery.data.total_users} />
+            <StatCard label="Active users" value={dashboardQuery.data.active_users} />
+            <StatCard label="Service accounts" value={dashboardQuery.data.service_accounts} />
+            <StatCard label="Active sessions" value={dashboardQuery.data.active_sessions} />
           </div>
         </SettingsSection>
       ) : null}
 
-      <SettingsSection id="logs" title="Event log" description="Filter by action type or free-text search.">
+      <SettingsSection id="logs" title="Event log">
         <div className="mb-4 flex flex-wrap gap-2">
           <Input
             placeholder="Search action, actor, target…"
@@ -137,7 +130,6 @@ export default function IdentityAuditLogsPage() {
         {events.length === 0 && !isLoading ? (
           <SettingsEmptyState
             title="No events found"
-            description={q || action ? "Try adjusting your search or filters." : "Identity events will appear here as they occur."}
           />
         ) : (
           <div className="overflow-hidden rounded-md border border-border/60">

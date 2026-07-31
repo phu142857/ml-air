@@ -119,10 +119,6 @@ function SearchPageInner() {
     router.push(`/search?${params.toString()}`)
   }
 
-  const scopeHint = isAggregate
-    ? "Searching merged scopes (API limits). Pin one workspace to narrow results."
-    : null
-
   const showSkeleton = isSearchStale && input.trim().length > 0
 
   return (
@@ -146,9 +142,6 @@ function SearchPageInner() {
             onChange={(id) => pushSearch(input || q, id as SearchType)}
             variant="sky"
           />
-          {scopeHint ? (
-            <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">{scopeHint}</p>
-          ) : null}
         </div>
 
         <form
@@ -183,7 +176,6 @@ function SearchPageInner() {
           <MlopsEmptyState
             icon={Search}
             title="Start a search"
-            description="Enter a run id, task id, dataset name, or pick a resource type above. Exact ids work best for runs and tasks."
           />
         ) : searchQuery.isLoading ? (
           <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
@@ -196,7 +188,6 @@ function SearchPageInner() {
           <MlopsEmptyState
             icon={Search}
             title="No matches"
-            description="Try another keyword or switch resource type. Exact ids work best for runs and tasks."
           />
         ) : (
           <div className="divide-y divide-border/80 overflow-hidden panel-surface">

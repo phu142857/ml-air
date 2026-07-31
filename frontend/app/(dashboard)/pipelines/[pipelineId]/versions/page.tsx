@@ -15,6 +15,7 @@ import {
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  pageHeaderActionClass,
 } from "@/components/mlops/layout";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
@@ -142,20 +143,20 @@ export default function PipelineVersionsPage() {
         accent="amber"
         title="Pipeline versions"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="border-border bg-card text-foreground/90 hover:bg-muted"
+              className={pageHeaderActionClass}
               onClick={() => router.push("/pipelines")}
             >
               All pipelines
             </Button>
-            <Button variant="outline" size="sm" className="border-border bg-card text-foreground/90 hover:bg-muted" asChild>
+            <Button variant="outline" size="sm" className={pageHeaderActionClass} asChild>
               <Link href={`/pipelines/${encodeURIComponent(pipelineId)}`}>DAG</Link>
             </Button>
-            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" asChild>
+            <Button size="sm" className="h-8 text-xs" asChild>
               <Link
                 href={`/pipelines/${encodeURIComponent(pipelineId)}/diff${
                   left && right ? `?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}` : ""
@@ -172,10 +173,6 @@ export default function PipelineVersionsPage() {
       >
         <div className="grid gap-4 lg:grid-cols-2">
           <DetailSection title="Create version" accentBorder="amber">
-            <p className="mb-2 text-xs text-muted-foreground">
-              POST creates the next monotonic version; previous rows are not modified. Use the full-screen editor to
-              review <code className="font-mono">inputs[]</code> and task config before publishing.
-            </p>
             <textarea
               className="mb-2 h-28 w-full inset-surface p-2 font-mono text-xs text-foreground"
               value={jsonText}
@@ -184,7 +181,8 @@ export default function PipelineVersionsPage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                size="sm"
+                className="h-8 text-xs"
                 onClick={() => setCreateEditorOpen(true)}
               >
                 Open full editor

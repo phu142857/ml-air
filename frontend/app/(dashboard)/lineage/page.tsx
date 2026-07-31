@@ -355,7 +355,6 @@ function LineagePageInner() {
           <MlopsEmptyState
             icon={Network}
             title="No lineage edges"
-            description="The API returned no graph nodes for this query."
             className="border-0 bg-transparent p-0"
           />
         </div>
@@ -373,7 +372,6 @@ function LineagePageInner() {
               <MlopsEmptyState
                 icon={Network}
                 title="No graph loaded"
-                description="Enter a run ID or dataset version ID above, use ?datasetId= for the latest version of a dataset, or open lineage from a run or dataset page."
                 className="max-w-lg border-0 bg-transparent"
               />
             </div>

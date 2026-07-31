@@ -153,7 +153,7 @@ export default function IdentityUserDetailPage() {
 
       {user ? (
         <>
-          <SettingsSection id="metadata" title="Metadata" description="Read-only identity record.">
+          <SettingsSection id="metadata" title="Metadata">
             <MetadataList
               items={[
                 { label: "User ID", value: userId, mono: true },
@@ -169,7 +169,6 @@ export default function IdentityUserDetailPage() {
           <SettingsSection
             id="configuration"
             title="Configuration"
-            description="Administrative password reset. The user is not notified automatically."
           >
             <div className="max-w-md space-y-3">
               <div className="space-y-1.5">
@@ -197,7 +196,6 @@ export default function IdentityUserDetailPage() {
             <SettingsSection
               id="permissions"
               title="Role assignments"
-              description="Grant Maintainer or Viewer access per tenant and project. Changes apply after you save."
             >
               {assignmentsQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading assignments…</p>
@@ -206,7 +204,6 @@ export default function IdentityUserDetailPage() {
                   {(assignmentsQuery.data || []).length === 0 && drafts.length === 0 ? (
                     <SettingsEmptyState
                       title="No roles assigned"
-                      description="Add a tenant/project role so this user can access Hub resources."
                       actionLabel="Add role assignment"
                       onAction={() => setDrafts([createAssignmentDraft()])}
                     />
@@ -227,18 +224,17 @@ export default function IdentityUserDetailPage() {
               )}
             </SettingsSection>
           ) : (
-            <SettingsSection id="permissions" title="Permissions" description="Global administrators bypass scoped assignments.">
+            <SettingsSection id="permissions" title="Permissions">
               <p className="text-sm text-muted-foreground">
                 This account has platform-wide access. Role assignments do not apply.
               </p>
             </SettingsSection>
           )}
 
-          <SettingsSection id="lifecycle" title="Lifecycle" description="Non-destructive account state changes.">
+          <SettingsSection id="lifecycle" title="Lifecycle">
             <div className="space-y-3">
               <LifecycleAction
                 title="Enable account"
-                description="Restores sign-in and API access for this user."
                 actionLabel="Enable"
                 disabled={user.state === "active"}
                 pending={patchState.isPending}
@@ -246,7 +242,6 @@ export default function IdentityUserDetailPage() {
               />
               <LifecycleAction
                 title="Disable account"
-                description="Prevents sign-in immediately. Existing sessions remain until they expire or are revoked."
                 actionLabel="Disable"
                 disabled={user.state === "disabled"}
                 pending={patchState.isPending}
@@ -254,7 +249,6 @@ export default function IdentityUserDetailPage() {
               />
               <LifecycleAction
                 title="Lock account"
-                description="Blocks authentication until an administrator unlocks the account."
                 actionLabel="Lock"
                 disabled={user.state === "locked"}
                 pending={patchState.isPending}
@@ -266,7 +260,6 @@ export default function IdentityUserDetailPage() {
           <DangerZone>
             <DangerZoneAction
               title="Delete user"
-              description="Permanently removes this user, role assignments, sessions, and personal access tokens."
               action={
                 <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
                   Delete user

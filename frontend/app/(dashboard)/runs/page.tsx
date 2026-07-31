@@ -190,7 +190,6 @@ export default function RunsPage() {
           isEmpty={rows.length === 0}
           emptyIcon={Play}
           emptyTitle="No runs"
-          emptyDescription=""
         >
           <MlopsDataTable
             className="min-h-0 flex-1"

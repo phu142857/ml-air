@@ -70,7 +70,6 @@ export default function SettingsProfilePage() {
     <SettingsPage loading={meQuery.isLoading} error={meQuery.error ? String((meQuery.error as Error).message) : null}>
       <SettingsPageHeader
         title="Profile"
-        description="Your identity on the MLAir control plane."
         badge={
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
             {(me?.display_name || me?.username || username || "?").slice(0, 1).toUpperCase()}
@@ -80,7 +79,7 @@ export default function SettingsProfilePage() {
 
       {me ? (
         <>
-          <SettingsSection id="general" title="General" description="How you appear across the platform.">
+          <SettingsSection id="general" title="General">
             <div className="grid max-w-lg gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="display-name">Display name</Label>
@@ -115,7 +114,7 @@ export default function SettingsProfilePage() {
             />
           </SettingsSection>
 
-          <SettingsSection id="metadata" title="Metadata" description="Read-only account details.">
+          <SettingsSection id="metadata" title="Metadata">
             <MetadataList
               items={[
                 { label: "Username", value: me.username || username, mono: true },
@@ -127,7 +126,7 @@ export default function SettingsProfilePage() {
             />
           </SettingsSection>
 
-          <SettingsSection id="permissions" title="Permissions" description="Your effective tenant and project access.">
+          <SettingsSection id="permissions" title="Permissions">
             {me.assignments?.length ? (
               <ul className="divide-y divide-border/60 rounded-md border border-border/60">
                 {me.assignments.map((a) => (
@@ -144,7 +143,6 @@ export default function SettingsProfilePage() {
             ) : (
               <SettingsEmptyState
                 title="No scoped assignments"
-                description="Contact your platform administrator to request tenant or project access."
               />
             )}
           </SettingsSection>

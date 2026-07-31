@@ -149,7 +149,6 @@ interface DataTableProps<T> {
   rowClassName?: (row: T) => string | undefined
   emptyMessage?: string
   emptyTitle?: string
-  emptyDescription?: string
   className?: string
   tableId?: string
   loading?: boolean
@@ -160,7 +159,6 @@ interface DataTableProps<T> {
   errorMessage?: string
   onRetry?: () => void
   title?: string
-  description?: string
   searchable?: boolean
   stickyHeader?: boolean
   stickyFirstColumn?: boolean
@@ -316,7 +314,6 @@ export function DataTable<T>({
   rowClassName,
   emptyMessage = "No rows",
   emptyTitle = "No data",
-  emptyDescription = "Try changing filters, adjusting visible columns, or clearing search.",
   className,
   tableId,
   loading = false,
@@ -326,7 +323,6 @@ export function DataTable<T>({
   errorMessage = "Something went wrong while loading rows. Try again.",
   onRetry,
   title,
-  description,
   searchable = true,
   stickyHeader = true,
   stickyFirstColumn = true,
@@ -1547,7 +1543,6 @@ export function DataTable<T>({
             <MlopsEmptyState
               icon={AlertCircle}
               title={errorTitle}
-              description={errorMessage}
               action={
                 onRetry ? (
                   <Button type="button" variant="outline" size="sm" onClick={onRetry}>

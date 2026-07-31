@@ -225,7 +225,6 @@ export function UsageRollupPanel({
       <MlopsEmptyState
         icon={Activity}
         title="Usage tracking disabled"
-        description="Enable ML_AIR_USAGE_TRACKING_ENABLED to collect resource attribution."
         className="border-0 bg-transparent p-0"
       />
     )

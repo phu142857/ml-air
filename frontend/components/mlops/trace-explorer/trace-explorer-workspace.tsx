@@ -543,7 +543,6 @@ export function TraceExplorerWorkspace({
           <MlopsEmptyState
             icon={Route}
             title="No traces yet"
-            description="Run a pipeline to generate traces."
             action={
               <Button type="button" size="sm" onClick={() => setTriggerOpen(true)}>
                 <Play className="h-3.5 w-3.5" aria-hidden />

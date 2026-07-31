@@ -74,20 +74,18 @@ export default function IdentityServiceAccountsPage() {
     <SettingsPage loading={isLoading} error={error ? formatApiClientError(error) : null}>
       <SettingsPageHeader
         title="Service accounts"
-        description="Machine identities for workers, schedulers, and SDK automation."
         actions={
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
             Create service account
           </Button>
         }
       />
 
-      <SettingsSection id="directory" title="Directory" description="Non-human principals with scoped API access.">
+      <SettingsSection id="directory" title="Directory">
         {accounts.length === 0 && !isLoading ? (
           <SettingsEmptyState
             title="No service accounts"
-            description="Create a service account for pipelines, workers, or integrations."
             actionLabel="Create service account"
             onAction={() => setOpen(true)}
           />

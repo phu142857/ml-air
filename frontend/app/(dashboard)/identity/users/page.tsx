@@ -75,16 +75,15 @@ export default function IdentityUsersPage() {
     <SettingsPage loading={isLoading} error={error ? formatApiClientError(error) : null}>
       <SettingsPageHeader
         title="Users"
-        description="Human identities, role assignments, and account lifecycle."
         actions={
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
             Create user
           </Button>
         }
       />
 
-      <SettingsSection id="directory" title="Directory" description="Search and filter platform users.">
+      <SettingsSection id="directory" title="Directory">
         <div className="mb-4 flex flex-wrap gap-2">
           <Input
             placeholder="Search username…"
@@ -111,7 +110,6 @@ export default function IdentityUsersPage() {
         {users.length === 0 && !isLoading ? (
           <SettingsEmptyState
             title="No users found"
-            description={q || stateFilter ? "Try adjusting your search or filters." : "Create the first user to get started."}
             {...(!q && !stateFilter ? { actionLabel: "Create user", onAction: () => setOpen(true) } : {})}
           />
         ) : (

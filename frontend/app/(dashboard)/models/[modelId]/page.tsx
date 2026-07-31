@@ -10,6 +10,7 @@ import {
   ResourcePageHeader,
   ScopePinnedInline,
   SubpageBreadcrumb,
+  pageHeaderActionClass,
   tabPanelScrollClassName,
 } from "@/components/mlops/layout";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -588,11 +589,11 @@ export default function ModelDetailPage() {
           title={`Model · ${model?.name ?? modelId}`}
           className="border-b-0"
           actions={
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 variant="outline"
                 size="sm"
-                className="border-border bg-card text-foreground/90 hover:bg-muted"
+                className={pageHeaderActionClass}
                 onClick={() => router.push("/models")}
               >
                 All models
@@ -600,6 +601,7 @@ export default function ModelDetailPage() {
               <Button
                 variant="danger"
                 size="sm"
+                className="h-8 text-xs"
                 onClick={() =>
                   openConfirm(
                     "Delete model",
@@ -631,7 +633,7 @@ export default function ModelDetailPage() {
           <DetailTabSkeleton variant={MODEL_TAB_SKELETON.overview} />
         ) : (
         <>
-      <DetailSection title="Registry status" description="Model registry health." accentBorder="violet">
+      <DetailSection title="Registry status" accentBorder="violet">
           <MetadataGrid
             columns={2}
             items={[
@@ -655,8 +657,8 @@ export default function ModelDetailPage() {
                   <span className="inline-flex flex-wrap items-center gap-x-2">
                     <span className="font-mono text-xs">{modelId}</span>
                     {productionVersion != null ? (
-                      <span className="rounded-full border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-1.5 py-0.5 text-[color:var(--status-success-fg)]">
-                        {formatVersionLabel(productionVersion)}
+                      <span className="font-mono text-xs text-muted-foreground">
+                        prod {formatVersionLabel(productionVersion)}
                       </span>
                     ) : null}
                   </span>
@@ -978,7 +980,6 @@ export default function ModelDetailPage() {
           <MlopsEmptyState
             icon={Box}
             title="No versions for this filter"
-            description="Import from local, change the stage filter, or register a version from a training run."
           />
         ) : (
           <>

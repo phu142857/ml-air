@@ -140,27 +140,15 @@ export function PatPanel() {
     <SettingsPage loading={patsQuery.isLoading} error={patsQuery.error ? String((patsQuery.error as Error).message) : null}>
       <SettingsPageHeader
         title="CLI & API"
-        description="CLI configuration, personal access tokens, and API authentication."
       />
 
-      <SettingsSection id="cli-configuration" title="CLI configuration" description="API endpoint for CLI and SDK clients.">
-        <div className="rounded-md border border-border/60 bg-muted/20 p-4 font-mono text-xs">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Recommended setup</p>
-          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-foreground">{`# Sign in via Hub (recommended)
-open ${typeof window !== "undefined" ? window.location.origin : ""}/login
-
-# Configure API endpoint
-export MLAIR_API_URL="${apiBase}/v1"`}</pre>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Native <span className="font-mono">mlair login</span> device flow is planned — use personal access tokens for scripts today.
-          </p>
-        </div>
+      <SettingsSection id="cli-configuration" title="CLI configuration">
+        <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground whitespace-pre-wrap">{`export MLAIR_API_URL="${apiBase}/v1"`}</pre>
       </SettingsSection>
 
       <SettingsSection
         id="personal-access-tokens"
         title="Personal access tokens"
-        description="Personal access tokens allow CLI and API access on behalf of your account."
       >
         <div className="grid max-w-lg gap-4">
           <div className="space-y-1.5">
@@ -207,7 +195,6 @@ export MLAIR_API_URL="${apiBase}/v1"`}</pre>
         {activePats.length === 0 ? (
           <SettingsEmptyState
             title="No active tokens"
-            description="Generate a token above to authenticate scripts and automation."
           />
         ) : (
           <div className="space-y-3">

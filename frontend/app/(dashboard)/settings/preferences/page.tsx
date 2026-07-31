@@ -61,10 +61,9 @@ export default function SettingsPreferencesPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="Preferences"
-        description="Personal Hub experience — appearance, locale, and workspace defaults."
       />
 
-      <SettingsSection id="appearance" title="Appearance" description="How the Hub UI looks and feels.">
+      <SettingsSection id="appearance" title="Appearance">
         <div className="max-w-xs space-y-1.5">
           <Label>Theme</Label>
           <Select value={theme || "dark"} onValueChange={setTheme}>
@@ -79,22 +78,14 @@ export default function SettingsPreferencesPage() {
           </Select>
         </div>
         <div className="mt-4 flex max-w-md items-center justify-between gap-4 rounded-md border border-border/60 px-4 py-3">
-          <div>
-            <p className="text-sm font-medium">Density</p>
-            <p className="text-xs text-muted-foreground">
-              {prefs.density === "compact" ? "Compact" : "Comfortable"} — tighter tables and panels.
-            </p>
-          </div>
+          <p className="text-sm font-medium">Density</p>
           <Switch
             checked={prefs.density === "compact"}
             onCheckedChange={(v) => setPrefs(saveUserPreferences({ density: v ? "compact" : "comfortable" }))}
           />
         </div>
         <div className="mt-4 flex max-w-md items-center justify-between gap-4 rounded-md border border-border/60 px-4 py-3">
-          <div>
-            <p className="text-sm font-medium">Design tokens</p>
-            <p className="text-xs text-muted-foreground">Developer preview of design system tokens.</p>
-          </div>
+          <p className="text-sm font-medium">Design tokens</p>
           <Switch
             checked={prefs.experimentalUi}
             onCheckedChange={(v) => setPrefs(saveUserPreferences({ experimentalUi: v }))}
@@ -107,7 +98,7 @@ export default function SettingsPreferencesPage() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection id="localization" title="Localization" description="Language and timezone preferences.">
+      <SettingsSection id="localization" title="Localization">
         <div className="grid max-w-lg gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Language</Label>
@@ -134,7 +125,7 @@ export default function SettingsPreferencesPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="workspace" title="Workspace defaults" description="Preferred tenant and project when switching scope.">
+      <SettingsSection id="workspace" title="Workspace defaults">
         <div className="grid max-w-lg gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Default tenant</Label>
@@ -167,7 +158,7 @@ export default function SettingsPreferencesPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="advanced" title="Advanced" description="Technical overrides for this browser.">
+      <SettingsSection id="advanced" title="Advanced">
         <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-sm text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           <p>Changing this value can connect MLAir to a different API environment.</p>
@@ -205,7 +196,6 @@ export default function SettingsPreferencesPage() {
           <div className="mt-4">
             <LifecycleAction
               title="Reset to default"
-              description="Clears the browser override and reloads with server configuration."
               actionLabel="Reset to default"
               onAction={() => {
                 clearRuntimeConfigOverride();

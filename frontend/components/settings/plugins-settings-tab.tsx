@@ -184,13 +184,12 @@ export function PluginsSettingsTab() {
     <SettingsPage>
       <SettingsPageHeader
         title="Integrations"
-        description="Plugin registry, lifecycle, and validation for platform extensions."
         actions={
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="gap-2"
+            className="h-8 gap-1.5 text-xs"
             loading={reloadMutation.isPending}
             loadingText="Reloading…"
             onClick={() => reloadMutation.mutate()}
@@ -204,7 +203,6 @@ export function PluginsSettingsTab() {
       <SettingsSection
         id="registry"
         title="Loaded plugins"
-        description="Plugins registered by the API runtime."
       >
         {pluginsQuery.isFetching ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -237,7 +235,6 @@ export function PluginsSettingsTab() {
         ) : items.length === 0 ? (
           <SettingsEmptyState
             title="No plugins loaded"
-            description="The API returned an empty registry. Use Reload registry after adding plugins on the server."
           />
         ) : (
           <DataTable
@@ -259,7 +256,6 @@ export function PluginsSettingsTab() {
       <SettingsSection
         id="validate"
         title="Validate plugin"
-        description="POST validation context JSON to a plugin entrypoint."
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">

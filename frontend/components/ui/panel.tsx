@@ -4,15 +4,19 @@ export function Panel({
   children,
   className,
   interactive = false,
+  padded = true,
 }: {
   children: React.ReactNode
   className?: string
   interactive?: boolean
+  /** When false, only the surface chrome is applied (for nested section layouts). */
+  padded?: boolean
 }) {
   return (
     <div
       className={cn(
-        "panel-surface p-5 sm:p-6 transition-default",
+        "panel-surface transition-default",
+        padded && "p-4 sm:p-5",
         interactive && "cursor-pointer hover:border-border",
         className,
       )}

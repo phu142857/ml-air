@@ -55,10 +55,9 @@ export default function IdentitySettingsPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="Authentication Policy"
-        description="Platform-wide authentication, session, and lockout rules."
       />
 
-      <SettingsSection id="metadata" title="Metadata" description="Last platform settings change.">
+      <SettingsSection id="metadata" title="Metadata">
         <MetadataList
           items={[
             { label: "Schema version", value: String(doc.schema_version), mono: true },
@@ -68,7 +67,7 @@ export default function IdentitySettingsPage() {
         />
       </SettingsSection>
 
-      <SettingsSection id="password-policy" title="Password policy" description="Enforced on user creation and password changes.">
+      <SettingsSection id="password-policy" title="Password policy">
         <div className="max-w-xs space-y-1.5">
           <Label htmlFor="min-password">Minimum password length</Label>
           <Input
@@ -81,7 +80,7 @@ export default function IdentitySettingsPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="session-ttl" title="Session TTL" description="Interactive login token lifetimes.">
+      <SettingsSection id="session-ttl" title="Session TTL">
         <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="access-ttl">Access token TTL (seconds)</Label>
@@ -106,7 +105,7 @@ export default function IdentitySettingsPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="lockout" title="Lockout policy" description="Brute-force protection for sign-in attempts.">
+      <SettingsSection id="lockout" title="Lockout policy">
         <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="lockout-threshold">Failed login threshold</Label>

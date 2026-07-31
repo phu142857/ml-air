@@ -20,10 +20,9 @@ export default function SettingsAboutPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="About MLAir"
-        description="Product, deployment, and documentation references."
       />
 
-      <SettingsSection id="brand" title="Brand" description="Official product mark.">
+      <SettingsSection id="brand" title="Brand">
         <div className="flex items-center gap-4">
           <MlairLogo size="lg" alt="MLAir logo" />
           <div className="min-w-0 space-y-1">
@@ -35,7 +34,7 @@ export default function SettingsAboutPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="metadata" title="Metadata" description="Read-only deployment information.">
+      <SettingsSection id="metadata" title="Metadata">
         <MetadataList
           items={[
             { label: "Product", value: "MLAir Hub (control plane)" },

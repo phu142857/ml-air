@@ -81,14 +81,11 @@ export function ModelPipelineMappingCard({ tenantId, projectId, modelId, token, 
   const dirty = draftPipelineId.trim() !== (mappedId || "");
 
   return (
-    <div className={cn("rounded-xl border border-border/70 bg-muted/20 p-4", className)}>
-      <div className="mb-3 flex items-center gap-2">
-        <GitBranch className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold text-foreground">Default training pipeline</h3>
+    <div className={cn("space-y-3", className)}>
+      <div className="flex items-center gap-2">
+        <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+        <h3 className="text-sm font-medium text-foreground">Default training pipeline</h3>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">
-        Used when training this model from Dataset Hub. Operators can override per run.
-      </p>
       {resolvedQuery.isLoading ? (
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" /> Resolving…

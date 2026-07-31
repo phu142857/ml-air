@@ -54,10 +54,9 @@ export function AdminObservabilitySettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="Observability"
-        description="Grafana integration, tracing retention, and metrics sampling."
       />
 
-      <SettingsSection id="metadata" title="Metadata" description="Last platform settings change.">
+      <SettingsSection id="metadata" title="Metadata">
         <MetadataList
           items={[
             { label: "Schema version", value: String(doc.schema_version), mono: true },
@@ -67,7 +66,7 @@ export function AdminObservabilitySettings() {
         />
       </SettingsSection>
 
-      <SettingsSection id="configuration" title="Configuration" description="Telemetry endpoints and retention.">
+      <SettingsSection id="configuration" title="Configuration">
         <div className="max-w-lg space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="grafana-url">Grafana URL</Label>

@@ -111,10 +111,9 @@ export default function SettingsSecurityPage() {
     <SettingsPage loading={mfaStatus.isLoading} error={mfaStatus.error ? String((mfaStatus.error as Error).message) : null}>
       <SettingsPageHeader
         title="Security"
-        description="Password, multi-factor authentication, and account recovery."
       />
 
-      <SettingsSection id="password" title="Password" description="Update your Hub sign-in password.">
+      <SettingsSection id="password" title="Password">
         <div className="grid max-w-md gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="current-password">Current password</Label>
@@ -174,7 +173,7 @@ export default function SettingsSecurityPage() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection id="mfa" title="Multi-factor authentication" description="Additional verification at sign-in.">
+      <SettingsSection id="mfa" title="Multi-factor authentication">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Status</p>
           <p className="text-sm font-medium text-foreground">
@@ -259,7 +258,7 @@ export default function SettingsSecurityPage() {
         )}
       </SettingsSection>
 
-      <SettingsSection id="recovery" title="Recovery" description="Options if you lose access.">
+      <SettingsSection id="recovery" title="Recovery">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Recovery methods</p>
           <p className="text-sm font-medium text-foreground">

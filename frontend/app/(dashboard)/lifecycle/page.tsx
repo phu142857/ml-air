@@ -7,14 +7,10 @@ import {
   RefreshCw, 
   Download, 
   Activity, 
-  AlertTriangle, 
   CheckCircle2, 
   XCircle,
   ExternalLink,
   Search,
-  TrendingUp,
-  Clock,
-  Zap,
   Radio,
   Loader2,
   ChevronDown,
@@ -26,7 +22,6 @@ import { EventFilters, type EventType, type Severity, type TimeRange } from "@/c
 import { TraceLink } from "@/components/mlops/trace-link"
 import { ErrorBoundary, ErrorDisplay } from "@/components/error-boundary"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -307,79 +302,22 @@ function LifecycleContent() {
         ) : null}
         <div
           className={cn(
-            "grid grid-cols-5 gap-4 transition-opacity duration-300",
+            "grid grid-cols-2 gap-2 sm:grid-cols-5 transition-opacity duration-300",
             isRefreshing && "opacity-80",
           )}
         >
-            <Card className="panel-surface">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Total Events</p>
-                    <p className="mt-1 text-2xl font-semibold text-foreground">{stats.total}</p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
-                    <Activity className="h-5 w-5 text-primary" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="panel-surface">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Successful</p>
-                    <p className="mt-1 text-2xl font-semibold text-[color:var(--status-success-fg)]">{stats.successCount}</p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)]">
-                    <CheckCircle2 className="h-5 w-5 text-[color:var(--status-success-fg)]" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="panel-surface">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Failed</p>
-                    <p className="mt-1 text-2xl font-semibold text-[color:var(--status-failed-fg)]">{stats.failedCount}</p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/20 bg-[color:var(--status-failed-bg)]">
-                    <XCircle className="h-5 w-5 text-[color:var(--status-failed-fg)]" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="panel-surface">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Warnings</p>
-                    <p className="mt-1 text-2xl font-semibold text-[color:var(--status-pending-fg)]">{stats.warningCount}</p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)]">
-                    <AlertTriangle className="h-5 w-5 text-[color:var(--status-pending-fg)]" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="panel-surface">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Trace Coverage</p>
-                    <p className="mt-1 text-2xl font-semibold text-primary">{stats.tracePercent}%</p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
-                    <Zap className="h-5 w-5 text-primary" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {[
+              { label: "Events", value: stats.total, className: "text-foreground" },
+              { label: "Success", value: stats.successCount, className: "text-[color:var(--status-success-fg)]" },
+              { label: "Failed", value: stats.failedCount, className: "text-[color:var(--status-failed-fg)]" },
+              { label: "Warnings", value: stats.warningCount, className: "text-[color:var(--status-pending-fg)]" },
+              { label: "Trace %", value: `${stats.tracePercent}%`, className: "text-primary" },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-md border border-border bg-card px-3 py-2">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", stat.className)}>{stat.value}</p>
+              </div>
+            ))}
         </div>
 
         {semanticObservabilitySurfaces.length > 0 ? (
@@ -550,81 +488,68 @@ function LifecycleContent() {
             )}
           >
               <div className="space-y-4">
-                {/* Recent traces */}
-                <Card className="panel-surface">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      Recent Traces
-                    </CardTitle>
-                    <CardDescription className="text-xs text-muted-foreground">
-                      Quick access to recent pipeline traces
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
+                <section>
+                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Recent traces
+                  </h3>
+                  <div className="space-y-2">
                     {recentTraces.map((trace) => (
                       <div
                         key={trace.id}
                         className={cn(
-                          "space-y-2 rounded-md border border-border bg-background p-3 transition-all",
+                          "space-y-2 rounded-md border border-border bg-background p-2.5",
                           trace.isNew && "ring-1 ring-primary/25 bg-primary/5"
                         )}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {trace.status === "success" ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-[color:var(--status-success-fg)] shrink-0" />
-                            ) : trace.status === "failed" ? (
-                              <XCircle className="h-3.5 w-3.5 text-[color:var(--status-failed-fg)] shrink-0" />
-                            ) : (
-                              <Activity className="h-3.5 w-3.5 text-primary shrink-0 animate-pulse" />
-                            )}
-                            <span className="text-xs text-foreground/90 truncate">{trace.title}</span>
-                            {trace.isNew && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-primary/10 border-primary/30 text-primary">
-                                New
-                              </Badge>
-                            )}
-                          </div>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          {trace.status === "success" ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--status-success-fg)]" />
+                          ) : trace.status === "failed" ? (
+                            <XCircle className="h-3.5 w-3.5 shrink-0 text-[color:var(--status-failed-fg)]" />
+                          ) : (
+                            <Activity className="h-3.5 w-3.5 shrink-0 animate-pulse text-primary" />
+                          )}
+                          <span className="truncate text-xs text-foreground/90">{trace.title}</span>
+                          {trace.isNew ? (
+                            <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                              New
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="flex items-center justify-between">
-                          <code className="text-[10px] font-mono text-muted-foreground/80">
+                          <code className="font-mono text-[10px] text-muted-foreground/80">
                             {trace.id.slice(0, 12)}...
                           </code>
                           <TraceLink traceId={trace.id} variant="link" size="sm" />
                         </div>
                       </div>
                     ))}
-                  </CardContent>
-                </Card>
-                
-                {/* Trace stats */}
-                <Card className="panel-surface">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                      Trace Analytics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center justify-between py-1.5 border-b border-border">
-                      <span className="text-xs text-muted-foreground">Total Traced Events</span>
-                      <span className="text-sm font-medium text-foreground/90">{stats.withTraces}</span>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Trace analytics
+                  </h3>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex items-center justify-between border-b border-border py-1.5">
+                      <span className="text-muted-foreground">Traced events</span>
+                      <span className="font-medium tabular-nums text-foreground/90">{stats.withTraces}</span>
                     </div>
-                    <div className="flex items-center justify-between py-1.5 border-b border-border">
-                      <span className="text-xs text-muted-foreground">Coverage Rate</span>
-                      <span className="text-sm font-medium text-primary">{stats.tracePercent}%</span>
+                    <div className="flex items-center justify-between border-b border-border py-1.5">
+                      <span className="text-muted-foreground">Coverage</span>
+                      <span className="font-medium tabular-nums text-primary">{stats.tracePercent}%</span>
                     </div>
-                    <div className="flex items-center justify-between py-1.5 border-b border-border">
-                      <span className="text-xs text-muted-foreground">Active Runs</span>
-                      <span className="text-sm font-medium text-[color:var(--status-pending-fg)]">{activeRunsCount}</span>
+                    <div className="flex items-center justify-between border-b border-border py-1.5">
+                      <span className="text-muted-foreground">Active runs</span>
+                      <span className="font-medium tabular-nums text-[color:var(--status-pending-fg)]">{activeRunsCount}</span>
                     </div>
                     <div className="flex items-center justify-between py-1.5">
-                      <span className="text-xs text-muted-foreground">Failed Traces (24h)</span>
-                      <span className="text-sm font-medium text-[color:var(--status-failed-fg)]">{stats.failedCount}</span>
+                      <span className="text-muted-foreground">Failed (24h)</span>
+                      <span className="font-medium tabular-nums text-[color:var(--status-failed-fg)]">{stats.failedCount}</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </section>
               </div>
           </div>
         </div>

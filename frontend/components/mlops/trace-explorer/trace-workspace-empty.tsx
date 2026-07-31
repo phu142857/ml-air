@@ -22,7 +22,6 @@ export function TraceWorkspaceEmpty({
     <MlopsEmptyState
       icon={Route}
       title="No trace selected"
-      description="Choose a trace or trigger a pipeline to begin."
       className={className}
       action={
         <div className="flex flex-wrap items-center justify-center gap-2">

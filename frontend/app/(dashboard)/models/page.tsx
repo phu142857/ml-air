@@ -220,7 +220,6 @@ export default function ModelsPage() {
           isEmpty={items.length === 0}
           emptyIcon={Box}
           emptyTitle="No models"
-          emptyDescription=""
           skeletonRows={5}
         >
           <MlopsDataTable

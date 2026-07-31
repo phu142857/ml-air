@@ -36,7 +36,6 @@ export default function IdentityAuditDetailPage() {
     <SettingsPage loading={isLoading} error={error ? String((error as Error).message) : null}>
       <SettingsPageHeader
         title={data?.action || "Audit event"}
-        description="Immutable identity and access event record."
         backHref="/identity/dashboard"
         backLabel="Audit logs"
         badge={data ? <IdentityStatusBadge state={data.result === "success" ? "active" : "locked"} /> : undefined}
@@ -44,7 +43,7 @@ export default function IdentityAuditDetailPage() {
 
       {data ? (
         <>
-          <SettingsSection id="metadata" title="Metadata" description="Event provenance and outcome.">
+          <SettingsSection id="metadata" title="Metadata">
             <MetadataList
               items={[
                 { label: "Event ID", value: data.id, mono: true },
@@ -67,7 +66,7 @@ export default function IdentityAuditDetailPage() {
             />
           </SettingsSection>
 
-          <SettingsSection id="payload" title="Payload" description="Structured event data captured at write time.">
+          <SettingsSection id="payload" title="Payload">
             <pre className="max-h-96 overflow-auto rounded-md border border-border/60 bg-muted/20 p-4 font-mono text-xs">
               {JSON.stringify(data.payload, null, 2)}
             </pre>
