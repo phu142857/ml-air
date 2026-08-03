@@ -35,7 +35,7 @@ import {
   MlopsEmptyState,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBreadcrumb,
+  SubpageBackLink,
   tabPanelScrollClassName,
 } from "@/components/mlops/layout"
 import { RunMetricsSummary } from "@/components/mlops/run-metrics-summary"
@@ -556,12 +556,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   if (runQuery.isFetched && !runQuery.isLoading && !run && !runQuery.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SubpageBreadcrumb
-          segments={[
-            { label: "Runs", href: "/runs" },
-            { label: runId, mono: true },
-          ]}
-        />
+        <SubpageBackLink href="/runs" label="Back to runs" />
         <ResourcePageHeader accent="sky" icon={Play} title="Run not found" subtitle={runId} className="border-b-0" />
         <div className="flex flex-1 items-center justify-center p-6">
           <MlopsEmptyState
@@ -581,13 +576,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
-        <SubpageBreadcrumb
-          className="border-b border-border/80"
-          segments={[
-            { label: "Runs", href: "/runs" },
-            { label: runId, mono: true },
-          ]}
-        />
+        <SubpageBackLink href="/runs" label="Back to runs" />
         <ResourcePageHeader
           accent="sky"
           icon={Play}

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { GitBranch } from "lucide-react";
 import { PipelineImportWizard } from "@/components/mlops/pipeline-import-wizard";
-import { PageScrollBody, ResourcePageHeader, ScopePinnedInline, SubpageBreadcrumb } from "@/components/mlops/layout";
+import { PageScrollBody, ResourcePageHeader, ScopePinnedInline, SubpageBackLink } from "@/components/mlops/layout";
 import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINES } from "@/lib/scope-messages";
@@ -15,12 +15,7 @@ export default function NewPipelinePage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBreadcrumb
-        segments={[
-          { label: "Pipelines", href: "/pipelines" },
-          { label: "Import", mono: true },
-        ]}
-      />
+      <SubpageBackLink href="/pipelines" label="Back to pipelines" />
       <ResourcePageHeader icon={GitBranch} accent="amber" title="Import pipeline" className="shrink-0" />
       <PageScrollBody>
         {!scopePinned ? (

@@ -10,7 +10,7 @@ import {
   PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBreadcrumb,
+  SubpageBackLink,
 } from "@/components/mlops/layout";
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
 import { useTabLoading } from "@/hooks/use-tab-loading";
@@ -1238,12 +1238,7 @@ export default function DatasetHubPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBreadcrumb
-        segments={[
-          { label: "Datasets", href: "/datasets" },
-          { label: dataset?.name ?? datasetId, mono: true },
-        ]}
-      />
+      <SubpageBackLink href="/datasets" label="Back to datasets" />
       <ResourcePageHeader
         icon={Database}
         accent="emerald"

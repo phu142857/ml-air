@@ -1,5 +1,6 @@
 export { ResourcePageHeader, pageHeaderActionClass, type ResourceAccent } from "./resource-page-header"
 export { SubpageBreadcrumb, type BreadcrumbSegment } from "./subpage-breadcrumb"
+export { SubpageBackLink } from "./subpage-back-link"
 export { DetailSection } from "./detail-section"
 export { MetadataGrid, type MetadataItem } from "./metadata-grid"
 export { FilterChips, type FilterChipOption } from "./filter-chips"

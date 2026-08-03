@@ -14,7 +14,7 @@ import {
   PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBreadcrumb,
+  SubpageBackLink,
   pageHeaderActionClass,
 } from "@/components/mlops/layout";
 import { isScopePinned } from "@/lib/scope";
@@ -117,13 +117,9 @@ function DiffPageInner() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBreadcrumb
-        segments={[
-          { label: "Pipelines", href: "/pipelines" },
-          { label: pipelineId, href: `/pipelines/${encodeURIComponent(pipelineId)}`, mono: true },
-          { label: "Versions", href: `/pipelines/${encodeURIComponent(pipelineId)}/versions` },
-          { label: "Diff", mono: true },
-        ]}
+      <SubpageBackLink
+        href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}
+        label="Back to versions"
       />
       <ResourcePageHeader
         icon={FileDiff}

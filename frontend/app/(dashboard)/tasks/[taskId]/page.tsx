@@ -28,7 +28,7 @@ import {
   PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBreadcrumb,
+  SubpageBackLink,
   pageHeaderActionClass,
 } from "@/components/mlops/layout"
 import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
@@ -188,12 +188,7 @@ function TaskDetailContent() {
   if (!isLoading && !isError && !task) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SubpageBreadcrumb
-          segments={[
-            { label: "Tasks", href: "/tasks" },
-            { label: taskId, mono: true },
-          ]}
-        />
+        <SubpageBackLink href="/tasks" label="Back to tasks" />
         <ResourcePageHeader accent="violet" icon={ListTodo} title="Task not found" subtitle={taskId} />
         <div className="flex flex-1 items-center justify-center p-6">
           <MlopsEmptyState
@@ -212,12 +207,7 @@ function TaskDetailContent() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBreadcrumb
-        segments={[
-          { label: "Tasks", href: "/tasks" },
-          { label: taskId, mono: true },
-        ]}
-      />
+      <SubpageBackLink href="/tasks" label="Back to tasks" />
       <ResourcePageHeader
         icon={ListTodo}
         accent="violet"

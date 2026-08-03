@@ -14,7 +14,7 @@ import {
   PageScrollBody,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBreadcrumb,
+  SubpageBackLink,
   pageHeaderActionClass,
 } from "@/components/mlops/layout";
 import { isScopePinned } from "@/lib/scope";
@@ -131,12 +131,9 @@ export default function PipelineVersionsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBreadcrumb
-        segments={[
-          { label: "Pipelines", href: "/pipelines" },
-          { label: pipelineId, href: `/pipelines/${encodeURIComponent(pipelineId)}`, mono: true },
-          { label: "Versions", mono: true },
-        ]}
+      <SubpageBackLink
+        href={`/pipelines/${encodeURIComponent(pipelineId)}`}
+        label="Back to pipeline"
       />
       <ResourcePageHeader
         icon={GitBranch}
