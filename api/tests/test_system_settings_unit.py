@@ -46,6 +46,33 @@ class SystemSettingsDocumentTests(unittest.TestCase):
         self.assertEqual(merged["identity"]["lockout_threshold"], 100)
         self.assertEqual(merged["identity"]["lockout_minutes"], 10)
 
+    def test_seed_includes_runtime(self) -> None:
+        seed = build_seed_settings({"features": {}})
+        self.assertIn("runtime", seed)
+        self.assertEqual(seed["runtime"]["task_execution_mode"], "external")
+        self.assertEqual(seed["runtime"]["task_lease_seconds"], 300)
+
+    def test_validate_runtime_mode(self) -> None:
+        current = build_seed_settings({"features": {}})
+        merged = validate_settings_patch(
+            current,
+            {"runtime": {"task_execution_mode": "internal", "task_lease_seconds": 120}},
+        )
+        self.assertEqual(merged["runtime"]["task_execution_mode"], "internal")
+        self.assertEqual(merged["runtime"]["task_lease_seconds"], 120)
+        with self.assertRaises(ValueError):
+            validate_settings_patch(current, {"runtime": {"task_execution_mode": "bogus"}})
+
+    def test_ensure_defaults_fills_runtime_on_legacy(self) -> None:
+        from app.domains.platform.system_settings_document import ensure_settings_defaults
+
+        legacy = {"hub": {"default_route": "models"}, "features": {"otel_enabled": False}}
+        filled = ensure_settings_defaults(legacy)
+        self.assertEqual(filled["hub"]["default_route"], "models")
+        self.assertFalse(filled["features"]["otel_enabled"])
+        self.assertIn("runtime", filled)
+        self.assertIn("task_lease_seconds", filled["runtime"])
+
 
 if __name__ == "__main__":
     unittest.main()

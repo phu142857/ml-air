@@ -7,10 +7,10 @@ export function DangerZone({
 }) {
   return (
     <section className="rounded-md border border-destructive/30 bg-destructive/[0.03]">
-      <div className="border-b border-destructive/20 px-3 py-2">
-        <h2 className="text-sm font-medium text-destructive">{title}</h2>
+      <div className="border-b border-destructive/20 px-6 py-4">
+        <h2 className="text-lg font-semibold text-destructive">{title}</h2>
       </div>
-      <div className="space-y-3 p-3">{children}</div>
+      <div className="space-y-4 p-6">{children}</div>
     </section>
   )
 }

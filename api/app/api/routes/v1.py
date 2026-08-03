@@ -29,10 +29,12 @@ from app.domains.governance.model_registry_service import (
     promote_model_version,
     promotion_governance_runtime,
     resolve_model_pipeline,
+    resolve_model_serving_route,
     set_model_serving_slot,
     update_model_version_approval,
     upsert_model_pipeline_mapping,
 )
+from app.domains.governance.admission_explain_service import explain_run_admission, preview_trigger_policy
 from app.settings import get_settings
 from app.plugins.compatibility_service import (
     compatibility_matrix_payload,
@@ -678,6 +680,15 @@ class TriggerPolicyIn(BaseModel):
     dataset_id: str | None = None
     dataset_version_id: str | None = None
     training_policy_id: str | None = None
+    max_parallel_tasks: int | None = Field(default=None, ge=1, le=1000)
+
+
+class AdmissionExplainIn(BaseModel):
+    pipeline_id: str | None = None
+    dataset_version_id: str | None = None
+    model_id: str | None = None
+    target_stage: str = "production"
+    version: int | None = Field(default=None, ge=1)
 
 
 class ScopeSwitchIn(BaseModel):
@@ -4129,14 +4140,52 @@ def upsert_model_trigger_policy_v1(
             dataset_id=payload.dataset_id,
             dataset_version_id=payload.dataset_version_id,
             training_policy_id=payload.training_policy_id,
+            max_parallel_tasks=payload.max_parallel_tasks,
         )
     except ValueError as exc:
         code = str(exc)
         if code in {"dataset_not_found", "dataset_version_not_found", "dataset_training_policy_not_found"}:
             raise HTTPException(status_code=404, detail=code) from exc
-        if code == "dataset_id_required_with_policy":
+        if code in {"dataset_id_required_with_policy", "invalid_max_parallel_tasks"}:
             raise HTTPException(status_code=422, detail=code) from exc
         raise HTTPException(status_code=422, detail=code) from exc
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy/preview")
+def preview_model_trigger_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Dry-run preview for auto-trigger policy (no run created)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return preview_trigger_policy(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/admission/explain")
+def explain_admission_v1(
+    tenant_id: str,
+    project_id: str,
+    payload: AdmissionExplainIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Composable admission explainability across quota, readiness, and promotion gates."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return explain_run_admission(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        pipeline_id=payload.pipeline_id,
+        dataset_version_id=payload.dataset_version_id,
+        model_id=payload.model_id,
+        target_stage=payload.target_stage,
+        version=payload.version,
+    )
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")
@@ -4257,10 +4306,15 @@ def promote_model_v1(
                 "or ML_AIR_SKIP_APPROVAL_FOR_PROMOTE=1 for dev-only bypass.",
             ) from exc
         if code in {
+            "approval_required",
+            "approval_pending",
+            "approval_rejected",
+            "already_at_stage",
             "invalid_stage_transition",
             "rollback_disabled",
             "unknown_target_stage",
             "invalid_rollback",
+            "promotion_blocked",
         }:
             raise HTTPException(status_code=422, detail=code) from exc
         raise HTTPException(status_code=404, detail=code) from exc
@@ -4357,6 +4411,17 @@ if _serving_slots_http_enabled():
         if not row:
             raise HTTPException(status_code=404, detail="model_not_found")
         return list_model_serving_slots(model_id)
+
+    @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/route")
+    def get_model_serving_route_v1(
+        tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
+    ) -> dict:
+        principal = authenticate_bearer(authorization)
+        authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+        try:
+            return resolve_model_serving_route(tenant_id, project_id, model_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/serving/{slot}")
     def put_model_serving_slot_v1(

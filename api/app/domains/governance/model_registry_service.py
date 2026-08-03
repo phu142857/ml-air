@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import logging
 import os
 import re
 from typing import Any
@@ -24,6 +25,8 @@ from app.domains.shared.pagination import (
 )
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
+
+logger = logging.getLogger(__name__)
 
 APPROVAL_PENDING = "pending_manual_approval"
 APPROVAL_APPROVED = "approved"
@@ -774,6 +777,19 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
             version=int(version),
             stage=str(out.get("stage") or stage_norm),
         )
+        # Metadata-only: production promote assigns champion serving slot.
+        if stage_norm == "production":
+            try:
+                set_model_serving_slot(
+                    tenant_id=str(scope[0]),
+                    project_id=str(scope[1]),
+                    model_id=model_id,
+                    slot="champion",
+                    version=int(version),
+                )
+                out["serving_slot"] = "champion"
+            except Exception:
+                logger.exception("auto_assign_champion_serving_slot_failed model_id=%s version=%s", model_id, version)
     return out
 
 
@@ -1149,6 +1165,36 @@ def set_model_serving_slot(
         stage=None,
     )
     return list_model_serving_slots(model_id)
+
+
+def resolve_model_serving_route(tenant_id: str, project_id: str, model_id: str) -> dict:
+    """Resolve serving slots into a simple metadata route map (no traffic LB)."""
+    row = None
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT model_id, name FROM models WHERE tenant_id = %s AND project_id = %s AND model_id = %s",
+                (tenant_id, project_id, model_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        raise ValueError("model_not_found")
+    slots = list_model_serving_slots(model_id)
+    slot_map = {str(s.get("slot")): s for s in (slots.get("slots") or []) if isinstance(s, dict)}
+    champion = slot_map.get("champion")
+    canary = slot_map.get("canary")
+    candidate = slot_map.get("candidate")
+    challenger = slot_map.get("challenger")
+    return {
+        "model_id": model_id,
+        "model_name": row[1],
+        "primary": champion,
+        "canary": canary,
+        "candidate": candidate,
+        "challenger": challenger,
+        "slots": slots.get("slots") or [],
+        "note": "Metadata route only; no traffic split is enforced by MLAir.",
+    }
 
 
 def _dataset_version_id_from_run(run: dict[str, Any]) -> str | None:

@@ -143,6 +143,15 @@ MATERIALIZATION_UNIQUE_VIOLATION_TOTAL = (
     if Counter
     else _NoopMetric()
 )
+MATERIALIZATION_SCHEDULE_TIME_ONLY_TOTAL = (
+    Counter(
+        "mlair_dataset_materialization_schedule_time_only_total",
+        "Snapshot-on-schedule materializations forced below threshold (time-only)",
+        ["source_type"],
+    )
+    if Counter
+    else _NoopMetric()
+)
 MATERIALIZATION_LATENCY_SECONDS = (
     Histogram(
         "mlair_dataset_materialization_latency_seconds",
@@ -1199,16 +1208,18 @@ def materialize_scheduled_buffers(
         source_type = str(r[1] or "runtime_feedback")
         current_size = max(0, int(r[2] or 0))
         target_threshold = max(1, int(r[3] or 1000))
-        if current_size < target_threshold:
+        if current_size <= 0:
             skipped.append(
                 {
                     "dataset_id": dataset_id,
-                    "reason": "below_threshold_guard",
+                    "reason": "empty_buffer",
                     "current_size": current_size,
                     "target_threshold": target_threshold,
                 }
             )
             continue
+        # Schedule tick: materialize when buffer has rows even if below threshold (time-only).
+        force_time_only = current_size < target_threshold
         ds = get_dataset(tenant_id, project_id, dataset_id)
         if not ds:
             skipped.append({"dataset_id": dataset_id, "reason": "dataset_not_found"})
@@ -1224,12 +1235,15 @@ def materialize_scheduled_buffers(
             force=True,
         )
         if version_id and version:
+            if force_time_only:
+                MATERIALIZATION_SCHEDULE_TIME_ONLY_TOTAL.labels(source_type=source_type).inc()
             materialized.append(
                 {
                     "dataset_id": dataset_id,
                     "dataset_version_id": version_id,
                     "version": version,
                     "strategy": "snapshot_on_schedule",
+                    "force_time_only": force_time_only,
                 }
             )
         else:

@@ -3401,6 +3401,7 @@ export async function fetchModelTriggerPolicy(tenantId: string, projectId: strin
     dataset_id?: string | null;
     dataset_version_id?: string | null;
     training_policy_id?: string | null;
+    max_parallel_tasks?: number | null;
     last_trigger_attempt_at?: string | null;
     last_trigger_outcome?: string | null;
     last_skip_reason?: string | null;
@@ -3419,6 +3420,7 @@ export async function updateModelTriggerPolicy(
     dataset_id?: string | null;
     dataset_version_id?: string | null;
     training_policy_id?: string | null;
+    max_parallel_tasks?: number | null;
   }
 ) {
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/trigger-policy`, {
@@ -3435,6 +3437,62 @@ export async function updateModelTriggerPolicy(
     dataset_id?: string | null;
     dataset_version_id?: string | null;
     training_policy_id?: string | null;
+    max_parallel_tasks?: number | null;
+  };
+}
+
+export async function previewModelTriggerPolicy(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/trigger-policy/preview`,
+    { method: "POST", headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    policy: Record<string, unknown>;
+    pipeline_id?: string | null;
+    would_trigger: boolean;
+    skip_reason?: string | null;
+    notes: string[];
+    dry_run: true;
+    admission?: {
+      admitted: boolean;
+      blocking: boolean;
+      checks: Array<Record<string, unknown>>;
+    };
+  };
+}
+
+export async function explainAdmission(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  payload: {
+    pipeline_id?: string | null;
+    dataset_version_id?: string | null;
+    model_id?: string | null;
+    target_stage?: string;
+    version?: number | null;
+  }
+) {
+  const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/admission/explain`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    admitted: boolean;
+    blocking: boolean;
+    pipeline_id?: string | null;
+    checks: Array<Record<string, unknown>>;
   };
 }
 
@@ -3628,6 +3686,31 @@ export async function fetchModelServing(tenantId: string, projectId: string, mod
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ModelServingMatrix;
+}
+
+/** Requires API `ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1` (GET .../serving/route). */
+export async function fetchModelServingRoute(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string
+) {
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${projectId}/models/${modelId}/serving/route`,
+    { headers: authHeaders(token), cache: "no-store" }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as {
+    model_id: string;
+    model_name?: string;
+    primary?: Record<string, unknown> | null;
+    canary?: Record<string, unknown> | null;
+    candidate?: Record<string, unknown> | null;
+    challenger?: Record<string, unknown> | null;
+    slots: Array<Record<string, unknown>>;
+    note?: string;
+  };
 }
 
 /** Requires API `ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1` (PUT .../serving/{slot}). */

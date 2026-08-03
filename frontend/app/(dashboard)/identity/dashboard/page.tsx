@@ -90,10 +90,11 @@ export default function IdentityAuditLogsPage() {
     >
       <SettingsPageHeader
         title="Audit Logs"
+        description="Security and administration events across the platform."
       />
 
       {dashboardQuery.data ? (
-        <SettingsSection id="dashboard" title="Dashboard">
+        <SettingsSection id="dashboard" title="Dashboard" description="Identity footprint at a glance.">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Total users" value={dashboardQuery.data.total_users} />
             <StatCard label="Active users" value={dashboardQuery.data.active_users} />

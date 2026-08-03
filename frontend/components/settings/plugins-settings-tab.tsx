@@ -184,12 +184,19 @@ export function PluginsSettingsTab() {
     <SettingsPage>
       <SettingsPageHeader
         title="Integrations"
-        actions={
+        description="Plugins loaded into the Hub and their enablement state."
+      />
+
+      <SettingsSection
+        id="registry"
+        title="Loaded plugins"
+        description="Reload the registry after deploying plugin packages."
+        headerActions={
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 text-xs"
+            className="h-8 gap-1.5 text-xs transition-colors duration-150"
             loading={reloadMutation.isPending}
             loadingText="Reloading…"
             onClick={() => reloadMutation.mutate()}
@@ -198,11 +205,6 @@ export function PluginsSettingsTab() {
             Reload registry
           </Button>
         }
-      />
-
-      <SettingsSection
-        id="registry"
-        title="Loaded plugins"
       >
         {pluginsQuery.isFetching ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

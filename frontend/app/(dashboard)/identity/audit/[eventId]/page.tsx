@@ -36,6 +36,7 @@ export default function IdentityAuditDetailPage() {
     <SettingsPage loading={isLoading} error={error ? String((error as Error).message) : null}>
       <SettingsPageHeader
         title={data?.action || "Audit event"}
+        description="Full audit event payload and actor context."
         backHref="/identity/dashboard"
         backLabel="Audit logs"
         badge={data ? <IdentityStatusBadge state={data.result === "success" ? "active" : "locked"} /> : undefined}

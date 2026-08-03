@@ -251,6 +251,7 @@ export default function IdentityServiceAccountDetailPage() {
     <SettingsPage loading={saQuery.isLoading} error={saQuery.error ? (saQuery.error as Error).message : null}>
       <SettingsPageHeader
         title={sa?.name || "Service account"}
+        description="Credentials, assignments, and lifecycle for this service account."
         backHref="/identity/service-accounts"
         backLabel="Service accounts"
         badge={sa ? <IdentityStatusBadge state={sa.state} /> : null}

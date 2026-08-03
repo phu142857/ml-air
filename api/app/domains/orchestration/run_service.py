@@ -113,7 +113,12 @@ def create_run(
     replay_from_task_id: str | None = None,
     override_config: dict | None = None,
 ) -> dict:
-    effective_max_parallel = max(1, min(1000, int(max_parallel_tasks)))
+    try:
+        from app.domains.governance.tenant_quota_service import resolve_max_parallel_tasks
+
+        effective_max_parallel = resolve_max_parallel_tasks(tenant_id, int(max_parallel_tasks))
+    except Exception:
+        effective_max_parallel = max(1, min(1000, int(max_parallel_tasks)))
     normalized_priority = priority.lower()
     if normalized_priority not in {"high", "normal", "low"}:
         normalized_priority = "normal"

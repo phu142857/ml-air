@@ -1326,7 +1326,7 @@ export default function DatasetHubPage() {
         {activeTab === "overview" ? (
           <div className="flex min-w-0 w-full flex-col gap-4">
             <DetailSection accentBorder={DATASET_SECTION_ACCENT}>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
                 {lifecycleStages.map((label, i) => (
                   <div key={label} className="flex items-center gap-1.5">
                     <Badge

@@ -122,6 +122,11 @@ SEMANTIC_OBSERVABILITY_SURFACES: tuple[SemanticObservabilitySurface, ...] = (
                 "labels": ("constraint",),
             },
             {
+                "name": "mlair_dataset_materialization_schedule_time_only_total",
+                "kind": "counter",
+                "labels": ("source_type",),
+            },
+            {
                 "name": "mlair_dataset_materialization_latency_seconds",
                 "kind": "histogram",
                 "labels": ("strategy",),

@@ -41,9 +41,11 @@ import {
 import { SPAN_SEARCH_DEBOUNCE_MS } from "@/components/mlops/trace-explorer/trace-span-search";
 import { useAppContext } from "@/lib/app-context";
 import type { TraceSearchHit, TraceWaterfallStep } from "@/lib/api";
-import { buildTraceShareUrl, downloadTraceExport } from "@/lib/api";
+import { buildTraceShareUrl, downloadTraceExport, replayFromTask } from "@/lib/api";
 import { copyWithToast, toastError, toastSuccess } from "@/lib/toast-actions";
 import { normalizeTraceId } from "@/lib/trace-id";
+import { useRouter } from "next/navigation";
+import { formatApiClientError } from "@/lib/utils";
 
 export type TraceExplorerWorkspaceProps = {
   traceList: TraceSearchHit[];
@@ -80,6 +82,7 @@ export function TraceExplorerWorkspace({
   onUrlQChange,
 }: TraceExplorerWorkspaceProps) {
   const { tenantId, projectId, token } = useAppContext();
+  const router = useRouter();
   const normalized = selectedTraceId ? normalizeTraceId(selectedTraceId) || selectedTraceId.trim() : "";
 
   const workspace = useTraceWorkspaceState({ tenantId, projectId });
@@ -103,6 +106,7 @@ export function TraceExplorerWorkspace({
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
+  const [replayPending, setReplayPending] = useState(false);
   const [flatSteps, setFlatSteps] = useState<TraceWaterfallStep[]>([]);
   const [allSteps, setAllSteps] = useState<TraceWaterfallStep[]>([]);
   const [collapsedSpanIds, setCollapsedSpanIds] = useState<Set<string>>(() => new Set());
@@ -395,6 +399,28 @@ export function TraceExplorerWorkspace({
     setCollapsedSpanIds(new Set());
   }, []);
 
+  const handleReplayFromTask = useCallback(
+    async (runId: string, taskId: string) => {
+      if (!tenantId || !projectId || !token || projectId === "all") {
+        toastError("Replay unavailable", "Pin a tenant/project scope first.");
+        return;
+      }
+      setReplayPending(true);
+      try {
+        const created = await replayFromTask(tenantId, projectId, runId, token, {
+          from_task_id: taskId,
+        });
+        toastSuccess("Replay started", created.run_id);
+        router.push(`/runs/${encodeURIComponent(created.run_id)}`);
+      } catch (e: unknown) {
+        toastError("Replay failed", formatApiClientError(e));
+      } finally {
+        setReplayPending(false);
+      }
+    },
+    [projectId, router, tenantId, token],
+  );
+
   const spanActionContextExtras = useMemo(
     () => ({
       hasTree: allSteps.length > 1,
@@ -403,8 +429,19 @@ export function TraceExplorerWorkspace({
       onJumpToParent: () => jumpToParent(),
       onCollapseOthers: () => collapseOthers(),
       onExpandAll: expandAll,
+      onReplayFromTask: handleReplayFromTask,
+      replayPending,
     }),
-    [allSteps.length, collapseOthers, data?.log_count, expandAll, jumpToParent, onOpenLogsTab],
+    [
+      allSteps.length,
+      collapseOthers,
+      data?.log_count,
+      expandAll,
+      handleReplayFromTask,
+      jumpToParent,
+      onOpenLogsTab,
+      replayPending,
+    ],
   );
 
   const focusDetailPanel = useCallback(() => {

@@ -530,16 +530,22 @@
   }
 
   .page-body {
-    @apply flex min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden px-4 py-4 sm:px-6;
+    @apply flex min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden py-4;
   }
 
   .page-body-flush {
-    @apply flex min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden px-4 py-4 sm:px-6;
+    @apply flex min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden py-4;
   }
 
   .scroll-region {
     @apply min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain;
+    scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Content inset inside scrollports so panels don’t sit under/against the scrollbar. */
+  .scroll-region-pad {
+    @apply px-4 sm:px-6;
   }
 
   [data-floating-menu] {

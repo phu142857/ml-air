@@ -19,10 +19,11 @@ export default function SettingsAboutPage() {
   return (
     <SettingsPage>
       <SettingsPageHeader
-        title="About MLAir"
+        title="About"
+        description="Product identity and runtime metadata for this Hub."
       />
 
-      <SettingsSection id="brand" title="Brand">
+      <SettingsSection id="brand" title="Brand" description="MLAir control plane.">
         <div className="flex items-center gap-4">
           <MlairLogo size="lg" alt="MLAir logo" />
           <div className="min-w-0 space-y-1">

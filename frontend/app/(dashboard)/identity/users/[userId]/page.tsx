@@ -140,6 +140,8 @@ export default function IdentityUserDetailPage() {
   return (
     <SettingsPage loading={userQuery.isLoading} error={userQuery.error ? (userQuery.error as Error).message : null}>
       <SettingsPageHeader
+        title={user?.username || "User"}
+        description="Account metadata, assignments, and lifecycle actions."
         backHref="/identity/users"
         backLabel="Users"
         secondaryActions={

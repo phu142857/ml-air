@@ -5,9 +5,11 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SINGLETON_ID = "default"
 _HUB_ROUTES = frozenset({"datasets", "lifecycle", "dashboard", "models"})
+_TASK_EXECUTION_MODES = frozenset({"internal", "external"})
+_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
 
 def _feature_map() -> dict[str, str]:
@@ -19,6 +21,20 @@ def _feature_map() -> dict[str, str]:
         from mlair.config.loader import _FEATURE_ENV_MAP
 
         return dict(_FEATURE_ENV_MAP)
+
+
+def _default_runtime() -> dict[str, Any]:
+    return {
+        "dataset_artifact_root": "file:///mlair/artifacts/datasets",
+        "model_artifact_root": "file:///mlair/artifacts/models",
+        "task_execution_mode": "external",
+        "task_lease_seconds": 300,
+        "lease_reap_interval_seconds": 5,
+        "log_level": "INFO",
+        "resource_sample_interval": 1.0,
+        "resource_flush_interval": 1.0,
+        "replay_require_artifact_evidence": True,
+    }
 
 
 def build_seed_settings(profile_cfg: dict[str, Any]) -> dict[str, Any]:
@@ -76,8 +92,15 @@ def build_seed_settings(profile_cfg: dict[str, Any]) -> dict[str, Any]:
             },
             "webhook_allowed_hosts": [],
         },
+        "runtime": _default_runtime(),
         "features": features,
     }
+
+
+def ensure_settings_defaults(settings: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing L4 sections/keys for older schema rows (non-destructive)."""
+    seed = build_seed_settings({"features": {}})
+    return _deep_merge(seed, settings if isinstance(settings, dict) else {})
 
 
 def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
@@ -92,7 +115,7 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
 
 def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """Merge and validate a partial settings update."""
-    merged = _deep_merge(current, patch)
+    merged = _deep_merge(ensure_settings_defaults(current), patch)
 
     hub = merged.get("hub")
     if isinstance(hub, dict):
@@ -101,7 +124,7 @@ def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> d
             raise ValueError(f"hub.default_route must be one of: {', '.join(sorted(_HUB_ROUTES))}")
         hub["default_route"] = route
 
-        identity = merged.get("identity")
+    identity = merged.get("identity")
     if isinstance(identity, dict):
         threshold = int(identity.get("lockout_threshold", 5))
         minutes = int(identity.get("lockout_minutes", 15))
@@ -123,6 +146,34 @@ def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> d
         grafana = telemetry.get("grafana_ui_url")
         if grafana is not None and str(grafana).strip() == "":
             telemetry["grafana_ui_url"] = None
+
+    runtime = merged.get("runtime")
+    if isinstance(runtime, dict):
+        mode = str(runtime.get("task_execution_mode") or "external").strip().lower()
+        if mode not in _TASK_EXECUTION_MODES:
+            raise ValueError("runtime.task_execution_mode must be internal or external")
+        runtime["task_execution_mode"] = mode
+        lease = int(runtime.get("task_lease_seconds", 300))
+        runtime["task_lease_seconds"] = max(10, min(lease, 86400))
+        reap = int(runtime.get("lease_reap_interval_seconds", 5))
+        runtime["lease_reap_interval_seconds"] = max(1, min(reap, 3600))
+        level = str(runtime.get("log_level") or "INFO").strip().upper()
+        if level not in _LOG_LEVELS:
+            raise ValueError(f"runtime.log_level must be one of: {', '.join(sorted(_LOG_LEVELS))}")
+        runtime["log_level"] = level
+        runtime["resource_sample_interval"] = max(0.1, min(float(runtime.get("resource_sample_interval", 1.0)), 3600.0))
+        runtime["resource_flush_interval"] = max(0.1, min(float(runtime.get("resource_flush_interval", 1.0)), 3600.0))
+        for path_key in ("dataset_artifact_root", "model_artifact_root"):
+            text = str(runtime.get(path_key) or "").strip()
+            if not text:
+                runtime[path_key] = _default_runtime()[path_key]
+            else:
+                runtime[path_key] = text
+        evid = runtime.get("replay_require_artifact_evidence", True)
+        if isinstance(evid, bool):
+            runtime["replay_require_artifact_evidence"] = evid
+        else:
+            runtime["replay_require_artifact_evidence"] = str(evid).strip().lower() in {"1", "true", "yes", "on"}
 
     governance = merged.get("governance")
     if isinstance(governance, dict):
@@ -191,6 +242,27 @@ def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> d
             else:
                 raise ValueError("governance.webhook_allowed_hosts must be a list or comma-separated string")
 
+        for bool_key in (
+            "rollback_enabled",
+            "rollback_requires_approval",
+            "promotion_allow_skip_stages",
+            "skip_approval_for_promote",
+            "replay_require_checksum",
+            "replay_require_signed_manifest",
+        ):
+            if bool_key not in governance:
+                continue
+            val = governance[bool_key]
+            if isinstance(val, bool):
+                continue
+            text = str(val).strip().lower()
+            if text in {"1", "true", "yes", "on"}:
+                governance[bool_key] = True
+            elif text in {"0", "false", "no", "off"}:
+                governance[bool_key] = False
+            else:
+                raise ValueError(f"governance.{bool_key} must be boolean")
+
     features = merged.get("features")
     if isinstance(features, dict):
         for key, val in list(features.items()):
@@ -208,7 +280,7 @@ def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> d
 def public_document(*, settings: dict[str, Any], schema_version: int, updated_at: str, updated_by: str | None) -> dict[str, Any]:
     return {
         "schema_version": schema_version,
-        "settings": settings,
+        "settings": ensure_settings_defaults(settings),
         "updated_at": updated_at,
         "updated_by": updated_by,
     }

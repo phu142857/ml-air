@@ -38,6 +38,7 @@ import {
   fetchModelVersions,
   fetchPromotionEligibility,
   fetchRun,
+  previewModelTriggerPolicy,
   promoteModelVersion,
   setModelServingSlot,
   updateModelVersionApproval,
@@ -115,9 +116,11 @@ export default function ModelDetailPage() {
   const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule">("manual");
   const [debounceMinutes, setDebounceMinutes] = useState("10");
   const [scheduleCron, setScheduleCron] = useState("0 */6 * * *");
+  const [maxParallelTasks, setMaxParallelTasks] = useState("");
   const [triggerDatasetId, setTriggerDatasetId] = useState("");
   const [triggerDatasetVersionId, setTriggerDatasetVersionId] = useState("");
   const [policyMsg, setPolicyMsg] = useState("");
+  const [previewMsg, setPreviewMsg] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmBody, setConfirmBody] = useState("");
@@ -183,6 +186,11 @@ export default function ModelDetailPage() {
     setTriggerMode(triggerPolicyQuery.data.trigger_mode);
     setDebounceMinutes(String(triggerPolicyQuery.data.debounce_minutes || 10));
     setScheduleCron(triggerPolicyQuery.data.schedule_cron || "0 */6 * * *");
+    setMaxParallelTasks(
+      triggerPolicyQuery.data.max_parallel_tasks != null
+        ? String(triggerPolicyQuery.data.max_parallel_tasks)
+        : ""
+    );
     setTriggerDatasetId(triggerPolicyQuery.data.dataset_id || "");
     setTriggerDatasetVersionId(triggerPolicyQuery.data.dataset_version_id || "");
   }, [triggerPolicyQuery.data]);
@@ -320,21 +328,27 @@ export default function ModelDetailPage() {
     }
   });
   const triggerPolicyMutation = useMutation({
-    mutationFn: () =>
-      updateModelTriggerPolicy(tenantId, projectId, modelId, token, {
+    mutationFn: () => {
+      const rawMpt = maxParallelTasks.trim();
+      const parsedMpt = rawMpt ? Number.parseInt(rawMpt, 10) : null;
+      return updateModelTriggerPolicy(tenantId, projectId, modelId, token, {
         trigger_mode: triggerMode,
         debounce_minutes: Math.max(1, Number.parseInt(debounceMinutes || "10", 10) || 10),
         schedule_cron: scheduleCron.trim() || "0 */6 * * *",
         dataset_id: triggerDatasetId.trim() || null,
         dataset_version_id: triggerDatasetVersionId.trim() || null,
         training_policy_id: null,
-      }),
+        max_parallel_tasks:
+          parsedMpt != null && Number.isFinite(parsedMpt) && parsedMpt >= 1 ? parsedMpt : null,
+      });
+    },
     onSuccess: async (saved) => {
       setPolicyMsg("");
       toastSuccess("Trigger policy saved");
       setTriggerMode(saved.trigger_mode);
       setDebounceMinutes(String(saved.debounce_minutes || 10));
       setScheduleCron(saved.schedule_cron || "0 */6 * * *");
+      setMaxParallelTasks(saved.max_parallel_tasks != null ? String(saved.max_parallel_tasks) : "");
       setTriggerDatasetId(saved.dataset_id || "");
       setTriggerDatasetVersionId(saved.dataset_version_id || "");
       await queryClient.invalidateQueries({ queryKey: mlairKeys.models.triggerPolicy(tenantId, projectId, modelId) });
@@ -344,6 +358,22 @@ export default function ModelDetailPage() {
       setPolicyMsg(`Save failed: ${msg}`);
       toastError("Save failed", msg);
     }
+  });
+  const triggerPreviewMutation = useMutation({
+    mutationFn: () => previewModelTriggerPolicy(tenantId, projectId, modelId, token),
+    onSuccess: (preview) => {
+      const notes = (preview.notes || []).join(" ");
+      const summary = preview.would_trigger
+        ? `Would trigger${preview.pipeline_id ? ` via ${preview.pipeline_id}` : ""}. ${notes}`
+        : `Would skip${preview.skip_reason ? ` (${preview.skip_reason})` : ""}. ${notes}`;
+      setPreviewMsg(summary.trim());
+      toastSuccess("Trigger preview", summary.trim() || "Dry-run complete");
+    },
+    onError: (e: unknown) => {
+      const msg = formatApiClientError(e);
+      setPreviewMsg(`Preview failed: ${msg}`);
+      toastError("Preview failed", msg);
+    },
   });
   const deleteModelMutation = useMutation({
     mutationFn: () => deleteModel(tenantId, projectId, modelId, token),
@@ -799,6 +829,17 @@ export default function ModelDetailPage() {
                 />
               </label>
             ) : null}
+            {triggerMode !== "manual" ? (
+              <label className="text-xs text-muted-foreground">
+                Max parallel tasks (optional)
+                <input
+                  value={maxParallelTasks}
+                  onChange={(e) => setMaxParallelTasks(e.target.value)}
+                  placeholder="default 1"
+                  className="mt-1 w-full inset-surface px-2 py-2 text-xs text-foreground"
+                />
+              </label>
+            ) : null}
             {triggerMode === "schedule" ? (
               <label className="text-xs text-muted-foreground">
                 Cron
@@ -868,7 +909,7 @@ export default function ModelDetailPage() {
               ) : null}
             </div>
           ) : null}
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               className="rounded-lg px-3 py-1 text-xs"
               onClick={() => triggerPolicyMutation.mutate()}
@@ -876,8 +917,19 @@ export default function ModelDetailPage() {
             >
               Save Trigger Policy
             </Button>
+            <Button
+              variant="outline"
+              className="rounded-lg px-3 py-1 text-xs"
+              onClick={() => triggerPreviewMutation.mutate()}
+              disabled={triggerPreviewMutation.isPending}
+            >
+              Preview dry-run
+            </Button>
             {policyMsg ? <span className="text-xs text-foreground">{policyMsg}</span> : null}
           </div>
+          {previewMsg ? (
+            <p className="mt-2 text-xs text-muted-foreground">{previewMsg}</p>
+          ) : null}
         </div>
       </DetailSection>
         )}

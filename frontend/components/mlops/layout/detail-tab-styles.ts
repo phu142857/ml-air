@@ -22,9 +22,11 @@ export function detailTabListClassName(className?: string) {
   )
 }
 
-/** Scrollable tab panel — use on Radix `TabsContent` (run detail, settings, …). */
+/** Scrollable tab panel — use on Radix `TabsContent` (run detail, settings, …).
+ *  `TabsContent` detects `scroll-region` and insets children so panels don’t touch the scrollbar.
+ */
 export function tabPanelScrollClassName(className?: string) {
-  return cn("scroll-region mt-0 px-4 py-6 sm:px-6", className)
+  return cn("scroll-region mt-0", className)
 }
 
 export function detailTabTriggerClassName(className?: string) {

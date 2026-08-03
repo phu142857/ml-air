@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { LogOut, User } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,6 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAppContext } from "@/lib/app-context";
+import { fetchIdentityMe } from "@/lib/identity-api";
+import {
+  loadProfileAvatar,
+  PROFILE_AVATAR_UPDATED_EVENT,
+} from "@/lib/profile-avatar";
 
 function initialsFromUsername(username: string | null): string {
   const value = String(username || "").trim();
@@ -23,7 +30,29 @@ function initialsFromUsername(username: string | null): string {
 }
 
 export function AccountMenu() {
-  const { username, logout } = useAppContext();
+  const { token, username, logout } = useAppContext();
+  const meQuery = useQuery({
+    queryKey: ["identity-me", token],
+    queryFn: () => fetchIdentityMe(token),
+    enabled: Boolean(token.trim()),
+    staleTime: 60_000,
+  });
+  const userId = meQuery.data?.id;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAvatarUrl(loadProfileAvatar(userId));
+  }, [userId]);
+
+  useEffect(() => {
+    const onUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId && userId && detail.userId !== userId) return;
+      setAvatarUrl(loadProfileAvatar(userId));
+    };
+    window.addEventListener(PROFILE_AVATAR_UPDATED_EVENT, onUpdated);
+    return () => window.removeEventListener(PROFILE_AVATAR_UPDATED_EVENT, onUpdated);
+  }, [userId]);
 
   return (
     <DropdownMenu>
@@ -36,6 +65,7 @@ export function AccountMenu() {
           aria-label="Account menu"
         >
           <Avatar className="h-8 w-8">
+            {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
             <AvatarFallback className="bg-muted text-xs font-medium text-foreground">
               {initialsFromUsername(username)}
             </AvatarFallback>

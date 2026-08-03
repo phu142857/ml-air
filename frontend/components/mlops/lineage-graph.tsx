@@ -75,7 +75,7 @@ const kindConfig: Record<
   model: {
     icon: Box,
     label: "Model",
-    accent: "bg-[color:var(--status-pending)]",
+    accent: "bg-[color:var(--status-warning)]",
     border: "border-[color:var(--status-pending-border)]",
     iconWrap: "bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]",
     minimap: "#f59e0b",

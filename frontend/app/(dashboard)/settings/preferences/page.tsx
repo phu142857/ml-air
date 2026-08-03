@@ -61,9 +61,10 @@ export default function SettingsPreferencesPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="Preferences"
+        description="Customize appearance and workspace defaults for this browser."
       />
 
-      <SettingsSection id="appearance" title="Appearance">
+      <SettingsSection id="appearance" title="Appearance" description="Theme and density for the Hub UI.">
         <div className="max-w-xs space-y-1.5">
           <Label>Theme</Label>
           <Select value={theme || "dark"} onValueChange={setTheme}>
@@ -98,7 +99,7 @@ export default function SettingsPreferencesPage() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection id="localization" title="Localization">
+      <SettingsSection id="localization" title="Localization" description="Language and regional defaults.">
         <div className="grid max-w-lg gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Language</Label>
@@ -125,7 +126,7 @@ export default function SettingsPreferencesPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="workspace" title="Workspace defaults">
+      <SettingsSection id="workspace" title="Workspace defaults" description="Preferred tenant and project when opening the Hub.">
         <div className="grid max-w-lg gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Default tenant</Label>
@@ -158,7 +159,7 @@ export default function SettingsPreferencesPage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection id="advanced" title="Advanced">
+      <SettingsSection id="advanced" title="Advanced" description="Local API override for development.">
         <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-sm text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           <p>Changing this value can connect MLAir to a different API environment.</p>

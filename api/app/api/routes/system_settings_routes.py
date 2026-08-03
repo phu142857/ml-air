@@ -20,6 +20,7 @@ class SystemSettingsPatchIn(BaseModel):
     identity: dict[str, Any] | None = None
     governance: dict[str, Any] | None = None
     features: dict[str, Any] | None = None
+    runtime: dict[str, Any] | None = None
 
 
 def _require_global_admin(principal: Principal) -> str | None:
@@ -40,6 +41,14 @@ def get_system_settings_v1(authorization: str | None = Header(default=None)) -> 
     principal = authenticate_bearer(authorization)
     _require_global_admin(principal)
     return svc.get_system_settings_document()
+
+
+@router.get("/system/settings/catalog")
+def get_system_settings_catalog_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    """Normalized catalog of all .env / L4 configuration keys for Hub Settings."""
+    principal = authenticate_bearer(authorization)
+    _require_global_admin(principal)
+    return svc.get_env_config_catalog_document()
 
 
 @router.patch("/system/settings")

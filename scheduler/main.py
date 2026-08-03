@@ -313,7 +313,8 @@ def _load_trigger_policies() -> list[dict]:
                 """
                 SELECT tenant_id, project_id, model_id, trigger_mode, debounce_minutes,
                        COALESCE(schedule_cron, '0 */6 * * *'),
-                       dataset_id, dataset_version_id, training_policy_id
+                       dataset_id, dataset_version_id, training_policy_id,
+                       max_parallel_tasks
                 FROM model_trigger_policies
                 WHERE trigger_mode IN ('auto_ready', 'schedule')
                 """
@@ -335,6 +336,7 @@ def _load_trigger_policies() -> list[dict]:
                 model_id,
             )
             continue
+        mpt = row[9]
         items.append(
             {
                 "tenant_id": tenant_id,
@@ -346,6 +348,7 @@ def _load_trigger_policies() -> list[dict]:
                 "dataset_id": row[6],
                 "dataset_version_id": row[7],
                 "training_policy_id": row[8],
+                "max_parallel_tasks": int(mpt) if mpt is not None else None,
                 "pipeline_id": pipeline_id,
                 "override_config": override_config,
             }
@@ -470,11 +473,16 @@ def _trigger_policy_run(policy: dict, reason: str) -> tuple[bool, str]:
         if not check or not bool(check.get("ready")):
             return False, "gate_blocked"
     idem = f"auto:{model_id}:{reason}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
+    mpt = policy.get("max_parallel_tasks")
+    try:
+        max_parallel = max(1, int(mpt)) if mpt is not None else 1
+    except Exception:
+        max_parallel = 1
     payload = {
         "pipeline_id": pipeline_id,
         "idempotency_key": idem,
         "priority": "normal",
-        "max_parallel_tasks": 1,
+        "max_parallel_tasks": max_parallel,
         "override_config": override_config,
         "context": context,
     }

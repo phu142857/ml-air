@@ -140,15 +140,21 @@ export function PatPanel() {
     <SettingsPage loading={patsQuery.isLoading} error={patsQuery.error ? String((patsQuery.error as Error).message) : null}>
       <SettingsPageHeader
         title="CLI & API"
+        description="Configure the MLAir CLI and manage personal access tokens."
       />
 
-      <SettingsSection id="cli-configuration" title="CLI configuration">
+      <SettingsSection
+        id="cli-configuration"
+        title="CLI configuration"
+        description="Point the CLI at this Hub API endpoint."
+      >
         <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground whitespace-pre-wrap">{`export MLAIR_API_URL="${apiBase}/v1"`}</pre>
       </SettingsSection>
 
       <SettingsSection
         id="personal-access-tokens"
         title="Personal access tokens"
+        description="Tokens authenticate CLI and API access on your behalf."
       >
         <div className="grid max-w-lg gap-4">
           <div className="space-y-1.5">

@@ -52,8 +52,35 @@ function TabsTrigger({
 
 function TabsContent({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+  const classStr = typeof className === 'string' ? className : ''
+  const isScrollRegion = classStr.includes('scroll-region')
+
+  if (isScrollRegion) {
+    // Keep layout utilities (space-y-*, gap-*) on the padded inner content so the
+    // scrollbar sits on the outer edge and does not collide with panels.
+    const innerLayout = classStr
+      .split(/\s+/)
+      .filter((token) => /^(space-y-|gap-|flex|flex-col|items-|justify-)/.test(token))
+      .join(' ')
+
+    return (
+      <TabsPrimitive.Content
+        data-slot="tabs-content"
+        className={cn(
+          'scroll-region mt-0 min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
+        )}
+        {...props}
+      >
+        <div className={cn('scroll-region-pad flex flex-col py-6', innerLayout)}>
+          {children}
+        </div>
+      </TabsPrimitive.Content>
+    )
+  }
+
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
@@ -63,7 +90,9 @@ function TabsContent({
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+    </TabsPrimitive.Content>
   )
 }
 

@@ -60,7 +60,7 @@ def get_l4_settings() -> dict[str, Any] | None:
     settings = row.get("settings")
     if not isinstance(settings, dict):
         return None
-    _l4_cache = settings
+    _l4_cache = doc.ensure_settings_defaults(settings)
     return _l4_cache
 
 
@@ -76,10 +76,84 @@ def get_system_settings_document() -> dict[str, Any]:
         )
     return doc.public_document(
         settings=row["settings"],
-        schema_version=int(row["schema_version"]),
+        schema_version=max(int(row["schema_version"]), doc.SCHEMA_VERSION),
         updated_at=str(row["updated_at"]),
         updated_by=row.get("updated_by"),
     )
+
+
+def _l4_value_at(settings: dict[str, Any], path: str | None) -> Any:
+    if not path:
+        return None
+    cur: Any = settings
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return None
+        cur = cur[part]
+    return cur
+
+
+def _mask_secret(raw: str | None) -> str | None:
+    if raw is None or raw == "":
+        return raw
+    if len(raw) <= 4:
+        return "••••"
+    return f"{raw[:2]}••••{raw[-2:]}"
+
+
+def get_env_config_catalog_document() -> dict[str, Any]:
+    """Hub catalog: every known env key with layer, effective value, and editability."""
+    import os
+
+    from app.domains.platform.env_config_catalog import build_env_config_catalog, catalog_sections
+
+    settings = get_l4_settings() or doc.build_seed_settings(_profile_bundle())
+    items: list[dict[str, Any]] = []
+    for entry in build_env_config_catalog():
+        env_raw = os.environ.get(entry.key)
+        l4_raw = _l4_value_at(settings, entry.l4_path) if entry.l4_path else None
+        source = "default"
+        effective: Any = entry.example_default
+        if entry.layer == "l4" and l4_raw is not None:
+            effective = l4_raw
+            source = "l4"
+        elif env_raw is not None:
+            effective = env_raw
+            source = "env"
+        elif l4_raw is not None:
+            effective = l4_raw
+            source = "l4"
+
+        display = effective
+        if entry.value_type == "secret" or entry.layer == "secret":
+            display = _mask_secret(None if effective is None else str(effective))
+        elif isinstance(effective, bool):
+            display = "1" if effective else "0"
+        elif isinstance(effective, (list, dict)):
+            display = str(effective)
+
+        items.append(
+            {
+                **entry.to_dict(),
+                "editable": entry.layer == "l4",
+                "source": source,
+                "effective": display,
+                "set_in_process_env": env_raw is not None,
+            }
+        )
+
+    return {
+        "schema_version": doc.SCHEMA_VERSION,
+        "sections": catalog_sections(),
+        "items": items,
+        "counts": {
+            "total": len(items),
+            "l4": sum(1 for i in items if i["layer"] == "l4"),
+            "env": sum(1 for i in items if i["layer"] == "env"),
+            "compose": sum(1 for i in items if i["layer"] == "compose"),
+            "secret": sum(1 for i in items if i["layer"] == "secret"),
+        },
+    }
 
 
 def patch_system_settings(partial: dict[str, Any], *, actor_user_id: str | None) -> dict[str, Any]:

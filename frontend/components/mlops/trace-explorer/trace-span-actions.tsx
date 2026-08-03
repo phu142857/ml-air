@@ -8,6 +8,7 @@ import {
   FileText,
   Layers,
   Play,
+  RotateCcw,
   Route,
 } from "lucide-react";
 
@@ -38,6 +39,8 @@ export type TraceSpanActionContext = {
   onJumpToParent?: () => void;
   onCollapseOthers?: () => void;
   onExpandAll?: () => void;
+  onReplayFromTask?: (runId: string, taskId: string) => void;
+  replayPending?: boolean;
 };
 
 export type TraceSpanActionId =
@@ -46,6 +49,7 @@ export type TraceSpanActionId =
   | "view-run"
   | "view-task"
   | "view-logs"
+  | "replay-from-task"
   | "jump-to-parent"
   | "collapse-others"
   | "expand-all";
@@ -80,6 +84,9 @@ export function resolveTraceSpanActions(ctx: TraceSpanActionContext): TraceSpanA
   const logsLink = links.find((link) => link.id === "logs");
   const runId = readRunId(step, data, waterfall);
   const taskId = readTaskId(step);
+  const canReplay =
+    Boolean(runId && taskId && ctx.onReplayFromTask) &&
+    (step?.kind === "task" || Boolean(step?.task_id));
 
   const actions: TraceSpanAction[] = [
     {
@@ -127,13 +134,24 @@ export function resolveTraceSpanActions(ctx: TraceSpanActionContext): TraceSpanA
     });
   }
 
+  if (canReplay && runId && taskId) {
+    actions.push({
+      id: "replay-from-task",
+      label: "Re-run from task",
+      icon: RotateCcw,
+      disabled: Boolean(ctx.replayPending),
+      onSelect: () => ctx.onReplayFromTask?.(runId, taskId),
+      separatorBefore: true,
+    });
+  }
+
   actions.push({
     id: "jump-to-parent",
     label: "Jump to Parent",
     icon: ChevronsUpDown,
     disabled: !step || !treeNode?.parentId,
     onSelect: ctx.onJumpToParent,
-    separatorBefore: true,
+    separatorBefore: !canReplay,
   });
 
   if (hasTree) {

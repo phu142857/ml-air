@@ -17,6 +17,8 @@ import {
   Puzzle,
   Activity,
   Lock,
+  ToggleLeft,
+  FileCode2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/lib/app-context";
@@ -51,7 +53,9 @@ const AUTH_POLICY_NAV: NavLink = {
 
 const PLATFORM_NAV: NavLink[] = [
   { title: "General", href: "/identity/platform/general", icon: Settings2 },
+  { title: "Features", href: "/identity/platform/features", icon: ToggleLeft },
   { title: "Runtime", href: "/identity/platform/runtime", icon: Server },
+  { title: "Environment", href: "/identity/platform/environment", icon: FileCode2 },
   { title: "Integrations", href: "/identity/platform/integrations", icon: Puzzle },
   { title: "Observability", href: "/identity/platform/observability", icon: Activity },
 ];

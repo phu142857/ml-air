@@ -33,6 +33,15 @@ def _transaction_conn():
 
 
 def _lease_ttl_seconds() -> int:
+    try:
+        from app.domains.platform.system_settings_service import get_l4_settings
+
+        l4 = get_l4_settings() or {}
+        runtime = l4.get("runtime") if isinstance(l4.get("runtime"), dict) else {}
+        if runtime.get("task_lease_seconds") is not None:
+            return max(5, int(runtime["task_lease_seconds"]))
+    except Exception:
+        pass
     raw = os.getenv("ML_AIR_TASK_LEASE_SECONDS", "30").strip()
     try:
         return max(5, int(raw))
@@ -41,6 +50,16 @@ def _lease_ttl_seconds() -> int:
 
 
 def _task_execution_mode() -> str:
+    try:
+        from app.domains.platform.system_settings_service import get_l4_settings
+
+        l4 = get_l4_settings() or {}
+        runtime = l4.get("runtime") if isinstance(l4.get("runtime"), dict) else {}
+        mode = str(runtime.get("task_execution_mode") or "").strip().lower()
+        if mode in {"internal", "external"}:
+            return mode
+    except Exception:
+        pass
     return os.getenv("ML_AIR_TASK_EXECUTION_MODE", "internal").strip().lower()
 
 
@@ -122,7 +141,14 @@ def lease_tasks(
               AND r.status = 'RUNNING'
               {cap_clause}
               {scope_sql}
-            ORDER BY t2.created_at ASC
+            ORDER BY
+              CASE lower(COALESCE(r.priority, 'normal'))
+                WHEN 'high' THEN 0
+                WHEN 'normal' THEN 1
+                WHEN 'low' THEN 2
+                ELSE 1
+              END ASC,
+              t2.created_at ASC
             FOR UPDATE OF t2 SKIP LOCKED
             LIMIT {lim}
         ) picked
