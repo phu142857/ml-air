@@ -6,7 +6,7 @@ MLAir **`dataset_accumulation_buffers.accumulation_strategy`** controls how muta
 | --- | --- | --- |
 | **`snapshot_on_threshold`** | Buffer grows until **`current_size` ≥ `target_threshold`**; then a new version is created and buffer advanced (runtime feedback path). | Automatic at threshold (see lineage materialization). |
 | **`rolling_accumulate`** | Buffer grows; **no** automatic version on size alone; operators materialize manually or change strategy. | Manual / policy change. Hub shows an amber warning. |
-| **`snapshot_on_schedule`** | Scheduler tick (`POST .../datasets/buffer/materialize-scheduled`) checks rows; materializes when size ≥ threshold. | Tick-driven. |
+| **`snapshot_on_schedule`** | Scheduler tick (`POST .../datasets/buffer/materialize-scheduled`) materializes non-empty buffers on each tick. If `current_size` &lt; `target_threshold`, the version is still created and marked **`force_time_only`** (time-driven snapshot). Metric: `mlair_dataset_materialization_schedule_time_only_total`. | Tick-driven (threshold optional). |
 | **`manual_materialize_only`** | No auto snapshot from size; maintainer calls **`POST .../datasets/{id}/materialize`** (alias: **`.../buffer/materialize`**). | Operator button only. |
 
 **Concurrency:** materialization uses advisory locks and idempotency keys (`lineage_service._materialize_runtime_feedback_if_needed`); see integration test **`test_materialization_concurrency_db`** when **`ML_AIR_RUN_DB_INTEGRATION_TESTS=1`**.

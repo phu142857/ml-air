@@ -7,7 +7,7 @@ Replay a failed run from a selected task and validate recovery.
 ## Steps
 
 1. Identify failed `task_id` in the original run.
-2. Trigger replay from that task.
+2. Trigger replay from that task (API below, or Hub **Traces** → task span → **Re-run from task**).
 3. Monitor replay run until terminal state.
 
 ## Command

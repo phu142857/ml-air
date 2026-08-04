@@ -61,7 +61,7 @@ Design notes:
   - Pipeline dashboard, DAG view, run timeline, realtime logs.
   - Tenant/project context switcher and role-aware UI actions.
 - `api` (FastAPI, `/v1/...`)
-  - AuthN/AuthZ, input validation, run/model/dataset/lineage APIs; **model lifecycle** includes **stages**, **per-version approval**, optional **serving-slot** rows (DB; **HTTP** for slots may be disabled in `v1.py` — see §7), and promote webhooks (see §7).
+  - AuthN/AuthZ, input validation, run/model/dataset/lineage APIs; **model lifecycle** includes **stages**, **per-version approval**, optional **serving-slot** HTTP (feature-flagged — see §7), admission explain / trigger preview, and promote webhooks (see §7).
   - Emits run/task events and exposes query APIs for UI/integration.
 - `scheduler` (DAG engine service)
   - Parses DAG, resolves dependencies, enforces state transitions.
@@ -139,7 +139,8 @@ Security requirements:
 **Serving slots** (`model_serving_slots`):
 
 - Slots: **`candidate`**, **`challenger`**, **`champion`**, **`canary`** — at most one assigned `version_id` per `(model_id, slot)`.
-- Intended HTTP surface (see OpenAPI draft): **`GET .../models/{model_id}/serving`** (current assignments) and **`PUT .../models/{model_id}/serving/{slot}`** (bind a numeric version to a slot; separate from `stage`; routing metadata for external load balancers). **As of the default tree, these route handlers are commented out in `v1.py`** (service helpers and table remain); re-enable there and in the frontend flag when shipping the feature again.
+- HTTP (when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**): **`GET .../serving`**, **`PUT .../serving/{slot}`**, **`GET .../serving/route`** (metadata map: primary=champion, canary, … — **no** traffic split enforced by MLAir).
+- Successful **`production`** promote auto-assigns **`champion`**.
 
 Optional **downstream webhook** on promote: `MLAIR_MODEL_PROMOTE_*`.
 
@@ -147,7 +148,7 @@ Optional **semantic lifecycle HTTP webhooks** (per-tenant/project subscriptions,
 
 ### Extended governance (roadmap)
 
-Not yet in `/v1`: unified **audit timeline** API, promotion policy engine beyond approval+stage, and a single **`serving/route`** resolver that performs traffic splitting (use external LB + this slot metadata until then).
+Traffic **splitting** still belongs to an external LB using slot metadata. Unified audit timeline and richer promotion policy engines continue to evolve beyond approval+stage.
 
 ## 8) Observability and Operations
 

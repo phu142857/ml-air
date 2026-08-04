@@ -43,7 +43,15 @@ Rollback: `ML_AIR_CONFIG_ACCEPT_POLICY_ENV=1` restores env aliases for L4 quota 
 
 ## Execution parallelism
 
-Run/task execution concurrency is not governed via tenant quotas. The system allows up to **1000** concurrent task slots per project (`max_parallel_tasks`, default 1000, capped 1000) and does not expose a governance knob for it.
+Per-run `max_parallel_tasks` (request field on create/trigger, default often `1`, hard-capped at **1000**) is clamped at create time by **`resolve_max_parallel_tasks(tenant_id, requested)`**:
+
+| Source | Field | Role |
+| --- | --- | --- |
+| L5 `tenant_quotas.max_parallel_tasks` | optional | Per-tenant ceiling |
+| L4 `governance.quota_defaults.max_parallel_tasks` | fallback | Platform default when tenant row is unset |
+| Request / trigger body | `max_parallel_tasks` | Requested value, then min(requested, tenant ceiling) |
+
+Scheduler auto-trigger may also pass optional **`model_trigger_policies.max_parallel_tasks`** into the created run (default `1` when unset). This governs **in-project concurrent task slots** for that run, not dollar chargeback.
 
 `/runtime-config` exposes `features.tenant_quota_enforcement`.
 

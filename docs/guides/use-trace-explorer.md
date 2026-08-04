@@ -37,6 +37,10 @@ Sign in at `/login` first if the Hub redirects unauthenticated users.
 
 **Live traces:** When `is_live` is true, the UI polls until the run completes.
 
+## Re-run from a task
+
+On a **task** step (waterfall or span actions menu), choose **Re-run from task**. Hub calls `POST .../runs/{run_id}/replay` with `from_task_id` and navigates to the new replay run. Requires a pinned tenant/project scope. See [Replay a task](./replay-task.md) and [Partial replay](./partial-replay.md).
+
 ## Export and share
 
 - **Export:** Toolbar → download `mlair-trace-<id>.json` (same payload as `GET .../traces/{id}/export`).

@@ -130,6 +130,14 @@ When a model has a **trigger policy** (`model_trigger_policies`), the scheduler 
 
 On success the attempt is recorded via `_record_trigger_attempt(policy, "triggered")`, updating `last_trigger_attempt_at` / `last_outcome`. Skips call `_record_trigger_attempt(policy, "skipped", skip_reason)`.
 
+**Optional `max_parallel_tasks` on the policy** (migration `0048`): when set, auto-trigger passes that value into the created run (otherwise `1`). Still subject to tenant `resolve_max_parallel_tasks` at create time.
+
+### Dry-run preview
+
+`POST .../models/{model_id}/trigger-policy/preview` (viewer+) returns `would_trigger`, `skip_reason`, `notes`, and optionally an embedded **`admission`** explain for `auto_ready` — **no run is created**. Debounce / cron due-now are not fully simulated on preview.
+
+Hub Model → Policy: **Preview dry-run** and read-only **`last_skip_reason`** when present.
+
 ## `plugin_context` for `POST .../runs/trigger`
 
 This object is attached to the **run** and flows to the **scheduler / worker** as part of the task payload (alongside `config_snapshot` from the pinned pipeline version). It is built **in the API** immediately after:
@@ -167,7 +175,8 @@ Implementation merges **`context`** from the request body first, then sets the k
 
 ### Model detail
 
-- Governance only (versions, approvals, trigger policy). No training or pipeline run triggers on this page.
+- Governance only (versions, approvals, trigger policy, serving slots when enabled). No training or pipeline run triggers on this page.
+- Trigger policy: save mode/debounce/cron/data anchor, optional max parallel tasks, and **Preview dry-run**.
 
 ## curl examples
 

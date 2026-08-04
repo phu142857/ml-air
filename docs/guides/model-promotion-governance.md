@@ -26,7 +26,23 @@ ML_AIR_PROMOTION_STAGE_ORDER=dev,staging,production
 ## API
 
 - `GET .../versions/{v}/promotion-eligibility?target_stage=` returns `transition` (`forward` | `rollback` | `noop`) and `reasons`.
-- `POST .../models/{id}/promote` enforces the same rules; **422** for `invalid_stage_transition`, `rollback_disabled`, etc.
+- `POST .../models/{id}/promote` enforces the same rules; governance blocks return **422** (including `approval_required_for_production`, `approval_required`, `approval_pending`, `approval_rejected`, `already_at_stage`, `invalid_stage_transition`, `rollback_disabled`, …) — not 404.
+- Successful promote to **`production`** auto-assigns the version to the **`champion`** serving slot (metadata only; no traffic split). See serving slots below.
+
+## Soft-block in training plugins
+
+Executors that call promote after train/eval (for example YOLO lifecycle) should treat promote **422** / approval blocks as **`promote_blocked`** metadata and keep the gate/task **SUCCESS**, so the run is not failed solely because production approval is pending.
+
+## Serving slots (metadata)
+
+When `ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`:
+
+- `GET|PUT .../models/{id}/serving` and `GET .../models/{id}/serving/route` expose champion / canary / candidate / challenger assignments.
+- `serving/route` is a **metadata map** for external LBs — MLAir does not enforce traffic split.
+
+## Admission explain (preflight)
+
+`POST .../admission/explain` aggregates quota snapshot, pipeline inputs readiness, training-policy eligibility, and optional promotion eligibility into one dry-run payload (`admitted` / `checks[]`). It does not create a run.
 
 ## Hub
 

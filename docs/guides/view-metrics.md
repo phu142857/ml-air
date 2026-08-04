@@ -73,6 +73,7 @@ Counters and histograms are emitted from [`api/app/domains/lifecycle/lineage_ser
 | `mlair_dataset_materialization_version_created_total` | `strategy`, `source_type` | Successful immutable version rows |
 | `mlair_dataset_materialization_failure_total` | `strategy`, `reason` | Failures |
 | `mlair_dataset_materialization_unique_violation_total` | `constraint` | Idempotency / uniqueness collisions |
+| `mlair_dataset_materialization_schedule_time_only_total` | `source_type` | `snapshot_on_schedule` versions created below threshold |
 | `mlair_dataset_materialization_latency_seconds` | `strategy` | Histogram of materialization duration |
 | `mlair_dataset_accumulation_current_size` | `strategy`, `source_type`, `window_status` | Buffer size gauge |
 | `mlair_dataset_accumulation_target_threshold` | `strategy`, `source_type`, `window_status` | Configured threshold gauge |

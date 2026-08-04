@@ -38,6 +38,7 @@ Create a run through the normal API (for example your control plane calling MLAi
 ### 3. Implement the worker loop
 
 1. `POST /v1/tasks/lease` with `worker_id`, `capabilities` (plugin names you implement), `max_tasks`.
+   Lease order prefers run **`priority`** (`high` → `normal` → `low`), then task `created_at` (`SKIP LOCKED`).
 2. For each leased task: run your logic (train, ETL, etc.).
 3. While **RUNNING**, stream stdout-style lines: `POST /v1/tasks/{task_id}/logs` (see [Streaming logs](#streaming-logs)).
 4. On success: `POST /v1/tasks/{task_id}/complete` with `worker_id`, optional `metrics`, and `artifacts` (or legacy `artifact_uri`). Metrics and artifacts are persisted to `run_metrics` / `run_artifacts` (same as the internal executor) and appear in Hub **Metrics** / **Artifacts**.
