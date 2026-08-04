@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Domain Event foundation (Phase 1):** Aggregate-owned events for ModelVersion / Dataset / Pipeline; `InProcessEventBus` + `OutboxEventBus` interface; publish-after-persist.
+- **Domain Audit:** table `domain_audit_events` (Alembic `0049`), handler/mapper, API `GET /v1/audit/events` (+ by id).
+- **Timeline:** model-version kinds projected from Domain Audit metadata (including `model.version.deleted`); no live `model_versions` JOIN.
+- **MetricsEventHandler:** sole owner of lifecycle promote/approval Prometheus counters.
+- **Architecture docs:** [`docs/architecture/`](docs/architecture/README.md) (overview, event/audit/timeline flows, developer guide).
 - **Identity MFA (TOTP):** enroll/disable, login challenge (`POST /v1/auth/mfa/verify`), recovery codes (`XXXX-XXXX`); Hub **Security** + login step.
 - **Personal Access Tokens:** `GET|POST|DELETE /v1/auth/pats`; Hub **CLI & API** (`/settings/cli`).
 - **Self-service sessions:** `GET|DELETE /v1/auth/sessions`; Hub **Sessions** (`/settings/sessions`); topbar account menu **Sign out**.
@@ -44,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **README:** visitor-facing rewrite (logo, badges, 3-step start, capability pillars); deep status/env/sequence content deferred to docs / ARCHITECTURE.
 - **Identity / security:** rewritten [`docs/guides/login-and-identity.md`](docs/guides/login-and-identity.md); new [`mfa-and-recovery-codes.md`](docs/guides/mfa-and-recovery-codes.md), [`personal-access-tokens.md`](docs/guides/personal-access-tokens.md), [`manage-sessions.md`](docs/guides/manage-sessions.md); OpenAPI draft paths for MFA/PATs/sessions.
-- **Docs index / hygiene:** orphaned guides and API pages linked from [`docs/index.md`](docs/index.md); concept stubs expanded; broken links fixed in plugin-development-guide and view-metrics; [`docs/evaluation/README.md`](docs/evaluation/README.md) placeholder.
+- **Docs index / hygiene:** orphaned guides and API pages linked from [`docs/index.md`](docs/index.md); concept stubs expanded; broken links fixed in plugin-development-guide and view-metrics.
+- **Release cleanup:** removed unused promote HTTP helper; document Phase 1 webhook status (semantic webhooks today; Domain Event delivery Phase 2).
 - **Hub / gating guides:** [`docs/guides/dataset-hub-and-readiness.md`](docs/guides/dataset-hub-and-readiness.md), [`model-page-governance-mode.md`](docs/guides/model-page-governance-mode.md), [`configure-data-readiness-gating.md`](docs/guides/configure-data-readiness-gating.md), [`manage-datasets-and-train-from-model.md`](docs/guides/manage-datasets-and-train-from-model.md), [`model-centric-pipeline-mapping-and-trigger.md`](docs/guides/model-centric-pipeline-mapping-and-trigger.md) — aligned with observability-only pipeline UI and Run / Train intents.
 - **ROADMAP:** Phase C/D readiness v2 + Hub-first lifecycle checkboxes aligned with shipped evaluations UI and pipeline execution-gate posture; README + Dataset list/detail subtitles point operators at **`docs/guides/dataset-accumulation-strategies.md`**.
 - **Governance docs:** `ARCHITECTURE.md` §7, `docs/index.md`, and OpenAPI describe **approval**, **serving slots** (contract + DB; HTTP routes mount when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**), and the **production promote** gate (plus roadmap-only items such as audit timeline API).

@@ -1,4 +1,11 @@
-"""Generic lifecycle HTTP webhook for training completion / failure (Phase 4)."""
+"""Generic lifecycle HTTP webhook for training completion / failure.
+
+Phase 1 status: this helper is **not** auto-invoked from ``run_service`` after the
+Domain Event cutover. Prefer semantic webhook subscriptions on
+``training.completed`` / ``training.failed`` for outbound notify today.
+``notify_lifecycle_webhook`` remains the HTTP implementation for a future
+Domain Event webhook sink (Phase 2).
+"""
 
 from __future__ import annotations
 
@@ -49,7 +56,11 @@ def _training_context_from_run(row: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def notify_lifecycle_webhook(*, event_type: str, run_row: dict[str, Any]) -> None:
-    """POST ``training.completed`` or ``training.failed`` when URL is configured."""
+    """POST ``training.completed`` or ``training.failed`` when URL is configured.
+
+    Callers must invoke this explicitly (e.g. a Domain Event handler). Run status
+    transitions do not call this automatically in Phase 1.
+    """
     url = str(os.getenv("ML_AIR_LIFECYCLE_WEBHOOK_URL", "") or "").strip()
     if not url:
         return
@@ -111,11 +122,3 @@ def notify_lifecycle_webhook(*, event_type: str, run_row: dict[str, Any]) -> Non
         )
     except urllib.error.URLError as exc:
         logger.warning("Lifecycle webhook unreachable type=%s run_id=%s: %s", event_type, run_id, exc.reason)
-
-
-def maybe_notify_training_lifecycle_webhook(run_row: dict[str, Any]) -> None:
-    status = str(run_row.get("status") or "").strip().upper()
-    if status == "SUCCESS":
-        notify_lifecycle_webhook(event_type="training.completed", run_row=run_row)
-    elif status == "FAILED":
-        notify_lifecycle_webhook(event_type="training.failed", run_row=run_row)

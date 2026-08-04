@@ -100,9 +100,10 @@ One container on **port 8080** serves Hub UI, REST `/v1`, and realtime `/ws`. Fu
 | **Dataset Hub** | Immutable versions, accumulation strategies, Run / Train with pinned `dataset_version_id` |
 | **Readiness & gates** | Training policies, eligibility, blocked reasons, strict version pinning |
 | **Orchestration** | Pipelines, retries, DLQ / partial replay, internal or external workers |
-| **Model governance** | Registry, approval, promote/rollback, promote webhooks |
+| **Model governance** | Registry, approval, promote/rollback, Domain Audit on lifecycle |
+| **Domain Events** | Aggregate-owned events → Audit, metrics, Timeline projection (Outbox-ready) |
 | **Identity & security** | Login, MFA (TOTP + recovery), PATs, sessions, RBAC, service accounts |
-| **Observability** | Traces, Prometheus/Grafana assets, audit timeline, Hub realtime sync |
+| **Observability** | Traces, Prometheus/Grafana, Domain Audit API, audit timeline, Hub realtime |
 
 Hub routes include `/datasets`, `/lifecycle`, `/models`, `/lineage`, `/runs`, `/settings/*`, and `/identity/*`. See [Hub lifecycle-first UX](docs/guides/hub-lifecycle-first.md) and [Login and Identity](docs/guides/login-and-identity.md).
 
@@ -112,7 +113,7 @@ Hub routes include `/datasets`, `/lifecycle`, `/models`, `/lineage`, `/runs`, `/
 
 | Component | Role |
 | --- | --- |
-| **api** | FastAPI control plane (`/v1`): auth, datasets, readiness, runs, models, plugins, lineage |
+| **api** | FastAPI control plane (`/v1`): auth, datasets, readiness, runs, models, Domain Audit, plugins, lineage |
 | **scheduler** | DAG planning, parallelism, replay gating via Redis |
 | **executor** | Task workers (plugins / leases) |
 | **frontend** | Next.js Hub |
@@ -121,7 +122,9 @@ Hub routes include `/datasets`, `/lifecycle`, `/models`, `/lineage`, `/runs`, `/
 
 **Data flow:** Client → API creates **Run** → scheduler enqueues **Tasks** → executor completes → Hub reflects status, metrics, lineage.
 
-Deep topology, multi-task sequence, and production baseline: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API draft: [openapi-v1-draft.yaml](openapi-v1-draft.yaml). Narrative API docs: [docs/api/](docs/api/).
+**Domain Event path (Phase 1):** Aggregate mutation → persist → `publish_all` → Audit / Metrics handlers; Timeline reads Domain Audit. Details: [docs/architecture/](docs/architecture/README.md).
+
+Deep topology and production baseline: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API draft: [openapi-v1-draft.yaml](openapi-v1-draft.yaml). Narrative API docs: [docs/api/](docs/api/).
 
 ---
 

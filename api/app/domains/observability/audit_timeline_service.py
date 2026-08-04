@@ -83,64 +83,120 @@ def list_audit_timeline_page(
 
       UNION ALL
 
+      -- Domain audit events mapped into timeline rows.
+      --
+      -- Model-version kinds are projected entirely from Domain Audit metadata.
+      -- Never JOIN live model_versions: projection must survive hard delete.
+      --
       -- Model version created
       SELECT
-        mv.created_at AS ts,
+        dae.occurred_at AS ts,
         'model.version.created'::text AS kind,
         'model'::text AS resource_type,
-        m.model_id::text AS resource_id,
+        (dae.metadata->>'model_id')::text AS resource_id,
         NULL::text AS source,
         json_build_object(
-          'version_id', mv.version_id,
-          'version', mv.version,
-          'stage', mv.stage,
-          'artifact_uri', mv.artifact_uri,
-          'run_id', mv.run_id
+          'version_id', (dae.metadata->>'model_version_id')::text,
+          'version', (dae.metadata->>'version')::int,
+          'stage', (dae.metadata->>'stage')::text
         ) AS payload
-      FROM model_versions mv
-      JOIN models m ON m.model_id = mv.model_id
-      WHERE m.tenant_id = %(tenant_id)s AND m.project_id = %(project_id)s
+      FROM domain_audit_events dae
+      WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
+        AND dae.action = 'model_version.created'
 
       UNION ALL
 
-      -- Model approval updated (only when it differs from created_at)
+      -- Model approval updated (approved / rejected)
       SELECT
-        mv.approval_updated_at AS ts,
+        dae.occurred_at AS ts,
         'model.version.approval_updated'::text AS kind,
         'model'::text AS resource_type,
-        m.model_id::text AS resource_id,
+        (dae.metadata->>'model_id')::text AS resource_id,
         NULL::text AS source,
         json_build_object(
-          'version_id', mv.version_id,
-          'version', mv.version,
-          'approval_status', mv.approval_status,
-          'approval_reason', mv.approval_reason
+          'version_id', (dae.metadata->>'model_version_id')::text,
+          'version', (dae.metadata->>'version')::int,
+          'approval_status',
+            CASE WHEN dae.action = 'model_version.approved' THEN 'approved' ELSE 'rejected' END,
+          'approval_reason', (dae.metadata->>'reason')::text
         ) AS payload
-      FROM model_versions mv
-      JOIN models m ON m.model_id = mv.model_id
-      WHERE m.tenant_id = %(tenant_id)s AND m.project_id = %(project_id)s
-        AND mv.approval_updated_at IS NOT NULL
-        AND mv.approval_updated_at <> mv.created_at
+      FROM domain_audit_events dae
+      WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
+        AND dae.action IN ('model_version.approved', 'model_version.rejected')
 
       UNION ALL
 
-      -- Model stage updated (promote / rollback)
+      -- Model stage updated (promoted / rollback)
       SELECT
-        mv.stage_updated_at AS ts,
+        dae.occurred_at AS ts,
         'model.version.stage_updated'::text AS kind,
         'model'::text AS resource_type,
-        m.model_id::text AS resource_id,
+        (dae.metadata->>'model_id')::text AS resource_id,
         NULL::text AS source,
         json_build_object(
-          'version_id', mv.version_id,
-          'version', mv.version,
-          'stage', mv.stage
+          'version_id', (dae.metadata->>'model_version_id')::text,
+          'version', (dae.metadata->>'version')::int,
+          'stage', (dae.metadata->>'to_stage')::text
         ) AS payload
-      FROM model_versions mv
-      JOIN models m ON m.model_id = mv.model_id
-      WHERE m.tenant_id = %(tenant_id)s AND m.project_id = %(project_id)s
-        AND mv.stage_updated_at IS NOT NULL
-        AND mv.stage_updated_at <> mv.created_at
+      FROM domain_audit_events dae
+      WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
+        AND dae.action IN ('model_version.promoted', 'model_version.rollback')
+
+      UNION ALL
+
+      -- Model version deleted (survives hard delete of model_versions row)
+      SELECT
+        dae.occurred_at AS ts,
+        'model.version.deleted'::text AS kind,
+        'model'::text AS resource_type,
+        (dae.metadata->>'model_id')::text AS resource_id,
+        NULL::text AS source,
+        json_build_object(
+          'version_id', (dae.metadata->>'model_version_id')::text,
+          'version', (dae.metadata->>'version')::int
+        ) AS payload
+      FROM domain_audit_events dae
+      WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
+        AND dae.action = 'model_version.deleted'
+
+      UNION ALL
+
+      -- Dataset lifecycle changes (not covered by readiness evaluations)
+      SELECT
+        dae.occurred_at AS ts,
+        CASE
+          WHEN dae.action = 'dataset.created' THEN 'dataset.created'
+          WHEN dae.action = 'dataset.deleted' THEN 'dataset.deleted'
+          ELSE 'dataset.updated'
+        END::text AS kind,
+        'dataset'::text AS resource_type,
+        (dae.metadata->>'dataset_id')::text AS resource_id,
+        NULL::text AS source,
+        json_build_object(
+          'dataset_id', (dae.metadata->>'dataset_id')::text,
+          'name', dae.metadata->>'name'
+        ) AS payload
+      FROM domain_audit_events dae
+      WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
+        AND dae.action IN ('dataset.created', 'dataset.deleted')
+
+      UNION ALL
+
+      -- Pipeline version lifecycle
+      SELECT
+        dae.occurred_at AS ts,
+        'pipeline.version.created'::text AS kind,
+        'pipeline'::text AS resource_type,
+        (dae.metadata->>'pipeline_id')::text AS resource_id,
+        NULL::text AS source,
+        json_build_object(
+          'pipeline_version_id', (dae.metadata->>'pipeline_version_id')::text,
+          'version', (dae.metadata->>'version')::int,
+          'pipeline_id', (dae.metadata->>'pipeline_id')::text
+        ) AS payload
+      FROM domain_audit_events dae
+      WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
+        AND dae.action = 'pipeline_version.created'
 
       UNION ALL
 

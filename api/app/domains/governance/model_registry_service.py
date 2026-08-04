@@ -25,6 +25,9 @@ from app.domains.shared.pagination import (
 )
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
+from app.domains.governance.model_version_aggregate import ModelVersionAggregate
+from app.domains.shared.events import get_event_bus
+from app.domains.shared.events.context import EventContext
 
 logger = logging.getLogger(__name__)
 
@@ -396,8 +399,7 @@ def _notify_model_eligibility_updated(
         stage=stage,
         approval_status=approval_status,
     )
-    if str(action) == "approval_updated" and approval_status:
-        rt.record_lifecycle_model_version_approval_set(approval_status=str(approval_status))
+    # Lifecycle metrics are owned solely by MetricsEventHandler (Domain Events).
 
 
 def _default_artifact_uri(model_id: str, version_num: int) -> str | None:
@@ -453,7 +455,30 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
                 ),
             )
             row = cur.fetchone()
-    out = _version_row_to_dict(row)
+            cur.execute("SELECT tenant_id, project_id FROM models WHERE model_id = %s", (model_id,))
+            scope = cur.fetchone()
+
+            out = _version_row_to_dict(row)
+            agg = ModelVersionAggregate(
+                model_id=model_id,
+                model_version_id=str(out.get("version_id") or version_id),
+                version=int(out.get("version") or version_num),
+                stage=str(out.get("stage") or stage),
+                approval_status=out.get("approval_status"),
+            )
+            agg.mark_created()
+            events = agg.pull_events()
+            tenant_id = str(scope[0]) if scope and scope[0] is not None else "unknown"
+            project_id = str(scope[1]) if scope and scope[1] is not None else "unknown"
+            ctx = EventContext(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                actor=None,
+                correlation_id=None,
+                ip=None,
+                user_agent=None,
+            )
+            get_event_bus().publish_all(events, context=ctx, session=conn)
     _notify_model_eligibility_updated(
         model_id,
         "version_created",
@@ -551,7 +576,30 @@ def create_model_version_from_upload(
                 ),
             )
             row = cur.fetchone()
-    out = _version_row_to_dict(row)
+            cur.execute("SELECT tenant_id, project_id FROM models WHERE model_id = %s", (model_id,))
+            scope = cur.fetchone()
+
+            out = _version_row_to_dict(row)
+            agg = ModelVersionAggregate(
+                model_id=model_id,
+                model_version_id=str(out.get("version_id") or version_id),
+                version=int(out.get("version") or version_num),
+                stage=str(out.get("stage") or stage),
+                approval_status=out.get("approval_status"),
+            )
+            agg.mark_created()
+            events = agg.pull_events()
+            tenant_id = str(scope[0]) if scope and scope[0] is not None else "unknown"
+            project_id = str(scope[1]) if scope and scope[1] is not None else "unknown"
+            ctx = EventContext(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                actor=None,
+                correlation_id=None,
+                ip=None,
+                user_agent=None,
+            )
+            get_event_bus().publish_all(events, context=ctx, session=conn)
     out["metadata_generated"] = metadata_generated
     _notify_model_eligibility_updated(
         model_id,
@@ -641,7 +689,30 @@ def create_model_version_from_uploads(
                 ),
             )
             row = cur.fetchone()
-    out = _version_row_to_dict(row)
+            cur.execute("SELECT tenant_id, project_id FROM models WHERE model_id = %s", (model_id,))
+            scope = cur.fetchone()
+
+            out = _version_row_to_dict(row)
+            agg = ModelVersionAggregate(
+                model_id=model_id,
+                model_version_id=str(out.get("version_id") or version_id),
+                version=int(out.get("version") or version_num),
+                stage=str(out.get("stage") or stage),
+                approval_status=out.get("approval_status"),
+            )
+            agg.mark_created()
+            events = agg.pull_events()
+            tenant_id = str(scope[0]) if scope and scope[0] is not None else "unknown"
+            project_id = str(scope[1]) if scope and scope[1] is not None else "unknown"
+            ctx = EventContext(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                actor=None,
+                correlation_id=None,
+                ip=None,
+                user_agent=None,
+            )
+            get_event_bus().publish_all(events, context=ctx, session=conn)
     out["metadata_generated"] = metadata_generated
     out["uploaded_files"] = safe_saved_names
     _notify_model_eligibility_updated(
@@ -688,10 +759,36 @@ def delete_model_version(model_id: str, version: int) -> bool:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
+                "SELECT version_id FROM model_versions WHERE model_id = %s AND version = %s",
+                (model_id, int(version)),
+            )
+            version_row = cur.fetchone()
+            cur.execute(
                 "DELETE FROM model_versions WHERE model_id = %s AND version = %s",
                 (model_id, int(version)),
             )
             deleted = cur.rowcount
+            ok = bool(deleted)
+            if ok and scope:
+                agg = ModelVersionAggregate(
+                    model_id=model_id,
+                    model_version_id=str(version_row[0]) if version_row and version_row[0] is not None else "",
+                    version=int(version),
+                    stage="unknown",
+                    approval_status=None,
+                )
+                agg.mark_deleted()
+                events = agg.pull_events()
+                ctx = EventContext(
+                    tenant_id=str(scope[0]) if scope and scope[0] is not None else "unknown",
+                    project_id=str(scope[1]) if scope and scope[1] is not None else "unknown",
+                    actor=None,
+                    correlation_id=None,
+                    ip=None,
+                    user_agent=None,
+                )
+                if events:
+                    get_event_bus().publish_all(events, context=ctx, session=conn)
     ok = bool(deleted)
     if ok and scope:
         _notify_model_eligibility_updated(
@@ -748,16 +845,40 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
                 (stage, now, model_id, version),
             )
             row = cur.fetchone()
+            scope = None
+            if row:
+                # Fetch tenant/project in the same connection to keep audit emission
+                # in the same DB session/transaction boundary as the persistence step.
+                cur.execute("SELECT tenant_id, project_id FROM models WHERE model_id = %s", (model_id,))
+                scope = cur.fetchone()
+
+                out = _version_row_to_dict(row)
+                if scope:
+                    agg = ModelVersionAggregate(
+                        model_id=model_id,
+                        model_version_id=str(out.get("version_id") or ""),
+                        version=int(out.get("version") or version),
+                        stage=str(row_g[2] or ""),
+                        approval_status=row_g[3],
+                    )
+                    transition_kind = str(elig.get("transition") or "forward")
+                    if transition_kind == "rollback":
+                        agg.rollback(to_stage=stage_norm)
+                    else:
+                        agg.promote(to_stage=stage_norm)
+                    events = agg.pull_events()
+                    ctx = EventContext(
+                        tenant_id=str(scope[0]) if scope and scope[0] is not None else "unknown",
+                        project_id=str(scope[1]) if scope and scope[1] is not None else "unknown",
+                        actor=None,
+                        correlation_id=None,
+                        ip=None,
+                        user_agent=None,
+                    )
+                    if events:
+                        get_event_bus().publish_all(events, context=ctx, session=conn)
     if not row:
         raise ValueError("model_version_not_found")
-    out = _version_row_to_dict(row)
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT tenant_id, project_id FROM models WHERE model_id = %s",
-                (model_id,),
-            )
-            scope = cur.fetchone()
     if scope:
         appr_at = row[9] if len(row) > 9 else None
         ua = appr_at if isinstance(appr_at, datetime) else datetime.now(timezone.utc)
@@ -1086,9 +1207,36 @@ def update_model_version_approval(
                 (st, reason, now, model_id, int(version), tenant_id, project_id, model_id),
             )
             row = cur.fetchone()
-    if not row:
-        raise ValueError("model_version_not_found")
-    out = _version_row_to_dict(row)
+            if not row:
+                raise ValueError("model_version_not_found")
+
+            out = _version_row_to_dict(row)
+
+            # Domain event emission: approval status is a business lifecycle fact.
+            agg = ModelVersionAggregate(
+                model_id=model_id,
+                model_version_id=str(out.get("version_id") or ""),
+                version=int(out.get("version") or version),
+                stage=str(out.get("stage") or ""),
+                approval_status=str(out.get("approval_status") or st),
+            )
+            if st == "approved":
+                agg.approve(reason=reason)
+            elif st == "rejected":
+                agg.reject(reason=reason)
+            # pending_manual_approval is intentionally not emitted yet.
+            events = agg.pull_events()
+            if events:
+                ctx = EventContext(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    actor=None,
+                    correlation_id=None,
+                    ip=None,
+                    user_agent=None,
+                )
+                get_event_bus().publish_all(events, context=ctx, session=conn)
+
     _notify_model_eligibility_updated(
         model_id,
         "approval_updated",

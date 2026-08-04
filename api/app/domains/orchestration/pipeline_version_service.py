@@ -13,6 +13,9 @@ from app.domains.shared.pagination import (
     resolve_page_params,
     sql_limit_offset,
 )
+from app.domains.orchestration.pipeline_aggregate import PipelineAggregate
+from app.domains.shared.events import get_event_bus
+from app.domains.shared.events.context import EventContext
 
 
 def create_pipeline_version(
@@ -39,7 +42,24 @@ def create_pipeline_version(
                 (version_id, tenant_id, project_id, pipeline_id, nxt, Json(config)),
             )
             row = cur.fetchone()
-    return _row_v(row)
+            out = _row_v(row)
+            agg = PipelineAggregate(pipeline_id=pipeline_id)
+            agg.mark_pipeline_version_created(
+                pipeline_version_id=str(out.get("version_id") or ""),
+                version=int(out.get("version") or 0),
+            )
+            events = agg.pull_events()
+            ctx = EventContext(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                actor=None,
+                correlation_id=None,
+                ip=None,
+                user_agent=None,
+            )
+            if events:
+                get_event_bus().publish_all(events, context=ctx, session=conn)
+    return out
 
 
 def _row_v(row: tuple) -> dict:

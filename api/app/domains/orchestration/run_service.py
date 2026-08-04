@@ -393,10 +393,6 @@ def set_run_status(run_id: str, status: str) -> bool:
             )
             if normalized == "SUCCESS":
                 rt.maybe_emit_training_completed_from_run_row(row)
-            from app.domains.governance.lifecycle_webhook_service import maybe_notify_training_lifecycle_webhook
-
-            if normalized in {"SUCCESS", "FAILED"}:
-                maybe_notify_training_lifecycle_webhook(row)
     return bool(updated)
 
 

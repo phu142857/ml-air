@@ -20,5 +20,5 @@ We aim to acknowledge reports within a few business days. Critical issues may re
 
 - Rotate `ML_AIR_JWT_HS256_SECRET`, `ML_AIR_TRACKING_TOKEN`, and worker tokens regularly in production.
 - Prefer network policies and ingress TLS termination for any deployment exposing the API or UI.
-- Review optional outbound webhooks (`MLAIR_MODEL_PROMOTE_*`) and restrict destinations to trusted services.
+- Optional outbound: prefer **semantic webhooks**; dedicated `MLAIR_MODEL_PROMOTE_*` is reserved (not wired in Phase 1).
 - Semantic event webhooks: set **`ML_AIR_WEBHOOK_ALLOWED_HOSTS`** to an explicit hostname allowlist; enable delivery only with **`ML_AIR_SEMANTIC_WEBHOOK_DELIVERY=1`**. Treat stored `secret_hmac` as sensitive (rotate via delete + recreate). Optional **`ML_AIR_SEMANTIC_WEBHOOK_DEDUPE=1`** grows table **`semantic_webhook_delivery_ack`** — plan retention or truncation in long-lived deployments.

@@ -106,13 +106,13 @@ def dt_to_unix(dt: datetime | None) -> float:
 
 
 def record_lifecycle_model_promoted(*, stage: str) -> None:
-    """Low-cardinality counter aligned with ``emit_model_promoted``."""
+    """Low-cardinality counter for promote/rollback. Owned by MetricsEventHandler only."""
     s = sanitize_label_value(stage or "unknown")
     LIFECYCLE_MODEL_PROMOTED_TOTAL.labels(stage=s).inc()
 
 
 def record_lifecycle_model_version_approval_set(*, approval_status: str) -> None:
-    """Low-cardinality counter for explicit approval transitions (``approval_updated``)."""
+    """Low-cardinality counter for approval transitions. Owned by MetricsEventHandler only."""
     st = str(approval_status or "").strip().lower()
     if st not in {"pending_manual_approval", "approved", "rejected"}:
         st = "other"
@@ -381,7 +381,7 @@ def emit_model_promoted(
             },
         )
     )
-    record_lifecycle_model_promoted(stage=str(stage or "").strip() or "unknown")
+    # Lifecycle metrics are owned solely by MetricsEventHandler (Domain Events).
 
 
 def emit_model_eligibility_updated(

@@ -14,8 +14,8 @@ This page is an **index** only — each row links to the canonical guide or API 
 | **Same lifecycle JSON** as the Hub, at your **HTTPS endpoint** (filters, HMAC, retries) | Per-project **semantic webhooks** | [Semantic event webhook cookbook](./semantic-webhook-cookbook.md) |
 | **Architecture** of publish → Redis → outbox → webhooks | Diagrams | [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md) |
 | **Persisted** semantic envelopes + operator replay to Redis | Postgres **outbox** + replay API | [Realtime envelope § Durable outbox](../api/realtime-event-envelope.md#durable-outbox-optional) |
-| **SIEM / audit** timeline (readiness, runs, approvals, …) | `GET .../audit/timeline` (+ export) | [API Overview](../api/overview.md) (audit section) |
-| **Notify serving** after `POST .../promote` succeeds | Single global **promote webhook** (`MLAIR_MODEL_PROMOTE_*`) | [Downstream model promote webhook](./downstream-model-promote-webhook.md) |
+| **SIEM / audit** | Domain Audit API `GET /v1/audit/events` + timeline `GET .../audit/timeline` | [Architecture / Audit Flow](../architecture/audit-flow.md), [API Overview](../api/overview.md) |
+| **Notify serving** after promote | Semantic webhook on `model.promoted` (Phase 1). Dedicated `MLAIR_MODEL_PROMOTE_*` reserved for Phase 2 | [Semantic webhook cookbook](./semantic-webhook-cookbook.md), [Downstream model promote webhook](./downstream-model-promote-webhook.md) |
 | **Execute tasks** outside MLAir workers | Lease / pull **external worker** | [External worker execution](./external-worker-execution.md), [End-to-end control plane](./downstream-executor-control-plane.md) |
 | **Prometheus / Grafana** for lifecycle counters | `GET /metrics` on API | [View metrics](./view-metrics.md) |
 | **Distributed traces** (OTLP) | Optional **OpenTelemetry** on api / scheduler / executor / realtime | [OpenTelemetry](./opentelemetry.md) |

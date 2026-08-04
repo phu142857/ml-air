@@ -110,7 +110,6 @@ from app.domains.shared.pagination import InvalidCursorError
 from app.domains.observability.trace_service import get_trace_id
 from app.domains.observability import usage_service
 from datetime import datetime, timezone
-from app.domains.governance.executor_promote_webhook_service import notify_model_promotion_webhook
 from app.domains.orchestration.manifest_service import upsert_task_manifest
 from app.domains.governance import trigger_policy_service
 from app.domains.governance import dataset_retention_service
@@ -4318,14 +4317,6 @@ def promote_model_v1(
         }:
             raise HTTPException(status_code=422, detail=code) from exc
         raise HTTPException(status_code=404, detail=code) from exc
-    notify_model_promotion_webhook(
-        tenant_id=tenant_id,
-        project_id=project_id,
-        model_id=model_id,
-        version=int(payload.version),
-        artifact_uri=str(out.get("artifact_uri") or "") or None,
-        idempotency_key=f"mlair-promote-{model_id}-v{int(payload.version)}-{str(payload.stage or '').strip()}",
-    )
     return out
 
 

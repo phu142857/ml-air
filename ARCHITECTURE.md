@@ -142,13 +142,15 @@ Security requirements:
 - HTTP (when **`ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1`**): **`GET .../serving`**, **`PUT .../serving/{slot}`**, **`GET .../serving/route`** (metadata map: primary=champion, canary, … — **no** traffic split enforced by MLAir).
 - Successful **`production`** promote auto-assigns **`champion`**.
 
-Optional **downstream webhook** on promote: `MLAIR_MODEL_PROMOTE_*`.
+Optional **semantic lifecycle HTTP webhooks** (per-tenant/project subscriptions, host allowlist, retries) — including `model.promoted`: see [Reference integrations](docs/guides/reference-integrations.md) and [Semantic webhook cookbook](docs/guides/semantic-webhook-cookbook.md). Dedicated `MLAIR_MODEL_PROMOTE_*` outbound POST is **not wired in Phase 1** (Domain Event webhook delivery is Phase 2).
 
-Optional **semantic lifecycle HTTP webhooks** (per-tenant/project subscriptions, host allowlist, retries): see [Reference integrations](docs/guides/reference-integrations.md).
+### Domain Events (Phase 1 foundation)
+
+ModelVersion / Dataset / Pipeline lifecycle mutations emit **Domain Events** after persist. Subscribers write **Domain Audit**, increment lifecycle **metrics**, and (contracts only) map **webhook drafts**. Timeline projects model-version history from Domain Audit metadata. Contributor docs: [docs/architecture/](docs/architecture/README.md).
 
 ### Extended governance (roadmap)
 
-Traffic **splitting** still belongs to an external LB using slot metadata. Unified audit timeline and richer promotion policy engines continue to evolve beyond approval+stage.
+Traffic **splitting** still belongs to an external LB using slot metadata. Richer promotion policy engines continue to evolve beyond approval+stage.
 
 ## 8) Observability and Operations
 

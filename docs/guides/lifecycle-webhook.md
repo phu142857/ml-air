@@ -1,24 +1,30 @@
 # Lifecycle webhook (training completed / failed)
 
-Configure a generic HTTP webhook for training runs that pin a `dataset_version_id`.
+## Phase 1 status
 
-## Environment
+`notify_lifecycle_webhook` is **not auto-invoked** from run status transitions after
+the Domain Event cutover. Configuring `ML_AIR_LIFECYCLE_WEBHOOK_*` alone does not
+fire HTTP callbacks today.
+
+**Use instead (current):** semantic webhook subscriptions on `training.completed` /
+`training.failed` — see [Semantic webhook cookbook](./semantic-webhook-cookbook.md)
+and [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
+
+The helper in `lifecycle_webhook_service.py` remains as the HTTP implementation for a
+future Domain Event webhook sink (Phase 2).
+
+---
+
+## Environment (reserved / Phase 2)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ML_AIR_LIFECYCLE_WEBHOOK_URL` | Yes | POST target (e.g. webhook.site URL) |
-| `ML_AIR_LIFECYCLE_WEBHOOK_HMAC_SECRET` | No | When set, sends `X-MLAir-Signature: sha256=<hex>` (HMAC-SHA256 of raw body) |
-| `ML_AIR_LIFECYCLE_WEBHOOK_BEARER_TOKEN` | No | Optional `Authorization: Bearer …` header |
+| `ML_AIR_LIFECYCLE_WEBHOOK_URL` | Yes | POST target |
+| `ML_AIR_LIFECYCLE_WEBHOOK_HMAC_SECRET` | No | When set, sends `X-MLAir-Signature: sha256=<hex>` |
+| `ML_AIR_LIFECYCLE_WEBHOOK_BEARER_TOKEN` | No | Optional `Authorization: Bearer …` |
 | `ML_AIR_LIFECYCLE_WEBHOOK_TIMEOUT_SECONDS` | No | Default `15` |
 
-## When it fires
-
-- **`training.completed`** — run reaches `SUCCESS` and `override_config` or `plugin_context` includes `dataset_version_id`
-- **`training.failed`** — run reaches `FAILED` with the same pinned version context
-
-Same gating as the internal `training.completed` semantic event (see [realtime-event-envelope](../api/realtime-event-envelope.md)).
-
-## Payload example
+## Intended payload (when re-wired)
 
 ```json
 {
@@ -37,17 +43,7 @@ Same gating as the internal `training.completed` semantic event (see [realtime-e
 
 Failed runs use `"type": "training.failed"` and `"status": "FAILED"`.
 
-## Verify signature (optional)
-
-```python
-import hmac, hashlib
-
-def verify(body: bytes, header: str, secret: str) -> bool:
-    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header.strip())
-```
-
 ## Related
 
-- Model promote webhook: `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` (artifact-based, separate contract)
-- Semantic subscriptions: `docs/guides/semantic-webhook-cookbook.md`
+- [Semantic webhook cookbook](./semantic-webhook-cookbook.md)
+- [Architecture overview](../architecture/README.md)

@@ -24,6 +24,9 @@ from app.domains.shared.pagination import (
     resolve_page_params,
     sql_limit_offset,
 )
+from app.domains.lifecycle.dataset_aggregate import DatasetAggregate
+from app.domains.shared.events import get_event_bus
+from app.domains.shared.events.context import EventContext
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
 try:
@@ -669,6 +672,19 @@ def _upsert_dataset(
                 """,
                 (dataset_id, tenant_id, project_id, name, source_uri, checksum, int(current_size or 0)),
             )
+            # Domain event emission: only when the dataset is created (not updated).
+            agg = DatasetAggregate(dataset_id=dataset_id, name=name)
+            agg.mark_created()
+            events = agg.pull_events()
+            ctx = EventContext(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                actor=None,
+                correlation_id=None,
+                ip=None,
+                user_agent=None,
+            )
+            get_event_bus().publish_all(events, context=ctx, session=conn)
             return dataset_id
 
 
@@ -2910,6 +2926,21 @@ def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
                 (tenant_id, project_id, dataset_id),
             )
             deleted = cur.rowcount
+            if deleted:
+                # Domain event emission: only when the dataset is deleted.
+                agg = DatasetAggregate(dataset_id=dataset_id, name="")
+                agg.mark_deleted()
+                events = agg.pull_events()
+                ctx = EventContext(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    actor=None,
+                    correlation_id=None,
+                    ip=None,
+                    user_agent=None,
+                )
+                if events:
+                    get_event_bus().publish_all(events, context=ctx, session=conn)
     ok = bool(deleted)
     if ok:
         _notify_dataset_updated(tenant_id, project_id, dataset_id, action="dataset_deleted")

@@ -140,7 +140,7 @@ def build_env_config_catalog() -> list[CatalogEntry]:
         CatalogEntry("POSTGRES_PASSWORD", "secrets", "secret", "secret", "Compose Postgres password", restart_required=True),
         CatalogEntry("MINIO_ROOT_PASSWORD", "secrets", "secret", "secret", "Compose MinIO root password", restart_required=True),
         CatalogEntry("GF_SECURITY_ADMIN_PASSWORD", "secrets", "secret", "secret", "Compose Grafana admin password", restart_required=True),
-        CatalogEntry("MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN", "secrets", "secret", "secret", "Model promote webhook bearer token", restart_required=False),
+        CatalogEntry("MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN", "secrets", "secret", "secret", "Reserved promote webhook bearer (Phase 2; use semantic webhooks today)", restart_required=False),
         # --- C. Storage / runtime (L4) ---
         CatalogEntry("ML_AIR_DATASET_ARTIFACT_ROOT", "runtime", "url", "l4", "Default dataset artifact root URI", l4_path="runtime.dataset_artifact_root", example_default="file:///mlair/artifacts/datasets"),
         CatalogEntry("ML_AIR_DEFAULT_MODEL_ARTIFACT_ROOT", "runtime", "url", "l4", "Default model artifact root URI", l4_path="runtime.model_artifact_root", example_default="file:///mlair/artifacts/models"),
@@ -220,8 +220,8 @@ def build_env_config_catalog() -> list[CatalogEntry]:
         CatalogEntry("ML_AIR_MANIFEST_ED25519_PUBLIC_KEY", "manifest", "string", "env", "Manifest Ed25519 public key", restart_required=True),
         CatalogEntry("ML_AIR_MANIFEST_ED25519_PUBLIC_KEYS_JSON", "manifest", "json", "env", "Manifest Ed25519 public keys JSON", restart_required=True),
         # --- Integrations ---
-        CatalogEntry("MLAIR_MODEL_PROMOTE_WEBHOOK_URL", "integrations", "url", "env", "Model promote webhook URL"),
-        CatalogEntry("MLAIR_MODEL_PROMOTE_WEBHOOK_TIMEOUT_SECONDS", "integrations", "int", "env", "Promote webhook timeout", example_default="15"),
+        CatalogEntry("MLAIR_MODEL_PROMOTE_WEBHOOK_URL", "integrations", "url", "env", "Reserved promote webhook URL (not wired in Phase 1)"),
+        CatalogEntry("MLAIR_MODEL_PROMOTE_WEBHOOK_TIMEOUT_SECONDS", "integrations", "int", "env", "Reserved promote webhook timeout", example_default="15"),
         CatalogEntry("ML_AIR_DOCKER_IMAGE", "integrations", "string", "env", "Run environment docker image label"),
         CatalogEntry("MLAIR_SOURCE_COMMIT", "integrations", "string", "env", "Source commit for run environment"),
         CatalogEntry("MLAIR_SOURCE_BRANCH", "integrations", "string", "env", "Source branch for run environment"),

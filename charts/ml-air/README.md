@@ -32,9 +32,9 @@ Frontend builds require `NEXT_PUBLIC_API_BASE_URL` at **image build time** (see 
 | `ML_AIR_RUNTIME_REALTIME_BASE_URL` | Browser WSS URL (`api.env.runtimeRealtimeBaseUrl` in values) |
 | `ML_AIR_TASK_EXECUTION_MODE` | `internal` (default) or `external` for lease-based workers |
 | `ML_AIR_WORKER_TOKEN` | Bearer for `POST /v1/tasks/lease` when using external workers |
-| `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` | Optional full URL; API POSTs JSON on successful **model promote** |
-| `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` | Bearer token for that webhook (both must be set to enable) |
-| `MLAIR_MODEL_PROMOTE_WEBHOOK_TIMEOUT_SECONDS` | HTTP timeout (default `15`) |
+| `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` | Reserved (not wired in Phase 1); use semantic webhooks on `model.promoted` |
+| `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` | Reserved with URL above |
+| `MLAIR_MODEL_PROMOTE_WEBHOOK_TIMEOUT_SECONDS` | Reserved (default `15`) |
 
 See root [`README.md`](../../README.md) and [`docs/guides/promote-model.md`](../../docs/guides/promote-model.md).
 

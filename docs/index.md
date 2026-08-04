@@ -39,6 +39,18 @@ Each guide follows:
 
 `Goal -> Steps -> Command -> Result -> Done`
 
+## Architecture (contributors)
+
+Internal Domain Event / Audit / Timeline design as implemented in the API:
+
+- [Architecture Overview](./architecture/README.md)
+- [Event Flow](./architecture/event-flow.md)
+- [Audit Flow](./architecture/audit-flow.md)
+- [Timeline Flow](./architecture/timeline-flow.md)
+- [Developer Guide](./architecture/developer-guide.md)
+
+Semantic realtime (Hub Pub/Sub / outbox) remains documented under [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md).
+
 ## Getting Started
 
 - [Configuration (single reference)](./configuration.md)
@@ -199,10 +211,6 @@ Deploy and sign off without reading application source:
 ## Plugin development
 
 - [Plugin development guide](./plugin-development-guide.md) — index for create, validate, reload, integrate
-
-## Evaluation
-
-- [Evaluation docs placeholder](./evaluation/README.md) — reserved; see readiness / metrics / promote links inside
 
 ## Documentation Rules
 

@@ -42,14 +42,11 @@ Promotion links the model to a validated pipeline run, task outputs, plugin beha
 
 ## Optional: notify downstream after promote
 
-If a **downstream** serving or executor process should react when a version reaches `production` (or another promoted stage), set:
+**Phase 1:** the dedicated `MLAIR_MODEL_PROMOTE_*` HTTP helper is **not wired**. Prefer
+[semantic webhook subscriptions](./semantic-webhook-cookbook.md) on `model.promoted`
+(or Hub realtime) for outbound notify today.
 
-- `MLAIR_MODEL_PROMOTE_WEBHOOK_URL` — POST target (**full URL**).
-- `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` — shared secret (`Authorization: Bearer …` on the outbound request).
-
-**Contract (mandatory reading for integrators):** [Downstream model promote webhook](./downstream-model-promote-webhook.md) — exact JSON schema, when MLAir **skips** the call (missing URL/token/`artifact_uri`), `idempotency_key` omission rules, and **best-effort** semantics (promote succeeds even if webhook fails).
-
-Context in the model-centric guide: [Model-centric pipeline mapping and run trigger](./model-centric-pipeline-mapping-and-trigger.md#optional-http-notify-after-promote).
+Historical / Phase 2 contract notes: [Downstream model promote webhook](./downstream-model-promote-webhook.md).
 
 ## Done
 

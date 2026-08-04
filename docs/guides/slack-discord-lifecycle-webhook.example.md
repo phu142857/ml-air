@@ -1,34 +1,29 @@
-# Slack / Discord lifecycle webhook (optional)
+# Slack / Discord lifecycle webhook example
 
-Use `ML_AIR_LIFECYCLE_WEBHOOK_URL` with a Slack Incoming Webhook or Discord webhook URL. Payload is JSON (not Slack-native); use a tiny relay or [n8n](https://n8n.io) to transform.
+## Phase 1 status
 
-## Minimal relay (Python)
+The dedicated `ML_AIR_LIFECYCLE_WEBHOOK_*` helper is **not auto-fired** from run
+transitions. For Slack/Discord today, subscribe a semantic webhook to
+`training.completed` / `training.failed` (see [Semantic webhook cookbook](./semantic-webhook-cookbook.md))
+or use a small relay on the semantic delivery path.
 
-```python
-# relay.py — POST from MLAir → format for Slack
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import json, os, urllib.request
+The payload shape below remains the intended contract when the Domain Event
+webhook sink reuses `notify_lifecycle_webhook` in Phase 2.
 
-SLACK_URL = os.environ["SLACK_WEBHOOK_URL"]
+---
 
-class Handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        n = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(n)
-        ev = json.loads(body)
-        text = f"*{ev.get('type')}* run `{ev.get('run_id')}` → {ev.get('status')}"
-        slack = json.dumps({"text": text}).encode()
-        urllib.request.urlopen(urllib.request.Request(SLACK_URL, data=slack, method="POST"), timeout=10)
-        self.send_response(204)
-        self.end_headers()
+## Historical relay sketch
 
-HTTPServer(("0.0.0.0", 9000), Handler).serve_forever()
+Use a Slack Incoming Webhook or Discord webhook URL behind a tiny relay (payload is JSON, not Slack-native). Tools like [n8n](https://n8n.io) can transform.
+
+Example transform target body for Slack:
+
+```json
+{
+  "text": "Training completed run_id=… dataset_version_id=…"
+}
 ```
 
-Point `ML_AIR_LIFECYCLE_WEBHOOK_URL=http://relay:9000/` at the relay.
+Point a semantic webhook subscription (or Phase 2 lifecycle URL) at `http://relay:9000/`.
 
-## Discord
-
-Discord webhooks accept `{"content": "..."}` — same pattern with `DISCORD_WEBHOOK_URL`.
-
-See [lifecycle-webhook.md](./lifecycle-webhook.md) for payload fields and HMAC verification.
+Related: [Lifecycle webhook](./lifecycle-webhook.md), [Semantic webhook cookbook](./semantic-webhook-cookbook.md).

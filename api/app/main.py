@@ -9,6 +9,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 
 from app.api.routes.v1 import router as v1_router
 from app.api.routes.identity_routes import router as identity_router
+from app.api.routes.audit_events_routes import router as audit_router
 from app.api.routes.system_settings_routes import router as system_settings_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.otel_api import (
@@ -46,6 +47,7 @@ async def _dataset_version_snapshot_integrity_handler(
 
 app.include_router(v1_router, prefix="/v1")
 app.include_router(identity_router, prefix="/v1")
+app.include_router(audit_router, prefix="/v1")
 app.include_router(system_settings_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
@@ -88,6 +90,21 @@ def on_startup() -> None:
     start_readiness_queue_background()
     start_trace_retention_background()
     start_run_log_retention_background()
+
+    # Domain audit (Phase 1): in-process subscriptions + same-transaction inserts.
+    from app.domains.audit.domain_audit_subscriber import start_domain_audit_subscriptions
+
+    start_domain_audit_subscriptions()
+
+    # WebhookEventHandler (Phase 1): mapping + contracts only (no outbound HTTP).
+    from app.domains.orchestration.webhook_event_subscriber import start_webhook_event_subscriptions
+
+    start_webhook_event_subscriptions()
+
+    # MetricsEventHandler (Phase 1): increments existing lifecycle metrics only.
+    from app.domains.orchestration.metrics_event_subscriber import start_metrics_event_subscriptions
+
+    start_metrics_event_subscriptions()
     logger.info("api_startup_completed")
 
 
