@@ -48,6 +48,7 @@ Internal Domain Event / Audit / Timeline design as implemented in the API:
 - [Audit Flow](./architecture/audit-flow.md)
 - [Timeline Flow](./architecture/timeline-flow.md)
 - [Developer Guide](./architecture/developer-guide.md)
+- [Phase 2 Roadmap](./architecture/phase-2.md)
 
 Semantic realtime (Hub Pub/Sub / outbox) remains documented under [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md).
 

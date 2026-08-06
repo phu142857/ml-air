@@ -4,18 +4,20 @@ MLAir is an enterprise **AI Control Plane**: it coordinates Models, Datasets, Pi
 
 This document describes the **current** internal architecture for contributors and deployers. It is not an OpenAPI reference and not a product roadmap.
 
-## Phase 1 status (Domain Event foundation)
+## Phase status (Domain Events)
 
-**Release gate: PASS.** Shipped foundation:
+**Phase 1:** released. **Phase 2:** complete — see [Phase 2 Roadmap](./phase-2.md).
+
+Shipped:
 
 - Aggregates emit Domain Events; services publish **after** persist
 - Domain Audit store + API (`/v1/audit/events`)
 - Timeline projects model-version history from Domain Audit metadata (deletion-safe)
-- Metrics ownership via `MetricsEventHandler` (exactly-once for promote/approval)
-- `WebhookEventHandler` mapping contracts only (**no outbound HTTP** yet)
-- `OutboxEventBus` interface only (`InProcessEventBus` in production)
+- Metrics ownership via `MetricsEventHandler` (handler acks for replay idempotency)
+- Domain webhook HTTP delivery when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1`
+- Optional durable Domain Event outbox when `ML_AIR_DOMAIN_EVENT_OUTBOX=1` + replay API
 
-Accepted Phase 1 debt (not blockers): `ActorRef` often unset (prefer Phase 2), dual Domain vs semantic event systems, Outbox not implemented. See Release Gate notes in the project conversation / changelog.
+Default production path remains **`InProcessEventBus`** (synchronous handlers, same DB connection).
 
 ## Design principles
 
@@ -75,3 +77,4 @@ Semantic realtime remains the fan-out path for UI and existing webhook subscript
 - [Developer Guide](./developer-guide.md)
 - Deploy: [Production deployment](../runbooks/production-deployment.md)
 - Production baseline topology: [ARCHITECTURE.md](../../ARCHITECTURE.md)
+- [Phase 2 Roadmap](./phase-2.md)

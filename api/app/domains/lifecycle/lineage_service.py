@@ -25,8 +25,7 @@ from app.domains.shared.pagination import (
     sql_limit_offset,
 )
 from app.domains.lifecycle.dataset_aggregate import DatasetAggregate
-from app.domains.shared.events import get_event_bus
-from app.domains.shared.events.context import EventContext
+from app.domains.shared.events import build_event_context, get_event_bus
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
 try:
@@ -676,13 +675,9 @@ def _upsert_dataset(
             agg = DatasetAggregate(dataset_id=dataset_id, name=name)
             agg.mark_created()
             events = agg.pull_events()
-            ctx = EventContext(
+            ctx = build_event_context(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                actor=None,
-                correlation_id=None,
-                ip=None,
-                user_agent=None,
             )
             get_event_bus().publish_all(events, context=ctx, session=conn)
             return dataset_id
@@ -2931,13 +2926,9 @@ def delete_dataset(tenant_id: str, project_id: str, dataset_id: str) -> bool:
                 agg = DatasetAggregate(dataset_id=dataset_id, name="")
                 agg.mark_deleted()
                 events = agg.pull_events()
-                ctx = EventContext(
+                ctx = build_event_context(
                     tenant_id=tenant_id,
                     project_id=project_id,
-                    actor=None,
-                    correlation_id=None,
-                    ip=None,
-                    user_agent=None,
                 )
                 if events:
                     get_event_bus().publish_all(events, context=ctx, session=conn)

@@ -314,40 +314,50 @@ def authenticate_bearer(authorization: str | None) -> Principal:
     from app.domains.governance.identity_token_service import IDENTITY_ISSUER, decode_identity_access_token
     from app.domains.governance import identity_repository as identity_repo
     from app.domains.governance.identity_service import authenticate_sa_secret
+    from app.domains.shared.events.request_context import bind_actor_from_principal
+
+    principal: Principal | None = None
 
     if identity_repo.identity_tables_available():
         sa = authenticate_sa_secret(token)
         if sa:
-            return _principal_from_service_account(token, sa)
-        from app.domains.governance.identity_service import authenticate_pat
+            principal = _principal_from_service_account(token, sa)
+        else:
+            from app.domains.governance.identity_service import authenticate_pat
 
-        pat = authenticate_pat(token)
-        if pat:
-            return _principal_from_pat_user(token, pat["user"])
-        try:
-            payload = decode_identity_access_token(token)
-            return _principal_from_identity_user(token, payload)
-        except HTTPException as exc:
-            if exc.status_code != 401:
-                raise
-        except Exception:
-            pass
+            pat = authenticate_pat(token)
+            if pat:
+                principal = _principal_from_pat_user(token, pat["user"])
+            else:
+                try:
+                    payload = decode_identity_access_token(token)
+                    principal = _principal_from_identity_user(token, payload)
+                except HTTPException as exc:
+                    if exc.status_code != 401:
+                        raise
+                except Exception:
+                    pass
 
-    jwt_payload = _decode_jwt_token(token)
-    if jwt_payload is not None:
-        iss = str(jwt_payload.get("iss") or "")
-        if iss == IDENTITY_ISSUER:
-            return _principal_from_identity_user(token, jwt_payload)
-        return _principal_from_token_data(token, jwt_payload, token_issuer="jwt")
+    if principal is None:
+        jwt_payload = _decode_jwt_token(token)
+        if jwt_payload is not None:
+            iss = str(jwt_payload.get("iss") or "")
+            if iss == IDENTITY_ISSUER:
+                principal = _principal_from_identity_user(token, jwt_payload)
+            else:
+                principal = _principal_from_token_data(token, jwt_payload, token_issuer="jwt")
 
-    if _legacy_static_tokens_enabled():
+    if principal is None and _legacy_static_tokens_enabled():
         token_data = _token_db().get(token)
         if token_data:
-            p = _principal_from_token_data(token, token_data, token_issuer="static_token")
-            p.principal_kind = "legacy"
-            return p
+            principal = _principal_from_token_data(token, token_data, token_issuer="static_token")
+            principal.principal_kind = "legacy"
 
-    raise HTTPException(status_code=401, detail="invalid_token")
+    if principal is None:
+        raise HTTPException(status_code=401, detail="invalid_token")
+
+    bind_actor_from_principal(principal)
+    return principal
 
 
 def authorize_scope(principal: Principal, tenant_id: str, project_id: str, min_role: str = "viewer") -> None:

@@ -14,7 +14,7 @@ class _CaptureSink(WebhookEventSink):
     def __init__(self) -> None:
         self.calls: list[tuple[object, object]] = []
 
-    def record(self, draft, *, session):  # type: ignore[override]
+    def record(self, draft, *, session, event_id=None):  # type: ignore[override]
         self.calls.append((draft, session))
 
 

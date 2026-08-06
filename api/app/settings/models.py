@@ -20,6 +20,9 @@ class FeatureFlags:
     serving_slots_http: bool
     otel_enabled: bool
     event_outbox: bool
+    domain_event_outbox: bool
+    domain_webhook_delivery: bool
+    domain_webhook_dedupe: bool
     event_stream: bool
     event_stream_global_fanout: bool
     execution_projection: bool
@@ -109,6 +112,9 @@ class Settings:
             "scope_debug_panel": f.scope_debug_panel,
             "serving_slots_http": f.serving_slots_http,
             "semantic_event_outbox": f.event_outbox,
+            "domain_event_outbox": f.domain_event_outbox,
+            "domain_webhook_delivery": f.domain_webhook_delivery,
+            "domain_webhook_dedupe": f.domain_webhook_dedupe,
             "semantic_event_stream": f.event_stream,
             "semantic_event_stream_global_fanout": f.event_stream_global_fanout,
             "execution_projection": f.execution_projection,

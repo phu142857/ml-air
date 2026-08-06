@@ -10,6 +10,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from app.api.routes.v1 import router as v1_router
 from app.api.routes.identity_routes import router as identity_router
 from app.api.routes.audit_events_routes import router as audit_router
+from app.api.routes.domain_events_routes import router as domain_events_router
 from app.api.routes.system_settings_routes import router as system_settings_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.otel_api import (
@@ -24,6 +25,7 @@ from app.plugins.registry import plugin_registry
 from app.domains.shared.db_service import assert_db_connection
 from app.domains.lifecycle.lineage_service import DatasetVersionSnapshotIntegrityError
 from app.domains.observability.trace_service import bind_request_trace_id, get_trace_id
+from app.domains.shared.events.request_context import bind_http_request_meta, reset_event_request_context
 
 logging.basicConfig(
     level=os.getenv("ML_AIR_LOG_LEVEL", "INFO").upper(),
@@ -48,6 +50,7 @@ async def _dataset_version_snapshot_integrity_handler(
 app.include_router(v1_router, prefix="/v1")
 app.include_router(identity_router, prefix="/v1")
 app.include_router(audit_router, prefix="/v1")
+app.include_router(domain_events_router, prefix="/v1")
 app.include_router(system_settings_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
@@ -87,6 +90,9 @@ def on_startup() -> None:
     from app.domains.orchestration.run_log_retention_service import start_run_log_retention_background
 
     start_outbox_drain_background()
+    from app.domains.shared.events.domain_event_outbox_service import start_domain_event_outbox_drain_background
+
+    start_domain_event_outbox_drain_background()
     start_readiness_queue_background()
     start_trace_retention_background()
     start_run_log_retention_background()
@@ -118,6 +124,7 @@ def _otel_capture_post_body(path: str, method: str) -> bool:
 @app.middleware("http")
 async def tracing_and_metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
     bind_request_trace_id(request.headers.get("x-trace-id"))
+    bind_http_request_meta(request)
     started = time.perf_counter()
     route_path = request.url.path
     if _otel_capture_post_body(route_path, request.method):
@@ -129,34 +136,37 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
 
         request = Request(request.scope, receive)
     try:
-        response = await call_next(request)
-    except Exception:
+        try:
+            response = await call_next(request)
+        except Exception:
+            elapsed = time.perf_counter() - started
+            logger.exception(
+                "http_request_failed method=%s path=%s trace_id=%s elapsed_ms=%d",
+                request.method,
+                route_path,
+                get_trace_id(),
+                int(elapsed * 1000),
+            )
+            raise
+        trace_id = get_trace_id()
         elapsed = time.perf_counter() - started
-        logger.exception(
-            "http_request_failed method=%s path=%s trace_id=%s elapsed_ms=%d",
+        HTTP_REQUESTS_TOTAL.labels(method=request.method, path=route_path, status=str(response.status_code)).inc()
+        HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, path=route_path).observe(elapsed)
+        attach_mlair_trace_id_to_current_span(trace_id)
+        enrich_http_span_from_request(request)
+        attach_otel_w3c_response_headers(response)
+        logger.info(
+            "http_request method=%s path=%s status=%s trace_id=%s elapsed_ms=%d",
             request.method,
             route_path,
-            get_trace_id(),
+            response.status_code,
+            trace_id,
             int(elapsed * 1000),
         )
-        raise
-    trace_id = get_trace_id()
-    elapsed = time.perf_counter() - started
-    HTTP_REQUESTS_TOTAL.labels(method=request.method, path=route_path, status=str(response.status_code)).inc()
-    HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, path=route_path).observe(elapsed)
-    attach_mlair_trace_id_to_current_span(trace_id)
-    enrich_http_span_from_request(request)
-    attach_otel_w3c_response_headers(response)
-    logger.info(
-        "http_request method=%s path=%s status=%s trace_id=%s elapsed_ms=%d",
-        request.method,
-        route_path,
-        response.status_code,
-        trace_id,
-        int(elapsed * 1000),
-    )
-    response.headers["X-Trace-Id"] = trace_id
-    return response
+        response.headers["X-Trace-Id"] = trace_id
+        return response
+    finally:
+        reset_event_request_context()
 
 
 def _install_cors_middleware(application: FastAPI) -> None:

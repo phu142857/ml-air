@@ -24,4 +24,5 @@ class EventContext:
     correlation_id: str | None
     ip: str | None
     user_agent: str | None
+    request_id: str | None = None
 

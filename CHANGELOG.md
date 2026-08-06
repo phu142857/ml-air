@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 2 Epic 4–7 — Outbox, replay, domain webhooks, hardening:** optional `ML_AIR_DOMAIN_EVENT_OUTBOX` + drain worker; replay API; domain webhook subscriptions + HTTP sink; handler timeouts/metrics/tracing.
+- **Phase 2 Epic 3 — Readiness Aggregate:** `ReadinessEvaluated` on new evaluation INSERT via `record_dataset_readiness_evaluation`; Domain Audit / webhook map `dataset.readiness.evaluated`.
+- **Phase 2 Epic 2 — Run Aggregate:** `RunCreated` / `RunStarted` / `RunCompleted` / `RunFailed` / `RunCancelled` from API `run_service` and scheduler `_transition_run_status`; Domain Audit actions `run.*`.
+- **Phase 2 Epic 1 — Actor propagation:** HTTP middleware + `authenticate_bearer` bind `ActorRef`, `request_id`, correlation, IP, and User-Agent; services use `build_event_context()` so Domain Audit records real actors.
 - **Domain Event foundation (Phase 1):** Aggregate-owned events for ModelVersion / Dataset / Pipeline; `InProcessEventBus` + `OutboxEventBus` interface; publish-after-persist.
 - **Domain Audit:** table `domain_audit_events` (Alembic `0049`), handler/mapper, API `GET /v1/audit/events` (+ by id).
 - **Timeline:** model-version kinds projected from Domain Audit metadata (including `model.version.deleted`); no live `model_versions` JOIN.

@@ -18,7 +18,15 @@ from app.domains.governance.model_version_aggregate import (
     ModelVersionRollback,
 )
 from app.domains.lifecycle.dataset_aggregate import DatasetCreated, DatasetDeleted
+from app.domains.lifecycle.readiness_aggregate import ReadinessEvaluated
 from app.domains.orchestration.pipeline_aggregate import PipelineVersionCreated
+from app.domains.orchestration.run_aggregate import (
+    RunCancelled,
+    RunCompleted,
+    RunCreated,
+    RunFailed,
+    RunStarted,
+)
 from app.domains.shared.events.envelope import EventEnvelope
 from app.domains.shared.events.handler import DomainEventHandler
 
@@ -54,6 +62,14 @@ class MetricsEventHandler(DomainEventHandler):
         self._recorder = recorder
 
     def handle(self, envelope: EventEnvelope, *, session: Any) -> None:  # noqa: ARG002
+        from app.domains.shared.events.handler_ack import try_claim_handler_ack
+
+        if not try_claim_handler_ack(
+            session=session,
+            event_id=envelope.event_id,
+            handler_name="MetricsEventHandler",
+        ):
+            return
         ev = envelope.event
 
         if isinstance(ev, (ModelVersionPromoted, ModelVersionRollback)):
@@ -68,7 +84,22 @@ class MetricsEventHandler(DomainEventHandler):
             self._recorder.record_model_version_approval_set(approval_status="rejected")
             return
 
-        # Other events are intentionally no-ops for Phase 1 (no new metrics).
-        if isinstance(ev, (ModelVersionCreated, ModelVersionDeleted, DatasetCreated, DatasetDeleted, PipelineVersionCreated)):
+        # Other events are intentionally no-ops for existing Prometheus schema.
+        if isinstance(
+            ev,
+            (
+                ModelVersionCreated,
+                ModelVersionDeleted,
+                DatasetCreated,
+                DatasetDeleted,
+                PipelineVersionCreated,
+                RunCreated,
+                RunStarted,
+                RunCompleted,
+                RunFailed,
+                RunCancelled,
+                ReadinessEvaluated,
+            ),
+        ):
             return
 

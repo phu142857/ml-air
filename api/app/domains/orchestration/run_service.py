@@ -18,6 +18,7 @@ from app.domains.shared.pagination import (
     sql_limit_offset,
 )
 from app.domains.orchestration.log_service import append_run_log
+from app.domains.orchestration.run_domain_events import publish_run_lifecycle_events
 from app.domains.shared.queue_service import publish_run_event
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
@@ -230,6 +231,15 @@ def create_run(
                 ),
             )
             created = cur.fetchone()
+            publish_run_lifecycle_events(
+                session=conn,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                run_id=str(created[0]),
+                pipeline_id=pipeline_id,
+                status="PENDING",
+                created=True,
+            )
 
     publish_run_event(
         {
@@ -340,6 +350,20 @@ def mark_run_running(run_id: str) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
+                SELECT status, tenant_id, project_id, pipeline_id
+                FROM runs
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            )
+            before = cur.fetchone()
+            if not before:
+                return
+            from_status = str(before[0] or "").strip().upper()
+            if from_status not in {"PENDING", "FAILED"}:
+                return
+            cur.execute(
+                """
                 UPDATE runs
                 SET status = 'RUNNING', updated_at = NOW()
                 WHERE run_id = %s AND status IN ('PENDING', 'FAILED')
@@ -347,6 +371,16 @@ def mark_run_running(run_id: str) -> None:
                 (run_id,),
             )
             changed = cur.rowcount > 0
+            if changed:
+                publish_run_lifecycle_events(
+                    session=conn,
+                    tenant_id=str(before[1]),
+                    project_id=str(before[2]),
+                    run_id=run_id,
+                    pipeline_id=str(before[3] or ""),
+                    status="RUNNING",
+                    from_status=from_status,
+                )
     if changed:
         row = get_run(run_id)
         if row:
@@ -372,6 +406,20 @@ def set_run_status(run_id: str, status: str) -> bool:
         with conn.cursor() as cur:
             cur.execute(
                 """
+                SELECT status, tenant_id, project_id, pipeline_id
+                FROM runs
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            )
+            before = cur.fetchone()
+            if not before:
+                return False
+            from_status = str(before[0] or "").strip().upper()
+            if from_status == normalized:
+                return True
+            cur.execute(
+                """
                 UPDATE runs
                 SET status = %s, updated_at = NOW()
                 WHERE run_id = %s
@@ -379,6 +427,16 @@ def set_run_status(run_id: str, status: str) -> bool:
                 (normalized, run_id),
             )
             updated = cur.rowcount
+            if updated and normalized in {"RUNNING", "SUCCESS", "FAILED", "CANCELLED"}:
+                publish_run_lifecycle_events(
+                    session=conn,
+                    tenant_id=str(before[1]),
+                    project_id=str(before[2]),
+                    run_id=run_id,
+                    pipeline_id=str(before[3] or ""),
+                    status=normalized,
+                    from_status=from_status,
+                )
     if updated:
         row = get_run(run_id)
         if row:

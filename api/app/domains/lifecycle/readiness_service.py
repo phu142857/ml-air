@@ -302,6 +302,8 @@ def record_dataset_readiness_evaluation(
 ) -> str:
     evaluation_id = str(uuid4())
     src = str(source or "manual").strip().lower() or "manual"
+    status_norm = str(status)
+    reasons_list = list(reasons or [])
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -330,11 +332,27 @@ def record_dataset_readiness_evaluation(
                     policy_id,
                     int(required_size),
                     int(current_size),
-                    str(status),
+                    status_norm,
                     src,
-                    json.dumps(reasons or []),
+                    json.dumps(reasons_list),
                 ),
             )
+        from app.domains.lifecycle.readiness_domain_events import publish_readiness_evaluated
+
+        publish_readiness_evaluated(
+            session=conn,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            evaluation_id=evaluation_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
+            policy_id=policy_id,
+            status=status_norm,
+            source=src,
+            required_size=int(required_size),
+            current_size=int(current_size),
+            reasons=reasons_list,
+        )
     return evaluation_id
 
 

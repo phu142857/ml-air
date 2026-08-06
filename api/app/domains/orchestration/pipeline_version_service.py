@@ -14,8 +14,7 @@ from app.domains.shared.pagination import (
     sql_limit_offset,
 )
 from app.domains.orchestration.pipeline_aggregate import PipelineAggregate
-from app.domains.shared.events import get_event_bus
-from app.domains.shared.events.context import EventContext
+from app.domains.shared.events import build_event_context, get_event_bus
 
 
 def create_pipeline_version(
@@ -49,13 +48,9 @@ def create_pipeline_version(
                 version=int(out.get("version") or 0),
             )
             events = agg.pull_events()
-            ctx = EventContext(
+            ctx = build_event_context(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                actor=None,
-                correlation_id=None,
-                ip=None,
-                user_agent=None,
             )
             if events:
                 get_event_bus().publish_all(events, context=ctx, session=conn)

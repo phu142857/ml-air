@@ -25,10 +25,19 @@ class InProcessEventBus(DomainEventPublisher):
     def subscribe(self, event_type: type[DomainEvent], handler: DomainEventHandler) -> None:
         self._handlers[event_type].append(handler)
 
+    def dispatch(self, envelope: EventEnvelope, *, session: Any) -> None:
+        """Dispatch a pre-built envelope to subscribed handlers."""
+        from app.domains.shared.events.domain_event_dispatch import dispatch_envelope_to_handlers
+
+        dispatch_envelope_to_handlers(
+            envelope,
+            handlers=self._handlers.get(type(envelope.event), []),
+            session=session,
+        )
+
     def publish(self, event: DomainEvent, *, context: EventContext, session: Any) -> None:
         envelope = EventEnvelope.create(event=event, context=context)
-        for handler in self._handlers.get(type(event), []):
-            handler.handle(envelope, session=session)
+        self.dispatch(envelope, session=session)
 
     def publish_all(self, events: Iterable[DomainEvent], *, context: EventContext, session: Any) -> None:
         for event in events:

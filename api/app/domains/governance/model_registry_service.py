@@ -26,8 +26,7 @@ from app.domains.shared.pagination import (
 import app.domains.lifecycle.realtime_events as rt
 from app.domains.observability.trace_service import get_trace_id
 from app.domains.governance.model_version_aggregate import ModelVersionAggregate
-from app.domains.shared.events import get_event_bus
-from app.domains.shared.events.context import EventContext
+from app.domains.shared.events import build_event_context, get_event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -470,13 +469,9 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
             events = agg.pull_events()
             tenant_id = str(scope[0]) if scope and scope[0] is not None else "unknown"
             project_id = str(scope[1]) if scope and scope[1] is not None else "unknown"
-            ctx = EventContext(
+            ctx = build_event_context(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                actor=None,
-                correlation_id=None,
-                ip=None,
-                user_agent=None,
             )
             get_event_bus().publish_all(events, context=ctx, session=conn)
     _notify_model_eligibility_updated(
@@ -591,13 +586,9 @@ def create_model_version_from_upload(
             events = agg.pull_events()
             tenant_id = str(scope[0]) if scope and scope[0] is not None else "unknown"
             project_id = str(scope[1]) if scope and scope[1] is not None else "unknown"
-            ctx = EventContext(
+            ctx = build_event_context(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                actor=None,
-                correlation_id=None,
-                ip=None,
-                user_agent=None,
             )
             get_event_bus().publish_all(events, context=ctx, session=conn)
     out["metadata_generated"] = metadata_generated
@@ -704,13 +695,9 @@ def create_model_version_from_uploads(
             events = agg.pull_events()
             tenant_id = str(scope[0]) if scope and scope[0] is not None else "unknown"
             project_id = str(scope[1]) if scope and scope[1] is not None else "unknown"
-            ctx = EventContext(
+            ctx = build_event_context(
                 tenant_id=tenant_id,
                 project_id=project_id,
-                actor=None,
-                correlation_id=None,
-                ip=None,
-                user_agent=None,
             )
             get_event_bus().publish_all(events, context=ctx, session=conn)
     out["metadata_generated"] = metadata_generated
@@ -779,13 +766,9 @@ def delete_model_version(model_id: str, version: int) -> bool:
                 )
                 agg.mark_deleted()
                 events = agg.pull_events()
-                ctx = EventContext(
+                ctx = build_event_context(
                     tenant_id=str(scope[0]) if scope and scope[0] is not None else "unknown",
                     project_id=str(scope[1]) if scope and scope[1] is not None else "unknown",
-                    actor=None,
-                    correlation_id=None,
-                    ip=None,
-                    user_agent=None,
                 )
                 if events:
                     get_event_bus().publish_all(events, context=ctx, session=conn)
@@ -867,13 +850,9 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
                     else:
                         agg.promote(to_stage=stage_norm)
                     events = agg.pull_events()
-                    ctx = EventContext(
+                    ctx = build_event_context(
                         tenant_id=str(scope[0]) if scope and scope[0] is not None else "unknown",
                         project_id=str(scope[1]) if scope and scope[1] is not None else "unknown",
-                        actor=None,
-                        correlation_id=None,
-                        ip=None,
-                        user_agent=None,
                     )
                     if events:
                         get_event_bus().publish_all(events, context=ctx, session=conn)
@@ -1227,13 +1206,9 @@ def update_model_version_approval(
             # pending_manual_approval is intentionally not emitted yet.
             events = agg.pull_events()
             if events:
-                ctx = EventContext(
+                ctx = build_event_context(
                     tenant_id=tenant_id,
                     project_id=project_id,
-                    actor=None,
-                    correlation_id=None,
-                    ip=None,
-                    user_agent=None,
                 )
                 get_event_bus().publish_all(events, context=ctx, session=conn)
 

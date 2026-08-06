@@ -21,7 +21,15 @@ from app.domains.governance.model_version_aggregate import (
     ModelVersionRollback,
 )
 from app.domains.lifecycle.dataset_aggregate import DatasetCreated, DatasetDeleted
+from app.domains.lifecycle.readiness_aggregate import ReadinessEvaluated
 from app.domains.orchestration.pipeline_aggregate import PipelineVersionCreated
+from app.domains.orchestration.run_aggregate import (
+    RunCancelled,
+    RunCompleted,
+    RunCreated,
+    RunFailed,
+    RunStarted,
+)
 from app.domains.shared.events.envelope import EventEnvelope
 from app.domains.shared.events.handler import DomainEventHandler
 
@@ -42,17 +50,26 @@ class WebhookEventDraft:
 
 
 class WebhookEventSink(ABC):
-    """Port that will enqueue/persist/dispatch webhook drafts in future."""
+    """Port that enqueues/persists/dispatches webhook drafts."""
 
-    def record(self, draft: WebhookEventDraft, *, session: Any) -> None:  # pragma: no cover
+    def record(self, draft: WebhookEventDraft, *, session: Any, event_id: str | None = None) -> None:  # pragma: no cover
         raise NotImplementedError
 
 
 class NoopWebhookEventSink(WebhookEventSink):
-    """Current Phase 1: do nothing (no outbound HTTP)."""
+    """No outbound HTTP (default when domain webhook delivery is off)."""
 
-    def record(self, draft: WebhookEventDraft, *, session: Any) -> None:
+    def record(self, draft: WebhookEventDraft, *, session: Any, event_id: str | None = None) -> None:
         return None
+
+
+class HttpDomainWebhookEventSink(WebhookEventSink):
+    """Schedule outbound HTTP delivery for Domain Event webhook drafts."""
+
+    def record(self, draft: WebhookEventDraft, *, session: Any, event_id: str | None = None) -> None:  # noqa: ARG002
+        from app.domains.orchestration.domain_webhook_subscription_service import schedule_deliver_domain_webhook
+
+        schedule_deliver_domain_webhook(draft=draft, event_id=str(event_id or ""))
 
 
 class WebhookEventMapper:
@@ -113,6 +130,30 @@ class WebhookEventMapper:
             action = "pipeline_version.created"
             target_type = "pipeline_version"
             target_id = event.pipeline_version_id
+        elif isinstance(event, RunCreated):
+            action = "run.created"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunStarted):
+            action = "run.started"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunCompleted):
+            action = "run.completed"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunFailed):
+            action = "run.failed"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunCancelled):
+            action = "run.cancelled"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, ReadinessEvaluated):
+            action = "dataset.readiness.evaluated"
+            target_type = "dataset"
+            target_id = event.dataset_id
 
         return WebhookEventDraft(
             occurred_at=envelope.occurred_at,
@@ -135,6 +176,14 @@ class WebhookEventHandler(DomainEventHandler):
         self._sink = sink
 
     def handle(self, envelope: EventEnvelope, *, session: Any) -> None:
+        from app.domains.shared.events.handler_ack import try_claim_handler_ack
+
+        if not try_claim_handler_ack(
+            session=session,
+            event_id=envelope.event_id,
+            handler_name="WebhookEventHandler",
+        ):
+            return
         draft = self._mapper.map(envelope)
-        self._sink.record(draft, session=session)
+        self._sink.record(draft, session=session, event_id=envelope.event_id)
 

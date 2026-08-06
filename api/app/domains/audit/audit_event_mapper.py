@@ -14,7 +14,15 @@ from app.domains.governance.model_version_aggregate import (
     ModelVersionRollback,
 )
 from app.domains.lifecycle.dataset_aggregate import DatasetCreated, DatasetDeleted
+from app.domains.lifecycle.readiness_aggregate import ReadinessEvaluated
 from app.domains.orchestration.pipeline_aggregate import PipelineVersionCreated
+from app.domains.orchestration.run_aggregate import (
+    RunCancelled,
+    RunCompleted,
+    RunCreated,
+    RunFailed,
+    RunStarted,
+)
 from app.domains.shared.events.envelope import EventEnvelope
 
 
@@ -41,6 +49,8 @@ class AuditEventMapper:
 
         event = envelope.event
         metadata = asdict(event)
+        if getattr(ctx, "request_id", None):
+            metadata = {**metadata, "request_id": ctx.request_id}
 
         # Defaults
         action = "unknown"
@@ -83,6 +93,30 @@ class AuditEventMapper:
             action = "pipeline_version.created"
             target_type = "pipeline_version"
             target_id = event.pipeline_version_id
+        elif isinstance(event, RunCreated):
+            action = "run.created"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunStarted):
+            action = "run.started"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunCompleted):
+            action = "run.completed"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunFailed):
+            action = "run.failed"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, RunCancelled):
+            action = "run.cancelled"
+            target_type = "run"
+            target_id = event.run_id
+        elif isinstance(event, ReadinessEvaluated):
+            action = "dataset.readiness.evaluated"
+            target_type = "dataset"
+            target_id = event.dataset_id
 
         return {
             "tenant_id": tenant_id,

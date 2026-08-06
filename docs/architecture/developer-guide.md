@@ -5,13 +5,14 @@ Practical guide for deploying and extending MLAir’s Domain Event / Audit / Tim
 ## Deploy / migrate
 
 1. Run API DB migrations (included in the all-in-one container startup, or via Alembic in API-only setups).
-2. Ensure revision **`0049_domain_audit_events`** (or later) is applied so `domain_audit_events` exists.
+2. Ensure revisions **`0049_domain_audit_events`** through **`0052_domain_webhook_subscriptions`** (or later) are applied.
 3. Start the API. On startup (`app/main.py`), MLAir registers:
-   - Domain Audit subscriptions
-   - Webhook event handler (mapping only)
+    - Domain Audit subscriptions
+   - Webhook event handler (noop or HTTP when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1`)
    - Metrics event handler
+   - Optional domain event outbox drain when `ML_AIR_DOMAIN_EVENT_OUTBOX=1`
 
-No extra process is required for Domain Event delivery today (in-process bus).
+Default delivery is **in-process** (no extra worker). Enable outbox + domain webhook delivery via env flags documented in [Phase 2](./phase-2.md).
 
 ## Add a Domain Event to an existing aggregate
 
@@ -21,6 +22,8 @@ No extra process is required for Domain Event delivery today (in-process bus).
 4. Pass a real DB connection as `session` when a handler must share the transaction (Audit does).
 
 Do **not** call audit repositories, timeline writers, or HTTP webhook clients from the service.
+Pass context via `build_event_context(tenant_id=…, project_id=…)` so Audit inherits the
+request actor (bound by auth middleware / `authenticate_bearer`).
 
 ## Subscribe a new handler
 

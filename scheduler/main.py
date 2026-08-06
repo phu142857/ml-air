@@ -756,6 +756,7 @@ def _maybe_publish_training_completed_scheduler(client: Redis, run_id: str, upda
 
 def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | None = None) -> None:
     updated: tuple | None = None
+    from_status: str | None = None
     with connect(_db_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT status FROM runs WHERE run_id = %s", (run_id,))
@@ -763,6 +764,7 @@ def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | 
             if not row:
                 return
             current_status = row[0]
+            from_status = str(current_status or "").strip().upper()
             if next_status not in RUN_ALLOWED_TRANSITIONS.get(current_status, set()):
                 logger.warning("invalid_run_transition run_id=%s from=%s to=%s", run_id, current_status, next_status)
                 return
@@ -775,6 +777,21 @@ def _transition_run_status(run_id: str, next_status: str, redis_client: Redis | 
                 (next_status, run_id),
             )
             updated = cur.fetchone()
+            if updated and next_status in ("RUNNING", "SUCCESS", "FAILED", "CANCELLED"):
+                try:
+                    from app.domains.orchestration.run_domain_events import publish_run_lifecycle_events
+
+                    publish_run_lifecycle_events(
+                        session=conn,
+                        tenant_id=str(updated[0]),
+                        project_id=str(updated[1]),
+                        run_id=run_id,
+                        pipeline_id=str(updated[6] or ""),
+                        status=str(next_status),
+                        from_status=from_status,
+                    )
+                except Exception:
+                    logger.exception("run_domain_event_publish_failed run_id=%s status=%s", run_id, next_status)
     if updated and next_status in ("SUCCESS", "FAILED", "CANCELLED"):
         try:
             from sdk.usage_cost import rollup_run_usage
@@ -1600,6 +1617,17 @@ def main() -> None:
     next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
+    try:
+        from app.domains.audit.domain_audit_subscriber import start_domain_audit_subscriptions
+        from app.domains.orchestration.metrics_event_subscriber import start_metrics_event_subscriptions
+        from app.domains.orchestration.webhook_event_subscriber import start_webhook_event_subscriptions
+
+        start_domain_audit_subscriptions()
+        start_webhook_event_subscriptions()
+        start_metrics_event_subscriptions()
+        logger.info("scheduler_domain_event_subscribers_started")
+    except Exception:
+        logger.exception("scheduler_domain_event_subscribers_failed")
     from otel_bootstrap import (
         ensure_worker_tracing,
         otel_remote_carrier_from_event,

@@ -19,5 +19,6 @@ class AuditEventHandler(DomainEventHandler):
 
     def handle(self, envelope: EventEnvelope, *, session: Any) -> None:
         row = self._mapper.map(envelope)
+        row["source_domain_event_id"] = envelope.event_id
         self._repository.insert_event(session=session, row=row)
 
