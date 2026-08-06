@@ -55,6 +55,8 @@ Publish sites: `model_registry_service`, `lineage_service`, `readiness_service`,
 | Projections | `projections/projection_subscriber.py` | Timeline, Activity, Dashboard, Statistics, Analytics (`ML_AIR_PROJECTIONS_ENABLED`) |
 | Notification | `projections/notification_subscriber.py` | Outbound webhook (`ML_AIR_NOTIFICATION_DELIVERY`) |
 | Integration | `projections/integration_subscriber.py` | ERP/CRM/CI HTTP (`ML_AIR_INTEGRATION_DELIVERY`) |
+| Retention | `governance/event_retention_service.py` | Purge audit/outbox/projections (`ML_AIR_EVENT_RETENTION_ENABLED`) |
+| SIEM export | `audit/siem_export_service.py` | Push audit JSONL to external sinks (`ML_AIR_SIEM_EXPORT_ENABLED`) |
 
 Dispatch uses shared hardening (timeout, metrics, OTEL): `domain_event_dispatch.py`.
 

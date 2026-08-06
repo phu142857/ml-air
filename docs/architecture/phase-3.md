@@ -100,4 +100,4 @@ Expose qua `GET /v1/runtime-config` → `features.*`.
 
 ## Phase 4+
 
-Governance, Retention, SIEM, Compliance, Security — sau Phase 3.
+Governance, Retention, SIEM, Compliance, Security — xem [Phase 4](./phase-4.md).
