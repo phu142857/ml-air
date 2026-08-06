@@ -30,6 +30,7 @@ Open **http://localhost:8080/login**. Configuration: [configuration.md](./config
 - [Domain Events](./architecture/domain-events.md)
 - [Phase 3 — Read Platform](./architecture/phase-3.md)
 - [Phase 4 — Governance & Enterprise](./architecture/phase-4.md)
+- [Phase 5 — AI Control Plane](./architecture/phase-5.md)
 - [Audit Flow](./architecture/audit-flow.md)
 - [Timeline Flow](./architecture/timeline-flow.md)
 - [Developer Guide](./architecture/developer-guide.md)
