@@ -100,7 +100,7 @@ For Hub UI / semantic realtime webhooks, use [Semantic webhook cookbook](../guid
 | `0049_domain_audit_events` | Domain Audit store |
 | `0050_domain_event_outbox` | Durable outbox |
 | `0051_domain_audit_source_event` | Replay idempotency + handler acks |
-| `0052_domain_webhook_subscriptions` | Domain webhook CRUD + dedupe acks |
+| `0052_domain_webhook_subs` | Domain webhook CRUD + dedupe acks |
 
 ## Tests
 

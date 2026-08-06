@@ -5,7 +5,7 @@ Practical guide for deploying and extending MLAir’s Domain Event / Audit / Tim
 ## Deploy / migrate
 
 1. Run API DB migrations (included in the all-in-one container startup, or via Alembic in API-only setups).
-2. Ensure revisions **`0049_domain_audit_events`** through **`0052_domain_webhook_subscriptions`** (or later) are applied.
+2. Ensure revisions **`0049_domain_audit_events`** through **`0052_domain_webhook_subs`** (or later) are applied.
 3. Start the API. On startup (`app/main.py`), MLAir registers:
     - Domain Audit subscriptions
    - Webhook event handler (noop or HTTP when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1`)

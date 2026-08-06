@@ -52,6 +52,9 @@ Publish sites: `model_registry_service`, `lineage_service`, `readiness_service`,
 | Domain Audit | `audit/domain_audit_subscriber.py` | Inserts `domain_audit_events` |
 | Webhook | `orchestration/webhook_event_subscriber.py` | HTTP when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1` |
 | Metrics | `orchestration/metrics_event_subscriber.py` | Lifecycle Prometheus counters |
+| Projections | `projections/projection_subscriber.py` | Timeline, Activity, Dashboard, Statistics, Analytics (`ML_AIR_PROJECTIONS_ENABLED`) |
+| Notification | `projections/notification_subscriber.py` | Outbound webhook (`ML_AIR_NOTIFICATION_DELIVERY`) |
+| Integration | `projections/integration_subscriber.py` | ERP/CRM/CI HTTP (`ML_AIR_INTEGRATION_DELIVERY`) |
 
 Dispatch uses shared hardening (timeout, metrics, OTEL): `domain_event_dispatch.py`.
 

@@ -28,6 +28,7 @@ Open **http://localhost:8080/login**. Configuration: [configuration.md](./config
 - [Architecture Overview](./architecture/README.md)
 - [Event Flow](./architecture/event-flow.md)
 - [Domain Events](./architecture/domain-events.md)
+- [Phase 3 — Read Platform](./architecture/phase-3.md)
 - [Audit Flow](./architecture/audit-flow.md)
 - [Timeline Flow](./architecture/timeline-flow.md)
 - [Developer Guide](./architecture/developer-guide.md)
