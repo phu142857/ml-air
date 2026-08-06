@@ -1,6 +1,6 @@
 # Event Flow
 
-How Domain Events move from aggregates to subscribers in the **current** codebase.
+How Domain Events move from aggregates to subscribers.
 
 ## Contracts
 
@@ -8,33 +8,32 @@ How Domain Events move from aggregates to subscribers in the **current** codebas
 |------|--------|----------------|
 | `DomainEvent` | `shared/events/domain_event.py` | Immutable business fact (no actor/IP/transport) |
 | `EventContext` | `shared/events/context.py` | Request metadata: tenant, project, actor, correlation, IP, UA |
-| `EventEnvelope` | `shared/events/envelope.py` | Bus-created wrapper: `event_id`, `event_version`, `occurred_at`, event, context |
+| `EventEnvelope` | `shared/events/envelope.py` | Bus wrapper: `event_id`, `event_version`, `occurred_at`, event, context |
 | `DomainEventPublisher` | `shared/events/publisher.py` | Application port: `publish` / `publish_all` |
 | `DomainEventHandler` | `shared/events/handler.py` | Subscriber: `handle(envelope, *, session)` |
-| `AggregateRoot` | `shared/events/aggregate_root.py` | Internal `_events` list + `pull_events()` |
-| `InProcessEventBus` | `shared/events/inprocess_event_bus.py` | Default bus: sync dispatch on the same `session` |
-| `OutboxEventBus` | `shared/events/postgres_outbox_event_bus.py` | Opt-in durable enqueue (`ML_AIR_DOMAIN_EVENT_OUTBOX=1`) |
+| `AggregateRoot` | `shared/events/aggregate_root.py` | Internal `_events` + `pull_events()` |
+| `InProcessEventBus` | `shared/events/inprocess_event_bus.py` | Default: sync dispatch on same `session` |
+| `OutboxEventBus` | `shared/events/postgres_outbox_event_bus.py` | Opt-in durable enqueue |
 
-Obtain the bus with `get_event_bus()` (`shared/events/event_bus_provider.py`). Callers depend on `DomainEventPublisher`, not a concrete bus type.
+Obtain the bus with `get_event_bus()` (`event_bus_provider.py`).
 
-## Runtime path
+## Runtime path (in-process)
 
 ```text
 1. Load or construct AggregateRoot subclass
-2. Invoke business method (emits DomainEvent into aggregate._events)
+2. Invoke business method (emits DomainEvent)
 3. Persist aggregate state (SQL)
 4. events = aggregate.pull_events()
 5. get_event_bus().publish_all(events, context=build_event_context(...), session=conn)
-6. InProcessEventBus wraps each event in EventEnvelope
-7. Each subscribed DomainEventHandler.handle(envelope, session=conn) runs
+6. Bus wraps each event in EventEnvelope
+7. Subscribed DomainEventHandler.handle(envelope, session=conn)
 ```
 
-`build_event_context` reads request-scoped bindings: actor (from `authenticate_bearer`),
-`request_id` / correlation / IP / User-Agent (from HTTP middleware). See [Phase 2 Epic 1](./phase-2.md).
+`build_event_context` reads actor (from `authenticate_bearer`), `request_id`, correlation, IP, and User-Agent from HTTP middleware.
 
-Handlers that write to Postgres (for example Domain Audit) must use the **same** `session`/`conn` so failures roll back with the business write when the connection is transactional.
+Handlers that write to Postgres (Domain Audit) should use the **same** `session`/`conn` so failures roll back with the business write when transactional.
 
-## Aggregates that emit today
+## Aggregates
 
 | Aggregate | Module | Events |
 |-----------|--------|--------|
@@ -44,36 +43,28 @@ Handlers that write to Postgres (for example Domain Audit) must use the **same**
 | `RunAggregate` | `orchestration/run_aggregate.py` | Created, Started, Completed, Failed, Cancelled |
 | `ReadinessAggregate` | `lifecycle/readiness_aggregate.py` | `ReadinessEvaluated` |
 
-Application services that publish after persistence include:
+Publish sites: `model_registry_service`, `lineage_service`, `readiness_service`, `pipeline_version_service`, `run_service`, scheduler run transitions.
 
-- `governance/model_registry_service.py` (create / promote / approval / delete version)
-- `lifecycle/lineage_service.py` (dataset create / delete paths)
-- `lifecycle/readiness_service.py` (readiness evaluation INSERT)
-- `orchestration/pipeline_version_service.py` (create pipeline version)
-- `orchestration/run_service.py` + scheduler `_transition_run_status` (run lifecycle)
-
-## Subscribers registered at API startup
-
-Wired in `app/main.py` `on_startup`:
+## Subscribers (API startup)
 
 | Subscriber | Module | Behavior |
 |------------|--------|----------|
 | Domain Audit | `audit/domain_audit_subscriber.py` | Inserts `domain_audit_events` |
-| Webhook (contracts) | `orchestration/webhook_event_subscriber.py` | Maps to draft; HTTP when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1` |
-| Metrics | `orchestration/metrics_event_subscriber.py` | Increments existing lifecycle Prometheus counters for promote/approval |
+| Webhook | `orchestration/webhook_event_subscriber.py` | HTTP when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1` |
+| Metrics | `orchestration/metrics_event_subscriber.py` | Lifecycle Prometheus counters |
 
-## Invariants for contributors
+Dispatch uses shared hardening (timeout, metrics, OTEL): `domain_event_dispatch.py`.
 
-1. Only aggregates emit Domain Events (`_emit` / business methods).
-2. Application services **publish** events; they must not write Domain Audit rows or mutate Timeline tables directly.
-3. Handlers must not publish additional business Domain Events.
-4. Do not add Service → Audit / Timeline / Webhook HTTP dependencies for domain side effects; extend a handler instead.
-5. Keep Domain Event payloads free of transport and actor fields (actor lives in `EventContext`).
+## Invariants
 
-## Outbox transport (Phase 2 Epic 4)
+1. Only aggregates emit Domain Events.
+2. Application services **publish** only; no direct Audit/Timeline writes.
+3. Handlers must not publish business Domain Events.
+4. Extend handlers for new side effects — not Service → HTTP clients.
+5. Event payloads stay transport-free; actor lives in `EventContext`.
 
-When **`ML_AIR_DOMAIN_EVENT_OUTBOX=1`**, `get_event_bus()` returns `PostgresOutboxEventBus`: envelopes are inserted into **`domain_event_outbox`** in the same DB connection as the business write; a background drain dispatches handlers. Default remains **`InProcessEventBus`** (synchronous, same-transaction Audit).
+## Outbox transport
 
-Replay / list: `GET|POST .../domain-events/outbox` — see [Phase 2 Epic 5](./phase-2.md).
+When **`ML_AIR_DOMAIN_EVENT_OUTBOX=1`**, envelopes persist to **`domain_event_outbox`**; a drain worker dispatches handlers asynchronously. Replay: [Domain Events](./domain-events.md).
 
-Semantic realtime still uses its own optional `semantic_event_outbox` table — independent of Domain Event transport. See [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
+Semantic realtime uses a separate **`semantic_event_outbox`** — see [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).

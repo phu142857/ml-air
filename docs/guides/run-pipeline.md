@@ -47,4 +47,4 @@ You should see a new run with `PENDING` then terminal status, and readable task 
 
 ## Done
 
-You can proceed to [Debug Failure Guide](./debug-failure.md).
+You can proceed to the [Debugging guide](./debugging.md).

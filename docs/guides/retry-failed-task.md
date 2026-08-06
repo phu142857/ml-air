@@ -31,4 +31,4 @@ At least one task has `attempt > 1`, and run reaches success.
 
 ## Done
 
-Continue with [Replay from DLQ](./replay-dlq.md) for terminal failures.
+Continue with [Replay](./replay.md) for terminal failures.

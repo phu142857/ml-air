@@ -62,7 +62,7 @@ mlair run examples/pipeline.custom-plugin.yaml
 |-------|-----|
 | Plugin not in list | Not installed in API env — rebuild image or pip install in container |
 | Validate fails | [Validate a Plugin](./guides/validate-plugin.md) |
-| Task fails at runtime | [Debug a failure](./guides/debug-failure.md) |
+| Task fails at runtime | [Debugging](./guides/debugging.md) |
 | Manifest / signing errors | [Verify manifest](./guides/verify-manifest.md) |
 
 ## Done

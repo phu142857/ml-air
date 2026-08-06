@@ -22,4 +22,4 @@ You can quickly identify unhealthy pipelines and investigate impacted runs.
 
 ## Done
 
-Proceed to [Debug Run in UI](./debug-run-ui.md).
+Proceed to [Debugging](./debugging.md).

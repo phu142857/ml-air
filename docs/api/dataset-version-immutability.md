@@ -1,6 +1,6 @@
 # Dataset version immutability and metadata policy
 
-This document closes the **Phase 1 — Dataset Version Policy → Document immutable fields** checklist item: it states what operators and integrators should treat as **frozen snapshot semantics** vs **additive metadata** on `dataset_versions` rows.
+This document states what operators and integrators should treat as **frozen snapshot semantics** vs **additive metadata** on `dataset_versions` rows.
 
 ## Immutable snapshot semantics (training / audit)
 

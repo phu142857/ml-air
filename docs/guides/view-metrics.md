@@ -121,4 +121,4 @@ Prometheus returns current metric values for MLAir services.
 
 ## Done
 
-Proceed to [Debug with Grafana](./debug-with-grafana.md).
+Proceed to [Debugging](./debugging.md).

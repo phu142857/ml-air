@@ -168,7 +168,7 @@ Task detail → **Resource attribution** section: complete CPU, memory, GPU, and
 
 Dashboard → **Resource attribution** panel (project scope or tenant-wide when project is aggregate).
 
-See also [Monitor a Run](./monitor-run.md) and [Debug Run in UI](./debug-run-ui.md).
+See also [Monitor a Run](./monitor-run.md) and [Debugging](./debugging.md).
 
 ## Troubleshooting
 

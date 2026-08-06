@@ -15,5 +15,5 @@ A **run** is one execution of a pipeline (or a model+dataset trigger) identified
 
 ## Related
 
-- Guides: [Monitor a Run](../guides/monitor-run.md), [Compare Runs](../guides/compare-runs.md), [POST /runs/trigger](../api/post-runs-trigger.md)
+- Guides: [Monitor a Run](../guides/monitor-run.md), [Compare resources](../guides/compare-resources.md), [POST /runs/trigger](../api/post-runs-trigger.md)
 - Concepts: [Pipeline](./pipeline.md), [Task](./task.md), [Lineage](./lineage.md)

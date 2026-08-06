@@ -26,5 +26,5 @@ CLI prints run and task log lines in chronological order for debugging plugins a
 
 ## Done
 
-- [Debug a Failed Task](../guides/debug-failure.md)
+- [Debugging](../guides/debugging.md)
 - [Monitor a Run](../guides/monitor-run.md)

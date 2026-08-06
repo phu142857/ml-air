@@ -165,5 +165,5 @@ Your project now enforces data-readiness gating with auditable per-run condition
 ## Related
 
 - [Dataset Hub and Readiness](./dataset-hub-and-readiness.md)
-- [Model page governance mode](./model-page-governance-mode.md)
+- [Model governance](./model-governance.md)
 - [Configure Data Readiness and Gating](./configure-data-readiness-gating.md) — legacy fallback flags

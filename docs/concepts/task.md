@@ -15,5 +15,5 @@ A **task** is one node execution inside a run (one plugin or HTTP step, one atte
 
 ## Related
 
-- Guides: [Retry a Failed Task](../guides/retry-failed-task.md), [Debug a Failed Task](../guides/debug-failure.md), [External Worker Execution](../guides/external-worker-execution.md)
+- Guides: [Retry a Failed Task](../guides/retry-failed-task.md), [Debugging](../guides/debugging.md), [External Worker Execution](../guides/external-worker-execution.md)
 - Concepts: [Task execution mode](./task-execution-mode.md), [Run](./run.md), [Pipeline](./pipeline.md)

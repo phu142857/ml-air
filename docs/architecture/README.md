@@ -2,32 +2,33 @@
 
 MLAir is an enterprise **AI Control Plane**: it coordinates Models, Datasets, Pipelines, Scheduler/Workers, Registry, and Hub surfaces while preserving accountability, resource history, and tenant/project scope.
 
-This document describes the **current** internal architecture for contributors and deployers. It is not an OpenAPI reference and not a product roadmap.
+This document describes the **current** internal architecture for contributors and deployers. It is not an OpenAPI reference.
 
-## Phase status (Domain Events)
+## Domain Events
 
-**Phase 1:** released. **Phase 2:** complete — see [Phase 2 Roadmap](./phase-2.md).
+| Capability | Default | Opt-in |
+|------------|---------|--------|
+| In-process bus | Yes | — |
+| Domain Audit + API | Yes | — |
+| Timeline from audit metadata | Yes | — |
+| Durable outbox | No | `ML_AIR_DOMAIN_EVENT_OUTBOX=1` |
+| Outbox replay API | When outbox on | — |
+| Domain webhook HTTP | No | `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1` |
+| Handler timeouts / metrics / OTEL | Yes | tune via env |
 
-Shipped:
+Aggregates emit Domain Events; services publish **after** persist. Default path is **`InProcessEventBus`** (synchronous handlers, same DB connection for Audit).
 
-- Aggregates emit Domain Events; services publish **after** persist
-- Domain Audit store + API (`/v1/audit/events`)
-- Timeline projects model-version history from Domain Audit metadata (deletion-safe)
-- Metrics ownership via `MetricsEventHandler` (handler acks for replay idempotency)
-- Domain webhook HTTP delivery when `ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1`
-- Optional durable Domain Event outbox when `ML_AIR_DOMAIN_EVENT_OUTBOX=1` + replay API
-
-Default production path remains **`InProcessEventBus`** (synchronous handlers, same DB connection).
+Operational detail: [Domain Events](./domain-events.md).
 
 ## Design principles
 
 | Principle | Meaning in MLAir |
 |-----------|------------------|
-| Aggregate owns business rules | Lifecycle mutations for ModelVersion, Dataset, and Pipeline emit **Domain Events** from the aggregate |
-| Domain Events for internal side effects | Audit and metrics subscribe to Domain Events — application services do not write those stores for domain accountability. Outbound Domain webhooks are Phase 2 |
+| Aggregate owns business rules | Lifecycle mutations emit **Domain Events** from aggregate methods |
+| Domain Events for side effects | Audit, metrics, and domain webhooks subscribe — services do not write those stores directly |
 | Audit ≠ Timeline | **Audit** answers *who did what?* **Timeline** answers *what happened to this resource?* |
-| Projections are disposable | Timeline (and similar views) can be rebuilt from Domain Audit (+ other sources) without changing aggregates |
-| Transport is swappable | Services publish through `DomainEventPublisher`; the default bus is in-process; an `OutboxEventBus` interface exists for a later durable transport |
+| Projections are disposable | Timeline can be rebuilt from Domain Audit (+ other sources) |
+| Transport is swappable | `DomainEventPublisher` + in-process or outbox bus |
 
 ## High-level layout
 
@@ -38,14 +39,14 @@ HTTP / Hub
 Application services (persist aggregate state)
     │  pull_events() → publish via DomainEventPublisher
     ▼
-Event bus (InProcessEventBus today)
+Event bus (InProcessEventBus default; PostgresOutboxEventBus optional)
     │
     ├── AuditEventHandler      → domain_audit_events
-    ├── MetricsEventHandler    → existing Prometheus counters
-    └── WebhookEventHandler    → mapping/contracts only (no outbound HTTP yet)
+    ├── MetricsEventHandler    → Prometheus lifecycle counters
+    └── WebhookEventHandler    → draft → HTTP when domain webhook delivery on
 
 Timeline API (read projection)
-    └── merges readiness rows + domain_audit_events + run/task snapshots
+    └── readiness rows + domain_audit_events + run/task snapshots
          (model-version kinds: metadata only — no live model_versions JOIN)
 ```
 
@@ -53,28 +54,28 @@ Timeline API (read projection)
 
 | Package | Role |
 |---------|------|
-| `app.domains.shared.events` | Domain Event contracts, envelope, publisher, in-process bus, aggregate root |
+| `app.domains.shared.events` | Contracts, envelope, publisher, buses, dispatch hardening |
 | `app.domains.governance` | Model registry / ModelVersion aggregate |
-| `app.domains.lifecycle` | Datasets, readiness, lineage, Dataset aggregate |
-| `app.domains.orchestration` | Runs, pipelines, Pipeline aggregate; webhook/metrics event handlers |
-| `app.domains.audit` | Domain audit persistence, mapping, query API backing |
-| `app.domains.observability` | Timeline projection, semantic realtime outbox (separate from Domain Event bus) |
+| `app.domains.lifecycle` | Datasets, readiness, lineage |
+| `app.domains.orchestration` | Runs, pipelines; webhook/metrics handlers |
+| `app.domains.audit` | Domain audit persistence and query API |
+| `app.domains.observability` | Timeline projection, semantic realtime outbox |
 
 ## Two event systems (do not confuse them)
 
 | System | Purpose | Entry point |
 |--------|---------|-------------|
-| **Domain Events** | Internal business facts for audit / metrics / (future) domain webhooks | Aggregates + `get_event_bus()` |
-| **Semantic realtime envelopes** | Hub UI Pub/Sub, optional Postgres outbox, semantic webhook subscriptions | `realtime_events.publish_mlair_event` |
+| **Domain Events** | Accountability: audit, metrics, domain webhooks | Aggregates + `get_event_bus()` |
+| **Semantic realtime** | Hub Pub/Sub, semantic outbox, semantic webhook subscriptions | `realtime_events.publish_mlair_event` |
 
-Semantic realtime remains the fan-out path for UI and existing webhook subscriptions. Domain Events are the accountability/projection path for ModelVersion / Dataset / Pipeline lifecycle. See [Event Flow](./event-flow.md) and [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
+See [Event Flow](./event-flow.md) and [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
 
 ## Related docs
 
 - [Event Flow](./event-flow.md)
+- [Domain Events](./domain-events.md)
 - [Audit Flow](./audit-flow.md)
 - [Timeline Flow](./timeline-flow.md)
 - [Developer Guide](./developer-guide.md)
-- Deploy: [Production deployment](../runbooks/production-deployment.md)
-- Production baseline topology: [ARCHITECTURE.md](../../ARCHITECTURE.md)
-- [Phase 2 Roadmap](./phase-2.md)
+- [Production deployment](../runbooks/production-deployment.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md) — full platform topology

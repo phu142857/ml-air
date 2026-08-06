@@ -30,4 +30,4 @@ Metrics, params, and artifact metadata are attached to run tasks.
 
 ## Done
 
-Continue with [Compare Runs](./compare-runs.md).
+Continue with [Compare resources](./compare-resources.md).

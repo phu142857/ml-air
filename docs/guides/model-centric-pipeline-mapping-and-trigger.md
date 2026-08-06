@@ -107,7 +107,7 @@ Content-Type: application/json
 
 ### Optional: HTTP notify after promote
 
-After a successful **`POST .../models/{model_id}/promote`**, MLAir may call a **downstream** URL you configure. Full contract (headers, JSON schema, when the call is skipped, idempotency, SLA): **[Downstream model promote webhook](./downstream-model-promote-webhook.md)**. Env summary: [Promote a model](./promote-model.md).
+After a successful **`POST .../models/{model_id}/promote`**, MLAir may call a **downstream** URL you configure. Full contract (headers, JSON schema, when the call is skipped, idempotency, SLA): **[Downstream model promote webhook](./downstream-model-promote-webhook.md)**. Env summary: [Model governance](./model-governance.md).
 
 ## Auto-retrain trigger controller (scheduler)
 
@@ -233,7 +233,7 @@ curl -sS -X POST "$API/v1/tenants/$TENANT/projects/$PROJECT/runs/trigger" \
 - [Manage Datasets and Train from Model](./manage-datasets-and-train-from-model.md) — dataset quality, upload, and UI train rules.
 - [Configure Data Readiness and Gating](./configure-data-readiness-gating.md) — how gates use `inputs[].dataset`.
 - [POST /runs/trigger](../api/post-runs-trigger.md) — request/response reference for this endpoint.
-- [Promote a Model](./promote-model.md) — stage transitions + optional promote webhook.
+- [Model governance](./model-governance.md) — stage transitions + webhooks.
 - [Downstream model promote webhook](./downstream-model-promote-webhook.md) — full outbound JSON contract.
 - [End-to-end: control plane + external executor](./downstream-executor-control-plane.md) — full integration narrative.
 - [External Worker Execution](./external-worker-execution.md) — lease / complete flow for executors consuming `plugin_context`.

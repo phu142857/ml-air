@@ -319,7 +319,7 @@ Model detail is governance-only (status, policy, approvals, versions). Dataset u
 
 See:
 
-- [Model page governance mode](./model-page-governance-mode.md)
+- [Model governance](./model-governance.md)
 - [Dataset Hub and Readiness](./dataset-hub-and-readiness.md)
 
 ## Deploy and Verification Checklist

@@ -32,4 +32,4 @@ Separate from manifest signing; used when **`ML_AIR_SEMANTIC_EVENT_SIGNING=1`**.
 
 ## Done
 
-Finalize rollout with [Replay Security Checks](./replay-security.md). Production checklist: [Production maturity](./production-maturity.md).
+Finalize rollout with [Replay](./replay.md) (manifest validation). Production checklist: [Production maturity](./production-maturity.md).

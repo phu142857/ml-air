@@ -39,7 +39,7 @@ Sign in at `/login` first if the Hub redirects unauthenticated users.
 
 ## Re-run from a task
 
-On a **task** step (waterfall or span actions menu), choose **Re-run from task**. Hub calls `POST .../runs/{run_id}/replay` with `from_task_id` and navigates to the new replay run. Requires a pinned tenant/project scope. See [Replay a task](./replay-task.md) and [Partial replay](./partial-replay.md).
+On a **task** step (waterfall or span actions menu), choose **Re-run from task**. Hub calls `POST .../runs/{run_id}/replay` with `from_task_id` and navigates to the new replay run. Requires a pinned tenant/project scope. See [Replay](./replay.md).
 
 ## Export and share
 
@@ -79,6 +79,6 @@ You can correlate Hub runs with OTLP spans in one waterfall and export traces fo
 
 ## Done
 
-- [Debug a run in the UI](./debug-run-ui.md)
+- [Debugging](./debugging.md)
 - [Monitor a run](./monitor-run.md)
 - [SLO/SLA incident runbook](../troubleshooting/slo-sla-incident.md) (uses `trace_id` in logs)

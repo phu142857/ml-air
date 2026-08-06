@@ -1,30 +1,27 @@
 # Lifecycle webhook (training completed / failed)
 
-## Phase 1 status
+## Recommended: semantic webhooks
 
-`notify_lifecycle_webhook` is **not auto-invoked** from run status transitions after
-the Domain Event cutover. Configuring `ML_AIR_LIFECYCLE_WEBHOOK_*` alone does not
-fire HTTP callbacks today.
+Subscribe to `training.completed` / `training.failed` via [Semantic webhook cookbook](./semantic-webhook-cookbook.md). This is the supported path for Hub realtime and outbound HTTP today.
 
-**Use instead (current):** semantic webhook subscriptions on `training.completed` /
-`training.failed` — see [Semantic webhook cookbook](./semantic-webhook-cookbook.md)
-and [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
+See [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
 
-The helper in `lifecycle_webhook_service.py` remains as the HTTP implementation for a
-future Domain Event webhook sink (Phase 2).
+## Domain Event webhooks
 
----
+For lifecycle accountability actions (run.*, model_version.*, etc.), use [Domain webhook delivery](../architecture/domain-events.md#domain-webhook-delivery) (`ML_AIR_DOMAIN_WEBHOOK_DELIVERY=1`).
 
-## Environment (reserved / Phase 2)
+## Legacy env webhook (`ML_AIR_LIFECYCLE_WEBHOOK_*`)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ML_AIR_LIFECYCLE_WEBHOOK_URL` | Yes | POST target |
-| `ML_AIR_LIFECYCLE_WEBHOOK_HMAC_SECRET` | No | When set, sends `X-MLAir-Signature: sha256=<hex>` |
-| `ML_AIR_LIFECYCLE_WEBHOOK_BEARER_TOKEN` | No | Optional `Authorization: Bearer …` |
-| `ML_AIR_LIFECYCLE_WEBHOOK_TIMEOUT_SECONDS` | No | Default `15` |
+`notify_lifecycle_webhook` is **not** auto-invoked from run transitions. Configuring `ML_AIR_LIFECYCLE_WEBHOOK_*` alone does not fire HTTP callbacks.
 
-## Intended payload (when re-wired)
+| Variable | Description |
+|----------|-------------|
+| `ML_AIR_LIFECYCLE_WEBHOOK_URL` | POST target (when re-wired) |
+| `ML_AIR_LIFECYCLE_WEBHOOK_HMAC_SECRET` | `X-MLAir-Signature: sha256=<hex>` |
+| `ML_AIR_LIFECYCLE_WEBHOOK_BEARER_TOKEN` | Optional bearer |
+| `ML_AIR_LIFECYCLE_WEBHOOK_TIMEOUT_SECONDS` | Default `15` |
+
+### Intended payload (reference)
 
 ```json
 {

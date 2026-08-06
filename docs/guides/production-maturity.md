@@ -1,4 +1,4 @@
-# Production maturity (Phase 10)
+# Production maturity
 
 Operational hardening for MLAir core (API, scheduler, executor, Hub). Integrator apps are out of scope.
 

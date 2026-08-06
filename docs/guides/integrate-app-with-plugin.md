@@ -38,4 +38,4 @@ App logic runs inside MLAir task lifecycle with retries, logs, and lineage.
 
 ## Done
 
-Continue with [Debug a Failed Task](./debug-failure.md).
+Continue with [Debugging](./debugging.md).

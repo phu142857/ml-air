@@ -31,4 +31,4 @@ A new model version is registered and ready for stage transition.
 
 ## Done
 
-Continue with [Promote a Model](./promote-model.md).
+Continue with [Model governance](./model-governance.md).

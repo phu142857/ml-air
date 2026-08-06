@@ -20,15 +20,16 @@ Table: `domain_audit_events`
 | `target_type`, `target_id` | Resource pointer |
 | `ip`, `user_agent`, `correlation_id` | Request context |
 | `metadata` | JSONB payload from the Domain Event |
+| `source_domain_event_id` | Idempotency key for outbox replay (optional) |
 
 ## Write path
 
 ```text
-DomainEvent published on InProcessEventBus
+DomainEvent published (in-process or via outbox drain)
     → AuditEventHandler
-        → AuditEventMapper.map(envelope) → row dict
+        → AuditEventMapper.map(envelope) → row dict (+ source_domain_event_id)
         → DomainAuditRepository.insert_event(session=..., row=...)
-        → INSERT domain_audit_events (same DB connection as publish)
+        → INSERT domain_audit_events
 ```
 
 | Component | Module |

@@ -31,4 +31,4 @@ A new `version_id` is created and can be selected for future runs.
 
 ## Done
 
-Use [Compare Pipeline Versions](./compare-pipeline-versions.md) before promotion.
+Use [Compare resources](./compare-resources.md) before promotion.

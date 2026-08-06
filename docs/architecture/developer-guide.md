@@ -12,7 +12,7 @@ Practical guide for deploying and extending MLAir’s Domain Event / Audit / Tim
    - Metrics event handler
    - Optional domain event outbox drain when `ML_AIR_DOMAIN_EVENT_OUTBOX=1`
 
-Default delivery is **in-process** (no extra worker). Enable outbox + domain webhook delivery via env flags documented in [Phase 2](./phase-2.md).
+Default delivery is **in-process** (no extra worker). Enable outbox + domain webhook delivery via [Domain Events](./domain-events.md).
 
 ## Add a Domain Event to an existing aggregate
 
@@ -59,6 +59,8 @@ From repo root with `PYTHONPATH` set to `api` (or your package layout):
 ```bash
 PYTHONPATH=api python -m pytest \
   api/tests/test_domain_event_foundation.py \
+  api/tests/test_domain_event_outbox.py \
+  api/tests/test_event_context_actor_propagation.py \
   api/tests/test_core_aggregates_domain_events.py \
   api/tests/test_domain_audit_repository.py \
   api/tests/test_domain_audit_api_integration.py \
@@ -99,4 +101,5 @@ PYTHONPATH=api python -m pytest \
 - [Event Flow](./event-flow.md)
 - [Audit Flow](./audit-flow.md)
 - [Timeline Flow](./timeline-flow.md)
+- [Domain Events](./domain-events.md)
 - Semantic UI realtime (separate): [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md)

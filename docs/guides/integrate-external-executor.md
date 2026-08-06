@@ -42,7 +42,7 @@ For a single narrative from mapping → trigger → lease → complete → optio
 
 ## Optional: promote webhook
 
-If your executor or serving layer should reload when a model version is promoted, configure **`MLAIR_MODEL_PROMOTE_*`** on the API (see [Promote a model](./promote-model.md)).
+If your executor or serving layer should reload when a model version is promoted, configure **`MLAIR_MODEL_PROMOTE_*`** on the API (see [Model governance](./model-governance.md)).
 
 ## Done
 
