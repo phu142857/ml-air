@@ -13,6 +13,34 @@ from datetime import datetime
 from typing import Any, Iterable
 
 
+def actor_fields_for_payload(
+    *,
+    actor_kind: str | None = None,
+    actor_id: str | None = None,
+    actor_name: str | None = None,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Actor metadata embedded in timeline payload for Event Explorer."""
+    out: dict[str, Any] = {}
+    if actor_kind or actor_id or actor_name:
+        kind = str(actor_kind or "system").strip().lower()
+        out["actor_kind"] = kind
+        out["actor_type"] = kind
+        if actor_id:
+            out["actor_id"] = actor_id
+        if actor_name:
+            out["actor_name"] = actor_name
+    if correlation_id:
+        out["correlation_id"] = correlation_id
+    return out
+
+
+def merge_timeline_payload(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    merged.update({k: v for k, v in extra.items() if v is not None})
+    return merged
+
+
 def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any] | None:
     """Map a Domain Audit row to a timeline item using metadata only.
 
@@ -26,6 +54,12 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
     model_id = meta.get("model_id")
     version_id = meta.get("model_version_id")
     version = meta.get("version")
+    actor_extra = actor_fields_for_payload(
+        actor_kind=row.get("actor_kind"),
+        actor_id=row.get("actor_id"),
+        actor_name=row.get("actor_name"),
+        correlation_id=row.get("correlation_id"),
+    )
 
     if action == "model_version.created":
         return {
@@ -34,11 +68,14 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "model",
             "resource_id": str(model_id or ""),
             "source": None,
-            "payload": {
+            "payload": merge_timeline_payload(
+                {
                 "version_id": version_id,
                 "version": version,
                 "stage": meta.get("stage"),
-            },
+                },
+                actor_extra,
+            ),
         }
     if action in ("model_version.approved", "model_version.rejected"):
         return {
@@ -47,12 +84,15 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "model",
             "resource_id": str(model_id or ""),
             "source": None,
-            "payload": {
-                "version_id": version_id,
-                "version": version,
-                "approval_status": "approved" if action == "model_version.approved" else "rejected",
-                "approval_reason": meta.get("reason"),
-            },
+            "payload": merge_timeline_payload(
+                {
+                    "version_id": version_id,
+                    "version": version,
+                    "approval_status": "approved" if action == "model_version.approved" else "rejected",
+                    "approval_reason": meta.get("reason"),
+                },
+                actor_extra,
+            ),
         }
     if action in ("model_version.promoted", "model_version.rollback"):
         return {
@@ -61,11 +101,14 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "model",
             "resource_id": str(model_id or ""),
             "source": None,
-            "payload": {
-                "version_id": version_id,
-                "version": version,
-                "stage": meta.get("to_stage"),
-            },
+            "payload": merge_timeline_payload(
+                {
+                    "version_id": version_id,
+                    "version": version,
+                    "stage": meta.get("to_stage"),
+                },
+                actor_extra,
+            ),
         }
     if action == "model_version.deleted":
         return {
@@ -74,10 +117,13 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "model",
             "resource_id": str(model_id or ""),
             "source": None,
-            "payload": {
-                "version_id": version_id,
-                "version": version,
-            },
+            "payload": merge_timeline_payload(
+                {
+                    "version_id": version_id,
+                    "version": version,
+                },
+                actor_extra,
+            ),
         }
     if action == "dataset.created":
         return {
@@ -86,7 +132,10 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "dataset",
             "resource_id": str(meta.get("dataset_id") or ""),
             "source": None,
-            "payload": {"dataset_id": meta.get("dataset_id"), "name": meta.get("name")},
+            "payload": merge_timeline_payload(
+                {"dataset_id": meta.get("dataset_id"), "name": meta.get("name")},
+                actor_extra,
+            ),
         }
     if action == "dataset.deleted":
         return {
@@ -95,7 +144,10 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "dataset",
             "resource_id": str(meta.get("dataset_id") or ""),
             "source": None,
-            "payload": {"dataset_id": meta.get("dataset_id"), "name": meta.get("name")},
+            "payload": merge_timeline_payload(
+                {"dataset_id": meta.get("dataset_id"), "name": meta.get("name")},
+                actor_extra,
+            ),
         }
     if action == "pipeline_version.created":
         return {
@@ -104,11 +156,14 @@ def project_domain_audit_to_timeline_item(row: dict[str, Any]) -> dict[str, Any]
             "resource_type": "pipeline",
             "resource_id": str(meta.get("pipeline_id") or ""),
             "source": None,
-            "payload": {
-                "pipeline_version_id": meta.get("pipeline_version_id"),
-                "version": meta.get("version"),
-                "pipeline_id": meta.get("pipeline_id"),
-            },
+            "payload": merge_timeline_payload(
+                {
+                    "pipeline_version_id": meta.get("pipeline_version_id"),
+                    "version": meta.get("version"),
+                    "pipeline_id": meta.get("pipeline_id"),
+                },
+                actor_extra,
+            ),
         }
     return None
 

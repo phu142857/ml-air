@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchAuditTimeline, fetchAuditTimelinePage, fetchRuns } from "@/lib/api"
 import { mapAuditTimelineItems, type AuditEvent } from "@/lib/audit-event"
+import { computeEventStats } from "@/lib/event-explorer"
 import { mlairKeys } from "@/lib/query-keys"
 import { useAppContext } from "@/lib/app-context"
 import { useToast } from "@/hooks/use-toast"
@@ -25,16 +26,12 @@ export interface LifecycleStats {
   successCount: number
   failedCount: number
   warningCount: number
-  withTraces: number
-  tracePercent: number
-}
-
-export interface RecentTrace {
-  id: string
-  title: string
-  status: string
-  timestamp: string
-  isNew: boolean
+  runningCount: number
+  uniqueActors: number
+  datasets: number
+  models: number
+  runs: number
+  avgProcessingMs: number | null
 }
 
 function parseApiErrorStatus(err: unknown): number | undefined {
@@ -60,7 +57,6 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
   const scopePinned = tenantId !== "all" && projectId !== "all"
   const enabled = Boolean(token?.trim())
 
-  const [isLive, setIsLive] = useState(true)
   const [newEventIds, setNewEventIds] = useState<Set<string>>(new Set())
   const prevIdsRef = useRef<Set<string>>(new Set())
   const hasSeededRef = useRef(false)
@@ -85,7 +81,7 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
     enabled: enabled && scopePinned,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
-    refetchInterval: isLive && enabled && scopePinned ? poll.refetchInterval : false,
+    refetchInterval: enabled && scopePinned ? poll.refetchInterval : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: 2,
   })
@@ -103,7 +99,7 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
     enabled: enabled && !scopePinned,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
-    refetchInterval: isLive && enabled && !scopePinned ? poll.refetchInterval : false,
+    refetchInterval: enabled && !scopePinned ? poll.refetchInterval : false,
     refetchOnWindowFocus: poll.refetchOnWindowFocus,
     retry: 2,
   })
@@ -153,14 +149,14 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
     if (fresh.size === 0) return
     setNewEventIds((prev) => new Set([...prev, ...fresh]))
     const first = data.find((e) => fresh.has(e.id))
-    if (first && isLive) {
+    if (first) {
       toast({
         title: "New lifecycle event",
-        description: first.title,
+        description: first.sentence || first.title,
         className: "bg-card border-border text-foreground",
       })
     }
-  }, [events, isLive, toast])
+  }, [events, toast])
 
   const errorType: ErrorType = useMemo(() => {
     if (scopePinned) {
@@ -203,36 +199,7 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
     ],
   )
 
-  const stats: LifecycleStats = useMemo(() => {
-    const total = events.length
-    const successCount = events.filter((e) => e.status === "success").length
-    const failedCount = events.filter((e) => e.status === "failed").length
-    const warningCount = events.filter((e) => e.severity === "warning" || e.severity === "error").length
-    const withTraces = events.filter((e) => e.traceId).length
-    return {
-      total,
-      successCount,
-      failedCount,
-      warningCount,
-      withTraces,
-      tracePercent: total > 0 ? Math.round((withTraces / total) * 100) : 0,
-    }
-  }, [events])
-
-  const recentTraces: RecentTrace[] = useMemo(
-    () =>
-      events
-        .filter((e) => e.traceId)
-        .slice(0, 5)
-        .map((e) => ({
-          id: e.traceId!,
-          title: e.title,
-          status: e.status,
-          timestamp: e.timestamp,
-          isNew: newEventIds.has(e.id),
-        })),
-    [events, newEventIds],
-  )
+  const stats: LifecycleStats = useMemo(() => computeEventStats(events), [events])
 
   const activeRunsCount = useMemo(() => {
     return (runsQuery.data?.items ?? []).filter((r) => normalizeStatus(r.status) === "RUNNING").length
@@ -243,39 +210,16 @@ export function useLifecycle(_options: UseLifecycleOptions = {}) {
     queryClient.invalidateQueries({ queryKey: mlairKeys.runs.list(tenantId, projectId), exact: false })
   }, [queryClient, tenantId, projectId])
 
-  const toggleLive = useCallback(() => {
-    setIsLive((prev) => {
-      const next = !prev
-      if (next) {
-        toast({
-          title: "Live updates enabled",
-          description: "Timeline refreshes from the audit API on an interval.",
-          className: "bg-card border-border text-foreground",
-        })
-      } else {
-        toast({
-          title: "Live updates disabled",
-          description: "Timeline will no longer auto-refresh.",
-          className: "bg-card border-border text-foreground",
-        })
-      }
-      return next
-    })
-  }, [toast])
-
   return {
     events,
     stats,
-    recentTraces,
     activeRunsCount,
     fetchState,
     isLoading,
     isRefreshing,
-    isLive,
     newEventIds,
     scopePinned,
     refresh,
-    toggleLive,
     fetchNextPage: scopePinned ? infiniteLifecycleQuery.fetchNextPage : undefined,
     hasNextPage: scopePinned ? infiniteLifecycleQuery.hasNextPage : false,
     isFetchingNextPage: scopePinned ? infiniteLifecycleQuery.isFetchingNextPage : false,

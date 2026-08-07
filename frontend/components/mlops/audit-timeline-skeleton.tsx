@@ -8,179 +8,134 @@ interface AuditTimelineSkeletonProps {
   className?: string
 }
 
+const RAIL = 28
+
 function TimelineItemSkeleton({ isLast }: { isLast: boolean }) {
   return (
-    <div className="relative flex gap-4 pb-6 last:pb-0">
-      {/* Timeline line */}
-      {!isLast && (
-        <div className="absolute left-[19px] top-10 bottom-0 w-px bg-muted" />
+    <li
+      className="relative grid items-start gap-x-3"
+      style={{ gridTemplateColumns: `${RAIL}px minmax(0, 1fr)` }}
+    >
+      {!isLast ? (
+        <div
+          className="pointer-events-none absolute inset-y-0 w-px bg-border"
+          style={{ left: RAIL / 2 - 0.5 }}
+          aria-hidden
+        />
+      ) : (
+        <div
+          className="pointer-events-none absolute top-0 w-px bg-border"
+          style={{ left: RAIL / 2 - 0.5, height: 16 }}
+          aria-hidden
+        />
       )}
-      
-      {/* Event icon skeleton */}
-      <Skeleton className="relative z-10 h-10 w-10 shrink-0 rounded-full bg-muted" />
-      
-      {/* Event content skeleton */}
-      <div className="flex-1 min-w-0">
-        <div className="panel-surface p-3">
-          {/* Header */}
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0 space-y-2">
-              {/* Title row */}
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-48 bg-muted" />
-                <Skeleton className="h-5 w-16 rounded-full bg-muted" />
-              </div>
-              {/* Description */}
-              <Skeleton className="h-3 w-72 bg-muted/70" />
-            </div>
-            
-            {/* Timestamp and chevron */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex flex-col items-end gap-1">
-                <Skeleton className="h-3 w-24 bg-muted/80" />
-                <Skeleton className="h-3 w-16 bg-muted/80" />
-              </div>
-              <Skeleton className="h-4 w-4 bg-muted/80" />
-            </div>
+
+      <div className="relative z-10 flex justify-center">
+        <Skeleton className="size-7 rounded-full" />
+      </div>
+
+      <div className="min-w-0 pb-6">
+        <div className="w-full rounded-md border border-border bg-card px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-6 rounded-full" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="ml-auto h-3 w-14" />
           </div>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <Skeleton className="h-4 w-3/5 max-w-sm" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+          <Skeleton className="mt-2 h-3 w-32" />
         </div>
       </div>
-    </div>
+    </li>
   )
 }
 
 export function AuditTimelineSkeleton({ count = 5, className }: AuditTimelineSkeletonProps) {
   return (
-    <div className={cn("relative", className)}>
-      {Array.from({ length: count }).map((_, index) => (
-        <TimelineItemSkeleton key={index} isLast={index === count - 1} />
-      ))}
+    <div className={cn("relative w-full", className)}>
+      <div
+        className="mb-3 grid items-center gap-x-3"
+        style={{ gridTemplateColumns: `${RAIL}px minmax(0, 1fr)` }}
+      >
+        <div aria-hidden />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <ul className="list-none">
+        {Array.from({ length: count }).map((_, index) => (
+          <TimelineItemSkeleton key={index} isLast={index === count - 1} />
+        ))}
+      </ul>
     </div>
   )
 }
 
-// Stats cards skeleton
 export function StatsCardsSkeleton() {
   return (
-    <div className="grid grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
-          <div className="rounded-[calc(var(--radius)+2px)] bg-card p-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <Skeleton className="h-2.5 w-20 bg-muted" />
-                <Skeleton className="h-7 w-12 bg-muted" />
-              </div>
-              <Skeleton className="h-10 w-10 rounded-lg bg-muted" />
-            </div>
-          </div>
+        <div key={index} className="rounded-md border border-border bg-card px-3 py-2">
+          <Skeleton className="h-2.5 w-16" />
+          <Skeleton className="mt-2 h-6 w-10" />
         </div>
       ))}
     </div>
   )
 }
 
-// Sidebar skeleton
 export function TraceSidebarSkeleton() {
   return (
-    <div className="space-y-4">
-      {/* Recent traces skeleton */}
-      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
-        <div className="rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-4 bg-muted" />
-            <Skeleton className="h-4 w-24 bg-muted" />
+    <div className="space-y-4 p-4">
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-4/5" />
+      <div className="space-y-2 pt-2">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="flex justify-between gap-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-24" />
           </div>
-          <Skeleton className="h-3 w-44 bg-muted/70" />
-          
-          <div className="space-y-2 pt-2">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="rounded-md bg-background border border-border p-3 space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <Skeleton className="h-3.5 w-3.5 rounded-full bg-muted" />
-                  <Skeleton className="h-3 w-28 bg-muted" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-2.5 w-24 bg-muted/80" />
-                  <Skeleton className="h-5 w-14 rounded bg-primary/10" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      
-      {/* Trace analytics skeleton */}
-      <div className="rounded-2xl bg-muted/40 p-1 ring-1 ring-border/60">
-        <div className="rounded-[calc(var(--radius)+2px)] bg-card p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-4 bg-muted" />
-            <Skeleton className="h-4 w-28 bg-muted" />
-          </div>
-          
-          <div className="space-y-2 pt-2">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                <Skeleton className="h-3 w-24 bg-muted/80" />
-                <Skeleton className="h-4 w-8 bg-muted" />
-              </div>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   )
 }
 
-// Full page skeleton combining all elements
 export function LifecyclePageSkeleton() {
   return (
-    <div className="flex h-full flex-col">
-      {/* Page header skeleton */}
-      <div className="border-b border-border/70 bg-background/60 px-4 py-4 sm:px-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-border px-4 py-4 sm:px-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-lg bg-muted" />
-            <div className="space-y-1.5">
-              <Skeleton className="h-5 w-32 bg-muted" />
-              <Skeleton className="h-3 w-56 bg-muted/70" />
-            </div>
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <Skeleton className="h-5 w-32" />
           </div>
           <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-32 rounded-md bg-primary/10" />
-            <Skeleton className="h-8 w-20 rounded-md bg-muted" />
-            <Skeleton className="h-8 w-20 rounded-md bg-muted" />
+            <Skeleton className="h-8 w-16 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
           </div>
         </div>
       </div>
-      
-      {/* Stats skeleton */}
-      <div className="page-toolbar">
+
+      <div className="page-toolbar shrink-0 space-y-3">
         <StatsCardsSkeleton />
-      </div>
-      
-      {/* Filters toolbar skeleton */}
-      <div className="page-toolbar">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-8 w-64 rounded-md bg-muted" />
-            <Skeleton className="h-8 w-24 rounded-md bg-muted" />
-            <Skeleton className="h-8 w-24 rounded-md bg-muted" />
-            <Skeleton className="h-8 w-24 rounded-md bg-muted" />
-          </div>
-          <Skeleton className="h-4 w-36 bg-muted/80" />
+        <Skeleton className="h-9 w-full max-w-xl rounded-md" />
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-8 w-28 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
         </div>
       </div>
-      
-      {/* Main content skeleton */}
-      <div className="flex-1 overflow-auto">
-        <div className="flex h-full">
-          <div className="flex-1 p-6 overflow-auto">
-            <AuditTimelineSkeleton count={6} />
-          </div>
-          <div className="w-80 border-l border-border surface-muted p-4 overflow-auto">
-            <TraceSidebarSkeleton />
-          </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden px-4 py-4 sm:px-6 min-[1200px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="scroll-region min-h-0">
+          <AuditTimelineSkeleton count={6} />
+        </div>
+        <div className="min-h-0 overflow-hidden rounded-md border border-border bg-card">
+          <TraceSidebarSkeleton />
         </div>
       </div>
     </div>

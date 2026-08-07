@@ -163,7 +163,6 @@ function keysProjectObservabilitySurfaces(tenantId: string, projectId: string): 
   return [
     [...mlairKeys.audit.timeline(tenantId, projectId)],
     [...mlairKeys.projections.dashboard(tenantId, projectId)],
-    [...mlairKeys.projections.activity(tenantId, projectId)],
     ["trace-list", tenantId, projectId],
     ["trace-detail", tenantId, projectId],
   ];

@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Activity,
   Bot,
   Database,
   DollarSign,
@@ -34,7 +33,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { cn } from "@/lib/utils"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
 import { hasAnyControlPlaneSurface, useControlPlaneFeatures } from "@/lib/use-control-plane-features"
 import { getRuntimeConfig } from "@/lib/runtime-config"
@@ -47,7 +45,6 @@ type NavItem = {
 
 const lifecycleNav: NavItem[] = [
   { title: "Datasets", href: "/datasets", icon: Database },
-  { title: "Activity", href: "/activity", icon: Activity },
   { title: "Lifecycle", href: "/lifecycle", icon: History },
   { title: "Traces", href: "/traces", icon: Route },
   { title: "Models", href: "/models", icon: Box },
@@ -96,25 +93,9 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton asChild isActive={isActive}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-default",
-                      isActive
-                        ? "nav-active-rail bg-sidebar-accent text-foreground"
-                        : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-                    )}
-                  >
-                    <item.icon
-                      strokeWidth={1.75}
-                      className={cn(
-                        "h-4 w-4 shrink-0 transition-default",
-                        isActive
-                          ? "text-primary"
-                          : "text-muted-foreground group-hover:text-foreground",
-                      )}
-                    />
+                <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                  <Link href={item.href}>
+                    <item.icon strokeWidth={1.75} />
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
@@ -135,11 +116,14 @@ export function AppSidebar() {
   const showControlPlaneNav = hasAnyControlPlaneSurface(cpFlags) || controlPlaneNav.length > 0
   const showDistributedNav = distributedNav.length > 0
   return (
-    <Sidebar className="border-r border-sidebar-border bg-sidebar">
-      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-        <Link href="/datasets" className="group flex min-w-0 items-center gap-2.5">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
+      <SidebarHeader className="border-b border-sidebar-border px-3 py-4 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
+        <Link
+          href="/datasets"
+          className="flex min-w-0 items-center gap-2.5 group-data-[collapsible=icon]:justify-center"
+        >
           <MlairLogo size="sm" className="shrink-0" alt="" />
-          <div className="flex min-w-0 flex-col">
+          <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-heading truncate text-sm font-semibold tracking-tight text-foreground">
               MLAir Hub
             </span>

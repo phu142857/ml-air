@@ -936,20 +936,6 @@ export type DashboardProjectionResponse = {
   updated_at: string | null;
 };
 
-export type ActivityFeedItem = {
-  id: string;
-  ts: string | null;
-  scope_type: string;
-  scope_id: string | null;
-  verb: string;
-  actor_kind: string;
-  actor_id: string | null;
-  actor_name: string | null;
-  title: string;
-  summary: string;
-  metadata: Record<string, unknown>;
-};
-
 export type TraceDetailRun = {
   run_id: string;
   pipeline_id: string;
@@ -1328,59 +1314,6 @@ export async function fetchDashboardProjection(
   return {
     snapshot: data.snapshot ?? {},
     updated_at: data.updated_at ?? null,
-  };
-}
-
-async function fetchActivityFeedForScope(
-  tenantId: string,
-  projectId: string,
-  token: string,
-  opts?: { limit?: number; cursor?: string | null; scopeType?: string | null },
-): Promise<{ items: ActivityFeedItem[]; has_more?: boolean; next_cursor?: string | null }> {
-  const scopedProjectId = normalizeProjectId(projectId);
-  const lim = Math.min(200, Math.max(1, opts?.limit ?? 25));
-  const p = new URLSearchParams();
-  p.set("limit", String(lim));
-  if (opts?.cursor) p.set("cursor", opts.cursor);
-  const scope = (opts?.scopeType || "").trim().toLowerCase();
-  if (scope && scope !== "all") p.set("scope_type", scope);
-  const res = await fetch(
-    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/projections/activity?${p.toString()}`,
-    {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      cache: "no-store",
-    },
-  );
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Activity feed failed (${res.status})`);
-  }
-  const data = (await res.json()) as {
-    items?: unknown;
-    has_more?: boolean;
-    next_cursor?: string | null;
-  };
-  const rawItems = data.items;
-  const items = Array.isArray(rawItems) ? (rawItems as ActivityFeedItem[]) : [];
-  return {
-    items,
-    has_more: Boolean(data.has_more),
-    next_cursor: data.next_cursor ?? null,
-  };
-}
-
-export async function fetchActivityFeedPage(
-  tenantId: string,
-  projectId: string,
-  token: string,
-  opts?: { limit?: number; cursor?: string | null; scopeType?: string | null },
-): Promise<CursorPage<ActivityFeedItem>> {
-  const page = await fetchActivityFeedForScope(tenantId, projectId, token, opts);
-  return {
-    items: page.items,
-    limit: opts?.limit ?? 25,
-    has_more: Boolean(page.has_more),
-    next_cursor: page.next_cursor ?? null,
   };
 }
 

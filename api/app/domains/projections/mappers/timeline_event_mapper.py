@@ -15,7 +15,11 @@ from app.domains.governance.model_version_aggregate import (
 )
 from app.domains.lifecycle.dataset_aggregate import DatasetCreated, DatasetDeleted
 from app.domains.lifecycle.readiness_aggregate import ReadinessEvaluated
-from app.domains.observability.timeline_adapter import project_domain_audit_to_timeline_item
+from app.domains.observability.timeline_adapter import (
+    actor_fields_for_payload,
+    merge_timeline_payload,
+    project_domain_audit_to_timeline_item,
+)
 from app.domains.orchestration.pipeline_aggregate import PipelineVersionCreated
 from app.domains.orchestration.run_aggregate import (
     RunCancelled,
@@ -36,10 +40,15 @@ def map_envelope_to_timeline_item(envelope: EventEnvelope) -> dict[str, Any] | N
     ev = envelope.event
 
     if isinstance(ev, (ModelVersionCreated, ModelVersionApproved, ModelVersionRejected, ModelVersionPromoted, ModelVersionRollback, ModelVersionDeleted)):
+        actor = ctx.actor
         row = {
             "occurred_at": envelope.occurred_at,
             "action": _audit_action(ev),
             "metadata": asdict(ev),
+            "actor_kind": str(actor.actor_type).strip().lower() if actor else None,
+            "actor_id": actor.actor_id if actor else None,
+            "actor_name": actor.actor_name if actor else None,
+            "correlation_id": ctx.correlation_id,
         }
         item = project_domain_audit_to_timeline_item(row)
         if item:
@@ -119,6 +128,14 @@ def _base(
     *,
     source: str | None = None,
 ) -> dict[str, Any]:
+    ctx = envelope.context
+    actor = ctx.actor
+    actor_extra = actor_fields_for_payload(
+        actor_kind=str(actor.actor_type).strip().lower() if actor else None,
+        actor_id=actor.actor_id if actor else None,
+        actor_name=actor.actor_name if actor else None,
+        correlation_id=ctx.correlation_id,
+    )
     return {
         "tenant_id": tenant_id,
         "project_id": project_id,
@@ -127,6 +144,6 @@ def _base(
         "resource_type": resource_type,
         "resource_id": str(resource_id or ""),
         "source": source,
-        "payload": payload,
+        "payload": merge_timeline_payload(payload, actor_extra),
         "source_domain_event_id": envelope.event_id,
     }

@@ -113,7 +113,12 @@ def list_audit_timeline_page(
         json_build_object(
           'version_id', (dae.metadata->>'model_version_id')::text,
           'version', (dae.metadata->>'version')::int,
-          'stage', (dae.metadata->>'stage')::text
+          'stage', (dae.metadata->>'stage')::text,
+          'actor_kind', dae.actor_kind,
+          'actor_type', dae.actor_kind,
+          'actor_id', dae.actor_id,
+          'actor_name', dae.actor_name,
+          'correlation_id', dae.correlation_id
         ) AS payload
       FROM domain_audit_events dae
       WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
@@ -133,7 +138,12 @@ def list_audit_timeline_page(
           'version', (dae.metadata->>'version')::int,
           'approval_status',
             CASE WHEN dae.action = 'model_version.approved' THEN 'approved' ELSE 'rejected' END,
-          'approval_reason', (dae.metadata->>'reason')::text
+          'approval_reason', (dae.metadata->>'reason')::text,
+          'actor_kind', dae.actor_kind,
+          'actor_type', dae.actor_kind,
+          'actor_id', dae.actor_id,
+          'actor_name', dae.actor_name,
+          'correlation_id', dae.correlation_id
         ) AS payload
       FROM domain_audit_events dae
       WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
@@ -151,7 +161,12 @@ def list_audit_timeline_page(
         json_build_object(
           'version_id', (dae.metadata->>'model_version_id')::text,
           'version', (dae.metadata->>'version')::int,
-          'stage', (dae.metadata->>'to_stage')::text
+          'stage', (dae.metadata->>'to_stage')::text,
+          'actor_kind', dae.actor_kind,
+          'actor_type', dae.actor_kind,
+          'actor_id', dae.actor_id,
+          'actor_name', dae.actor_name,
+          'correlation_id', dae.correlation_id
         ) AS payload
       FROM domain_audit_events dae
       WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
@@ -168,7 +183,12 @@ def list_audit_timeline_page(
         NULL::text AS source,
         json_build_object(
           'version_id', (dae.metadata->>'model_version_id')::text,
-          'version', (dae.metadata->>'version')::int
+          'version', (dae.metadata->>'version')::int,
+          'actor_kind', dae.actor_kind,
+          'actor_type', dae.actor_kind,
+          'actor_id', dae.actor_id,
+          'actor_name', dae.actor_name,
+          'correlation_id', dae.correlation_id
         ) AS payload
       FROM domain_audit_events dae
       WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
@@ -189,7 +209,12 @@ def list_audit_timeline_page(
         NULL::text AS source,
         json_build_object(
           'dataset_id', (dae.metadata->>'dataset_id')::text,
-          'name', dae.metadata->>'name'
+          'name', dae.metadata->>'name',
+          'actor_kind', dae.actor_kind,
+          'actor_type', dae.actor_kind,
+          'actor_id', dae.actor_id,
+          'actor_name', dae.actor_name,
+          'correlation_id', dae.correlation_id
         ) AS payload
       FROM domain_audit_events dae
       WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s
@@ -207,7 +232,12 @@ def list_audit_timeline_page(
         json_build_object(
           'pipeline_version_id', (dae.metadata->>'pipeline_version_id')::text,
           'version', (dae.metadata->>'version')::int,
-          'pipeline_id', (dae.metadata->>'pipeline_id')::text
+          'pipeline_id', (dae.metadata->>'pipeline_id')::text,
+          'actor_kind', dae.actor_kind,
+          'actor_type', dae.actor_kind,
+          'actor_id', dae.actor_id,
+          'actor_name', dae.actor_name,
+          'correlation_id', dae.correlation_id
         ) AS payload
       FROM domain_audit_events dae
       WHERE dae.tenant_id = %(tenant_id)s AND dae.project_id = %(project_id)s

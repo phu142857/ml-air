@@ -1,32 +1,27 @@
 import Link from "next/link"
-import { AlertCircle, CheckCircle2, Clock, History, Activity } from "lucide-react"
+import { AlertCircle, CheckCircle2, Clock, History } from "lucide-react"
 
 import { MlopsEmptyState } from "@/components/mlops/layout"
 import { auditEventTitle, auditResourceHref } from "@/lib/audit-event"
-import { activityResourceHref } from "@/lib/activity-feed"
-import type { ActivityFeedItem, AuditTimelineItem, RunItem } from "@/lib/api"
+import type { AuditTimelineItem, RunItem } from "@/lib/api"
 import { cn, formatRelativeTime } from "@/lib/utils"
 
 type AlertsWidgetProps = {
   failedRuns: RunItem[]
   auditEvents: AuditTimelineItem[]
-  activityItems?: ActivityFeedItem[]
   blockedReadinessCount: number
   scopePinned: boolean
   auditLoading: boolean
   auditError?: string
-  useActivityFeed?: boolean
 }
 
 export function AlertsWidget({
   failedRuns,
   auditEvents,
-  activityItems = [],
   blockedReadinessCount,
   scopePinned,
   auditLoading,
   auditError,
-  useActivityFeed = false,
 }: AlertsWidgetProps) {
   const alertCount = failedRuns.length + blockedReadinessCount
 
@@ -80,17 +75,10 @@ export function AlertsWidget({
         <div className="min-h-0 flex-1 border-t border-border/60 pt-2">
           <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
             <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {useActivityFeed ? (
-                <Activity className="h-3 w-3" />
-              ) : (
-                <History className="h-3 w-3" />
-              )}
-              {useActivityFeed ? "Recent activity" : "Lifecycle events"}
+              <History className="h-3 w-3" />
+              Recent events
             </p>
-            <Link
-              href={useActivityFeed ? "/activity" : "/lifecycle"}
-              className="text-[10px] text-primary hover:text-primary/80"
-            >
+            <Link href="/lifecycle" className="text-[10px] text-primary hover:text-primary/80">
               View all
             </Link>
           </div>
@@ -104,51 +92,8 @@ export function AlertsWidget({
             </div>
           ) : auditError ? (
             <p className="text-xs text-[color:var(--status-failed-fg)]">{auditError}</p>
-          ) : useActivityFeed ? (
-            activityItems.length === 0 ? (
-              <MlopsEmptyState
-                icon={Activity}
-                title="No activity yet"
-                className="border-0 bg-transparent p-0"
-              />
-            ) : (
-              <ul className="space-y-1.5">
-                {activityItems.map((item) => {
-                  const href = activityResourceHref(item)
-                  const inner = (
-                    <>
-                      <p className="truncate text-xs font-medium text-foreground">{item.title}</p>
-                      <p className="truncate text-[10px] text-muted-foreground">{item.summary}</p>
-                      <p className="font-mono text-[10px] text-muted-foreground/80">
-                        {formatRelativeTime(item.ts)}
-                      </p>
-                    </>
-                  )
-                  return href ? (
-                    <Link
-                      key={item.id}
-                      href={href}
-                      className="block rounded-lg border border-border/70 bg-muted/20 px-2.5 py-2 transition-default hover:border-primary/30 hover:bg-primary/5"
-                    >
-                      {inner}
-                    </Link>
-                  ) : (
-                    <div
-                      key={item.id}
-                      className="rounded-lg border border-border/40 bg-muted/20 px-2.5 py-2"
-                    >
-                      {inner}
-                    </div>
-                  )
-                })}
-              </ul>
-            )
           ) : auditEvents.length === 0 ? (
-            <MlopsEmptyState
-              icon={History}
-              title="No events yet"
-              className="border-0 bg-transparent p-0"
-            />
+            <MlopsEmptyState icon={History} title="No events yet" className="border-0 bg-transparent p-0" />
           ) : (
             <ul className="space-y-1.5">
               {auditEvents.map((event, index) => {

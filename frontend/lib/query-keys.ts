@@ -179,10 +179,6 @@ export const mlairKeys = {
   projections: {
     dashboard: (tenantId: string, projectId: string) =>
       ["projections-dashboard", tenantId, projectId] as const,
-    activity: (tenantId: string, projectId: string, scopeType?: string) =>
-      ["projections-activity", tenantId, projectId, scopeType ?? "all"] as const,
-    activityInfinite: (tenantId: string, projectId: string, scopeType?: string) =>
-      ["projections-activity", tenantId, projectId, scopeType ?? "all", "infinite"] as const,
   },
   search: (tenantId: string, projectId: string, q: string, type: string) =>
     ["search", q, type, tenantId, projectId] as const,
