@@ -1605,6 +1605,27 @@ def _requeue_expired_leases(client: Redis) -> int:
     return len(run_ids)
 
 
+def _pop_next_run(client: Redis) -> tuple[str | None, str]:
+    try:
+        from app.domains.control_plane.scheduling_service import pop_next_run_payload
+
+        return pop_next_run_payload(client)
+    except ImportError:
+        fifo = client.blpop("mlair:runs:new", timeout=1)
+        if fifo:
+            return str(fifo[1]), "fifo"
+        return None, "none"
+
+
+def _requeue_run(client: Redis, run_event: dict, raw_payload: str) -> None:
+    try:
+        from app.domains.control_plane.scheduling_service import publish_run_with_policy
+
+        publish_run_with_policy(run_event, raw_payload=raw_payload)
+    except ImportError:
+        client.rpush("mlair:runs:new", raw_payload)
+
+
 def main() -> None:
     metrics_port = int(os.getenv("ML_AIR_SCHEDULER_METRICS_PORT", "9102"))
     policy_interval_seconds = max(10, int(os.getenv("ML_AIR_TRIGGER_POLICY_TICK_SECONDS", "30")))
@@ -1670,9 +1691,8 @@ def main() -> None:
             else:
                 SCHEDULER_TICK_LOCK_SKIPPED_TOTAL.labels(tick="dataset_materialization").inc()
             next_materialization_tick = loop_started + materialization_interval_seconds
-        run_msg = client.blpop("mlair:runs:new", timeout=1)
-        if run_msg:
-            _, raw_payload = run_msg
+        raw_payload, _queue_source = _pop_next_run(client)
+        if raw_payload:
             run_event = json.loads(raw_payload)
             run_id = run_event["run_id"]
             with otel_span(
@@ -1694,7 +1714,7 @@ def main() -> None:
                     _cancel_tasks_for_run(run_id, only_pending_like=False)
                     continue
                 if _project_running_tasks(tenant_id=tenant_id, project_id=project_id) >= max_parallel_tasks:
-                    client.rpush("mlair:runs:new", raw_payload)
+                    _requeue_run(client, run_event, raw_payload)
                     RUN_REQUEUED_TOTAL.inc()
                     time.sleep(0.2)
                 else:

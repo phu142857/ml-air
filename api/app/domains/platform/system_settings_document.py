@@ -11,6 +11,66 @@ _HUB_ROUTES = frozenset({"datasets", "lifecycle", "dashboard", "models"})
 _TASK_EXECUTION_MODES = frozenset({"internal", "external"})
 _LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
+# Phase 3–6 and optional surfaces: default off unless profile/env explicitly enables.
+_FEATURE_DEFAULT_OFF = frozenset(
+    {
+        "projections_enabled",
+        "timeline_projection_reads",
+        "dashboard_projection_reads",
+        "notification_delivery",
+        "integration_delivery",
+        "event_retention_enabled",
+        "siem_export_enabled",
+        "event_schema_registry_enabled",
+        "cost_aware_scheduler",
+        "ai_gateway",
+        "chargeback",
+        "prompt_management",
+        "policy_engine",
+        "copilot",
+        "multi_cluster",
+        "multi_region",
+        "federation",
+        "edge_deployment",
+        "global_scheduler",
+        "cross_region_replication",
+        "disaster_recovery",
+        "global_identity",
+        "global_observability",
+        "extension_platform",
+    }
+)
+
+# Phase 3–6 flags default off unless profile/env explicitly enables them.
+_FEATURE_DEFAULT_OFF = frozenset(
+    {
+        "projections_enabled",
+        "timeline_projection_reads",
+        "dashboard_projection_reads",
+        "notification_delivery",
+        "integration_delivery",
+        "event_retention_enabled",
+        "siem_export_enabled",
+        "event_schema_registry_enabled",
+        "cost_aware_scheduler",
+        "ai_gateway",
+        "chargeback",
+        "prompt_management",
+        "policy_engine",
+        "copilot",
+        "multi_cluster",
+        "multi_region",
+        "federation",
+        "edge_deployment",
+        "global_scheduler",
+        "cross_region_replication",
+        "disaster_recovery",
+        "global_identity",
+        "global_observability",
+        "extension_platform",
+    }
+)
+
 
 def _feature_map() -> dict[str, str]:
     try:
@@ -47,7 +107,7 @@ def build_seed_settings(profile_cfg: dict[str, Any]) -> dict[str, Any]:
         if feature_key in features_in:
             features[feature_key] = bool(features_in[feature_key])
         else:
-            features[feature_key] = True
+            features[feature_key] = feature_key not in _FEATURE_DEFAULT_OFF
 
     features["plugin_version_enforcement"] = True
     features["legacy_static_tokens"] = False

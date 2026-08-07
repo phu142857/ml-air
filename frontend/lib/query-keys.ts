@@ -176,6 +176,14 @@ export const mlairKeys = {
         auditTimelineFilterKey(filters),
       ] as const,
   },
+  projections: {
+    dashboard: (tenantId: string, projectId: string) =>
+      ["projections-dashboard", tenantId, projectId] as const,
+    activity: (tenantId: string, projectId: string, scopeType?: string) =>
+      ["projections-activity", tenantId, projectId, scopeType ?? "all"] as const,
+    activityInfinite: (tenantId: string, projectId: string, scopeType?: string) =>
+      ["projections-activity", tenantId, projectId, scopeType ?? "all", "infinite"] as const,
+  },
   search: (tenantId: string, projectId: string, q: string, type: string) =>
     ["search", q, type, tenantId, projectId] as const,
   searchInfinite: (tenantId: string, projectId: string, q: string, type: string) =>
@@ -198,5 +206,17 @@ export const mlairKeys = {
       ["trace-search", tenantId, projectId, query] as const,
     list: (tenantId: string, projectId: string, offset: number) =>
       ["trace-list", tenantId, projectId, offset] as const,
+  },
+  controlPlane: {
+    gatewayProviders: (tenantId: string, projectId: string) =>
+      ["cp-gateway-providers", tenantId, projectId] as const,
+    gatewayRoutes: (tenantId: string, projectId: string) => ["cp-gateway-routes", tenantId, projectId] as const,
+    chargeback: (tenantId: string, projectId: string) => ["cp-chargeback", tenantId, projectId] as const,
+    chargebackSnapshots: (tenantId: string, projectId: string) =>
+      ["cp-chargeback-snapshots", tenantId, projectId] as const,
+    prompts: (tenantId: string, projectId: string) => ["cp-prompts", tenantId, projectId] as const,
+    promptVersions: (tenantId: string, projectId: string, promptId: string) =>
+      ["cp-prompt-versions", tenantId, projectId, promptId] as const,
+    automlJobs: (tenantId: string, projectId: string) => ["cp-automl-jobs", tenantId, projectId] as const,
   },
 };

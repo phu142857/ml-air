@@ -18,7 +18,9 @@ def redis_client() -> Redis:
 def publish_run_event(event: dict[str, Any]) -> None:
     inject_redis_trace_carrier(event)
     payload = json.dumps(event)
-    redis_client().rpush("mlair:runs:new", payload)
+    from app.domains.control_plane.scheduling_service import publish_run_with_policy
+
+    publish_run_with_policy(event, raw_payload=payload)
 
 
 def publish_task_finished(event: dict[str, Any]) -> None:

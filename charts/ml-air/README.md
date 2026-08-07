@@ -36,7 +36,7 @@ Frontend builds require `NEXT_PUBLIC_API_BASE_URL` at **image build time** (see 
 | `MLAIR_MODEL_PROMOTE_WEBHOOK_BEARER_TOKEN` | Reserved with URL above |
 | `MLAIR_MODEL_PROMOTE_WEBHOOK_TIMEOUT_SECONDS` | Reserved (default `15`) |
 
-See root [`README.md`](../../README.md) and [`docs/guides/promote-model.md`](../../docs/guides/promote-model.md).
+See [`docs/guides/model-governance.md`](../../docs/guides/model-governance.md).
 
 ## Executor / scheduler
 

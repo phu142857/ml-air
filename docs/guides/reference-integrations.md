@@ -14,9 +14,9 @@ This page is an **index** only — each row links to the canonical guide or API 
 | **Same lifecycle JSON** as the Hub, at your **HTTPS endpoint** (filters, HMAC, retries) | Per-project **semantic webhooks** | [Semantic event webhook cookbook](./semantic-webhook-cookbook.md) |
 | **Architecture** of publish → Redis → outbox → webhooks | Diagrams | [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md) |
 | **Persisted** semantic envelopes + operator replay to Redis | Postgres **outbox** + replay API | [Realtime envelope § Durable outbox](../api/realtime-event-envelope.md#durable-outbox-optional) |
-| **SIEM / audit** | Domain Audit API `GET /v1/audit/events` + timeline `GET .../audit/timeline` | [Architecture / Audit Flow](../architecture/audit-flow.md), [API Overview](../api/overview.md) |
+| **SIEM / audit** | Domain Audit API `GET /v1/audit/events` + timeline `GET .../audit/timeline` | [Event Processing](../architecture/event-processing.md), [API Overview](../api/overview.md) |
 | **Notify serving** after promote | Semantic webhook on `model.promoted` or [Domain webhooks](../architecture/domain-events.md#domain-webhook-delivery) | [Semantic webhook cookbook](./semantic-webhook-cookbook.md), [Model governance](./model-governance.md) |
-| **Domain lifecycle accountability** | Domain Audit + optional domain webhook HTTP | [Domain Events](../architecture/domain-events.md), [Audit Flow](../architecture/audit-flow.md) |
+| **Domain lifecycle accountability** | Domain Audit + optional domain webhook HTTP | [Domain Events](../architecture/domain-events.md), [Event Processing](../architecture/event-processing.md) |
 | **Execute tasks** outside MLAir workers | Lease / pull **external worker** | [External worker execution](./external-worker-execution.md), [End-to-end control plane](./downstream-executor-control-plane.md) |
 | **Prometheus / Grafana** for lifecycle counters | `GET /metrics` on API | [View metrics](./view-metrics.md) |
 | **Distributed traces** (OTLP) | Optional **OpenTelemetry** on api / scheduler / executor / realtime | [OpenTelemetry](./opentelemetry.md) |

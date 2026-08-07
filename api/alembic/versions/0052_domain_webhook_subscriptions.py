@@ -1,6 +1,6 @@
 """Per-project HTTP subscriptions for Domain Event webhooks.
 
-Revision ID: 0052_domain_webhook_subscriptions
+Revision ID: 0052_domain_webhook_subs
 Revises: 0051_domain_audit_source_event
 Create Date: 2026-08-06
 """
@@ -12,13 +12,15 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = "0052_domain_webhook_subscriptions"
+revision = "0052_domain_webhook_subs"
 down_revision = "0051_domain_audit_source_event"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    # Alembic stores revision ids in version_num VARCHAR(32); widen before long ids.
+    op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)")
     op.create_table(
         "domain_webhook_subscriptions",
         sa.Column("subscription_id", sa.Text(), nullable=False),

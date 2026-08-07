@@ -26,14 +26,8 @@ Open **http://localhost:8080/login**. Configuration: [configuration.md](./config
 ## Architecture (contributors)
 
 - [Architecture Overview](./architecture/README.md)
-- [Event Flow](./architecture/event-flow.md)
+- [Event Processing](./architecture/event-processing.md)
 - [Domain Events](./architecture/domain-events.md)
-- [Phase 3 — Read Platform](./architecture/phase-3.md)
-- [Phase 4 — Governance & Enterprise](./architecture/phase-4.md)
-- [Phase 5 — AI Control Plane](./architecture/phase-5.md)
-- [Phase 6 — Distributed Control Plane](./architecture/phase-6.md)
-- [Audit Flow](./architecture/audit-flow.md)
-- [Timeline Flow](./architecture/timeline-flow.md)
 - [Developer Guide](./architecture/developer-guide.md)
 
 Semantic realtime (Hub Pub/Sub): [Lifecycle semantic event flow](./concepts/lifecycle-event-flow.md).
@@ -169,10 +163,6 @@ Model registry quick reference: [Model governance](./guides/model-governance.md)
 - [Production deployment](./runbooks/production-deployment.md)
 - [Production strict lifecycle](./runbooks/production-strict-lifecycle.md)
 - [Production WSS and ingress](./runbooks/production-wss-ingress.md)
-
-## Releases
-
-- [Historical release notes](./releases/README.md)
 
 ## Changelog
 

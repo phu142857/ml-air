@@ -1,9 +1,10 @@
 "use client";
 
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   fetchAuditTimeline,
   fetchAuditTimelinePage,
+  fetchDashboardProjection,
   fetchDatasets,
   fetchDatasetsPage,
   fetchModels,
@@ -17,6 +18,7 @@ import { useAppContext } from "@/lib/app-context";
 import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { isScopePinned } from "@/lib/scope";
+import { useProjectionFeatures } from "@/lib/use-projection-features";
 
 const STATS_LIST_LIMIT = 100;
 const BLOCKED_READINESS_LIMIT = 200;
@@ -26,8 +28,18 @@ export function useDashboardStats() {
   const scopePinned = isScopePinned(tenantId, projectId);
   const isAggregate = !scopePinned;
   const enabled = Boolean(token?.trim());
+  const { dashboardProjectionReads } = useProjectionFeatures();
+  const useProjection = dashboardProjectionReads && scopePinned;
 
   const poll = useRealtimeQueryPolling();
+
+  const dashboardProjectionQ = useQuery({
+    queryKey: mlairKeys.projections.dashboard(tenantId, projectId),
+    queryFn: () => fetchDashboardProjection(tenantId, projectId, token),
+    enabled: enabled && useProjection,
+    ...poll,
+  });
+
   const results = useQueries({
     queries: [
       {
@@ -107,7 +119,6 @@ export function useDashboardStats() {
   });
 
   const [datasetsQ, pipelinesQ, runsQ, modelsQ, blockedReadinessQ] = results;
-  const isLoading = results.some((r) => r.isLoading);
 
   const datasets = datasetsQ.data?.items ?? [];
   const pipelines = pipelinesQ.data?.items ?? [];
@@ -122,11 +133,18 @@ export function useDashboardStats() {
       .includes("RUN"),
   );
   const failedRuns = runs.filter((r) => String(r.status || "").toUpperCase() === "FAILED");
+  const snap = dashboardProjectionQ.data?.snapshot;
+  const projectedRunTotal = typeof snap?.total_runs === "number" ? snap.total_runs : null;
+  const projectedRunFailed = typeof snap?.failed_runs === "number" ? snap.failed_runs : null;
+
   return {
-    isLoading,
+    isLoading: results.some((r) => r.isLoading) || (useProjection && dashboardProjectionQ.isLoading),
     isAggregate,
     tenantId,
     projectId,
+    dashboardSnapshot: snap ?? null,
+    dashboardProjectionUpdatedAt: dashboardProjectionQ.data?.updated_at ?? null,
+    usesDashboardProjection: useProjection,
     datasets,
     pipelines,
     runs,
@@ -147,8 +165,8 @@ export function useDashboardStats() {
       },
       {
         label: "Recent Runs",
-        value: runs.length,
-        failed: failedRuns.length,
+        value: projectedRunTotal ?? runs.length,
+        failed: projectedRunFailed ?? failedRuns.length,
         href: "/runs",
       },
       {

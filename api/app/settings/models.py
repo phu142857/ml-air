@@ -46,6 +46,30 @@ class FeatureFlags:
     manifest_strict_key_lifecycle: bool
     plugin_version_enforcement: bool
     legacy_static_tokens: bool
+    projections_enabled: bool
+    timeline_projection_reads: bool
+    dashboard_projection_reads: bool
+    notification_delivery: bool
+    integration_delivery: bool
+    event_retention_enabled: bool
+    siem_export_enabled: bool
+    event_schema_registry_enabled: bool
+    cost_aware_scheduler: bool
+    ai_gateway: bool
+    chargeback: bool
+    prompt_management: bool
+    policy_engine: bool
+    copilot: bool
+    multi_cluster: bool
+    multi_region: bool
+    federation: bool
+    edge_deployment: bool
+    global_scheduler: bool
+    cross_region_replication: bool
+    disaster_recovery: bool
+    global_identity: bool
+    global_observability: bool
+    extension_platform: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,4 +155,28 @@ class Settings:
             "promotion_allow_skip_stages": self.promotion.allow_skip_forward_stages,
             "rollback_enabled": self.promotion.rollback_enabled,
             "rollback_requires_approval": self.promotion.rollback_requires_approval,
+            "projections_enabled": f.projections_enabled,
+            "timeline_projection_reads": f.timeline_projection_reads,
+            "dashboard_projection_reads": f.dashboard_projection_reads,
+            "notification_delivery": f.notification_delivery,
+            "integration_delivery": f.integration_delivery,
+            "event_retention_enabled": f.event_retention_enabled,
+            "siem_export_enabled": f.siem_export_enabled,
+            "event_schema_registry_enabled": f.event_schema_registry_enabled,
+            "cost_aware_scheduler": f.cost_aware_scheduler,
+            "ai_gateway": f.ai_gateway,
+            "chargeback": f.chargeback,
+            "prompt_management": f.prompt_management,
+            "policy_engine": f.policy_engine,
+            "copilot": f.copilot,
+            "multi_cluster": f.multi_cluster,
+            "multi_region": f.multi_region,
+            "federation": f.federation,
+            "edge_deployment": f.edge_deployment,
+            "global_scheduler": f.global_scheduler,
+            "cross_region_replication": f.cross_region_replication,
+            "disaster_recovery": f.disaster_recovery,
+            "global_identity": f.global_identity,
+            "global_observability": f.global_observability,
+            "extension_platform": f.extension_platform,
         }

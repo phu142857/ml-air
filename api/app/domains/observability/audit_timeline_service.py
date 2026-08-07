@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.domains.projections.config import timeline_projection_reads_enabled
+from app.domains.projections.projection_query_service import list_projected_timeline_page
 from app.domains.shared.db_service import db_conn
 from app.domains.shared.pagination import (
     PageResult,
@@ -28,6 +30,19 @@ def list_audit_timeline_page(
     readiness_status: str | None = None,
     limit_ceiling: int = 200,
 ) -> PageResult:
+    if timeline_projection_reads_enabled() and not policy_id and not dataset_version_id and not readiness_status:
+        return list_projected_timeline_page(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            limit=limit,
+            offset=offset,
+            cursor=cursor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            kind=kind,
+            source=source,
+            limit_ceiling=limit_ceiling,
+        )
     params = resolve_page_params(
         limit=limit,
         offset=offset,

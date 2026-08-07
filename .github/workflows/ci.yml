@@ -117,6 +117,13 @@ jobs:
         run: |
           python -m compileall api/app scheduler executor
 
+      - name: Architecture invariants (Phase 4)
+        run: python scripts/check_architecture_invariants.py
+
+      - name: Phase 4 governance unit tests
+        run: |
+          cd api && PYTHONPATH=. python -m unittest tests.test_phase4_governance -q
+
   helm-check:
     runs-on: ubuntu-latest
     steps:

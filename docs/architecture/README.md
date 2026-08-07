@@ -68,14 +68,12 @@ Timeline API (read projection)
 | **Domain Events** | Accountability: audit, metrics, domain webhooks | Aggregates + `get_event_bus()` |
 | **Semantic realtime** | Hub Pub/Sub, semantic outbox, semantic webhook subscriptions | `realtime_events.publish_mlair_event` |
 
-See [Event Flow](./event-flow.md) and [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
+See [Event Processing](./event-processing.md) and [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md).
 
 ## Related docs
 
-- [Event Flow](./event-flow.md)
+- [Event Processing](./event-processing.md)
 - [Domain Events](./domain-events.md)
-- [Audit Flow](./audit-flow.md)
-- [Timeline Flow](./timeline-flow.md)
 - [Developer Guide](./developer-guide.md)
 - [Production deployment](../runbooks/production-deployment.md)
 - [ARCHITECTURE.md](../../ARCHITECTURE.md) — full platform topology

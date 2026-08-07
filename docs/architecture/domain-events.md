@@ -11,7 +11,7 @@ Reference for contributors and operators extending MLAir's Domain Event stack.
 | Event bus | `InProcessEventBus` (default) or `PostgresOutboxEventBus` (opt-in) |
 | Handlers | Audit, Metrics, Webhook — subscribe only; never publish business events |
 
-See also: [Event Flow](./event-flow.md), [Audit Flow](./audit-flow.md), [Timeline Flow](./timeline-flow.md).
+See also: [Event Processing](./event-processing.md).
 
 ## Default vs durable transport
 

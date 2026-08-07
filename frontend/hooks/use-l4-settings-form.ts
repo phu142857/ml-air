@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FEATURE_FLAG_META,
+  featureDefaultEnabled,
   fetchSystemSettings,
   patchSystemSettings,
   type L4Settings,
@@ -73,7 +74,7 @@ export type L4FormState = {
 export function stateFromL4(s: L4Settings): L4FormState {
   const features: Record<string, boolean> = {};
   for (const meta of FEATURE_FLAG_META) {
-    features[meta.key] = Boolean(s.features?.[meta.key] ?? true);
+    features[meta.key] = Boolean(s.features?.[meta.key] ?? featureDefaultEnabled(meta.key));
   }
   if (s.features) {
     for (const [k, v] of Object.entries(s.features)) {

@@ -122,7 +122,7 @@ Hub routes include `/datasets`, `/lifecycle`, `/models`, `/lineage`, `/runs`, `/
 
 **Data flow:** Client → API creates **Run** → scheduler enqueues **Tasks** → executor completes → Hub reflects status, metrics, lineage.
 
-**Domain Event path (Phase 1):** Aggregate mutation → persist → `publish_all` → Audit / Metrics handlers; Timeline reads Domain Audit. Details: [docs/architecture/](docs/architecture/README.md).
+**Domain Event path:** Aggregate mutation → persist → `publish_all` → Audit / Metrics / Webhook handlers; Timeline reads Domain Audit. Details: [docs/architecture/](docs/architecture/README.md).
 
 Deep topology and production baseline: **[ARCHITECTURE.md](ARCHITECTURE.md)**. API draft: [openapi-v1-draft.yaml](openapi-v1-draft.yaml). Narrative API docs: [docs/api/](docs/api/).
 
@@ -147,7 +147,7 @@ Extend steps via Python entry points (`mlair.plugins`) or HTTP tasks. Package, v
 | Kubernetes | [charts/ml-air](charts/ml-air/README.md) |
 | Production | [docs/runbooks/production-deployment.md](docs/runbooks/production-deployment.md) |
 
-Observability assets live under `deploy/monitoring/` (Prometheus + Grafana). Guides: [Set Up Prometheus](docs/guides/setup-prometheus.md), [Debug with Grafana](docs/guides/debug-with-grafana.md).
+Observability assets live under `deploy/monitoring/` (Prometheus + Grafana). Guides: [Set Up Prometheus](docs/guides/setup-prometheus.md), [Debugging](docs/guides/debugging.md).
 
 ---
 

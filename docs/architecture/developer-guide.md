@@ -98,8 +98,6 @@ PYTHONPATH=api python -m pytest \
 ## Further reading
 
 - [Architecture Overview](./README.md)
-- [Event Flow](./event-flow.md)
-- [Audit Flow](./audit-flow.md)
-- [Timeline Flow](./timeline-flow.md)
+- [Event Processing](./event-processing.md)
 - [Domain Events](./domain-events.md)
 - Semantic UI realtime (separate): [Lifecycle semantic event flow](../concepts/lifecycle-event-flow.md)

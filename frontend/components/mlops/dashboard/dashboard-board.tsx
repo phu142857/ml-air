@@ -1,6 +1,6 @@
 "use client"
 
-import type { AuditTimelineItem, DatasetItem, PipelineItem, RunItem } from "@/lib/api"
+import type { ActivityFeedItem, AuditTimelineItem, DatasetItem, PipelineItem, RunItem } from "@/lib/api"
 
 import {
   DashboardCustomizeMenu,
@@ -27,6 +27,8 @@ type DashboardBoardProps = {
   runningPipelines: PipelineItem[]
   failedRuns: RunItem[]
   auditEvents: AuditTimelineItem[]
+  activityItems?: ActivityFeedItem[]
+  useActivityFeed?: boolean
   auditLoading: boolean
   auditError?: string
   blockedReadinessCount: number
@@ -45,6 +47,8 @@ export function DashboardBoard({
   runningPipelines,
   failedRuns,
   auditEvents,
+  activityItems = [],
+  useActivityFeed = false,
   auditLoading,
   auditError,
   blockedReadinessCount,
@@ -104,6 +108,8 @@ export function DashboardBoard({
           <AlertsWidget
             failedRuns={failedRuns}
             auditEvents={auditEvents}
+            activityItems={activityItems}
+            useActivityFeed={useActivityFeed}
             blockedReadinessCount={blockedReadinessCount}
             scopePinned={scopePinned}
             auditLoading={auditLoading}

@@ -13,11 +13,13 @@ import { ListTableSkeleton } from "@/components/mlops/list-table-skeleton"
 
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 
-import { fetchAuditTimeline, fetchAuditTimelinePage } from "@/lib/api"
+import { fetchActivityFeedPage, fetchAuditTimeline, fetchAuditTimelinePage } from "@/lib/api"
+import type { ActivityFeedItem, AuditTimelineItem } from "@/lib/api"
 import { useAppContext } from "@/lib/app-context"
 import { mlairKeys } from "@/lib/query-keys"
 import { SCOPE_AGGREGATE_DASHBOARD } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
+import { useProjectionFeatures } from "@/lib/use-projection-features"
 import { formatApiClientError } from "@/lib/utils"
 
 export default function DashboardPage() {
@@ -26,6 +28,8 @@ export default function DashboardPage() {
   const scopePinned = isScopePinned(tenantId, projectId)
   const showProjectUsage = scopePinned
   const showTenantUsage = !scopePinned && tenantId !== "all"
+  const { projectionsEnabled } = useProjectionFeatures()
+  const useActivityOnDashboard = projectionsEnabled && scopePinned
 
   const {
     isLoading,
@@ -39,19 +43,33 @@ export default function DashboardPage() {
   } = useDashboardStats()
 
   const auditQ = useQuery({
-    queryKey: mlairKeys.audit.timeline(tenantId, projectId, {}),
+    queryKey: useActivityOnDashboard
+      ? mlairKeys.projections.activity(tenantId, projectId)
+      : mlairKeys.audit.timeline(tenantId, projectId, {}),
     queryFn: async () => {
+      if (useActivityOnDashboard) {
+        const page = await fetchActivityFeedPage(tenantId, projectId, token, { limit: 12 })
+        return { items: page.items, mode: "activity" as const }
+      }
       if (scopePinned) {
         const page = await fetchAuditTimelinePage(tenantId, projectId, token, { limit: 12 })
-        return { items: page.items }
+        return { items: page.items, mode: "audit" as const }
       }
-      return fetchAuditTimeline(tenantId, projectId, token, { limit: 12 })
+      const res = await fetchAuditTimeline(tenantId, projectId, token, { limit: 12 })
+      return { items: res.items, mode: "audit" as const }
     },
     enabled: Boolean(token?.trim()),
   })
 
   const blockedReadinessCount =
     typeof stats[0]?.blocked === "number" ? stats[0].blocked : 0
+
+  const auditEvents: AuditTimelineItem[] = useActivityOnDashboard
+    ? []
+    : ((auditQ.data?.items ?? []) as AuditTimelineItem[])
+  const activityItems: ActivityFeedItem[] = useActivityOnDashboard
+    ? ((auditQ.data?.items ?? []) as ActivityFeedItem[])
+    : []
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -78,7 +96,9 @@ export default function DashboardPage() {
               datasets={datasets}
               runningPipelines={runningPipelines}
               failedRuns={failedRuns}
-              auditEvents={auditQ.data?.items ?? []}
+              auditEvents={auditEvents}
+              activityItems={activityItems}
+              useActivityFeed={useActivityOnDashboard}
               auditLoading={auditQ.isLoading}
               auditError={auditQ.isError ? formatApiClientError(auditQ.error) : undefined}
               blockedReadinessCount={blockedReadinessCount}

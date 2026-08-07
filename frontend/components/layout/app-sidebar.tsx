@@ -3,7 +3,12 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  Activity,
+  Bot,
   Database,
+  DollarSign,
+  FileText,
+  FlaskConical,
   GitBranch,
   Play,
   ListTodo,
@@ -13,6 +18,9 @@ import {
   Network,
   LayoutDashboard,
   Route,
+  Globe,
+  Server,
+  Sparkles,
 } from "lucide-react"
 import { MlairLogo } from "@/components/brand/mlair-logo"
 import {
@@ -28,6 +36,8 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
+import { hasAnyControlPlaneSurface, useControlPlaneFeatures } from "@/lib/use-control-plane-features"
+import { getRuntimeConfig } from "@/lib/runtime-config"
 
 type NavItem = {
   title: string
@@ -37,6 +47,7 @@ type NavItem = {
 
 const lifecycleNav: NavItem[] = [
   { title: "Datasets", href: "/datasets", icon: Database },
+  { title: "Activity", href: "/activity", icon: Activity },
   { title: "Lifecycle", href: "/lifecycle", icon: History },
   { title: "Traces", href: "/traces", icon: Route },
   { title: "Models", href: "/models", icon: Box },
@@ -53,6 +64,24 @@ const executionNav: NavItem[] = [
   { title: "Runs", href: "/runs", icon: Play },
   { title: "Tasks", href: "/tasks", icon: ListTodo },
 ]
+
+function buildDistributedNav(): NavItem[] {
+  const f = getRuntimeConfig()?.features ?? {}
+  const items: NavItem[] = []
+  if (f.global_observability) items.push({ title: "Global", href: "/global", icon: Globe })
+  if (f.multi_cluster || f.multi_region) items.push({ title: "Clusters", href: "/clusters", icon: Server })
+  return items
+}
+
+function buildControlPlaneNav(flags: ReturnType<typeof useControlPlaneFeatures>): NavItem[] {
+  const items: NavItem[] = []
+  if (flags.aiGateway) items.push({ title: "AI Gateway", href: "/ai-gateway", icon: Bot })
+  if (flags.chargeback) items.push({ title: "Billing", href: "/billing", icon: DollarSign })
+  if (flags.promptManagement) items.push({ title: "Prompts", href: "/prompts", icon: FileText })
+  if (flags.copilot) items.push({ title: "Copilot", href: "/copilot", icon: Sparkles })
+  items.push({ title: "AutoML", href: "/automl", icon: FlaskConical })
+  return items
+}
 
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const pathname = usePathname()
@@ -100,6 +129,11 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 
 export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
+  const cpFlags = useControlPlaneFeatures()
+  const controlPlaneNav = buildControlPlaneNav(cpFlags)
+  const distributedNav = buildDistributedNav()
+  const showControlPlaneNav = hasAnyControlPlaneSurface(cpFlags) || controlPlaneNav.length > 0
+  const showDistributedNav = distributedNav.length > 0
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
@@ -120,6 +154,12 @@ export function AppSidebar() {
         <NavGroup label="Overview" items={platformNav} />
         {showExecutionNav ? (
           <NavGroup label="Execution" items={executionNav} />
+        ) : null}
+        {showControlPlaneNav ? (
+          <NavGroup label="AI Control Plane" items={controlPlaneNav} />
+        ) : null}
+        {showDistributedNav ? (
+          <NavGroup label="Distributed" items={distributedNav} />
         ) : null}
       </SidebarContent>
     </Sidebar>

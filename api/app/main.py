@@ -11,6 +11,10 @@ from app.api.routes.v1 import router as v1_router
 from app.api.routes.identity_routes import router as identity_router
 from app.api.routes.audit_events_routes import router as audit_router
 from app.api.routes.domain_events_routes import router as domain_events_router
+from app.api.routes.projection_routes import router as projection_router
+from app.api.routes.governance_routes import router as governance_router
+from app.api.routes.control_plane_routes import router as control_plane_router
+from app.api.routes.distributed_routes import router as distributed_router
 from app.api.routes.system_settings_routes import router as system_settings_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.otel_api import (
@@ -51,6 +55,10 @@ app.include_router(v1_router, prefix="/v1")
 app.include_router(identity_router, prefix="/v1")
 app.include_router(audit_router, prefix="/v1")
 app.include_router(domain_events_router, prefix="/v1")
+app.include_router(projection_router, prefix="/v1")
+app.include_router(governance_router, prefix="/v1")
+app.include_router(control_plane_router, prefix="/v1")
+app.include_router(distributed_router, prefix="/v1")
 app.include_router(system_settings_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
@@ -111,6 +119,43 @@ def on_startup() -> None:
     from app.domains.orchestration.metrics_event_subscriber import start_metrics_event_subscriptions
 
     start_metrics_event_subscriptions()
+
+    # Phase 3: projection handlers (timeline, activity, dashboard, analytics).
+    from app.domains.projections.projection_subscriber import start_projection_subscriptions
+
+    start_projection_subscriptions()
+
+    from app.domains.governance.event_retention_service import start_event_retention_background
+    from app.domains.audit.siem_export_service import start_siem_export_background
+
+    start_event_retention_background()
+    start_siem_export_background()
+
+    from app.domains.control_plane.config import chargeback_enabled
+    from app.domains.control_plane import billing_service as billing_svc
+
+    if chargeback_enabled():
+        billing_svc.seed_default_rates()
+
+    from app.domains.distributed.config import (
+        extension_platform_enabled,
+        federation_enabled,
+        multi_cluster_enabled,
+        multi_region_enabled,
+    )
+    from app.domains.distributed import region_registry_service as region_svc
+    from app.domains.distributed import federation_service as fed_svc
+    from app.domains.distributed import extension_platform_service as ext_svc
+    from app.domains.distributed.cluster_health_background import start_cluster_health_background
+
+    if multi_region_enabled():
+        region_svc.seed_default_regions()
+    if federation_enabled():
+        fed_svc.seed_default_federations()
+    if extension_platform_enabled():
+        ext_svc.seed_default_extensions()
+    if multi_cluster_enabled():
+        start_cluster_health_background()
     logger.info("api_startup_completed")
 
 

@@ -90,5 +90,5 @@ Executors that promote after train/eval should treat promote **422** / approval 
 
 - [Register a model](./register-model.md)
 - [Model-centric pipeline mapping](./model-centric-pipeline-mapping-and-trigger.md)
-- [Domain Audit / timeline](../architecture/audit-flow.md)
+- [Domain Audit / timeline](../architecture/event-processing.md)
 - [Compare runs](./compare-resources.md#compare-runs) before promoting candidates
