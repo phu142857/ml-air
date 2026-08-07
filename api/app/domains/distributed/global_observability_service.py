@@ -56,12 +56,21 @@ def _queue_depth() -> dict[str, int]:
 
 
 def _outbox_stats() -> dict[str, int]:
-    with db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM domain_event_outbox WHERE delivered_at IS NULL")
-            pending = int((cur.fetchone() or [0])[0])
-            cur.execute("SELECT COUNT(*) FROM event_outbox WHERE delivered_at IS NULL")
-            semantic_pending = int((cur.fetchone() or [0])[0])
+    pending = 0
+    semantic_pending = 0
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM domain_event_outbox WHERE delivered_at IS NULL AND dlq_at IS NULL"
+                )
+                pending = int((cur.fetchone() or [0])[0])
+                cur.execute(
+                    "SELECT COUNT(*) FROM semantic_event_outbox WHERE delivered_at IS NULL"
+                )
+                semantic_pending = int((cur.fetchone() or [0])[0])
+    except Exception:
+        pass
     return {"domain_event_outbox_pending": pending, "semantic_outbox_pending": semantic_pending}
 
 

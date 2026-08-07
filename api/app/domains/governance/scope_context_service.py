@@ -20,6 +20,108 @@ _SCOPE_VERSION_SOURCES = [
 ]
 
 
+def _legacy_catalog_wide(principal: Principal) -> bool:
+    """Legacy static/JWT admin with wildcard projects — platform-wide catalog."""
+    return principal.role == "admin" and "*" in (principal.project_ids or [])
+
+
+def accessible_scopes_for_principal(principal: Principal) -> list[dict[str, str]]:
+    """Tenant/project/role rows the principal may access (Hub lists + scope switcher)."""
+    if principal.principal_kind == "user" and principal.user_id:
+        from app.domains.governance import identity_repository as identity_repo
+        from app.domains.governance.identity_service import accessible_scopes_for_user
+
+        user = identity_repo.get_user_by_id(principal.user_id)
+        if not user:
+            return []
+        if user.get("is_global_admin"):
+            return list_catalog_accessible_scopes()
+        return accessible_scopes_for_user(user)
+
+    if principal.principal_kind == "service_account" and principal.service_account_id:
+        from app.domains.governance import identity_repository as identity_repo
+
+        scopes: list[dict[str, str]] = []
+        for scope in identity_repo.list_sa_scopes(principal.service_account_id):
+            tid = str(scope.get("tenant_id") or "").strip()
+            if not tid:
+                continue
+            if scope.get("all_projects"):
+                for proj in list_projects(tid, limit=500):
+                    pid = str(proj.get("project_id") or "").strip()
+                    if pid:
+                        scopes.append({"tenant_id": tid, "project_id": pid, "role": "maintainer"})
+            else:
+                for pid in scope.get("project_ids") or []:
+                    p = str(pid).strip()
+                    if p:
+                        scopes.append({"tenant_id": tid, "project_id": p, "role": "maintainer"})
+        return scopes
+
+    if _legacy_catalog_wide(principal):
+        return list_catalog_accessible_scopes(role=principal.role)
+
+    tid = str(principal.tenant_id or "").strip()
+    role = principal.role
+    if not tid:
+        return []
+
+    if "*" in (principal.project_ids or []):
+        rows: list[dict[str, str]] = []
+        for proj in list_projects(tid, limit=500):
+            pid = str(proj.get("project_id") or "").strip()
+            if pid:
+                rows.append({"tenant_id": tid, "project_id": pid, "role": role})
+        if not rows:
+            rows.append({"tenant_id": tid, "project_id": "default_project", "role": role})
+        return rows
+
+    return [
+        {"tenant_id": tid, "project_id": str(pid).strip(), "role": role}
+        for pid in (principal.project_ids or [])
+        if str(pid).strip()
+    ]
+
+
+def list_accessible_tenants_for_principal(principal: Principal, *, limit: int = 500) -> list[dict[str, str]]:
+    tenant_ids = sorted(
+        {
+            s["tenant_id"]
+            for s in accessible_scopes_for_principal(principal)
+            if s.get("tenant_id") not in ("", "*")
+        }
+    )
+    capped = tenant_ids[: max(1, min(int(limit or 50), 500))]
+    return [{"tenant_id": tid, "name": tid} for tid in capped]
+
+
+def list_accessible_projects_for_principal(
+    principal: Principal,
+    tenant_id: str,
+    *,
+    limit: int = 500,
+) -> list[dict[str, str]]:
+    allowed = sorted(
+        {
+            s["project_id"]
+            for s in accessible_scopes_for_principal(principal)
+            if s.get("tenant_id") == tenant_id and s.get("project_id") not in ("", "*")
+        }
+    )
+    if not allowed:
+        return []
+    catalog = {
+        str(p.get("project_id") or "").strip(): str(p.get("name") or p.get("project_id") or "").strip()
+        for p in list_projects(tenant_id=tenant_id, limit=limit)
+    }
+    lim = max(1, min(int(limit or 50), 500))
+    return [{"project_id": pid, "name": catalog.get(pid) or pid} for pid in allowed[:lim]]
+
+
+def principal_has_tenant_access(principal: Principal, tenant_id: str) -> bool:
+    return any(s.get("tenant_id") == tenant_id for s in accessible_scopes_for_principal(principal))
+
+
 def list_catalog_accessible_scopes(
     *,
     role: str = "admin",
@@ -53,13 +155,15 @@ def resolve_source_tenant_for_mapping_check(subject: str, default_tenant: str) -
 
 
 def list_accessible_project_ids(principal: Principal, tenant_id: str, limit: int = 500) -> list[str]:
-    if principal.project_ids and "*" not in principal.project_ids:
-        return [str(pid).strip() for pid in principal.project_ids if str(pid).strip()]
-    projects = list_projects(tenant_id=tenant_id, limit=limit)
-    ids = [str(item.get("project_id") or "").strip() for item in projects]
-    cleaned = [pid for pid in ids if pid]
-    if cleaned:
-        return cleaned
+    ids = sorted(
+        {
+            s["project_id"]
+            for s in accessible_scopes_for_principal(principal)
+            if s.get("tenant_id") == tenant_id and s.get("project_id") not in ("", "*")
+        }
+    )
+    if ids:
+        return ids[:limit]
     return ["default_project"]
 
 

@@ -9,12 +9,9 @@ import {
   Activity, 
   CheckCircle2, 
   XCircle,
-  ExternalLink,
   Search,
   Radio,
   Loader2,
-  ChevronDown,
-  BarChart3,
 } from "lucide-react"
 import { AuditTimeline } from "@/components/mlops/audit-timeline"
 import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
@@ -24,15 +21,11 @@ import { ErrorBoundary, ErrorDisplay } from "@/components/error-boundary"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useLifecycle } from "@/hooks/use-lifecycle"
 import { useToast } from "@/hooks/use-toast"
 import { exportAuditTimeline } from "@/lib/api"
 import { auditEventsToCsv } from "@/lib/audit-event"
 import { useAppContext } from "@/lib/app-context"
-import { useSemanticObservabilitySurfaces, shouldOpenLifecycleMetricsIndex } from "@/lib/use-semantic-observability-surfaces"
-import { useGrafanaUiUrl } from "@/lib/use-grafana-ui-url"
-import { grafanaDashboardUrl } from "@/lib/grafana-dashboard-url"
 import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { SCOPE_AGGREGATE_LIFECYCLE } from "@/lib/scope-messages"
 import { cn, downloadBlob, formatApiClientError } from "@/lib/utils"
@@ -41,9 +34,6 @@ function LifecycleContent() {
   const { toast } = useToast()
   const { tenantId, projectId, token } = useAppContext()
   const searchParams = useSearchParams()
-  const semanticObservabilitySurfaces = useSemanticObservabilitySurfaces()
-  const grafanaUiUrl = useGrafanaUiUrl()
-  const [metricsIndexOpen, setMetricsIndexOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   const [eventType, setEventType] = useState<EventType>("all")
@@ -57,15 +47,6 @@ function LifecycleContent() {
       setSearchQuery(trace)
     }
   }, [searchParams])
-
-  useEffect(() => {
-    if (
-      shouldOpenLifecycleMetricsIndex(searchParams.get("metrics")) &&
-      semanticObservabilitySurfaces.length > 0
-    ) {
-      setMetricsIndexOpen(true)
-    }
-  }, [searchParams, semanticObservabilitySurfaces.length])
 
   // Data fetching via custom hook
   const {
@@ -319,94 +300,6 @@ function LifecycleContent() {
               </div>
             ))}
         </div>
-
-        {semanticObservabilitySurfaces.length > 0 ? (
-          <Collapsible
-            open={metricsIndexOpen}
-            onOpenChange={setMetricsIndexOpen}
-            className="mt-4 panel-surface"
-          >
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-muted/40">
-              <span className="flex min-w-0 items-center gap-2">
-                <BarChart3 className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} />
-                <span className="text-sm font-medium text-foreground">Semantic metrics index</span>
-                <Badge variant="outline" className="shrink-0 text-[10px]">
-                  {semanticObservabilitySurfaces.length} surfaces
-                </Badge>
-                <span className="hidden truncate text-xs text-muted-foreground sm:inline">
-                  From runtime-config → Prometheus / Grafana map
-                </span>
-              </span>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                  metricsIndexOpen && "rotate-180",
-                )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="max-h-[min(28rem,45vh)] overflow-y-auto border-t border-border px-3 pb-3 pt-2">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {semanticObservabilitySurfaces.map((surf) => (
-                  <div
-                    key={surf.id || surf.title}
-                    className="rounded-md border border-border bg-background/80 p-3"
-                  >
-                    <p className="text-xs font-medium text-foreground">{surf.title}</p>
-                    {surf.description ? (
-                      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{surf.description}</p>
-                    ) : null}
-                    {surf.metrics?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {surf.metrics.map((m) => (
-                          <code
-                            key={m.name}
-                            className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                            title={[m.kind, ...(m.labels || [])].filter(Boolean).join(" · ")}
-                          >
-                            {m.name}
-                          </code>
-                        ))}
-                      </div>
-                    ) : null}
-                    {surf.event_types?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {surf.event_types.map((et) => (
-                          <Badge key={et} variant="secondary" className="text-[9px] font-normal">
-                            {et}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                    {surf.grafana_dashboards?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {surf.grafana_dashboards.map((file) => {
-                          const href = grafanaDashboardUrl(grafanaUiUrl, file)
-                          const label = file.replace(/\.json$/i, "")
-                          return href ? (
-                            <a
-                              key={file}
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] text-primary hover:bg-muted/50"
-                            >
-                              {label}
-                              <ExternalLink className="h-2.5 w-2.5" />
-                            </a>
-                          ) : (
-                            <span key={file} className="text-[10px] text-muted-foreground/90">
-                              Grafana: {file}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        ) : null}
       </div>
 
       {/* Filters toolbar */}

@@ -30,6 +30,7 @@ export function ScopeSwitcher() {
     mappingVersion,
     isScopeLoading,
     isBootstrapped,
+    isGlobalAdmin,
     refreshBootstrap,
     setTenantId,
     setProjectId,
@@ -37,22 +38,38 @@ export function ScopeSwitcher() {
 
   const aggregateActive = tenantId === "all" && projectId === "all"
 
+  const scopedPairs = useMemo(
+    () =>
+      accessibleScopes
+        .map((s) => ({ tenant_id: s.tenant_id, project_id: s.project_id }))
+        .filter((s) => s.tenant_id && s.project_id && s.tenant_id !== "*" && s.project_id !== "*"),
+    [accessibleScopes],
+  )
+
+  const distinctTenants = useMemo(
+    () => Array.from(new Set(scopedPairs.map((s) => s.tenant_id))).sort(),
+    [scopedPairs],
+  )
+
+  const canAggregate =
+    isGlobalAdmin || distinctTenants.length > 1 || scopedPairs.length > 1
+
   const tenantIds = useMemo(() => {
-    const fromBootstrap = tenantOptions.filter(Boolean)
+    if (distinctTenants.length) return distinctTenants
+    const fromBootstrap = tenantOptions.filter((t) => t && t !== "all")
     if (fromBootstrap.length) return fromBootstrap
-    const fromScopes = Array.from(new Set(accessibleScopes.map((s) => s.tenant_id).filter(Boolean)))
-    return fromScopes.length ? fromScopes.sort() : [tenantId].filter(Boolean)
-  }, [tenantOptions, accessibleScopes, tenantId])
+    return [tenantId].filter(Boolean)
+  }, [distinctTenants, tenantOptions, tenantId])
 
   const projectsForTenant = useMemo(() => {
-    if (tenantId === "all") return ["all"]
+    if (tenantId === "all") return canAggregate ? ["all"] : []
     const fromScopes = Array.from(
       new Set(accessibleScopes.filter((s) => s.tenant_id === tenantId).map((s) => s.project_id).filter(Boolean))
-    )
+    ).filter((p) => p !== "*")
     const base = fromScopes.length ? fromScopes.sort() : projectOptions.filter(Boolean).length ? projectOptions : [projectId].filter(Boolean)
-    if (base.length > 1 && !base.includes("all")) return ["all", ...base]
+    if (canAggregate && base.length > 1 && !base.includes("all")) return ["all", ...base]
     return base
-  }, [accessibleScopes, tenantId, projectOptions, projectId])
+  }, [accessibleScopes, tenantId, projectOptions, projectId, canAggregate])
 
   const busy = isSwitching || isScopeLoading
 
@@ -91,7 +108,7 @@ export function ScopeSwitcher() {
   }
 
   const onPickAggregate = () => {
-    if (aggregateActive) return
+    if (!canAggregate || aggregateActive) return
     setTenantId("all")
     setProjectId("all")
     goToDashboard()
@@ -166,7 +183,7 @@ export function ScopeSwitcher() {
           {!isBootstrapped && !tenantIds.length ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">Loading scope…</div>
           ) : null}
-          {tenantIds.length > 1 ? (
+          {canAggregate && tenantIds.length > 1 ? (
             <DropdownMenuItem
               disabled={busy}
               onClick={onPickAggregate}

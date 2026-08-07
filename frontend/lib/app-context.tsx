@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { setAccessibleScopeCache, clearAccessibleScopeCache } from "@/lib/scope-resolution";
 import type { BootstrapContextResponse } from "@/lib/api";
 import { fetchBootstrapContext } from "@/lib/api";
 import {
@@ -57,10 +58,14 @@ function deriveScopeLists(ctx: BootstrapContextResponse): {
     project_id: String(s.project_id || "").trim(),
     role: String(s.role || "").trim()
   })) as AccessibleScopeRow[];
-  const tenantsFromScopes = Array.from(new Set(scopes.map((s) => s.tenant_id).filter(Boolean)));
+  setAccessibleScopeCache(scopes);
+  const tenantsFromScopes = Array.from(new Set(scopes.map((s) => s.tenant_id).filter((t) => t && t !== "*")));
   const effTenant = String(ctx.effective_scope.tenant_id || "").trim();
   const defTenant = String(ctx.defaults?.tenant_id || "").trim();
-  const tenantSet = new Set<string>([...tenantsFromScopes, effTenant, defTenant].filter(Boolean));
+  const allowedTenants = new Set(tenantsFromScopes);
+  const tenantSet = new Set<string>(tenantsFromScopes);
+  if (effTenant && (allowedTenants.size === 0 || allowedTenants.has(effTenant))) tenantSet.add(effTenant);
+  if (defTenant && (allowedTenants.size === 0 || allowedTenants.has(defTenant))) tenantSet.add(defTenant);
   const tenantOptions = tenantSet.size ? Array.from(tenantSet).sort() : ["default"];
 
   const effectiveTenant = effTenant || "default";
@@ -170,6 +175,7 @@ export function AppContextProvider({ children }: PropsWithChildren) {
         setMappingVersion((prev) => prev || 1);
         setBootstrapSource("client_fallback");
         setAccessibleScopes([]);
+        clearAccessibleScopeCache();
         setTenantOptions((prev) => (prev.length ? prev : ["default"]));
         setProjectOptions((prev) => (prev.length ? prev : ["default_project"]));
         setIsBootstrapped(true);
@@ -234,6 +240,7 @@ export function AppContextProvider({ children }: PropsWithChildren) {
     setToken("");
     setRefreshToken("");
     setUsername(null);
+    clearAccessibleScopeCache();
     bootstrapKeyRef.current = "";
     if (typeof window !== "undefined") window.location.href = "/login";
   }, []);
@@ -249,6 +256,7 @@ export function AppContextProvider({ children }: PropsWithChildren) {
     setToken("");
     setRefreshToken("");
     setUsername(null);
+    clearAccessibleScopeCache();
     bootstrapKeyRef.current = "";
     if (typeof window !== "undefined") window.location.href = "/login";
   }, [token, refreshToken]);

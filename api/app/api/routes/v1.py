@@ -727,11 +727,15 @@ class TaskManifestIn(BaseModel):
 @router.get("/tenants/{tenant_id}/projects")
 def list_projects_v1(tenant_id: str, limit: int = 50, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id="default_project", min_role="viewer")
+    if not scope_context_service.principal_has_tenant_access(principal, tenant_id):
+        raise HTTPException(status_code=403, detail="tenant_forbidden")
+    items = scope_context_service.list_accessible_projects_for_principal(
+        principal, tenant_id, limit=limit
+    )
     return {
         "tenant_id": tenant_id,
         "limit": limit,
-        "items": list_projects(tenant_id=tenant_id, limit=limit),
+        "items": items,
     }
 
 
@@ -815,14 +819,8 @@ def get_tenant_resource_usage_v1(
 @router.get("/tenants")
 def list_tenants_v1(limit: int = 50, authorization: str | None = Header(default=None)) -> dict:
     principal = authenticate_bearer(authorization)
-    if principal.is_global_admin:
-        return {"limit": limit, "items": list_tenants(limit=limit)}
-    if principal.tenant_id:
-        return {
-            "limit": limit,
-            "items": [{"tenant_id": principal.tenant_id, "name": principal.tenant_id}],
-        }
-    return {"limit": limit, "items": list_tenants(limit=limit)}
+    items = scope_context_service.list_accessible_tenants_for_principal(principal, limit=limit)
+    return {"limit": limit, "items": items}
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs")
@@ -1817,20 +1815,30 @@ def bootstrap_context_v1(authorization: str | None = Header(default=None)) -> di
                 "feature_flags": {"scope_switcher": True, "identity_login": True},
             }
 
-    default_tenant = principal.tenant_id or os.getenv("ML_AIR_DEFAULT_TENANT", "default")
-    project_ids = scope_context_service.list_accessible_project_ids(principal, default_tenant)
+    accessible_scopes = scope_context_service.accessible_scopes_for_principal(principal)
+    if not accessible_scopes:
+        default_tenant = principal.tenant_id or os.getenv("ML_AIR_DEFAULT_TENANT", "default")
+        accessible_scopes = [
+            {"tenant_id": default_tenant, "project_id": "default_project", "role": principal.role}
+        ]
+    default_tenant = accessible_scopes[0]["tenant_id"]
+    project_ids = list(
+        {s["project_id"] for s in accessible_scopes if s["tenant_id"] == default_tenant}
+    ) or [accessible_scopes[0]["project_id"]]
+    allowed_pairs = {(s["tenant_id"], s["project_id"]) for s in accessible_scopes}
     selected = scope_context_service.get_scope_override(principal.subject)
     mapping_version = scope_context_service.resolve_mapping_version(principal, default_tenant)
     selected_tenant = str((selected or {}).get("tenant_id") or default_tenant)
     selected_project = str((selected or {}).get("project_id") or project_ids[0])
-    if selected_tenant != default_tenant or selected_project not in project_ids:
+    if (selected_tenant, selected_project) not in allowed_pairs:
         selected_tenant = default_tenant
         selected_project = project_ids[0]
+    role = accessible_scopes[0].get("role") or principal.role
     return {
         "user": {
             "subject": principal.subject,
-            "role": principal.role,
-            "tenant_id": principal.tenant_id,
+            "role": role,
+            "tenant_id": default_tenant,
             "token_issuer": principal.token_issuer,
         },
         "effective_scope": {
@@ -1843,10 +1851,7 @@ def bootstrap_context_v1(authorization: str | None = Header(default=None)) -> di
             "tenant_id": default_tenant,
             "project_id": project_ids[0],
         },
-        "accessible_scopes": [
-            {"tenant_id": default_tenant, "project_id": project_id, "role": principal.role}
-            for project_id in project_ids
-        ],
+        "accessible_scopes": accessible_scopes,
         "feature_flags": {"scope_switcher": True},
     }
 

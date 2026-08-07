@@ -1,6 +1,13 @@
 import { buildAuditTimelineSearchParams, type AuditTimelineFilters } from "./audit-timeline-filters";
 import { resolveRealtimeWsBase } from "./realtime-url";
 import { buildTraceShareUrl as buildTraceViewerShareUrl } from "./trace-url-state";
+import {
+  getAccessibleScopeCache,
+  projectIdsForTenantFromCache,
+  resolveScopePairsFromCache,
+  resolveTenantIdsFromCache,
+  type ScopePair,
+} from "./scope-resolution";
 
 type RuntimeConfigGlobal = {
   __ML_AIR_RUNTIME_CONFIG__?: {
@@ -556,7 +563,11 @@ function authHeaders(token: string) {
 }
 
 async function fetchProjectsForTenant(tenantId: string, token: string): Promise<string[]> {
+  const cached = getAccessibleScopeCache();
   if (tenantId === "all") {
+    if (cached.length) {
+      return Array.from(new Set(cached.map((s) => s.project_id))).sort();
+    }
     const tenants = await fetchTenants(token);
     const responses = await Promise.all(
       tenants.map(async (tid) => {
@@ -576,6 +587,10 @@ async function fetchProjectsForTenant(tenantId: string, token: string): Promise<
         return Boolean(key) && key !== "all" && key !== "global";
       });
     return Array.from(new Set(ids.map((x) => String(x).trim())));
+  }
+  if (cached.length) {
+    const fromCache = projectIdsForTenantFromCache(tenantId, cached);
+    if (fromCache.length) return fromCache;
   }
   const res = await fetch(`${API_BASE}/v1/tenants/${tenantId}/projects?limit=500`, {
     headers: authHeaders(token),
@@ -797,12 +812,18 @@ export async function fetchTenantProjects(tenantId: string, token: string): Prom
 }
 
 async function resolveTenantIds(tenantId: string, token: string): Promise<string[]> {
-  return tenantId === "all" ? fetchTenants(token) : [tenantId];
+  if (tenantId !== "all") return [tenantId];
+  const cached = getAccessibleScopeCache();
+  if (cached.length) return resolveTenantIdsFromCache(tenantId, cached);
+  return fetchTenants(token);
 }
 
-type ScopePair = { tenant_id: string; project_id: string };
-
 async function resolveScopePairs(tenantId: string, projectId: string, token: string): Promise<ScopePair[]> {
+  const cached = getAccessibleScopeCache();
+  if (cached.length) {
+    const pairs = resolveScopePairsFromCache(tenantId, projectId, cached);
+    if (pairs.length) return pairs;
+  }
   const tenantIds = await resolveTenantIds(tenantId, token);
   const pairs: ScopePair[] = [];
   for (const tid of tenantIds) {

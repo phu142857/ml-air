@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   Box,
   Database,
   GitBranch,
@@ -198,16 +197,6 @@ export const PALETTE_COMMANDS: PaletteCommandDef[] = [
     href: "/settings/profile",
     icon: Settings,
     shortcut: ",",
-    pinnable: true,
-  },
-  {
-    id: "action-metrics",
-    section: "actions",
-    kind: "action",
-    label: "Semantic metrics index",
-    description: "Lifecycle metrics and Grafana dashboards",
-    href: "/lifecycle?metrics=1",
-    icon: BarChart3,
     pinnable: true,
   },
   {
