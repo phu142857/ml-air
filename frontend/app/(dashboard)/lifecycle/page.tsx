@@ -1,12 +1,8 @@
 "use client"
 
-import { Suspense, useState, useMemo, useEffect, useCallback, useSyncExternalStore } from "react"
+import { Suspense, useState, useMemo, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { History, Download, Search, Loader2, RefreshCw } from "lucide-react"
-import {
-  getMlairRealtimeUiStatus,
-  subscribeMlairRealtimeUiStatus,
-} from "@/lib/mlair-realtime-status"
+import { History, Download, Search, Loader2 } from "lucide-react"
 import { LifecycleTimeline } from "@/components/mlops/lifecycle-timeline"
 import { EventDetailPanel } from "@/components/mlops/event-detail-panel"
 import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
@@ -57,30 +53,11 @@ function useSplitLayout() {
   return split
 }
 
-function useLiveStatusLabel() {
-  const status = useSyncExternalStore(
-    subscribeMlairRealtimeUiStatus,
-    getMlairRealtimeUiStatus,
-    () => ({ kind: "polling" as const }),
-  )
-  if (status.kind === "connected") {
-    return { label: "Live", tone: "live" as const }
-  }
-  if (status.kind === "connecting" || status.kind === "reconnecting") {
-    return { label: "Connecting", tone: "pending" as const }
-  }
-  if (status.kind === "fatal") {
-    return { label: "Offline", tone: "off" as const }
-  }
-  return { label: "Polling", tone: "poll" as const }
-}
-
 function LifecycleContent() {
   const { toast } = useToast()
   const { tenantId, projectId, token } = useAppContext()
   const searchParams = useSearchParams()
   const isSplit = useSplitLayout()
-  const live = useLiveStatusLabel()
   const [exporting, setExporting] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -222,58 +199,21 @@ function LifecycleContent() {
         accent="violet"
         title="Lifecycle"
         actions={
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium",
-                live.tone === "live" &&
-                  "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-                live.tone === "poll" && "border-border bg-muted/40 text-muted-foreground",
-                live.tone === "pending" &&
-                  "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-                live.tone === "off" && "border-destructive/40 bg-destructive/10 text-destructive",
-              )}
-              title="Realtime event updates"
-            >
-              <span
-                className={cn(
-                  "size-1.5 rounded-full",
-                  live.tone === "live" && "animate-pulse bg-emerald-500",
-                  live.tone === "poll" && "bg-muted-foreground/60",
-                  live.tone === "pending" && "animate-pulse bg-amber-500",
-                  live.tone === "off" && "bg-destructive",
-                )}
-                aria-hidden
-              />
-              {live.label}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-2 text-xs"
-              disabled={isRefreshing}
-              onClick={() => refresh()}
-            >
-              <RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
-              Refresh
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-2 text-xs"
-              disabled={exporting || !token.trim()}
-              onClick={() => void handleExport()}
-            >
-              {exporting ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Download className="size-3.5" />
-              )}
-              Export
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-2 text-xs"
+            disabled={exporting || !token.trim()}
+            onClick={() => void handleExport()}
+          >
+            {exporting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}
+            Export
+          </Button>
         }
       />
 
