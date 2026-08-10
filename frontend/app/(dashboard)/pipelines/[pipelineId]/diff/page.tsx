@@ -123,7 +123,7 @@ function DiffPageInner() {
       />
       <ResourcePageHeader
         icon={FileDiff}
-        accent="amber"
+        accent="zinc"
         title="Config diff"
         actions={
           <div className="flex flex-wrap items-center gap-1.5">

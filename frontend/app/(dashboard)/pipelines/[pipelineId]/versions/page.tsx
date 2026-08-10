@@ -137,7 +137,7 @@ export default function PipelineVersionsPage() {
       />
       <ResourcePageHeader
         icon={GitBranch}
-        accent="amber"
+        accent="zinc"
         title="Pipeline versions"
         actions={
           <div className="flex flex-wrap items-center gap-1.5">

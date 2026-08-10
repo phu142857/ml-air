@@ -610,7 +610,7 @@ export default function ModelDetailPage() {
         <SubpageBackLink href="/models" label="Back to models" />
         <ResourcePageHeader
           icon={Box}
-          accent="violet"
+          accent="zinc"
           title={`Model · ${model?.name ?? modelId}`}
           className="border-b-0"
           actions={
@@ -646,7 +646,7 @@ export default function ModelDetailPage() {
         />
       </div>
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
-        <DetailTabList accent="violet" tabs={[...MODEL_TABS]} />
+        <DetailTabList accent="zinc" tabs={[...MODEL_TABS]} />
         {!scopePinned ? (
           <div className="shrink-0 px-4 pt-3 sm:px-6">
             <ScopePinnedInline message={SCOPE_AGGREGATE_MODEL_DETAIL} />
@@ -712,7 +712,7 @@ export default function ModelDetailPage() {
           ) : null}
           {scopePinned && versionsQuery.data?.items?.length ? (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div className="panel-surface p-3">
                 <h3 className="mb-3 text-sm font-semibold text-foreground">Stage transition timeline</h3>
                 <ModelStageTimeline
                   tenantId={tenantId}
@@ -722,7 +722,7 @@ export default function ModelDetailPage() {
                   versions={versionsQuery.data.items}
                 />
               </div>
-              <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div className="panel-surface p-3">
                 <h3 className="mb-3 text-sm font-semibold text-foreground">Approval history</h3>
                 <ModelApprovalHistory
                   tenantId={tenantId}
@@ -782,7 +782,7 @@ export default function ModelDetailPage() {
           <DetailTabSkeleton variant={MODEL_TAB_SKELETON.policy} />
         ) : (
       <DetailSection title="Trigger policy" accentBorder="violet">
-        <div className="mb-4 rounded-xl border border-border bg-muted/40 p-3">
+        <div className="panel-surface mb-4 p-3">
           <h3 className="mb-2 text-xs font-semibold text-foreground">Auto Trigger Config</h3>
           <div className="grid gap-3 md:grid-cols-3">
             <label className="flex items-center gap-2 text-xs text-foreground">
@@ -938,7 +938,7 @@ export default function ModelDetailPage() {
         {!(recentRunsQuery.data || []).length ? (
           <MlopsEmptyState icon={Play} title="No recent runs" />
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+          <ul className="panel-surface divide-y divide-border overflow-hidden">
             {(recentRunsQuery.data || []).map((r) => (
               <li key={r.run_id} className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2.5">
                 <Link href={`/runs/${encodeURIComponent(r.run_id)}`} className="font-mono text-xs text-primary hover:text-primary/80">

@@ -36,7 +36,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
   if (!versions.length) return null;
 
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div className="panel-surface p-3">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden />
         <span className="text-sm font-semibold text-foreground">Trace version origin</span>
@@ -62,7 +62,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
       ) : null}
       {versionId && provQuery.data ? (
         <div className="mt-3 space-y-2 text-xs">
-          <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+          <div className="inset-surface p-2">
             <span className="font-semibold text-foreground">Snapshot</span>
             <div className="text-muted-foreground">
               {formatVersionLabel(provQuery.data.version.version)} · {provQuery.data.version.record_count ?? 0} rows ·{" "}
@@ -72,7 +72,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
               {provQuery.data.version.checksum || "no checksum"}
             </div>
           </div>
-          <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+          <div className="inset-surface p-2">
             <span className="font-semibold text-foreground">Materialization</span>
             <div className="text-muted-foreground">
               {provQuery.data.materialized_from_buffer ? "From accumulation buffer" : "Direct import / manual"}
@@ -95,7 +95,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
             ) : null}
           </div>
           {provQuery.data.producing_runs.length ? (
-            <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+            <div className="inset-surface p-2">
               <span className="font-semibold text-foreground">Producing runs</span>
               <ul className="mt-1 space-y-1">
                 {provQuery.data.producing_runs.map((r) => (
@@ -112,7 +112,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
             <p className="text-muted-foreground">No lineage edge recorded this version as output yet.</p>
           )}
           {provQuery.data.input_versions.length ? (
-            <div className="rounded-lg border border-border/60 bg-background/60 p-2">
+            <div className="inset-surface p-2">
               <span className="font-semibold text-foreground">Input versions</span>
               <ul className="mt-1 space-y-1 text-muted-foreground">
                 {provQuery.data.input_versions.map((v) => (

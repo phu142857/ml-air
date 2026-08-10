@@ -3,21 +3,11 @@ import { cn } from "@/lib/utils"
 
 export type ResourceAccent = "emerald" | "sky" | "amber" | "violet" | "zinc"
 
-const primaryAccent = {
-  wash: "bg-primary/10",
-  icon: "text-primary",
+/** Neutral GitHub-style header — accent prop kept for API compatibility. */
+const headerIconStyles = {
+  wash: "bg-muted/60",
+  icon: "text-muted-foreground",
 } as const
-
-const accentStyles: Record<ResourceAccent, { wash: string; icon: string }> = {
-  emerald: primaryAccent,
-  sky: primaryAccent,
-  amber: primaryAccent,
-  violet: primaryAccent,
-  zinc: {
-    wash: "bg-muted/60",
-    icon: "text-muted-foreground",
-  },
-}
 
 interface ResourcePageHeaderProps {
   icon: LucideIcon
@@ -36,39 +26,37 @@ export const pageHeaderActionClass =
 
 export function ResourcePageHeader({
   icon: Icon,
-  accent,
+  accent: _accent,
   title,
   subtitle,
   actions,
   leading,
   className,
 }: ResourcePageHeaderProps) {
-  const styles = accentStyles[accent]
-
   return (
     <header
       className={cn(
-        "relative z-[1] shrink-0 border-b border-border bg-background px-4 py-3 sm:px-6",
+        "relative z-[1] shrink-0 border-b border-border bg-background px-4 py-2.5 sm:px-6",
         className,
       )}
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           {leading}
           <span
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
-              styles.wash,
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60",
+              headerIconStyles.wash,
             )}
           >
-            <Icon strokeWidth={1.75} className={cn("h-4 w-4", styles.icon)} aria-hidden />
+            <Icon strokeWidth={1.75} className={cn("h-3.5 w-3.5", headerIconStyles.icon)} aria-hidden />
           </span>
           <div className="min-w-0">
-            <h1 className="font-heading truncate text-lg font-semibold tracking-tight text-foreground">
+            <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
               {title}
             </h1>
             {subtitle ? (
-              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{subtitle}</p>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{subtitle}</p>
             ) : null}
           </div>
         </div>

@@ -108,7 +108,7 @@ export function ModelStageTimeline({
     <ul className="space-y-2">
       {isLoading ? <li className="text-xs text-muted-foreground">Loading timeline…</li> : null}
       {stageEvents.map((row) => (
-        <li key={row.id} className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-xs">
+        <li key={row.id} className="inset-surface flex items-start gap-2 px-2.5 py-2 text-xs">
           <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <div className="min-w-0 flex-1">
             <p className="font-medium text-foreground">{row.label}</p>
@@ -245,7 +245,7 @@ export function ModelVersionComparePanel({
   }, [left, right, leftProv.data, rightProv.data]);
 
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div className="panel-surface p-3">
       <div className="mb-3 flex items-center gap-2">
         <ArrowRightLeft className="h-4 w-4 text-muted-foreground" aria-hidden />
         <span className="text-sm font-semibold text-foreground">Compare versions</span>

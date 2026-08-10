@@ -123,7 +123,7 @@ export default function TasksPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader className="shrink-0" icon={ListTodo} accent="violet" title="Tasks" />
+      <ResourcePageHeader className="shrink-0" icon={ListTodo} accent="zinc" title="Tasks" />
 
       <PageScrollBody variant="workspace">
         <ScopedListContent

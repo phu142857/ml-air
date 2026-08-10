@@ -354,7 +354,7 @@ export function PipelineImportWizard({ tenantId, projectId, token, onComplete, o
               Upload bundle (.zip)
             </Button>
           </div>
-          <div className="overflow-hidden rounded-xl border border-border bg-muted/10">
+          <div className="panel-surface overflow-hidden">
             <Tabs
               value={sourceFormat}
               onValueChange={(value) => handleSourceFormatChange(value as "yaml" | "json")}
@@ -415,7 +415,7 @@ export function PipelineImportWizard({ tenantId, projectId, token, onComplete, o
             Run validation
           </Button>
           {clientResult ? (
-            <div className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3 text-sm">
+            <div className="panel-surface space-y-2 p-3 text-sm">
               <div className="flex items-center gap-2 font-medium text-foreground">
                 {clientResult.ok ? (
                   <CheckCircle2 className="h-4 w-4 text-[color:var(--status-success-fg)]" />
@@ -436,7 +436,7 @@ export function PipelineImportWizard({ tenantId, projectId, token, onComplete, o
           ) : null}
           {serverError ? <p className={cn("text-sm", feedbackMessageClass("failed"))}>{serverError}</p> : null}
           {unknownPluginNames.length > 0 ? (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
               <p className="mb-2 flex items-start gap-2 text-destructive">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
@@ -494,7 +494,7 @@ export function PipelineImportWizard({ tenantId, projectId, token, onComplete, o
             </div>
           </div>
           {previewTab === "readonly" && previewPipeline ? (
-            <div className="min-h-[280px] rounded-xl border border-border/70 bg-muted/10 p-2">
+            <div className="panel-surface min-h-[280px] p-2">
               <PipelineDAG pipeline={previewPipeline} />
             </div>
           ) : (
@@ -515,7 +515,7 @@ export function PipelineImportWizard({ tenantId, projectId, token, onComplete, o
 
       {step === 4 ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
+          <div className="panel-surface p-3 text-sm">
             <div className="mb-2 flex items-center gap-2 font-medium text-foreground">
               <GitBranch className="h-4 w-4" />
               Ready to publish
@@ -543,7 +543,7 @@ export function PipelineImportWizard({ tenantId, projectId, token, onComplete, o
 
       {step === 5 && publishedVersion ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)]/30 p-4 text-sm">
+          <div className="rounded-md border border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)]/30 p-3 text-sm">
             <p className="font-medium text-foreground">
               Published {pipelineId} · {formatVersionLabel(publishedVersion.version)}
             </p>

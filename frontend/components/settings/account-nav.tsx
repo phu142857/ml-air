@@ -65,7 +65,7 @@ function NavLinkItem({ item, active }: { item: NavLink; active: boolean }) {
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-default",
+        "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium transition-default",
         active
           ? "bg-sidebar-accent text-foreground nav-active-rail"
           : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
@@ -82,7 +82,7 @@ function NavSection({ label, items }: { label: string; items: NavLink[] }) {
 
   return (
     <div className="space-y-1">
-      <p className="px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">{label}</p>
+      <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       <nav className="space-y-0.5">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -119,12 +119,12 @@ export function AccountNav() {
   const showAdministration = showIdentityNav || isGlobalAdmin;
 
   return (
-    <aside className="flex w-[220px] shrink-0 flex-col gap-4 border-r border-border bg-sidebar/40 p-3">
+    <aside className="flex w-[200px] shrink-0 flex-col gap-3 border-r border-border bg-sidebar/40 p-2">
       <NavSection label="My Account" items={MY_ACCOUNT} />
 
       {showAdministration ? (
         <div className="space-y-1">
-          <p className="px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+          <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Administration
           </p>
           <div className="space-y-2">
@@ -135,11 +135,11 @@ export function AccountNav() {
       ) : null}
 
       <div className="space-y-1">
-        <p className="px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">About</p>
+        <p className="px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">About</p>
         <Link
           href="/settings/about"
           className={cn(
-            "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-default",
+            "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium transition-default",
             aboutActive
               ? "bg-sidebar-accent text-foreground nav-active-rail"
               : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",

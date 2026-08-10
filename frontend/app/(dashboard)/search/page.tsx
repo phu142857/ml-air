@@ -126,7 +126,7 @@ function SearchPageInner() {
       <ResourcePageHeader
         className="shrink-0"
         icon={Search}
-        accent="sky"
+        accent="zinc"
         title="Search"
       />
 
@@ -140,12 +140,11 @@ function SearchPageInner() {
             options={filterOptions}
             value={type}
             onChange={(id) => pushSearch(input || q, id as SearchType)}
-            variant="sky"
           />
         </div>
 
         <form
-          className="panel-surface p-1 shadow-sm"
+          className="panel-surface p-1"
           onSubmit={(e) => {
             e.preventDefault()
             pushSearch(input, type)
@@ -161,7 +160,7 @@ function SearchPageInner() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Search by run id, task id, dataset name, or status…"
             className={cn(
-              "w-full rounded-md border-0 bg-transparent px-4 py-3.5 text-base text-foreground",
+              "w-full rounded-md border-0 bg-transparent px-3 py-2.5 text-sm text-foreground",
               "placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/40",
             )}
             autoComplete="off"
@@ -197,9 +196,9 @@ function SearchPageInner() {
               <Link
                 key={`${result.type}-${resultLabel(result)}-${i}`}
                 href={normalizeSearchHref(result)}
-                className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/40 group"
+                className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background/60">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/60">
                   <TypeIcon type={result.type} />
                 </div>
                 <div className="min-w-0 flex-1">

@@ -83,18 +83,18 @@ function buildControlPlaneNav(flags: ReturnType<typeof useControlPlaneFeatures>)
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const pathname = usePathname()
   return (
-    <SidebarGroup className="px-2">
-      <SidebarGroupLabel className="px-3 text-[11px] font-medium tracking-wide text-muted-foreground/80">
+    <SidebarGroup className="px-1.5">
+      <SidebarGroupLabel className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5">
+        <SidebarMenu className="gap-px">
           {items.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                  <Link href={item.href}>
+                  <Link href={item.href} aria-current={isActive ? "page" : undefined}>
                     <item.icon strokeWidth={1.75} />
                     <span>{item.title}</span>
                   </Link>
@@ -117,23 +117,24 @@ export function AppSidebar() {
   const showDistributedNav = distributedNav.length > 0
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
-      <SidebarHeader className="border-b border-sidebar-border px-3 py-4 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
+      <SidebarHeader className="border-b border-sidebar-border px-2 py-2.5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
         <Link
           href="/datasets"
-          className="flex min-w-0 items-center gap-2.5 group-data-[collapsible=icon]:justify-center"
+          className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-default hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center"
+          aria-label="MLAir Hub home"
         >
           <MlairLogo size="sm" className="shrink-0" alt="" />
           <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-heading truncate text-sm font-semibold tracking-tight text-foreground">
               MLAir Hub
             </span>
-            <span className="truncate text-[10px] tracking-wide text-muted-foreground">
-              MLOps · Anywhere
+            <span className="truncate text-[10px] text-muted-foreground">
+              MLOps control plane
             </span>
           </div>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="gap-1 py-3">
+      <SidebarContent className="gap-0.5 py-2">
         <NavGroup label="Lifecycle" items={lifecycleNav} />
         <NavGroup label="Overview" items={platformNav} />
         {showExecutionNav ? (

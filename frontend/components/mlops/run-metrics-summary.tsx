@@ -39,7 +39,7 @@ export function RunMetricsSummary({ tracking, onExport, exporting }: Props) {
   if (!metricCount && highlights.length === 0) return null;
 
   return (
-    <div className="mb-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div className="panel-surface mb-4 p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-foreground">Live summary</p>
@@ -64,7 +64,7 @@ export function RunMetricsSummary({ tracking, onExport, exporting }: Props) {
       {highlights.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {highlights.map(([key, item]) => (
-            <div key={key} className="rounded-lg border border-border/60 bg-background/70 px-3 py-2">
+            <div key={key} className="inset-surface px-2.5 py-2">
               <p className="truncate font-mono text-[11px] text-muted-foreground">{key}</p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{formatMetricValue(item.latest)}</p>
               <p className="text-[11px] text-muted-foreground">

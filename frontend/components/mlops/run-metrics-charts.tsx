@@ -257,14 +257,14 @@ function AllMetricsInventory({
 
   if (!filtered.length) {
     return (
-      <div className="rounded-xl border border-border/70 bg-card/40 px-4 py-8 text-center text-sm text-muted-foreground">
+      <div className="panel-surface px-4 py-8 text-center text-sm text-muted-foreground">
         No metrics match this filter.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card/40">
+    <div className="panel-surface">
       <div className="border-b border-border/60 px-4 py-3">
         <p className="text-sm font-semibold text-foreground">All metrics</p>
         <p className="text-xs text-muted-foreground">
@@ -415,7 +415,7 @@ function MetricPanelCard({
     panel.viewType === "pie" && !pieAllowed ? "line" : panel.viewType;
 
   return (
-    <div className="w-full rounded-xl border border-border/70 bg-card/40 p-4">
+    <div className="panel-surface w-full p-3">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

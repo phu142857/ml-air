@@ -1241,7 +1241,7 @@ export default function DatasetHubPage() {
       <SubpageBackLink href="/datasets" label="Back to datasets" />
       <ResourcePageHeader
         icon={Database}
-        accent="emerald"
+        accent="zinc"
         title={dataset ? `Dataset · ${dataset.name}` : "Dataset"}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -1292,7 +1292,7 @@ export default function DatasetHubPage() {
       />
 
       <DetailTabBar
-        accent="emerald"
+        accent="zinc"
         tabs={[...DATASET_TABS]}
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
@@ -1601,7 +1601,7 @@ export default function DatasetHubPage() {
               onPolicyMutated={refetchPolicyReadiness}
             />
             {readinessQuery.data ? (
-              <div className="min-w-0 rounded-xl border border-border bg-muted/40 p-4 text-sm">
+              <div className="panel-surface min-w-0 p-3 text-sm">
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-foreground">
                   <span className="text-muted-foreground">Status:</span>
                   <span

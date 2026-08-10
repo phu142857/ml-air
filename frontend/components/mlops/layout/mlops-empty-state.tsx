@@ -19,7 +19,7 @@ export function MlopsEmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/15 px-4 py-8 text-center",
+        "flex flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/15 px-4 py-6 text-center",
         className,
       )}
     >

@@ -166,7 +166,7 @@ function LifecycleContent() {
   if (fetchState.status === "error" && fetchState.errorType) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <ResourcePageHeader className="shrink-0" icon={History} accent="violet" title="Lifecycle" />
+        <ResourcePageHeader className="shrink-0" icon={History} accent="zinc" title="Lifecycle" />
         <div className="min-h-0 flex-1 overflow-auto">
           <ErrorDisplay
             errorType={fetchState.errorType}
@@ -196,7 +196,7 @@ function LifecycleContent() {
       <ResourcePageHeader
         className="shrink-0"
         icon={History}
-        accent="violet"
+        accent="zinc"
         title="Lifecycle"
         actions={
           <Button
@@ -270,7 +270,7 @@ function LifecycleContent() {
       {/* ── Level 3: Content — 60/40 grid, independent scrolls ── */}
       <div
         className={cn(
-          "grid min-h-0 flex-1 gap-6 overflow-hidden px-4 py-4 sm:px-6",
+          "grid min-h-0 flex-1 gap-4 overflow-hidden px-4 py-3 sm:px-6 sm:gap-6",
           isSplit
             ? "grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
             : "grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)]",

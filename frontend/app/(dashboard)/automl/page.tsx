@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlaskConical, Play, Plus } from "lucide-react";
 import { useState } from "react";
 
-import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,14 +54,15 @@ export default function AutomlPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader className="shrink-0" icon={FlaskConical} accent="emerald" title="AutoML" />
-      <div className="shrink-0 page-toolbar">{!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
+      <ResourcePageHeader className="shrink-0" icon={FlaskConical} accent="zinc" title="AutoML" />
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : undefined}
+      >
         {!scopePinned ? (
-          <MlopsEmptyState icon={FlaskConical} title="Pin a project" description="Tạo và chạy AutoML search theo project." />
+          <MlopsEmptyState icon={FlaskConical} title="Pin a project" description="Create and run AutoML search per project." />
         ) : (
           <>
-            <section className="space-y-3 rounded-lg border border-border/60 p-4 max-w-xl">
+            <section className="panel-surface max-w-xl space-y-3 p-3">
               <h2 className="text-sm font-semibold">New search job</h2>
               <div className="grid gap-3">
                 <div><Label className="text-xs">Pipeline ID</Label><Input value={pipelineId} onChange={(e) => setPipelineId(e.target.value)} className="h-8 text-xs" /></div>
@@ -77,7 +78,7 @@ export default function AutomlPage() {
               {jobsQ.isError ? <p className="text-xs text-destructive">{formatApiClientError(jobsQ.error)}</p> : null}
               <ul className="text-xs space-y-2">
                 {(jobsQ.data?.items || []).map((job) => (
-                  <li key={job.job_id} className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
+                  <li key={job.job_id} className="panel-surface flex items-center justify-between gap-3 p-2.5">
                     <div>
                       <p className="font-mono text-[11px]">{job.job_id.slice(0, 8)}…</p>
                       <p className="text-muted-foreground">pipeline {job.pipeline_id} · {job.status} · trials {(job.trials || []).length}</p>
@@ -93,7 +94,7 @@ export default function AutomlPage() {
             </section>
           </>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

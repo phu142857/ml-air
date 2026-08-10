@@ -32,7 +32,7 @@ export function DatasetQualityPanel({ tenantId, projectId, datasetId, token, ver
   const total = entries.reduce((sum, [, count]) => sum + count, 0);
 
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div className="panel-surface p-3">
       <div className="mb-3 flex items-center gap-2">
         <BarChart3 className="h-4 w-4 text-muted-foreground" aria-hidden />
         <div>

@@ -204,7 +204,7 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="mlair-dag-flow overflow-hidden rounded-xl border border-border/70" style={{ height: canvasHeight }}>
+        <div className="mlair-dag-flow panel-surface overflow-hidden" style={{ height: canvasHeight }}>
           <ReactFlow
             nodes={nodesState}
             edges={edgesState}
@@ -225,7 +225,7 @@ export function PipelineVisualEditor({ pipelineId, config, onChange, className }
           </ReactFlow>
         </div>
 
-        <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-3">
+        <div className="panel-surface space-y-3 p-3">
           <h4 className="text-sm font-medium text-foreground">Task inspector</h4>
           {!selectedTask ? (
             <p className="text-xs text-muted-foreground">Select a node to edit.</p>

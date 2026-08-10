@@ -16,7 +16,7 @@ export function Panel({
     <div
       className={cn(
         "panel-surface transition-default",
-        padded && "p-4 sm:p-5",
+        padded && "p-3 sm:p-4",
         interactive && "cursor-pointer hover:border-border",
         className,
       )}

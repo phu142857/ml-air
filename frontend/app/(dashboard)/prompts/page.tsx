@@ -5,7 +5,7 @@ import { FileText, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { ControlPlaneDisabled } from "@/components/mlops/control-plane/disabled-state";
-import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,14 +84,16 @@ export default function PromptsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader className="shrink-0" icon={FileText} accent="sky" title="Prompts" />
-      <div className="shrink-0 page-toolbar">{!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 grid gap-6 lg:grid-cols-2">
+      <ResourcePageHeader className="shrink-0" icon={FileText} accent="zinc" title="Prompts" />
+      <PageScrollBody
+        className="lg:grid lg:grid-cols-2 lg:gap-4"
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : undefined}
+      >
         {!scopePinned ? (
-          <MlopsEmptyState icon={FileText} title="Pin a project" description="Quản lý prompt theo project." />
+          <MlopsEmptyState icon={FileText} title="Pin a project" description="Manage prompts per project." />
         ) : (
           <>
-            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+            <section className="panel-surface space-y-3 p-3">
               <h2 className="text-sm font-semibold">Prompts</h2>
               <div className="flex gap-2">
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Prompt name" className="h-8 text-xs" />
@@ -105,7 +107,7 @@ export default function PromptsPage() {
                   <li key={p.prompt_id}>
                     <button
                       type="button"
-                      className={`w-full text-left rounded px-2 py-1 hover:bg-muted/60 ${selectedPromptId === p.prompt_id ? "bg-muted" : ""}`}
+                      className={`w-full rounded-md px-2 py-1 text-left hover:bg-muted/60 ${selectedPromptId === p.prompt_id ? "bg-muted" : ""}`}
                       onClick={() => setSelectedPromptId(p.prompt_id)}
                     >
                       {p.name}
@@ -115,7 +117,7 @@ export default function PromptsPage() {
               </ul>
             </section>
 
-            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+            <section className="panel-surface space-y-3 p-3">
               <h2 className="text-sm font-semibold">Versions</h2>
               {!selectedPromptId ? (
                 <p className="text-xs text-muted-foreground">Chọn một prompt.</p>
@@ -130,7 +132,7 @@ export default function PromptsPage() {
                   </Button>
                   <ul className="text-xs space-y-2">
                     {(versionsQ.data?.items || []).map((v) => (
-                      <li key={v.version_id} className="border border-border/40 rounded p-2">
+                      <li key={v.version_id} className="panel-surface p-2">
                         <div className="flex justify-between items-center mb-1">
                           <span>v{v.version_num} · {v.status}</span>
                           <div className="flex gap-1">
@@ -151,7 +153,7 @@ export default function PromptsPage() {
             </section>
           </>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

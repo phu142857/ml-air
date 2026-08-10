@@ -144,7 +144,7 @@ export function ErrorDisplay({
           <summary className="cursor-pointer text-xs text-muted-foreground/80 hover:text-muted-foreground transition-colors">
             Show technical details
           </summary>
-          <div className="mt-2 overflow-x-auto rounded-xl border border-border/60 bg-muted/30 p-3">
+          <div className="mt-2 overflow-x-auto rounded-md border border-border/60 bg-muted/30 p-3">
             <code className="text-xs font-mono text-muted-foreground break-all">
               {error.message}
             </code>
@@ -200,7 +200,7 @@ export function ErrorDisplay({
       
       {/* Helpful links for API down */}
       {errorType === "api-down" && (
-        <div className="mt-8 w-full max-w-md rounded-xl border border-border/60 bg-muted/40 p-4">
+        <div className="panel-surface mt-8 w-full max-w-md p-4">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Troubleshooting
           </h3>

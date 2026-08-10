@@ -16,7 +16,7 @@ export default function NewPipelinePage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubpageBackLink href="/pipelines" label="Back to pipelines" />
-      <ResourcePageHeader icon={GitBranch} accent="amber" title="Import pipeline" className="shrink-0" />
+      <ResourcePageHeader icon={GitBranch} accent="zinc" title="Import pipeline" className="shrink-0" />
       <PageScrollBody>
         {!scopePinned ? (
           <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINES} />

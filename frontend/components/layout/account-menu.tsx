@@ -72,7 +72,7 @@ export function AccountMenu() {
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52 rounded-xl border-border/60 bg-card">
+      <DropdownMenuContent align="end" className="w-52 rounded-md border-border/60 bg-card">
         <DropdownMenuLabel className="truncate font-normal">
           <p className="text-sm font-medium text-foreground">{username || "Account"}</p>
           <p className="text-xs text-muted-foreground">Signed in</p>

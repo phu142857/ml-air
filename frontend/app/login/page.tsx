@@ -133,13 +133,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-background to-muted/30 px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-md space-y-5 rounded-xl border border-border/70 bg-card p-8 shadow-sm"
+        className="panel-surface w-full max-w-md space-y-5 p-6"
       >
         <div className="flex flex-col items-center gap-4 text-center">
-          <MlairLogo size="hero" priority alt="MLAir" className="rounded-xl p-1" />
+          <MlairLogo size="hero" priority alt="MLAir" className="rounded-md p-1" />
           <div className="space-y-1">
             <h1 className="sr-only">MLAir Hub</h1>
             <p className="text-sm font-medium text-foreground">Sign in to MLAir Hub</p>

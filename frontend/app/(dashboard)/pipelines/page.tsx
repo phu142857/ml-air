@@ -6,6 +6,7 @@ import { useQueries } from "@tanstack/react-query"
 import { GitBranch, Plus, Database, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { PipelineDAG } from "@/components/mlops/pipeline-dag"
 import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, pageHeaderActionClass } from "@/components/mlops/layout"
@@ -26,11 +27,18 @@ export default function PipelinesPage() {
   const { tenantId, projectId, token } = useAppContext()
   const scopePinned = isScopePinned(tenantId, projectId)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [listQuery, setListQuery] = useState("")
 
   const pipelinesQuery = usePipelinesList(Boolean(token?.trim()))
   const showLoadMore = scopePinned && pipelinesQuery.hasNextPage
 
   const items = pipelinesQuery.items
+
+  const filteredItems = useMemo(() => {
+    const q = listQuery.trim().toLowerCase()
+    if (!q) return items
+    return items.filter((p) => p.pipeline_id.toLowerCase().includes(q))
+  }, [items, listQuery])
 
   const versionQueries = useQueries({
     queries: items.map((p) => ({
@@ -51,16 +59,19 @@ export default function PipelinesPage() {
   }, [items, versionQueries])
 
   useEffect(() => {
-    if (!items.length) {
+    if (!filteredItems.length) {
       setSelectedId(null)
       return
     }
-    if (!selectedId || !items.some((p) => p.pipeline_id === selectedId)) {
-      setSelectedId(items[0].pipeline_id)
+    if (!selectedId || !filteredItems.some((p) => p.pipeline_id === selectedId)) {
+      setSelectedId(filteredItems[0].pipeline_id)
     }
-  }, [items, selectedId])
+  }, [filteredItems, selectedId])
 
-  const selected = useMemo(() => items.find((p) => p.pipeline_id === selectedId) ?? null, [items, selectedId])
+  const selected = useMemo(
+    () => filteredItems.find((p) => p.pipeline_id === selectedId) ?? null,
+    [filteredItems, selectedId],
+  )
 
   const topologyEnabled = Boolean(selectedId && token.trim()) && scopePinned
 
@@ -116,7 +127,7 @@ export default function PipelinesPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={GitBranch}
-        accent="amber"
+        accent="zinc"
         title="Pipelines"
         actions={
           scopePinned ? (
@@ -136,93 +147,108 @@ export default function PipelinesPage() {
           isLoading={pipelinesQuery.isLoading}
           isError={pipelinesQuery.isError}
           errorMessage={pipelinesQuery.error ? formatApiClientError(pipelinesQuery.error) : undefined}
-          isEmpty={items.length === 0}
+          isEmpty={filteredItems.length === 0}
           emptyIcon={GitBranch}
           emptyTitle="No pipelines"
           skeletonRows={4}
         >
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="space-y-3">
-              <h2 className="px-1 text-sm font-medium capitalize text-muted-foreground">All pipelines</h2>
-              {items.map((pipeline, index) => {
-                const isSelected = selectedId === pipeline.pipeline_id
-                const configVer = latestConfigVersionByPipeline.get(pipeline.pipeline_id)
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-card">
+              <div className="shrink-0 border-b border-border px-3 py-2">
+                <Input
+                  placeholder="Filter pipelines…"
+                  value={listQuery}
+                  onChange={(e) => setListQuery(e.target.value)}
+                  className="h-8 bg-background"
+                  aria-label="Filter pipelines"
+                />
+              </div>
+              <div className="scroll-region min-h-0 max-h-[min(70vh,640px)] flex-1">
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 z-10 border-b border-border bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Pipeline</th>
+                      <th className="hidden px-2 py-2 font-medium sm:table-cell">Status</th>
+                      <th className="px-3 py-2 text-right font-medium">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((pipeline) => {
+                      const isSelected = selectedId === pipeline.pipeline_id
+                      const configVer = latestConfigVersionByPipeline.get(pipeline.pipeline_id)
+                      const versionIndex = items.findIndex((p) => p.pipeline_id === pipeline.pipeline_id)
 
-                return (
-                  <button
-                    key={pipeline.pipeline_id}
-                    type="button"
-                    onClick={() => setSelectedId(pipeline.pipeline_id)}
-                    className={cn(
-                      "w-full rounded-xl border p-4 text-left transition-default",
-                      isSelected
-                        ? "border-primary/30 bg-primary/5 ring-1 ring-primary/20"
-                        : "panel-surface hover:border-border",
-                    )}
-                  >
-                    <div className="mb-2 flex items-start justify-between">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <Link
-                          href={`/pipelines/${encodeURIComponent(pipeline.pipeline_id)}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="truncate font-mono text-sm font-medium text-foreground hover:text-primary"
-                        >
-                          {pipeline.pipeline_id}
-                        </Link>
-                        {configVer != null ? (
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 border-amber-500/30 font-mono text-[10px] text-[color:var(--status-pending-fg)]"
-                            title="Latest published config version (used for new runs)"
-                          >
-                            {formatVersionLabel(configVer)}
-                          </Badge>
-                        ) : versionQueries[index]?.isLoading ? (
-                          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
-                        ) : null}
-                      </div>
-                      <Badge variant="outline" className="shrink-0 border-border font-mono text-[10px] text-muted-foreground">
-                        {pipeline.total_runs} runs
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      {!pipeline.latest_status || String(pipeline.latest_status).toLowerCase() === "idle" ? (
-                        <StatusBadge status="cancelled" label="Idle" size="sm" />
-                      ) : (
-                        <StatusBadge value={pipeline.latest_status} size="sm" />
-                      )}
-                      <span className="text-[10px] text-muted-foreground/80">
-                        {formatRelativeTime(pipeline.updated_at)}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
+                      return (
+                        <tr key={pipeline.pipeline_id}>
+                          <td colSpan={3} className="p-0">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedId(pipeline.pipeline_id)}
+                              className={cn(
+                                "interactive-row grid w-full grid-cols-1 items-center gap-1 border-0 border-b border-border px-3 py-2 text-left sm:grid-cols-[1fr_auto_auto]",
+                                isSelected && "bg-primary/[0.04] ring-1 ring-inset ring-primary/20",
+                              )}
+                              aria-current={isSelected ? "true" : undefined}
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <span className="truncate font-mono text-xs font-medium text-foreground">
+                                  {pipeline.pipeline_id}
+                                </span>
+                                {configVer != null ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="shrink-0 font-mono text-[10px] text-[color:var(--status-pending-fg)]"
+                                  >
+                                    {formatVersionLabel(configVer)}
+                                  </Badge>
+                                ) : versionQueries[versionIndex]?.isLoading ? (
+                                  <Loader2 className="h-3 w-3 shrink-0 motion-safe-spin text-muted-foreground" />
+                                ) : null}
+                              </div>
+                              <div className="hidden sm:block">
+                                {!pipeline.latest_status ||
+                                String(pipeline.latest_status).toLowerCase() === "idle" ? (
+                                  <StatusBadge status="cancelled" label="Idle" size="sm" />
+                                ) : (
+                                  <StatusBadge value={pipeline.latest_status} size="sm" />
+                                )}
+                              </div>
+                              <span className="text-right text-[11px] tabular-nums text-muted-foreground">
+                                {formatRelativeTime(pipeline.updated_at)}
+                              </span>
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
               {showLoadMore ? (
-                <div className="flex justify-center pt-2">
+                <div className="shrink-0 border-t border-border p-2 text-center">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="h-7 text-xs"
                     disabled={pipelinesQuery.isFetchingNextPage}
                     onClick={() => void pipelinesQuery.fetchNextPage?.()}
                   >
-                    {pipelinesQuery.isFetchingNextPage ? "Loading…" : "Load more pipelines"}
+                    {pipelinesQuery.isFetchingNextPage ? "Loading…" : "Load more"}
                   </Button>
                 </div>
               ) : null}
             </div>
 
-            <div className="space-y-6 lg:col-span-2">
+            <div className="space-y-4 lg:col-span-2">
               {!displayPipeline ? (
                 <MlopsEmptyState icon={GitBranch} title="Select a pipeline" className="border-0 bg-transparent p-0" />
               ) : (
                 <>
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
                     <div className="min-w-0">
-                      <h2 className="truncate text-lg font-semibold text-foreground">
+                      <h2 className="truncate text-base font-semibold text-foreground">
                         {selected?.pipeline_id || displayPipeline.id}
                         {selectedId && latestConfigVersionByPipeline.get(selectedId) != null ? (
                           <span className="ml-2 font-mono text-sm font-normal text-[color:var(--status-pending-fg)]">
@@ -288,8 +314,10 @@ export default function PipelinesPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="mb-3 text-sm font-medium text-muted-foreground">Pipeline topology</h3>
+                  <div className="rounded-md border border-border bg-card p-3">
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Pipeline topology
+                    </h3>
                     <PipelineDAG key={selectedId} pipeline={displayPipeline} />
                   </div>
                 </>

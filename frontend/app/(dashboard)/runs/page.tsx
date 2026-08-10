@@ -158,7 +158,7 @@ export default function RunsPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={Play}
-        accent="sky"
+        accent="zinc"
         title="Runs"
       />
 

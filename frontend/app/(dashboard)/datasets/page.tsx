@@ -152,7 +152,7 @@ export default function DatasetsPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={Database}
-        accent="emerald"
+        accent="zinc"
         title="Datasets"
         actions={
           <Button

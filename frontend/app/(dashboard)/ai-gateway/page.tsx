@@ -5,7 +5,7 @@ import { Bot, Plus, Send } from "lucide-react";
 import { useState } from "react";
 
 import { ControlPlaneDisabled } from "@/components/mlops/control-plane/disabled-state";
-import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,14 +88,15 @@ export default function AiGatewayPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader className="shrink-0" icon={Bot} accent="violet" title="AI Gateway" />
-      <div className="shrink-0 page-toolbar">{!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-8">
+      <ResourcePageHeader className="shrink-0" icon={Bot} accent="zinc" title="AI Gateway" />
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : undefined}
+      >
         {!scopePinned ? (
-          <MlopsEmptyState icon={Bot} title="Pin a project" description="Cấu hình gateway theo tenant/project." />
+          <MlopsEmptyState icon={Bot} title="Pin a project" description="Configure gateway per tenant/project." />
         ) : (
           <>
-            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+            <section className="panel-surface space-y-3 p-3">
               <h2 className="text-sm font-semibold">Providers</h2>
               <div className="grid gap-3 md:grid-cols-3">
                 <div><Label className="text-xs">Type</Label><Input value={providerType} onChange={(e) => setProviderType(e.target.value)} className="h-8 text-xs" /></div>
@@ -113,7 +114,7 @@ export default function AiGatewayPage() {
               </ul>
             </section>
 
-            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+            <section className="panel-surface space-y-3 p-3">
               <h2 className="text-sm font-semibold">Routes</h2>
               <div className="grid gap-3 md:grid-cols-2">
                 <div><Label className="text-xs">Model pattern</Label><Input value={routePattern} onChange={(e) => setRoutePattern(e.target.value)} className="h-8 text-xs" /></div>
@@ -127,7 +128,7 @@ export default function AiGatewayPage() {
               </ul>
             </section>
 
-            <section className="space-y-3 rounded-lg border border-border/60 p-4">
+            <section className="panel-surface space-y-3 p-3">
               <h2 className="text-sm font-semibold">Chat test</h2>
               <div className="grid gap-3 md:grid-cols-2">
                 <div><Label className="text-xs">Model</Label><Input value={chatModel} onChange={(e) => setChatModel(e.target.value)} className="h-8 text-xs" /></div>
@@ -136,11 +137,11 @@ export default function AiGatewayPage() {
               <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => chatM.mutate()} disabled={chatM.isPending}>
                 <Send className={cn("h-3.5 w-3.5", chatM.isPending && "animate-pulse")} /> Send
               </Button>
-              {chatResult ? <pre className="text-xs bg-muted/40 rounded p-3 overflow-auto max-h-64">{chatResult}</pre> : null}
+              {chatResult ? <pre className="panel-surface max-h-64 overflow-auto p-3 text-xs">{chatResult}</pre> : null}
             </section>
           </>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

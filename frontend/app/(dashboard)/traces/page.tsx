@@ -59,10 +59,10 @@ function TracesPageContent() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader icon={Route} accent="sky" title="Traces" />
+      <ResourcePageHeader icon={Route} accent="zinc" title="Traces" />
 
       {isAggregate ? (
-        <div className="shrink-0 px-4 py-3 sm:px-6">
+        <div className="page-toolbar shrink-0 py-2">
           <ScopePinnedInline message={SCOPE_AGGREGATE_RUNS} />
         </div>
       ) : null}

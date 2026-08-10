@@ -16,7 +16,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     return (
       <div
         className={cn(
-          "h-9 w-9 shrink-0 rounded-xl border border-border/60 bg-muted/30",
+          "h-8 w-8 shrink-0 rounded-md border border-border/60 bg-muted/30",
           className,
         )}
         aria-hidden
@@ -32,7 +32,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       variant="outline"
       size="icon"
       className={cn(
-        "relative h-9 w-9 shrink-0 rounded-xl border-border/70 bg-muted/30 text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        "relative h-8 w-8 shrink-0 rounded-md border-border/70 bg-muted/30 text-muted-foreground hover:bg-accent/50 hover:text-foreground",
         className,
       )}
       onClick={() => setTheme(isDark ? "light" : "dark")}

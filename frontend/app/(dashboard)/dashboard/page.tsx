@@ -62,7 +62,7 @@ export default function DashboardPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={Network}
-        accent="sky"
+        accent="zinc"
         title="Dashboard"
       />
 

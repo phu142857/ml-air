@@ -5,7 +5,7 @@ import { Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { ControlPlaneDisabled } from "@/components/mlops/control-plane/disabled-state";
-import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,14 +53,16 @@ export default function CopilotPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ResourcePageHeader className="shrink-0" icon={Sparkles} accent="sky" title="AI Copilot" />
-      <div className="shrink-0 page-toolbar">{!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4 max-w-3xl">
+      <ResourcePageHeader className="shrink-0" icon={Sparkles} accent="zinc" title="AI Copilot" />
+      <PageScrollBody
+        className="max-w-3xl"
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : undefined}
+      >
         {!scopePinned ? (
-          <MlopsEmptyState icon={Sparkles} title="Pin a project" description="Copilot theo project scope." />
+          <MlopsEmptyState icon={Sparkles} title="Pin a project" description="Copilot runs in project scope." />
         ) : (
           <>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {ACTIONS.map((a) => (
                 <Button key={a.id} size="sm" variant={action === a.id ? "default" : "outline"} className="h-7 text-xs" onClick={() => setAction(a.id)}>
                   {a.label}
@@ -75,10 +77,10 @@ export default function CopilotPage() {
               {suggestM.isPending ? "Thinking…" : "Ask Copilot"}
             </Button>
             {suggestM.isError ? <p className="text-xs text-destructive">{formatApiClientError(suggestM.error)}</p> : null}
-            {result ? <pre className="text-xs bg-muted/40 rounded p-3 overflow-auto">{result}</pre> : null}
+            {result ? <pre className="panel-surface overflow-auto p-3 text-xs">{result}</pre> : null}
           </>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

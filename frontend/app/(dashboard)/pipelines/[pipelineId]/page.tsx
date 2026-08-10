@@ -130,7 +130,7 @@ export default function PipelineDetailPage() {
       <SubpageBackLink href="/pipelines" label="Back to pipelines" />
       <ResourcePageHeader
         icon={GitBranch}
-        accent="amber"
+        accent="zinc"
         title="Pipeline"
         subtitle={pageSubtitle}
         actions={

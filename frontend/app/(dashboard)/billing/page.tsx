@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DollarSign, RefreshCw } from "lucide-react";
 
 import { ControlPlaneDisabled } from "@/components/mlops/control-plane/disabled-state";
-import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
+import { MlopsEmptyState, PageScrollBody, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/lib/app-context";
 import { fetchChargeback, fetchChargebackSnapshots, saveChargebackSnapshot } from "@/lib/control-plane-api";
@@ -47,7 +47,7 @@ export default function BillingPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={DollarSign}
-        accent="amber"
+        accent="zinc"
         title="Billing & Chargeback"
         actions={
           <Button variant="outline" size="sm" className="h-8 gap-2 text-xs" onClick={() => chargebackQ.refetch()} disabled={!scopePinned || chargebackQ.isFetching}>
@@ -55,30 +55,31 @@ export default function BillingPage() {
           </Button>
         }
       />
-      <div className="shrink-0 page-toolbar">{!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
+      <PageScrollBody
+        header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : undefined}
+      >
         {!scopePinned ? (
-          <MlopsEmptyState icon={DollarSign} title="Pin a project" description="Chargeback theo project." />
+          <MlopsEmptyState icon={DollarSign} title="Pin a project" description="Chargeback is scoped per project." />
         ) : chargebackQ.isError ? (
           <p className="text-sm text-destructive">{formatApiClientError(chargebackQ.error)}</p>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="rounded-lg border border-border/60 p-4">
-                <p className="text-xs text-muted-foreground">Total (30d)</p>
-                <p className="text-2xl font-semibold">${report?.total_cost_usd?.toFixed(2) ?? "—"}</p>
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-4">
+              <div className="bg-card px-3 py-2.5">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Total (30d)</p>
+                <p className="text-2xl font-semibold tabular-nums">${report?.total_cost_usd?.toFixed(2) ?? "—"}</p>
               </div>
               {report?.categories
                 ? Object.entries(report.categories).map(([k, v]) => (
-                    <div key={k} className="rounded-lg border border-border/60 p-4">
-                      <p className="text-xs text-muted-foreground capitalize">{k}</p>
-                      <p className="text-xl font-semibold">${Number(v).toFixed(2)}</p>
+                    <div key={k} className="bg-card px-3 py-2.5">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground capitalize">{k}</p>
+                      <p className="text-xl font-semibold tabular-nums">${Number(v).toFixed(2)}</p>
                     </div>
                   ))
                 : null}
             </div>
 
-            <section className="space-y-2">
+            <section className="panel-surface space-y-2 p-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Top runs by cost</h2>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => snapshotM.mutate()} disabled={snapshotM.isPending}>
@@ -95,8 +96,8 @@ export default function BillingPage() {
               </ul>
             </section>
 
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold">Snapshots</h2>
+            <section className="panel-surface space-y-2 p-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Snapshots</h2>
               <ul className="text-xs text-muted-foreground space-y-1">
                 {(snapshotsQ.data?.items || []).map((s) => (
                   <li key={s.period_key}>{s.period_key} · ${s.payload?.total_cost_usd?.toFixed(2) ?? "—"}</li>
@@ -105,7 +106,7 @@ export default function BillingPage() {
             </section>
           </>
         )}
-      </div>
+      </PageScrollBody>
     </div>
   );
 }

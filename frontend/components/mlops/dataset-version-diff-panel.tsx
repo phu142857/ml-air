@@ -43,7 +43,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
   if (versions.length < 2) return null;
 
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div className="panel-surface p-3">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <GitCompare className="h-4 w-4 text-muted-foreground" aria-hidden />
         <span className="text-sm font-semibold text-foreground">Compare versions</span>
@@ -97,7 +97,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
       ) : null}
       {compare && diffQuery.data ? (
         <div className="mt-4 grid gap-3 text-xs md:grid-cols-2">
-          <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+          <div className="inset-surface p-2.5">
             <p className="mb-1 font-semibold text-foreground">From {formatVersionLabel(diffQuery.data.from.version)}</p>
             <p className="text-muted-foreground">{diffQuery.data.from.record_count} rows</p>
             <p className="truncate font-mono text-[10px] text-muted-foreground" title={diffQuery.data.from.checksum || ""}>
@@ -105,7 +105,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
             </p>
             <p className="text-muted-foreground">{formatDateTimeCompact(diffQuery.data.from.created_at)}</p>
           </div>
-          <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+          <div className="inset-surface p-2.5">
             <p className="mb-1 font-semibold text-foreground">To {formatVersionLabel(diffQuery.data.to.version)}</p>
             <p className="text-muted-foreground">{diffQuery.data.to.record_count} rows</p>
             <p className="truncate font-mono text-[10px] text-muted-foreground" title={diffQuery.data.to.checksum || ""}>

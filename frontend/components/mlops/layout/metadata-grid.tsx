@@ -26,7 +26,7 @@ export function MetadataGrid({ items, columns = 2, className }: MetadataGridProp
       {items.map((item) => (
         <div
           key={item.label}
-          className="min-w-0 overflow-hidden rounded-xl border border-border/50 bg-muted/15 px-3 py-2.5"
+          className="inset-surface min-w-0 overflow-hidden px-2.5 py-2"
         >
           <dt className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {item.label}

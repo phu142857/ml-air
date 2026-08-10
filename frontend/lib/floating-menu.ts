@@ -13,7 +13,7 @@ export const FLOATING_MENU_MIN_HEIGHT_PX = 96;
 export const FLOATING_MENU_FLIP_THRESHOLD_PX = 160;
 
 export const floatingMenuSurfaceClass =
-  "overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-card py-1 shadow-diffused";
+  "overflow-y-auto overscroll-contain rounded-md border border-border/60 bg-card py-1 shadow-diffused";
 
 /**
  * Viewport-aware fixed layout for portaled menus (dropdowns, listboxes).

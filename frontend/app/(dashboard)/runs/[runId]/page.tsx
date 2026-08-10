@@ -557,7 +557,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SubpageBackLink href="/runs" label="Back to runs" />
-        <ResourcePageHeader accent="sky" icon={Play} title="Run not found" subtitle={runId} className="border-b-0" />
+        <ResourcePageHeader accent="zinc" icon={Play} title="Run not found" subtitle={runId} className="border-b-0" />
         <div className="flex flex-1 items-center justify-center p-6">
           <MlopsEmptyState
             icon={Activity}
@@ -578,7 +578,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
         <SubpageBackLink href="/runs" label="Back to runs" />
         <ResourcePageHeader
-          accent="sky"
+          accent="zinc"
           icon={Play}
           title={runId}
           subtitle={
@@ -670,7 +670,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden">
-        <DetailTabList accent="sky" tabs={[...RUN_TABS]} />
+        <DetailTabList accent="zinc" tabs={[...RUN_TABS]} />
 
         {runQuery.isError ? (
           <div className="shrink-0 px-4 pt-3 sm:px-6">

@@ -66,7 +66,7 @@ export const STATUS_CHIP_BG: Record<StatusChipKey, string> = {
 
 /** Bordered callout shells — pair with semantic text classes inside. */
 export const STATUS_CALLOUT_CLASS = {
-  failed: `rounded-xl border px-4 py-3 text-sm ${failedChip}`,
+  failed: `rounded-md border px-4 py-3 text-sm ${failedChip}`,
   failedCompact: `rounded-md border px-2 py-1.5 text-xs ${failedChip}`,
   warning: `rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${pendingChip}`,
   warningCompact: `rounded-md border px-2 py-1.5 text-xs ${pendingChip}`,

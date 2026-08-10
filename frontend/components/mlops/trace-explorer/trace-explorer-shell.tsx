@@ -90,17 +90,17 @@ export function TraceExplorerShell({
       onValueChange={setActiveTab}
       className={cn("flex min-h-0 flex-1 flex-col", className)}
     >
-      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-muted/30 px-3 py-1.5">
-        <TabsList className="h-auto min-w-0 flex-1 flex-wrap justify-start gap-0.5 bg-transparent p-0">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-1">
+        <TabsList className="h-auto min-w-0 flex-1 flex-wrap justify-start gap-0.5 border-0 bg-transparent p-0">
           <TabsTrigger
             value="spans"
-            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-2.5 text-xs data-[state=active]:bg-muted data-[state=active]:text-foreground"
           >
             Spans
           </TabsTrigger>
           <TabsTrigger
             value="events"
-            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-2.5 text-xs data-[state=active]:bg-muted data-[state=active]:text-foreground"
             disabled={!detailEnabled || (!data && !isLoading)}
           >
             Events
@@ -110,7 +110,7 @@ export function TraceExplorerShell({
           </TabsTrigger>
           <TabsTrigger
             value="logs"
-            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-2.5 text-xs data-[state=active]:bg-muted data-[state=active]:text-foreground"
             disabled={!detailEnabled || (!data && !isLoading)}
           >
             Logs
@@ -120,7 +120,7 @@ export function TraceExplorerShell({
           </TabsTrigger>
           <TabsTrigger
             value="runs"
-            className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            className="h-7 rounded-md px-2.5 text-xs data-[state=active]:bg-muted data-[state=active]:text-foreground"
             disabled={!detailEnabled || (!data && !isLoading)}
           >
             Runs
@@ -131,7 +131,7 @@ export function TraceExplorerShell({
           {hasServiceGraph ? (
             <TabsTrigger
               value="services"
-              className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              className="h-7 rounded-md px-2.5 text-xs data-[state=active]:bg-muted data-[state=active]:text-foreground"
             >
               Services
             </TabsTrigger>
@@ -139,7 +139,7 @@ export function TraceExplorerShell({
           {hasExecutionGraph ? (
             <TabsTrigger
               value="graph"
-              className="h-7 rounded-md px-3 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              className="h-7 rounded-md px-2.5 text-xs data-[state=active]:bg-muted data-[state=active]:text-foreground"
             >
               Execution graph
             </TabsTrigger>

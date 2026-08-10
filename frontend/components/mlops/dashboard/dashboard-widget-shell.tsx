@@ -103,7 +103,7 @@ export function DashboardWidgetShell({
     >
       <header
         className={cn(
-          "flex shrink-0 items-center justify-between gap-2 border-b border-border/70 px-3 py-2",
+          "flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1.5",
           editMode && "cursor-grab active:cursor-grabbing",
         )}
       >
@@ -127,7 +127,7 @@ export function DashboardWidgetShell({
         ) : null}
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2.5">{children}</div>
 
       {editMode ? (
         <div

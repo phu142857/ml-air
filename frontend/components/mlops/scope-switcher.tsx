@@ -166,7 +166,7 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!tenantIds.length || busy}
-            className="h-9 max-w-[200px] gap-2 rounded-xl text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground"
+            className="h-8 max-w-[200px] gap-2 rounded-md text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
             <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -177,7 +177,7 @@ export function ScopeSwitcher() {
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56 rounded-xl border-border/60 bg-card">
+        <DropdownMenuContent align="start" className="w-56 rounded-md border-border/60 bg-card">
           <DropdownMenuLabel className="text-xs text-muted-foreground">Tenant</DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-muted" />
           {!isBootstrapped && !tenantIds.length ? (
@@ -217,7 +217,7 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!projectsForTenant.length || busy}
-            className="h-9 max-w-[220px] gap-2 rounded-xl text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground"
+            className="h-8 max-w-[220px] gap-2 rounded-md text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
             <FolderKanban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -228,7 +228,7 @@ export function ScopeSwitcher() {
             <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64 rounded-xl border-border/60 bg-card">
+        <DropdownMenuContent align="start" className="w-64 rounded-md border-border/60 bg-card">
           <DropdownMenuLabel className="text-xs text-muted-foreground">Project</DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-muted" />
           {projectsForTenant.map((pid) => (

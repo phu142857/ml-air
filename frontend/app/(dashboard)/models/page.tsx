@@ -126,7 +126,7 @@ export default function ModelsPage() {
       <ResourcePageHeader
         className="shrink-0"
         icon={Box}
-        accent="violet"
+        accent="zinc"
         title="Models"
         actions={
           <div className="flex flex-wrap items-center gap-2">

@@ -189,7 +189,7 @@ function TaskDetailContent() {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SubpageBackLink href="/tasks" label="Back to tasks" />
-        <ResourcePageHeader accent="violet" icon={ListTodo} title="Task not found" subtitle={taskId} />
+        <ResourcePageHeader accent="zinc" icon={ListTodo} title="Task not found" subtitle={taskId} />
         <div className="flex flex-1 items-center justify-center p-6">
           <MlopsEmptyState
             icon={ListTodo}
@@ -210,7 +210,7 @@ function TaskDetailContent() {
       <SubpageBackLink href="/tasks" label="Back to tasks" />
       <ResourcePageHeader
         icon={ListTodo}
-        accent="violet"
+        accent="zinc"
         title="Task"
         subtitle={
           isError
