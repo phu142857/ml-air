@@ -131,42 +131,38 @@ function SearchPageInner() {
       />
 
       <PageScrollBody
-        className="space-y-5"
         header={
-          <>
+          <div className="flex flex-col gap-3">
             {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_SEARCH} /> : null}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <FilterChips
-            options={filterOptions}
-            value={type}
-            onChange={(id) => pushSearch(input || q, id as SearchType)}
-          />
-        </div>
-
-        <form
-          className="panel-surface p-1"
-          onSubmit={(e) => {
-            e.preventDefault()
-            pushSearch(input, type)
-          }}
-        >
-          <label htmlFor="global-search" className="sr-only">
-            Search workspace
-          </label>
-          <input
-            id="global-search"
-            type="search"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Search by run id, task id, dataset name, or status…"
-            className={cn(
-              "w-full rounded-md border-0 bg-transparent px-3 py-2.5 text-sm text-foreground",
-              "placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/40",
-            )}
-            autoComplete="off"
-          />
-        </form>
-          </>
+            <FilterChips
+              options={filterOptions}
+              value={type}
+              onChange={(id) => pushSearch(input || q, id as SearchType)}
+            />
+            <form
+              className="panel-surface p-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                pushSearch(input, type)
+              }}
+            >
+              <label htmlFor="global-search" className="sr-only">
+                Search workspace
+              </label>
+              <input
+                id="global-search"
+                type="search"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Search by run id, task id, dataset name, or status…"
+                className={cn(
+                  "w-full rounded-md border-0 bg-transparent px-3 py-2.5 text-sm text-foreground",
+                  "placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-primary/40",
+                )}
+                autoComplete="off"
+              />
+            </form>
+          </div>
         }
       >
         {showSkeleton ? (
