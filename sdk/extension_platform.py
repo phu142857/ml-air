@@ -19,14 +19,6 @@ EXTENSION_POINTS = {
         "contract": "app.domains.projections.framework:ProjectionHandler",
         "description": "Read model projectors",
     },
-    "ai_provider": {
-        "contract": "app.domains.control_plane.gateway_service:create_provider",
-        "description": "LLM provider adapters",
-    },
-    "gateway_adapter": {
-        "contract": "app.domains.control_plane.gateway_service:chat_completion",
-        "description": "AI gateway routing adapters",
-    },
 }
 
 

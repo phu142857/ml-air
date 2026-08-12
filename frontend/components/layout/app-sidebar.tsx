@@ -3,23 +3,18 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Bot,
   Database,
-  DollarSign,
-  FileText,
-  FlaskConical,
   GitBranch,
+  History,
   Play,
   ListTodo,
   Search,
-  History,
   Box,
   Network,
   LayoutDashboard,
   Route,
   Globe,
   Server,
-  Sparkles,
 } from "lucide-react"
 import { MlairLogo } from "@/components/brand/mlair-logo"
 import {
@@ -34,7 +29,6 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
-import { hasAnyControlPlaneSurface, useControlPlaneFeatures } from "@/lib/use-control-plane-features"
 import { getRuntimeConfig } from "@/lib/runtime-config"
 
 type NavItem = {
@@ -70,16 +64,6 @@ function buildDistributedNav(): NavItem[] {
   return items
 }
 
-function buildControlPlaneNav(flags: ReturnType<typeof useControlPlaneFeatures>): NavItem[] {
-  const items: NavItem[] = []
-  if (flags.aiGateway) items.push({ title: "AI Gateway", href: "/ai-gateway", icon: Bot })
-  if (flags.chargeback) items.push({ title: "Billing", href: "/billing", icon: DollarSign })
-  if (flags.promptManagement) items.push({ title: "Prompts", href: "/prompts", icon: FileText })
-  if (flags.copilot) items.push({ title: "Copilot", href: "/copilot", icon: Sparkles })
-  items.push({ title: "AutoML", href: "/automl", icon: FlaskConical })
-  return items
-}
-
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const pathname = usePathname()
   return (
@@ -110,10 +94,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 
 export function AppSidebar() {
   const showExecutionNav = useCanSeeExecutionNav()
-  const cpFlags = useControlPlaneFeatures()
-  const controlPlaneNav = buildControlPlaneNav(cpFlags)
   const distributedNav = buildDistributedNav()
-  const showControlPlaneNav = hasAnyControlPlaneSurface(cpFlags) || controlPlaneNav.length > 0
   const showDistributedNav = distributedNav.length > 0
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
@@ -139,9 +120,6 @@ export function AppSidebar() {
         <NavGroup label="Overview" items={platformNav} />
         {showExecutionNav ? (
           <NavGroup label="Execution" items={executionNav} />
-        ) : null}
-        {showControlPlaneNav ? (
-          <NavGroup label="AI Control Plane" items={controlPlaneNav} />
         ) : null}
         {showDistributedNav ? (
           <NavGroup label="Distributed" items={distributedNav} />

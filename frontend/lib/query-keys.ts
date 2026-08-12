@@ -203,16 +203,4 @@ export const mlairKeys = {
     list: (tenantId: string, projectId: string, offset: number) =>
       ["trace-list", tenantId, projectId, offset] as const,
   },
-  controlPlane: {
-    gatewayProviders: (tenantId: string, projectId: string) =>
-      ["cp-gateway-providers", tenantId, projectId] as const,
-    gatewayRoutes: (tenantId: string, projectId: string) => ["cp-gateway-routes", tenantId, projectId] as const,
-    chargeback: (tenantId: string, projectId: string) => ["cp-chargeback", tenantId, projectId] as const,
-    chargebackSnapshots: (tenantId: string, projectId: string) =>
-      ["cp-chargeback-snapshots", tenantId, projectId] as const,
-    prompts: (tenantId: string, projectId: string) => ["cp-prompts", tenantId, projectId] as const,
-    promptVersions: (tenantId: string, projectId: string, promptId: string) =>
-      ["cp-prompt-versions", tenantId, projectId, promptId] as const,
-    automlJobs: (tenantId: string, projectId: string) => ["cp-automl-jobs", tenantId, projectId] as const,
-  },
 };

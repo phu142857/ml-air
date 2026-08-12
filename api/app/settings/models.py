@@ -54,12 +54,6 @@ class FeatureFlags:
     event_retention_enabled: bool
     siem_export_enabled: bool
     event_schema_registry_enabled: bool
-    cost_aware_scheduler: bool
-    ai_gateway: bool
-    chargeback: bool
-    prompt_management: bool
-    policy_engine: bool
-    copilot: bool
     multi_cluster: bool
     multi_region: bool
     federation: bool
@@ -163,12 +157,6 @@ class Settings:
             "event_retention_enabled": f.event_retention_enabled,
             "siem_export_enabled": f.siem_export_enabled,
             "event_schema_registry_enabled": f.event_schema_registry_enabled,
-            "cost_aware_scheduler": f.cost_aware_scheduler,
-            "ai_gateway": f.ai_gateway,
-            "chargeback": f.chargeback,
-            "prompt_management": f.prompt_management,
-            "policy_engine": f.policy_engine,
-            "copilot": f.copilot,
             "multi_cluster": f.multi_cluster,
             "multi_region": f.multi_region,
             "federation": f.federation,

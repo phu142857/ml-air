@@ -13,8 +13,6 @@ EXTENSION_POINT_TYPES = (
     "scheduler",
     "event_handler",
     "projection",
-    "ai_provider",
-    "gateway_adapter",
 )
 
 DEFAULT_EXTENSION_POINTS = (
@@ -22,8 +20,6 @@ DEFAULT_EXTENSION_POINTS = (
     ("scheduler", "mlair.scheduler", "1.0", "app.domains.distributed.global_scheduler_service:place_run"),
     ("event_handler", "mlair.event_handler", "1.0", "app.domains.shared.events:DomainEventHandler"),
     ("projection", "mlair.projection", "1.0", "app.domains.projections.framework:ProjectionHandler"),
-    ("ai_provider", "mlair.ai_provider", "1.0", "app.domains.control_plane.gateway_service:create_provider"),
-    ("gateway_adapter", "mlair.gateway_adapter", "1.0", "app.domains.control_plane.gateway_service:chat_completion"),
 )
 
 

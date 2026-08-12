@@ -1606,24 +1606,15 @@ def _requeue_expired_leases(client: Redis) -> int:
 
 
 def _pop_next_run(client: Redis) -> tuple[str | None, str]:
-    try:
-        from app.domains.control_plane.scheduling_service import pop_next_run_payload
-
-        return pop_next_run_payload(client)
-    except ImportError:
-        fifo = client.blpop("mlair:runs:new", timeout=1)
-        if fifo:
-            return str(fifo[1]), "fifo"
-        return None, "none"
+    fifo = client.blpop("mlair:runs:new", timeout=1)
+    if fifo:
+        return str(fifo[1]), "fifo"
+    return None, "none"
 
 
 def _requeue_run(client: Redis, run_event: dict, raw_payload: str) -> None:
-    try:
-        from app.domains.control_plane.scheduling_service import publish_run_with_policy
-
-        publish_run_with_policy(run_event, raw_payload=raw_payload)
-    except ImportError:
-        client.rpush("mlair:runs:new", raw_payload)
+    del run_event  # FIFO requeue uses serialized payload only
+    client.rpush("mlair:runs:new", raw_payload)
 
 
 def main() -> None:

@@ -5,21 +5,10 @@ from __future__ import annotations
 import unittest
 
 
-class TestAutomlSearchGrid(unittest.TestCase):
-    def test_grid_combinations(self) -> None:
-        from app.domains.control_plane.automl_search import generate_trials
-
-        trials = generate_trials(
-            {"strategy": "grid", "max_trials": 20, "parameters": {"a": [1, 2], "b": [3, 4]}}
-        )
-        self.assertEqual(len(trials), 4)
-
-
 class TestExtensionPlatformTypes(unittest.TestCase):
     def test_known_types(self) -> None:
-        types = ("plugin", "scheduler", "event_handler", "projection", "ai_provider", "gateway_adapter")
-        self.assertIn("plugin", types)
-        self.assertEqual(len(types), 6)
+        types = ("plugin", "scheduler", "event_handler", "projection")
+        self.assertEqual(len(types), 4)
 
 
 class TestGlobalSchedulerScoring(unittest.TestCase):

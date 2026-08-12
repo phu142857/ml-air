@@ -13,7 +13,6 @@ from app.api.routes.audit_events_routes import router as audit_router
 from app.api.routes.domain_events_routes import router as domain_events_router
 from app.api.routes.projection_routes import router as projection_router
 from app.api.routes.governance_routes import router as governance_router
-from app.api.routes.control_plane_routes import router as control_plane_router
 from app.api.routes.distributed_routes import router as distributed_router
 from app.api.routes.system_settings_routes import router as system_settings_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
@@ -57,7 +56,6 @@ app.include_router(audit_router, prefix="/v1")
 app.include_router(domain_events_router, prefix="/v1")
 app.include_router(projection_router, prefix="/v1")
 app.include_router(governance_router, prefix="/v1")
-app.include_router(control_plane_router, prefix="/v1")
 app.include_router(distributed_router, prefix="/v1")
 app.include_router(system_settings_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
@@ -130,12 +128,6 @@ def on_startup() -> None:
 
     start_event_retention_background()
     start_siem_export_background()
-
-    from app.domains.control_plane.config import chargeback_enabled
-    from app.domains.control_plane import billing_service as billing_svc
-
-    if chargeback_enabled():
-        billing_svc.seed_default_rates()
 
     from app.domains.distributed.config import (
         extension_platform_enabled,
