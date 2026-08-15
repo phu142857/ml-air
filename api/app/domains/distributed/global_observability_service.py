@@ -22,6 +22,7 @@ def build_global_dashboard() -> dict[str, Any]:
     queue_depth = _queue_depth()
     outbox_stats = _outbox_stats()
     webhook_stats = _webhook_stats()
+    workloads = _workload_stats()
     return {
         "enabled": True,
         "regions": {
@@ -38,9 +39,27 @@ def build_global_dashboard() -> dict[str, Any]:
             "synced": sum(1 for j in replications if j.get("status") == "synced"),
         },
         "scheduler": {"queue_depth": queue_depth},
+        "workloads": workloads,
         "outbox": outbox_stats,
         "webhooks": webhook_stats,
     }
+
+
+def _workload_stats() -> dict[str, int]:
+    running = 0
+    queued = 0
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM runs WHERE UPPER(status) = 'RUNNING'")
+                running = int((cur.fetchone() or [0])[0])
+                cur.execute(
+                    "SELECT COUNT(*) FROM runs WHERE UPPER(status) IN ('QUEUED', 'PENDING')"
+                )
+                queued = int((cur.fetchone() or [0])[0])
+    except Exception:
+        pass
+    return {"running": running, "queued": queued}
 
 
 def _queue_depth() -> dict[str, int]:

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Seed Phase 6 distributed demo: regions, clusters, federation, edge, scheduler, replication, DR.
 
-Populates /global and /clusters Hub pages. Run after seed_enable_features.py.
+Populates /clusters Hub page (Infrastructure). Run after seed_enable_features.py.
+
+Demo coverage:
+- 5 regions (2 empty: Tokyo, Frankfurt)
+- 4 clusters across health profiles: healthy, stale, offline, degraded region (mixed)
+- Full capacity telemetry (GPU / CPU / RAM) where applicable
 
   python scripts/seed_distributed_demo.py
 """
@@ -10,10 +15,12 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 _scripts = Path(__file__).resolve().parent
 if str(_scripts) not in sys.path:
@@ -25,17 +32,82 @@ BASE = os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
 TENANT = os.getenv("ML_AIR_TENANT_ID", "default")
 PROJECT = os.getenv("ML_AIR_PROJECT_ID", "default_project")
 HUB = os.getenv("ML_AIR_HUB_URL", BASE).rstrip("/")
+MLAIR_CONTAINER = os.getenv("ML_AIR_CONTAINER", "mlair")
 
 _DEMO_REGIONS = (
     ("vn-hanoi", "Vietnam (Hanoi)", 1.0, 25),
     ("ap-singapore", "Singapore", 0.95, 35),
+    ("ap-tokyo", "Tokyo", 0.9, 80),
+    ("eu-frankfurt", "Frankfurt", 0.88, 180),
     ("us-virginia", "US East (Virginia)", 0.85, 220),
 )
 
-_DEMO_CLUSTERS = (
-    ("demo-cluster-vn", "vn-hanoi", "http://vn.mlair-demo.local:8080", {"env": "demo", "tier": "gpu"}, {"gpu_available": 4, "cpu_cores_available": 32}),
-    ("demo-cluster-apac", "ap-singapore", "http://apac.mlair-demo.local:8080", {"env": "demo", "tier": "cpu"}, {"gpu_available": 0, "cpu_cores_available": 64}),
-    ("demo-cluster-us", "us-virginia", "http://us.mlair-demo.local:8080", {"env": "demo", "tier": "gpu"}, {"gpu_available": 8, "cpu_cores_available": 48}),
+# name, region_code, endpoint, labels, capacity, health_status, heartbeat_seconds_ago
+_DEMO_CLUSTERS: tuple[tuple[str, str, str, dict, dict, str, int], ...] = (
+    (
+        "demo-cluster-apac",
+        "ap-singapore",
+        "http://apac.mlair-demo.local:8080",
+        {"env": "demo", "tier": "gpu", "agent_version": "1.4.2"},
+        {
+            "gpu_available": 8,
+            "gpu_used": 2,
+            "cpu_cores_available": 64,
+            "cpu_used": 24,
+            "memory_gb_available": 256,
+            "memory_gb_used": 96,
+        },
+        "healthy",
+        15,
+    ),
+    (
+        "demo-cluster-apac-standby",
+        "ap-singapore",
+        "http://apac-standby.mlair-demo.local:8080",
+        {"env": "demo", "tier": "cpu", "agent_version": "1.4.1"},
+        {
+            "gpu_available": 4,
+            "gpu_used": 0,
+            "cpu_cores_available": 32,
+            "cpu_used": 8,
+            "memory_gb_available": 128,
+            "memory_gb_used": 16,
+        },
+        "stale",
+        180,
+    ),
+    (
+        "demo-cluster-vn",
+        "vn-hanoi",
+        "http://vn.mlair-demo.local:8080",
+        {"env": "demo", "tier": "gpu", "agent_version": "1.4.0"},
+        {
+            "gpu_available": 4,
+            "gpu_used": 1,
+            "cpu_cores_available": 32,
+            "cpu_used": 12,
+            "memory_gb_available": 128,
+            "memory_gb_used": 32,
+        },
+        "stale",
+        240,
+    ),
+    (
+        "demo-cluster-us",
+        "us-virginia",
+        "http://us.mlair-demo.local:8080",
+        {"env": "demo", "tier": "gpu", "agent_version": "1.3.9"},
+        {
+            "gpu_available": 8,
+            "gpu_used": 0,
+            "cpu_cores_available": 48,
+            "cpu_used": 40,
+            "memory_gb_available": 256,
+            "memory_gb_used": 200,
+        },
+        "stale",
+        3600,
+    ),
 )
 
 
@@ -65,11 +137,53 @@ def _items(body: dict) -> list[dict]:
     return [x for x in raw if isinstance(x, dict)]
 
 
-def _region_by_code(regions: list[dict], code: str) -> dict | None:
-    for region in regions:
-        if str(region.get("code") or "") == code:
-            return region
-    return None
+def _docker_psql(sql: str) -> bool:
+    """Apply SQL inside the MLAir container (idempotent re-seed for existing clusters)."""
+    try:
+        proc = subprocess.run(
+            [
+                "docker",
+                "exec",
+                MLAIR_CONTAINER,
+                "sh",
+                "-c",
+                f'psql "$ML_AIR_DATABASE_URL" -v ON_ERROR_STOP=1 -c {json.dumps(sql)}',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode != 0:
+            print(f"[WARN] docker psql: {proc.stderr.strip() or proc.stdout.strip()}")
+            return False
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        print(f"[WARN] docker psql unavailable: {exc}")
+        return False
+
+
+def _apply_cluster_state_db(
+    *,
+    name: str,
+    health_status: str,
+    heartbeat_seconds_ago: int,
+    capacity: dict[str, Any],
+    labels: dict[str, Any],
+    api_endpoint: str,
+) -> bool:
+    cap = json.dumps(capacity).replace("'", "''")
+    lbl = json.dumps(labels).replace("'", "''")
+    endpoint = api_endpoint.replace("'", "''")
+    sql = (
+        f"UPDATE dc_clusters SET "
+        f"health_status = '{health_status}', "
+        f"last_heartbeat_at = NOW() - INTERVAL '{int(heartbeat_seconds_ago)} seconds', "
+        f"capacity = '{cap}'::jsonb, "
+        f"labels = '{lbl}'::jsonb, "
+        f"api_endpoint = '{endpoint}' "
+        f"WHERE name = '{name.replace(chr(39), chr(39)+chr(39))}';"
+    )
+    return _docker_psql(sql)
 
 
 def ensure_regions(token: str) -> dict[str, str]:
@@ -108,15 +222,30 @@ def ensure_clusters(token: str, region_ids: dict[str, str]) -> list[dict]:
     if code != 200:
         raise RuntimeError(f"list clusters failed: {code} {body}")
     existing_by_name = {str(c.get("name")): c for c in _items(body)}
-    created_clusters: list[dict] = []
-    for name, region_code, endpoint, labels, capacity in _DEMO_CLUSTERS:
-        if name in existing_by_name:
-            created_clusters.append(existing_by_name[name])
-            print(f"[SKIP] cluster {name} exists")
-            continue
+    agent_tokens: dict[str, str] = {}
+    result: list[dict] = []
+
+    for name, region_code, endpoint, labels, capacity, health_status, hb_ago in _DEMO_CLUSTERS:
         region_id = region_ids.get(region_code)
         if not region_id:
             raise RuntimeError(f"missing region_id for {region_code}")
+
+        if name in existing_by_name:
+            cluster = existing_by_name[name]
+            cluster_id = str(cluster.get("cluster_id") or "")
+            print(f"[SKIP] cluster {name} exists — applying demo profile")
+            if _apply_cluster_state_db(
+                name=name,
+                health_status=health_status,
+                heartbeat_seconds_ago=hb_ago,
+                capacity=capacity,
+                labels=labels,
+                api_endpoint=endpoint,
+            ):
+                print(f"[OK] cluster {name} demo profile (db)")
+            result.append(cluster)
+            continue
+
         rc, cluster = req(
             "POST",
             "/v1/distributed/clusters",
@@ -133,6 +262,8 @@ def ensure_clusters(token: str, region_ids: dict[str, str]) -> list[dict]:
             raise RuntimeError(f"register cluster {name}: {rc} {cluster}")
         agent_token = str(cluster.get("agent_token") or "")
         cluster_id = str(cluster.get("cluster_id") or "")
+        agent_tokens[name] = agent_token
+
         hb_code, hb = req(
             "POST",
             f"/v1/distributed/clusters/{cluster_id}/heartbeat",
@@ -140,15 +271,25 @@ def ensure_clusters(token: str, region_ids: dict[str, str]) -> list[dict]:
             {
                 "agent_token": agent_token,
                 "capacity": capacity,
-                "health_status": "healthy",
+                "health_status": health_status,
             },
         )
         if hb_code != 200:
             print(f"[WARN] heartbeat {name}: {hb_code} {hb}")
+        elif hb_ago > 0 and _apply_cluster_state_db(
+            name=name,
+            health_status=health_status,
+            heartbeat_seconds_ago=hb_ago,
+            capacity=capacity,
+            labels=labels,
+            api_endpoint=endpoint,
+        ):
+            print(f"[OK] cluster {name} registered + demo heartbeat age")
         else:
-            print(f"[OK] cluster {name} + heartbeat")
-        created_clusters.append(cluster)
-    return created_clusters
+            print(f"[OK] cluster {name} + heartbeat ({health_status})")
+        result.append(cluster)
+
+    return result
 
 
 def seed_federation(token: str, region_ids: dict[str, str]) -> None:
@@ -327,7 +468,8 @@ def verify_global_dashboard(token: str) -> None:
         return
     regions = (dash.get("regions") or {}).get("total", 0)
     clusters = (dash.get("clusters") or {}).get("total", 0)
-    print(f"[OK] global dashboard regions={regions} clusters={clusters}")
+    running = (dash.get("workloads") or {}).get("running", 0)
+    print(f"[OK] global dashboard regions={regions} clusters={clusters} running_runs={running}")
 
 
 def main() -> int:
@@ -351,9 +493,16 @@ def main() -> int:
 
     out = {
         "status": "ok",
-        "hub": {"global": f"{HUB}/global", "clusters": f"{HUB}/clusters"},
+        "hub": {"infrastructure": f"{HUB}/clusters"},
         "regions": list(region_ids.keys()),
         "clusters": [c.get("name") for c in clusters if c.get("name")],
+        "profiles": {
+            "healthy": ["demo-cluster-apac"],
+            "stale": ["demo-cluster-apac-standby", "demo-cluster-vn"],
+            "offline": ["demo-cluster-us"],
+            "empty_regions": ["ap-tokyo", "eu-frankfurt"],
+            "degraded_region": "ap-singapore",
+        },
     }
     print(json.dumps(out, indent=2))
     return 0

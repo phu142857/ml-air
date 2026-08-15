@@ -13,7 +13,6 @@ import {
   Network,
   LayoutDashboard,
   Route,
-  Globe,
   Server,
 } from "lucide-react"
 import { MlairLogo } from "@/components/brand/mlair-logo"
@@ -58,10 +57,10 @@ const executionNav: NavItem[] = [
 
 function buildDistributedNav(): NavItem[] {
   const f = getRuntimeConfig()?.features ?? {}
-  const items: NavItem[] = []
-  if (f.global_observability) items.push({ title: "Global", href: "/global", icon: Globe })
-  if (f.multi_cluster || f.multi_region) items.push({ title: "Clusters", href: "/clusters", icon: Server })
-  return items
+  if (f.global_observability || f.multi_cluster || f.multi_region) {
+    return [{ title: "Infrastructure", href: "/clusters", icon: Server }]
+  }
+  return []
 }
 
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {

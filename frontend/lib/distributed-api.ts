@@ -22,6 +22,8 @@ export type Cluster = {
   health_status: string;
   capacity: Record<string, unknown>;
   last_heartbeat_at: string | null;
+  created_at?: string | null;
+  labels?: Record<string, unknown>;
 };
 
 export type GlobalDashboard = {
@@ -29,7 +31,8 @@ export type GlobalDashboard = {
   regions?: { total: number; healthy: number; items: Region[] };
   clusters?: { total: number; healthy: number; stale_or_unknown: number };
   cluster_items?: Cluster[];
-  scheduler?: { queue_depth: { total: number } };
+  scheduler?: { queue_depth: { total: number; fifo?: number; priority?: number } };
+  workloads?: { running: number; queued: number };
   replication?: { pending: number; synced: number };
 };
 
@@ -40,6 +43,15 @@ export async function fetchGlobalDashboard(token: string): Promise<GlobalDashboa
   });
   if (!res.ok) throw new Error(await res.text());
   return (await res.json()) as GlobalDashboard;
+}
+
+export async function fetchCluster(token: string, clusterId: string): Promise<Cluster> {
+  const res = await fetch(`${API_BASE}/v1/distributed/clusters/${encodeURIComponent(clusterId)}`, {
+    headers: headers(token),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as Cluster;
 }
 
 export async function fetchClusters(token: string, regionId?: string): Promise<{ items: Cluster[] }> {
