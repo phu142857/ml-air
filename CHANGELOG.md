@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Phase 4 — Governance & Enterprise:** event retention policies + background purge; domain audit export (JSONL/CSV); SIEM subscriptions; event schema registry; data governance policies; platform observability API; architecture invariant CI script. Migration `0054_governance_enterprise`.
-- **Phase 5 — AI Control Plane:** cost-aware scheduler (priority ZSET); usage chargeback + monthly snapshots; AI gateway (providers, routes, chat proxy, Redis cache, retry/fallback); prompt management; LLM evaluation; marketplace; AutoML hyperparameter search; Hub copilot; policy engine; resource optimization profiles; Hub UI pages (`/ai-gateway`, `/billing`, `/prompts`, `/copilot`, `/automl`). Migration `0055_ai_control_plane`. Flags: `ML_AIR_COST_AWARE_SCHEDULER`, `ML_AIR_CHARGEBACK`, `ML_AIR_AI_GATEWAY`, `ML_AIR_PROMPT_MANAGEMENT`, `ML_AIR_POLICY_ENGINE`, `ML_AIR_COPILOT`, `ML_AIR_GATEWAY_CACHE`.
-- **Phase 6 — Distributed Control Plane:** multi-cluster registry + cluster agent heartbeat; multi-region registry & failover; federation (Global/APAC/EU/US); edge deployment sync; global scheduler (region→cluster→node pool→node); cross-region metadata replication; disaster recovery snapshots; global identity trust; global observability dashboard; extension platform SDK. Migration `0056_distributed_cp`. Hub pages `/global`, `/clusters`. Flags: `ML_AIR_MULTI_CLUSTER`, `ML_AIR_MULTI_REGION`, `ML_AIR_FEDERATION`, `ML_AIR_GLOBAL_SCHEDULER`, `ML_AIR_GLOBAL_OBSERVABILITY`, `ML_AIR_EXTENSION_PLATFORM`, and related.
+- **Phase 6 — Distributed:** multi-cluster registry + cluster agent heartbeat; multi-region registry & failover; federation (Global/APAC/EU/US); edge deployment sync; global scheduler (region→cluster→node pool→node); cross-region metadata replication; disaster recovery snapshots; global identity trust; global observability dashboard; extension platform SDK. Migration `0056_distributed_cp`. Hub pages `/global`, `/clusters`. Flags: `ML_AIR_MULTI_CLUSTER`, `ML_AIR_MULTI_REGION`, `ML_AIR_FEDERATION`, `ML_AIR_GLOBAL_SCHEDULER`, `ML_AIR_GLOBAL_OBSERVABILITY`, `ML_AIR_EXTENSION_PLATFORM`, and related.
 - **Phase 3 — Read Platform & Integration:** projection framework (`ProjectionHandler`, `ProjectionRegistry`, `ProjectionRunner`, checkpoints, rebuilder, health); stores for timeline, activity, dashboard, statistics, analytics (migration `0053`); notification channels + integration subscriptions; projection APIs; feature flags `ML_AIR_PROJECTIONS_ENABLED`, `ML_AIR_TIMELINE_PROJECTION_READS`, `ML_AIR_DASHBOARD_PROJECTION_READS`, `ML_AIR_NOTIFICATION_DELIVERY`, `ML_AIR_INTEGRATION_DELIVERY`.
+
 - **Phase 2 Epic 4–7 — Outbox, replay, domain webhooks, hardening:** optional `ML_AIR_DOMAIN_EVENT_OUTBOX` + drain worker; replay API; domain webhook subscriptions + HTTP sink; handler timeouts/metrics/tracing.
 - **Phase 2 Epic 3 — Readiness Aggregate:** `ReadinessEvaluated` on new evaluation INSERT via `record_dataset_readiness_evaluation`; Domain Audit / webhook map `dataset.readiness.evaluated`.
 - **Phase 2 Epic 2 — Run Aggregate:** `RunCreated` / `RunStarted` / `RunCompleted` / `RunFailed` / `RunCancelled` from API `run_service` and scheduler `_transition_run_status`; Domain Audit actions `run.*`.
@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`GET /v1/tenants/{tenant}/projects/{project}/models/{model_id}/resolved-pipeline`**: resolve `pipeline_id` plus optional **`artifact_uri`**, **`base_weights_source`**, **`base_version_id`** for training context.
 - **`POST /v1/tenants/{tenant}/projects/{project}/runs/trigger`**: create a gated run from **model + dataset** with resolved pipeline and injected base-weight hints.
 - Optional HTTP notify on model promote: **`MLAIR_MODEL_PROMOTE_WEBHOOK_URL`**, … (see `docs/guides/model-governance.md` and `docs/guides/model-centric-pipeline-mapping-and-trigger.md`).
+
+### Removed
+
+- **Phase 5 — AI Control Plane (product surface):** removed Hub pages (`/ai-gateway`, `/billing`, `/prompts`, `/copilot`, `/automl`), API routes under `/control-plane/*`, feature flags (`ML_AIR_COST_AWARE_SCHEDULER`, `ML_AIR_CHARGEBACK`, `ML_AIR_AI_GATEWAY`, `ML_AIR_PROMPT_MANAGEMENT`, `ML_AIR_POLICY_ENGINE`, `ML_AIR_COPILOT`), and runtime services (AI gateway, chargeback, AutoML, copilot). Run scheduling uses FIFO queue `mlair:runs:new`. Alembic migration `0055_ai_control_plane` tables remain for history; no new migration drops them.
 
 ### Changed
 

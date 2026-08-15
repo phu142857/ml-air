@@ -222,9 +222,7 @@ export function auditResourceHref(item: AuditTimelineItem): string | null {
   if (rt === "dataset" || rt === "dataset_version") return `/datasets/${encodeURIComponent(id)}`
   if (rt === "pipeline" || rt === "pipeline_version") return `/pipelines/${encodeURIComponent(id)}`
   if (rt === "model" || rt === "model_version") return `/models/${encodeURIComponent(id)}`
-  if (rt === "prompt" || rt === "prompt_version") return `/prompts/${encodeURIComponent(id)}`
   if (rt === "cluster" || rt === "region" || rt === "node") return `/clusters`
-  if (rt === "gateway" || rt === "policy") return `/governance`
   return null
 }
 

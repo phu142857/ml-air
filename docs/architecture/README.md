@@ -1,6 +1,6 @@
 # Architecture Overview
 
-MLAir is an enterprise **AI Control Plane**: it coordinates Models, Datasets, Pipelines, Scheduler/Workers, Registry, and Hub surfaces while preserving accountability, resource history, and tenant/project scope.
+MLAir is an enterprise **MLOps governance platform**: it coordinates Models, Datasets, Pipelines, Scheduler/Workers, Registry, and Hub surfaces while preserving accountability, resource history, and tenant/project scope.
 
 This document describes the **current** internal architecture for contributors and deployers. It is not an OpenAPI reference.
 

@@ -244,7 +244,7 @@ Keep using pinned images and `MLAIR_API_IMAGE` — no monorepo submodule. Set pr
 - [Run environment capture](./guides/run-environment.md)
 - [CLI commands](./cli/commands.md)
 - `.env.example` — L3 deployment contract (groups A–E)
-- `deploy/.env.infra.example` — compose ports, image bootstrap, scheduler/executor tuning
+- `deploy/.env.infra.example` — compose ports, image bootstrap, scheduler/executor tuning, Phase 3–6 compose-forwarded feature flags
 
 ## Done
 
