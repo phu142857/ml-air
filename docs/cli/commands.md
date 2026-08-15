@@ -1,6 +1,8 @@
 # MLAir CLI commands
 
-Unified entry point for local development and operations. **Configuration:** [Configuration guide](../configuration.md).
+Public operator CLI. **Configuration:** [Configuration guide](../configuration.md).
+
+Internal developer/CI tooling uses `make` targets (for example `make test-all`, `make verify-deployment-signoff`) — not `mlair`.
 
 ## Install
 
@@ -16,28 +18,54 @@ python -m mlair --help
 python bin/mlair --help
 ```
 
+## Public commands
+
+```text
+mlair build                 # Build application/images
+mlair start                 # Start MLAir services
+mlair stop                  # Stop MLAir services
+mlair rebuild               # Rebuild and restart services
+mlair serve                 # Run development/API server (uvicorn)
+mlair doctor                # Check environment and diagnose problems
+mlair health                # Check service health
+mlair config print          # View merged configuration
+
+mlair run <pipeline.yaml>   # Create an ML run from a pipeline file
+mlair logs <run_id>         # View run logs
+
+mlair seed                  # Create primary hub demo data
+mlair seed all              # Create all demo seed datasets
+mlair remove demo           # Remove demo data (best-effort)
+
+mlair db backup             # Backup PostgreSQL
+mlair db restore --file <path>
+
+mlair dev shell|logs|ps     # Compose development helpers
+```
+
 ## Start / stop stack
 
 ```bash
 mlair doctor
-mlair build              # docker compose build (images only)
-mlair start              # docker compose up -d (from existing images)
-mlair rebuild            # build then (re)start
+mlair build
+mlair start
 mlair health
-mlair stop               # docker compose down
+mlair stop
 ```
 
-`mlair build --no-cache` / `mlair rebuild --no-cache` skip the build cache; `mlair start --foreground` / `mlair rebuild --foreground` attach logs.
+`mlair build --no-cache` / `mlair rebuild --no-cache` skip the build cache.  
+`mlair start --foreground` / `mlair rebuild --foreground` attach logs.
 
 ## Configuration
 
 ```bash
 mlair config print
+mlair config print --json
 mlair start --profile staging
 mlair start --config ./mlair.yaml
 ```
 
-## Trigger runs and logs
+## Runs and logs
 
 ```bash
 mlair run examples/pipeline.demo.yaml
@@ -51,20 +79,39 @@ Environment (optional overrides):
 - `ML_AIR_PROJECT_ID` (default `default_project`)
 - `ML_AIR_TOKEN` or `ML_AIR_TRACKING_TOKEN`
 
-## Subcommands
+## Demo data
 
-| Command | Description |
-|---------|-------------|
-| `serve` | Start microservice stack (Compose) |
-| `stop` | Stop stack |
-| `doctor` | Preflight checks |
-| `health` | API/UI health probe |
-| `config print` | Merged config + env keys |
-| `run` | POST /runs from pipeline file |
-| `logs` | GET run logs |
-| `dev up` | Alias for `serve` |
+```bash
+mlair seed          # full demo: features, hub, metrics, drift, resolve, governance, global/clusters
+mlair seed all      # same as mlair seed
+mlair remove demo
+```
+
+Seeds include:
+- Hub runs (SUCCESS / FAILED / RUNNING), datasets, models, lineage
+- Metrics panel, drift/compare (phase5), pipeline resolve UI
+- Governance (retention, SIEM, schema registry, notifications)
+- **Global / Clusters**: regions (VN, APAC, US), clusters + heartbeats, federation, edge, scheduler placement, replication, DR
+
+Equivalent internal Make targets: `make seed-demo` (full `mlair seed`), `make seed-phase5-demo`, etc.
+
+## Database
+
+```bash
+mlair db backup
+mlair db backup --output-dir backups/postgres
+mlair db restore --file backups/postgres/mlair_YYYYMMDD_HHMMSS.dump
+```
+
+## Development
+
+```bash
+mlair serve --reload              # API only (requires DB/Redis in .env)
+mlair dev ps
+mlair dev logs
+mlair dev shell
+```
 
 ## Done
 
-See [Quickstart](../getting-started/quickstart.md) for first pipeline run.
-Detail pages: [`mlair run`](./run.md), [`mlair logs`](./logs.md), [CLI local development](./dev.md).
+See [Quickstart](../getting-started/quickstart.md). Detail pages: [`mlair run`](./run.md), [`mlair logs`](./logs.md).

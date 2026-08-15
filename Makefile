@@ -264,10 +264,7 @@ seed-metrics-demo:
 
 .PHONY: seed-demo
 seed-demo:
-	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
-	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
-	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
-	python scripts/seed_demo.py
+	python -m mlair seed
 
 .PHONY: seed-phase5-demo
 seed-phase5-demo:
@@ -480,13 +477,9 @@ test-all: test-env-sync test-manifest-key-rotation test-prometheus-rules test-sm
 
 .PHONY: backup-db
 backup-db:
-	mkdir -p $(BACKUP_DIR)
-	docker compose -f $(COMPOSE_FILE) exec -T postgres pg_dump -U mlair -d mlair -Fc > $(BACKUP_DIR)/mlair_$$(date +%Y%m%d_%H%M%S).dump
-	@echo "Backup created in $(BACKUP_DIR)"
+	python -m mlair db backup
 
 .PHONY: restore-db
 restore-db:
 	@if [ -z "$(BACKUP_FILE)" ]; then echo "BACKUP_FILE is required. Example: make restore-db BACKUP_FILE=backups/postgres/mlair_YYYYMMDD_HHMMSS.dump"; exit 1; fi
-	@if [ ! -f "$(BACKUP_FILE)" ]; then echo "Backup file not found: $(BACKUP_FILE)"; exit 1; fi
-	docker compose -f $(COMPOSE_FILE) exec -T postgres pg_restore -U mlair -d mlair --clean --if-exists < $(BACKUP_FILE)
-	@echo "Restore completed from $(BACKUP_FILE)"
+	python -m mlair db restore --file "$(BACKUP_FILE)"

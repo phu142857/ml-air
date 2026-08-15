@@ -1,32 +1,46 @@
-# MLAir CLI (local development)
+# MLAir CLI — development utilities
 
 ## Goal
 
-Start and stop the local MLAir stack with the unified CLI.
+Day-to-day local development with the public `mlair` CLI. For CI and verification, use **Makefile** targets (`make test-all`, `make verify-deployment-signoff`, …).
 
-## Steps
-
-1. Install: `pip install -e .` from repository root.
-2. Run preflight: `mlair doctor`
-3. Start stack: `mlair rebuild` (or `mlair build` then `mlair start`)
-
-## Command
+## Stack lifecycle
 
 ```bash
 mlair doctor
-mlair build           # images only
-mlair start           # from existing images
-mlair rebuild         # build then (re)start
+mlair build
+mlair start
 mlair health
 mlair stop
-python -m mlair rebuild
+mlair rebuild
 ```
 
-## Result
+## API-only development
 
-- MLAir: `http://localhost:8080` (Hub + API + realtime)
-- Health: `mlair health`
+Run FastAPI with uvicorn (PostgreSQL/Redis must match `.env`):
+
+```bash
+mlair serve
+mlair serve --reload --port 8080
+```
+
+## Compose helpers
+
+```bash
+mlair dev ps
+mlair dev logs
+mlair dev logs mlair
+mlair dev shell
+```
+
+## Demo data
+
+```bash
+mlair seed
+mlair seed all
+mlair remove demo
+```
 
 ## Done
 
-Continue with [Quickstart](../getting-started/quickstart.md).
+Continue with [Quickstart](../getting-started/quickstart.md) and [CLI commands](./commands.md).

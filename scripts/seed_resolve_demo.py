@@ -129,16 +129,45 @@ def ensure_pipeline(token: str, pipeline_id: str, dataset_name: str, tag: str) -
         raise RuntimeError(f"pipeline {pipeline_id}: {code} {body}")
 
 
-def create_model(token: str, name: str) -> str:
+def ensure_model(token: str, name: str) -> str:
+    code, listed = req(
+        "GET",
+        f"/v1/tenants/{TENANT}/projects/{PROJECT}/models?limit=200",
+        token,
+    )
+    if code == 200:
+        for item in listed.get("items") or []:
+            if isinstance(item, dict) and str(item.get("name") or "") == name:
+                model_id = str(item.get("model_id") or item.get("id") or "")
+                if model_id:
+                    print(f"[SKIP] model {name} exists ({model_id})")
+                    return model_id
     code, body = req(
         "POST",
         f"/v1/tenants/{TENANT}/projects/{PROJECT}/models",
         token,
         {"name": name, "description": "resolve demo — Hub pipeline dropdown"},
     )
-    if code != 200 or not body.get("model_id"):
-        raise RuntimeError(f"create model {name}: {code} {body}")
-    return str(body["model_id"])
+    if code == 200 and body.get("model_id"):
+        return str(body["model_id"])
+    if code == 409:
+        code2, listed2 = req(
+            "GET",
+            f"/v1/tenants/{TENANT}/projects/{PROJECT}/models?limit=200",
+            token,
+        )
+        if code2 == 200:
+            for item in listed2.get("items") or []:
+                if isinstance(item, dict) and str(item.get("name") or "") == name:
+                    model_id = str(item.get("model_id") or item.get("id") or "")
+                    if model_id:
+                        print(f"[SKIP] model {name} exists ({model_id})")
+                        return model_id
+    raise RuntimeError(f"create model {name}: {code} {body}")
+
+
+def create_model(token: str, name: str) -> str:
+    return ensure_model(token, name)
 
 
 def set_mapping(token: str, model_id: str, pipeline_id: str) -> None:

@@ -276,18 +276,37 @@ def run_stop(*, profile: str | None = None, config_path: str | None = None) -> i
     return _compose(compose_path, "down")
 
 
-def run_serve(
+def run_dev_api_server(
     *,
-    build: bool = False,
-    detach: bool = True,
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    reload: bool = False,
     profile: str | None = None,
     config_path: str | None = None,
 ) -> int:
-    """Deprecated alias: ``serve`` == ``start``; ``serve --build`` == ``rebuild`` (cache reused)."""
-    if build:
-        print(
-            "[mlair] note: `serve --build` is deprecated — use `mlair build` / `mlair rebuild`",
-            file=sys.stderr,
-        )
-        return run_rebuild(no_cache=False, detach=detach, profile=profile, config_path=config_path)
-    return run_start(detach=detach, profile=profile, config_path=config_path)
+    """Run the FastAPI app with uvicorn for local API development (no Compose stack)."""
+    prep = _prepare(profile, config_path, ensure_env=True)
+    if prep is None:
+        return 1
+    _compose_path, cfg = prep
+    api_dir = repo_root() / "api"
+    if not (api_dir / "main.py").is_file():
+        print(f"[mlair] API entry not found: {api_dir / 'main.py'}", file=sys.stderr)
+        return 1
+    print(f"[mlair] serve profile={cfg.get('profile')} api={api_dir} http://{host}:{port}")
+    print("[mlair] requires PostgreSQL/Redis per .env — use `mlair start` for the full stack")
+    cmd = [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "main:app",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+    if reload:
+        cmd.append("--reload")
+    proc = subprocess.run(cmd, cwd=str(api_dir), check=False)
+    return int(proc.returncode)
+

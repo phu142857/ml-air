@@ -204,7 +204,7 @@ python bin/mlair doctor
 |------|---------|---------|
 | **Recommended local** | `mlair rebuild` | Single all-in-one container on port 8080 |
 | **Production** | Pinned ghcr images + compose | Same topology, scaled executor, HA scheduler |
-| **SDK / worker only** | `pip install mlair` | `sdk.start_run`, `mlair worker` (external) |
+| **SDK / worker only** | `pip install mlair` | `sdk.start_run`, external worker lease API |
 
 The **Python package is one wheel** (`mlair` + `sdk`). **Processes remain microservices** for scale and blast-radius — the CLI hides compose wiring.
 
