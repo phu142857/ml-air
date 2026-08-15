@@ -133,7 +133,12 @@ export function getCapacityParts(capacity: Record<string, unknown> | undefined):
 
   if (hasCapacityKey(capacity, "gpu_available", "gpu_total", "gpu")) {
     const gpu = parseGpuCapacity(capacity);
-    if (gpu && gpu.total > 0) parts.push({ label: "GPU", value: `${gpu.used}/${gpu.total}` });
+    if (gpu) {
+      parts.push({
+        label: "GPU",
+        value: gpu.total > 0 ? `${gpu.used}/${gpu.total}` : "—",
+      });
+    }
   }
   if (hasCapacityKey(capacity, "cpu_cores_available", "cpu_total", "cpu")) {
     const cpu = parseCpuCapacity(capacity);
@@ -178,7 +183,7 @@ export function getRegionCapacityParts(clusters: Cluster[]): CapacityPart[] {
   }
 
   const parts: CapacityPart[] = [];
-  if (gpu.has) parts.push({ label: "GPU", value: `${gpu.used}/${gpu.total}` });
+  if (gpu.has) parts.push({ label: "GPU", value: gpu.total > 0 ? `${gpu.used}/${gpu.total}` : "—" });
   if (cpu.has) parts.push({ label: "CPU", value: `${cpu.used}/${cpu.total}` });
   if (mem.has) parts.push({ label: "RAM", value: `${mem.used}/${mem.total} GB` });
   return parts;
@@ -216,6 +221,62 @@ export function formatInfraRunningCount(clusterCount: number, running?: number |
   if (clusterCount === 0) return "—";
   if (running === null || running === undefined) return "0";
   return String(running);
+}
+
+export function clusterProjectId(cluster: Cluster): string | null {
+  const labels = cluster.labels ?? {};
+  const project = labels.project ?? labels.mlair_project ?? labels.MLAIR_PROJECT;
+  if (!project) return null;
+  const value = String(project).trim();
+  return value || null;
+}
+
+export function clusterTenantId(cluster: Cluster, fallback?: string): string | null {
+  const labels = cluster.labels ?? {};
+  const tenant = labels.tenant ?? labels.mlair_tenant ?? labels.MLAIR_TENANT;
+  if (tenant) {
+    const value = String(tenant).trim();
+    if (value) return value;
+  }
+  return fallback?.trim() || null;
+}
+
+export type ClusterProjectScope = { tenant: string; project: string };
+
+export function clusterProjectScopes(
+  clusters: Cluster[],
+  accessibleScopes: { tenant_id: string; project_id: string }[],
+  fallbackTenant: string,
+): ClusterProjectScope[] {
+  const pairs: ClusterProjectScope[] = [];
+  const seen = new Set<string>();
+  for (const cluster of clusters) {
+    const project = clusterProjectId(cluster);
+    if (!project) continue;
+    const labelTenant = clusterTenantId(cluster);
+    const scopeTenant = accessibleScopes.find((s) => s.project_id === project)?.tenant_id;
+    const tenant = labelTenant || scopeTenant || fallbackTenant;
+    const key = `${tenant}:${project}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({ tenant, project });
+  }
+  return pairs;
+}
+
+export function buildRunningCounts(
+  clusters: Cluster[],
+  runsByProject: Record<string, number>,
+): { byCluster: Map<string, number>; byRegion: Map<string, number> } {
+  const byCluster = new Map<string, number>();
+  const byRegion = new Map<string, number>();
+  for (const cluster of clusters) {
+    const project = clusterProjectId(cluster);
+    const running = project ? (runsByProject[project] ?? 0) : 0;
+    byCluster.set(cluster.cluster_id, running);
+    byRegion.set(cluster.region_id, (byRegion.get(cluster.region_id) ?? 0) + running);
+  }
+  return { byCluster, byRegion };
 }
 
 export function groupClustersByRegion(

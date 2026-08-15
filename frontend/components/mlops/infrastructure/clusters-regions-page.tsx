@@ -12,6 +12,7 @@ import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppContext } from "@/lib/app-context";
+import { fetchRunsPage } from "@/lib/api";
 import {
   fetchClusters,
   fetchGlobalDashboard,
@@ -20,7 +21,10 @@ import {
   type Region,
 } from "@/lib/distributed-api";
 import {
+  buildRunningCounts,
   clusterHealthTooltip,
+  clusterProjectId,
+  clusterProjectScopes,
   countHealthyClusters,
   formatHeartbeatAgo,
   formatInfraRunningCount,
@@ -36,6 +40,7 @@ import {
   type ClusterHealth,
   type RegionHealthStatus,
 } from "@/lib/infrastructure-view";
+import { resolveInfraRefetchInterval } from "@/lib/realtime-query-polling";
 import { cn, formatApiClientError } from "@/lib/utils";
 
 const HEALTH_FILTER_OPTIONS = [
@@ -149,7 +154,7 @@ export function ClustersRegionsPage() {
 function ClustersRegionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token } = useAppContext();
+  const { token, tenantId, accessibleScopes } = useAppContext();
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(() => new Set());
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -161,7 +166,7 @@ function ClustersRegionsPageContent() {
     const clusterFromUrl = searchParams.get("cluster");
     if (clusterFromUrl) {
       setSelectedClusterId(clusterFromUrl);
-      router.replace("/clusters");
+      router.replace("/infra");
     }
   }, [searchParams, router]);
 
@@ -169,24 +174,61 @@ function ClustersRegionsPageContent() {
     queryKey: ["distributed-global-dashboard"],
     queryFn: () => fetchGlobalDashboard(token),
     enabled: Boolean(token),
+    refetchInterval: (q) => {
+      const running = q.state.data?.workloads?.running ?? 0;
+      return resolveInfraRefetchInterval({ active: running > 0 });
+    },
   });
   const regionsQ = useQuery({
     queryKey: ["distributed-regions"],
     queryFn: () => fetchRegions(token),
     enabled: Boolean(token),
+    refetchInterval: () => resolveInfraRefetchInterval(),
   });
   const clustersQ = useQuery({
     queryKey: ["distributed-clusters"],
     queryFn: () => fetchClusters(token),
     enabled: Boolean(token),
+    refetchInterval: () => resolveInfraRefetchInterval(),
   });
 
   const regions = regionsQ.data?.items ?? dashQ.data?.regions?.items ?? [];
   const clusters = clustersQ.data?.items ?? dashQ.data?.cluster_items ?? [];
   const grouped = useMemo(() => groupClustersByRegion(regions, clusters), [regions, clusters]);
 
+  const projectScopes = useMemo(
+    () => clusterProjectScopes(clusters, accessibleScopes, tenantId),
+    [clusters, accessibleScopes, tenantId],
+  );
+
+  const runningQ = useQuery({
+    queryKey: ["infra-running-by-project", projectScopes],
+    queryFn: async () => {
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        projectScopes.map(async ({ tenant, project }) => {
+          const page = await fetchRunsPage(tenant, project, token, { limit: 50 });
+          counts[project] = page.items.filter((run) => String(run.status || "").toUpperCase() === "RUNNING").length;
+        }),
+      );
+      return counts;
+    },
+    enabled: Boolean(token && projectScopes.length > 0),
+    refetchInterval: (q) => {
+      const total = Object.values(q.state.data ?? {}).reduce((sum, count) => sum + count, 0);
+      return resolveInfraRefetchInterval({ active: total > 0 });
+    },
+  });
+
+  const runningCounts = useMemo(
+    () => buildRunningCounts(clusters, runningQ.data ?? {}),
+    [clusters, runningQ.data],
+  );
+
   const healthyClusters = countHealthyClusters(clusters);
-  const globalRunning = dashQ.data?.workloads?.running ?? 0;
+  const globalRunning =
+    dashQ.data?.workloads?.running ??
+    Object.values(runningQ.data ?? {}).reduce((sum, count) => sum + count, 0);
   const globalQueued = dashQ.data?.scheduler?.queue_depth?.total ?? dashQ.data?.workloads?.queued ?? 0;
 
   const regionFilterOptions = useMemo(
@@ -214,6 +256,11 @@ function ClustersRegionsPageContent() {
   const isLoading = dashQ.isLoading || regionsQ.isLoading || clustersQ.isLoading;
   const error = dashQ.error || regionsQ.error || clustersQ.error;
   const dashEnabled = dashQ.data?.enabled !== false;
+
+  useEffect(() => {
+    if (expandedRegions.size > 0 || clusters.length === 0) return;
+    setExpandedRegions(new Set(clusters.map((c) => c.region_id)));
+  }, [clusters, expandedRegions.size]);
 
   const toggleRegion = (regionId: string) => {
     setExpandedRegions((prev) => {
@@ -320,6 +367,8 @@ function ClustersRegionsPageContent() {
                             onSelectCluster={setSelectedClusterId}
                             healthFilter={healthFilter}
                             search={search}
+                            regionRunning={runningCounts.byRegion.get(region.region_id) ?? 0}
+                            clusterRunning={runningCounts.byCluster}
                           />
                         );
                       })
@@ -340,6 +389,9 @@ function ClustersRegionsPageContent() {
         }}
         globalRunning={globalRunning}
         globalQueued={globalQueued}
+        clusterRunning={
+          selectedClusterId ? runningCounts.byCluster.get(selectedClusterId) : undefined
+        }
       />
     </div>
   );
@@ -354,6 +406,8 @@ function RegionRows({
   onSelectCluster,
   healthFilter,
   search,
+  regionRunning,
+  clusterRunning,
 }: {
   region: Region;
   clusters: Cluster[];
@@ -363,6 +417,8 @@ function RegionRows({
   onSelectCluster: (id: string) => void;
   healthFilter: string;
   search: string;
+  regionRunning: number;
+  clusterRunning: Map<string, number>;
 }) {
   const clusterLabel =
     clusters.length === 1 ? "1 cluster" : clusters.length === 0 ? "0 clusters" : `${clusters.length} clusters`;
@@ -409,7 +465,7 @@ function RegionRows({
           <HealthIndicator health={health} heartbeatAt={regionHeartbeat} />
         </td>
         <td className="px-3 py-2 tabular-nums text-muted-foreground">
-          {formatInfraRunningCount(clusters.length, 0)}
+          {formatInfraRunningCount(clusters.length, regionRunning)}
         </td>
         <td className="px-3 py-2 text-muted-foreground">
           <CapacityCell parts={getRegionCapacityParts(clusters)} />
@@ -447,7 +503,9 @@ function RegionRows({
                     backendStatus={cluster.health_status}
                   />
                 </td>
-                <td className="px-3 py-2 tabular-nums text-muted-foreground">0</td>
+                <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                  {formatInfraRunningCount(1, clusterRunning.get(cluster.cluster_id) ?? 0)}
+                </td>
                 <td className="px-3 py-2 text-muted-foreground">
                   <CapacityCell parts={getCapacityParts(cluster.capacity)} />
                 </td>

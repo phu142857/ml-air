@@ -18,6 +18,16 @@ export const POLL_RECONCILE_MS = 30_000;
 /** Active run/task polling when WebSocket is down. */
 export const POLL_ACTIVE_EXECUTION_MS = 8_000;
 
+/** Cluster heartbeat / global dashboard — not delivered over WebSocket. */
+export const POLL_INFRA_MS = 10_000;
+
+export const POLL_INFRA_ACTIVE_MS = 5_000;
+
+/** Infrastructure queries always HTTP-poll; WS only invalidates run-related infra keys. */
+export function resolveInfraRefetchInterval(opts?: { active?: boolean }): number {
+  return opts?.active ? POLL_INFRA_ACTIVE_MS : POLL_INFRA_MS;
+}
+
 export type RealtimeQueryPollingOptions = {
   refetchInterval: number | false;
   refetchOnWindowFocus: boolean;
@@ -59,10 +69,10 @@ export function resolveRefetchInterval(
   poll: RealtimeQueryPollingOptions,
   opts?: { active?: boolean; activeMs?: number },
 ): number | false {
+  if (opts?.active && opts.activeMs) return opts.activeMs;
   if (poll.refetchInterval === false) {
     return false;
   }
-  if (opts?.active && opts.activeMs) return opts.activeMs;
   return poll.refetchInterval;
 }
 

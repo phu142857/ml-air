@@ -46,7 +46,7 @@ import { ExecutionLogStream } from "@/components/mlops/execution-log-stream"
 import { ExecutionLogToolbar } from "@/components/mlops/execution-log-toolbar"
 import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
-import { mergeRunListRow } from "@/lib/execution-live-merge"
+import { mergeRunListRow, mergeTaskListRow } from "@/lib/execution-live-merge"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
 import { toastError, toastSuccess } from "@/lib/toast-actions"
 import { formatRuntimeSeconds } from "@/lib/usage-format"
@@ -414,9 +414,19 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const status = runStatusMeta[sk]
   const traceId = run ? pickTraceId(run) : null
   const tasks = useMemo(() => {
-    const fromStore = storeTasks ? Object.values(storeTasks) : []
-    if (fromStore.length) return fromStore
-    return tasksQuery.data?.items ?? []
+    const apiItems = tasksQuery.data?.items ?? []
+    const liveMap = storeTasks ?? {}
+    if (!apiItems.length && !Object.keys(liveMap).length) return []
+    const byId = new Map<string, (typeof apiItems)[number]>()
+    for (const row of apiItems) {
+      if (row.task_id) byId.set(row.task_id, row)
+    }
+    for (const live of Object.values(liveMap)) {
+      if (!live?.task_id) continue
+      const prev = byId.get(live.task_id)
+      byId.set(live.task_id, prev ? mergeTaskListRow(prev, live) : live)
+    }
+    return [...byId.values()]
   }, [storeTasks, tasksQuery.data?.items])
 
   const runWallClockNowMs = useWallClockNow(runIsActive)

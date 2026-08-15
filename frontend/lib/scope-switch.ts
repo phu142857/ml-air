@@ -1,4 +1,6 @@
-import { switchScopeContext } from "./api";
+import { switchScopeContext, type BootstrapContextResponse } from "./api";
+
+export type EffectiveScope = BootstrapContextResponse["effective_scope"];
 
 export function parseApiErrorPayload(err: unknown): Record<string, unknown> | null {
   const raw = String((err as Error)?.message || err || "");
@@ -35,6 +37,8 @@ export type SwitchScopeParams = {
 export type SwitchScopeCallbacks = {
   refreshBootstrap: (opts?: { withSpinner?: boolean }) => Promise<unknown>;
   getMappingVersion: () => number | undefined;
+  /** Apply server effective scope immediately (before bootstrap reconcile). */
+  onEffectiveScope?: (scope: EffectiveScope) => void;
 };
 
 /**
@@ -46,11 +50,12 @@ export async function switchScopeWithRetry(
   options?: { retried?: boolean }
 ): Promise<void> {
   try {
-    await switchScopeContext(params.token, {
+    const result = await switchScopeContext(params.token, {
       tenant_id: params.tenant_id,
       project_id: params.project_id,
       expected_mapping_version: params.expected_mapping_version ?? callbacks.getMappingVersion(),
     });
+    callbacks.onEffectiveScope?.(result.effective_scope);
     await callbacks.refreshBootstrap({ withSpinner: false });
   } catch (err) {
     if (!options?.retried && isMappingVersionStaleError(err)) {

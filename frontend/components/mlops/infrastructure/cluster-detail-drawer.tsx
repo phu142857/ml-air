@@ -46,6 +46,7 @@ type ClusterDetailDrawerProps = {
   onOpenChange: (open: boolean) => void;
   globalRunning?: number;
   globalQueued?: number;
+  clusterRunning?: number;
 };
 
 export function ClusterDetailDrawer({
@@ -54,6 +55,7 @@ export function ClusterDetailDrawer({
   onOpenChange,
   globalRunning,
   globalQueued,
+  clusterRunning,
 }: ClusterDetailDrawerProps) {
   const { token } = useAppContext();
   const [tab, setTab] = useState<DrawerTab>("overview");
@@ -184,8 +186,11 @@ export function ClusterDetailDrawer({
                       items={[
                         {
                           label: "Running runs",
-                          value: "—",
-                          hint: globalRunning !== undefined ? `${globalRunning} across all clusters` : undefined,
+                          value: clusterRunning ?? "—",
+                          hint:
+                            clusterRunning === undefined && globalRunning !== undefined
+                              ? `${globalRunning} across all clusters`
+                              : undefined,
                         },
                         {
                           label: "Queued runs",
@@ -195,7 +200,7 @@ export function ClusterDetailDrawer({
                       ]}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      Per-cluster workload attribution is not available yet.
+                      Running counts are mapped from the cluster project label when available.
                     </p>
                   </DrawerSection>
 

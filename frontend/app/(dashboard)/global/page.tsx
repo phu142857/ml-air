@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function GlobalRedirectPage() {
-  redirect("/clusters");
+  redirect("/infra");
 }

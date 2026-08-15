@@ -58,7 +58,7 @@ const executionNav: NavItem[] = [
 function buildDistributedNav(): NavItem[] {
   const f = getRuntimeConfig()?.features ?? {}
   if (f.global_observability || f.multi_cluster || f.multi_region) {
-    return [{ title: "Infrastructure", href: "/clusters", icon: Server }]
+    return [{ title: "Infrastructure", href: "/infra", icon: Server }]
   }
   return []
 }
@@ -73,7 +73,10 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
       <SidebarGroupContent>
         <SidebarMenu className="gap-px">
           {items.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const isActive =
+              pathname === item.href ||
+              pathname.startsWith(`${item.href}/`) ||
+              (item.href === "/infra" && (pathname === "/clusters" || pathname.startsWith("/clusters/")))
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>

@@ -139,7 +139,7 @@ function actorHref(type: ActorType, id?: string): string | null {
   if (!id) return null
   if (type === "user") return `/identity/users/${encodeURIComponent(id)}`
   if (type === "service_account") return `/identity/service-accounts/${encodeURIComponent(id)}`
-  if (type === "worker") return `/clusters`
+  if (type === "worker") return `/infra`
   return null
 }
 
@@ -222,7 +222,7 @@ export function auditResourceHref(item: AuditTimelineItem): string | null {
   if (rt === "dataset" || rt === "dataset_version") return `/datasets/${encodeURIComponent(id)}`
   if (rt === "pipeline" || rt === "pipeline_version") return `/pipelines/${encodeURIComponent(id)}`
   if (rt === "model" || rt === "model_version") return `/models/${encodeURIComponent(id)}`
-  if (rt === "cluster" || rt === "region" || rt === "node") return `/clusters`
+  if (rt === "cluster" || rt === "region" || rt === "node") return `/infra`
   return null
 }
 

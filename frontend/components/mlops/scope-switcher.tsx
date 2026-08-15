@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { ChevronDown, Building2, FolderKanban, Globe, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,11 +12,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAppContext } from "@/lib/app-context"
+import { clearScopeContext } from "@/lib/api"
 import { switchScopeWithRetry } from "@/lib/scope-switch"
 import { useToast } from "@/hooks/use-toast"
 
 export function ScopeSwitcher() {
-  const router = useRouter()
   const { toast } = useToast()
   const [isSwitching, setIsSwitching] = useState(false)
   const {
@@ -34,6 +33,7 @@ export function ScopeSwitcher() {
     refreshBootstrap,
     setTenantId,
     setProjectId,
+    setMappingVersion,
   } = useAppContext()
 
   const aggregateActive = tenantId === "all" && projectId === "all"
@@ -73,8 +73,20 @@ export function ScopeSwitcher() {
 
   const busy = isSwitching || isScopeLoading
 
-  const goToDashboard = () => {
-    router.replace("/dashboard")
+  const applyEffectiveScope = (scope: {
+    tenant_id: string
+    project_id: string
+    mapping_version?: number
+  }) => {
+    setTenantId(scope.tenant_id)
+    setProjectId(scope.project_id)
+    if (scope.mapping_version) setMappingVersion(scope.mapping_version)
+  }
+
+  const scopeCallbacks = {
+    refreshBootstrap,
+    getMappingVersion: () => mappingVersion,
+    onEffectiveScope: applyEffectiveScope,
   }
 
   const applyScopeChange = async (nextTenant: string, nextProject: string) => {
@@ -87,14 +99,15 @@ export function ScopeSwitcher() {
       return
     }
     setIsSwitching(true)
+    applyEffectiveScope({ tenant_id: nextTenant, project_id: nextProject, mapping_version: mappingVersion })
     try {
       await switchScopeWithRetry(
         { token, tenant_id: nextTenant, project_id: nextProject, expected_mapping_version: mappingVersion },
-        { refreshBootstrap, getMappingVersion: () => mappingVersion },
+        scopeCallbacks,
       )
-      goToDashboard()
     } catch (e) {
       const msg = String((e as Error)?.message || e).slice(0, 480)
+      await refreshBootstrap({ withSpinner: false })
       toast({
         variant: "destructive",
         title: "Scope switch failed",
@@ -107,15 +120,24 @@ export function ScopeSwitcher() {
     }
   }
 
-  const onPickAggregate = () => {
-    if (!canAggregate || aggregateActive) return
-    setTenantId("all")
-    setProjectId("all")
-    goToDashboard()
-    toast({
-      title: "Aggregate scope",
-      description: "Lists fan out across tenants/projects. Pin a scope for triggers, search, and exports.",
-    })
+  const onPickAggregate = async () => {
+    if (!canAggregate || aggregateActive || !token.trim()) return
+    setIsSwitching(true)
+    try {
+      await clearScopeContext(token)
+      await refreshBootstrap({ withSpinner: false })
+      setTenantId("all")
+      setProjectId("all")
+    } catch (e) {
+      const msg = String((e as Error)?.message || e).slice(0, 480)
+      toast({
+        variant: "destructive",
+        title: "Scope switch failed",
+        description: msg || "Could not clear pinned scope.",
+      })
+    } finally {
+      setIsSwitching(false)
+    }
   }
 
   const onPickTenant = (tid: string) => {
@@ -136,15 +158,27 @@ export function ScopeSwitcher() {
     if (pid === projectId) return
     if (pid === "all") {
       if (tenantId === "all") {
-        onPickAggregate()
+        void onPickAggregate()
         return
       }
-      setProjectId("all")
-      goToDashboard()
-      toast({
-        title: "All projects in tenant",
-        description: `Aggregating projects under ${tenantId}.`,
-      })
+      if (!token.trim()) return
+      void (async () => {
+        setIsSwitching(true)
+        try {
+          await clearScopeContext(token)
+          await refreshBootstrap({ withSpinner: false })
+          setProjectId("all")
+        } catch (e) {
+          const msg = String((e as Error)?.message || e).slice(0, 480)
+          toast({
+            variant: "destructive",
+            title: "Scope switch failed",
+            description: msg || "Could not clear pinned scope.",
+          })
+        } finally {
+          setIsSwitching(false)
+        }
+      })()
       return
     }
     if (tenantId === "all") {
@@ -186,7 +220,7 @@ export function ScopeSwitcher() {
           {canAggregate && tenantIds.length > 1 ? (
             <DropdownMenuItem
               disabled={busy}
-              onClick={onPickAggregate}
+              onClick={() => void onPickAggregate()}
               className={aggregateActive ? "bg-muted/80 text-foreground" : "text-foreground/90"}
             >
               <Globe className="mr-2 h-3.5 w-3.5 shrink-0 text-[color:var(--status-pending-fg)]" />

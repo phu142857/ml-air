@@ -1,5 +1,5 @@
-import { ClustersRegionsPage } from "@/components/mlops/infrastructure/clusters-regions-page";
+import { redirect } from "next/navigation";
 
-export default function ClustersPage() {
-  return <ClustersRegionsPage />;
+export default function ClustersRedirectPage() {
+  redirect("/infra");
 }

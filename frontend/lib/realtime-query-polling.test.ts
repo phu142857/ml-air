@@ -8,6 +8,7 @@ import {
   isRealtimeWsPrimary,
   realtimeQueryPollingOptions,
   resolveActiveExecutionRefetchInterval,
+  resolveInfraRefetchInterval,
   resolveRefetchInterval,
 } from "./realtime-query-polling";
 
@@ -64,12 +65,20 @@ describe("resolveRefetchInterval", () => {
     expect(resolveRefetchInterval(connected)).toBe(false);
   });
 
-  it("uses active interval for running executions when polling fallback is active", () => {
+  it("uses active interval for running executions even when WebSocket is connected", () => {
     mockedGetRealtimeWsBase.mockReturnValue("ws://localhost:8080/ws");
     const connected = realtimeQueryPollingOptions({ kind: "connected" });
-    expect(resolveActiveExecutionRefetchInterval(connected, "RUNNING")).toBe(false);
+    expect(resolveActiveExecutionRefetchInterval(connected, "RUNNING")).toBe(POLL_ACTIVE_EXECUTION_MS);
+    expect(resolveActiveExecutionRefetchInterval(connected, "SUCCESS", 4000)).toBe(false);
     expect(resolveActiveExecutionRefetchInterval(fallback, "RUNNING", 4000)).toBe(4000);
     expect(resolveActiveExecutionRefetchInterval(fallback, "SUCCESS", 4000)).toBe(POLL_FALLBACK_MS);
+  });
+});
+
+describe("resolveInfraRefetchInterval", () => {
+  it("always polls regardless of WebSocket state", () => {
+    expect(resolveInfraRefetchInterval()).toBeGreaterThan(0);
+    expect(resolveInfraRefetchInterval({ active: true })).toBeLessThan(resolveInfraRefetchInterval());
   });
 });
 

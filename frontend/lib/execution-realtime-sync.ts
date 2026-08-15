@@ -87,4 +87,9 @@ export function appendRunExecutionKeys(
   for (const k of keysRunExecutionSurface(tenantId, projectId, runId)) {
     keys.push([...k]);
   }
+  keys.push(
+    ["distributed-global-dashboard"],
+    ["infra-running-by-project"],
+    ["distributed-clusters"],
+  );
 }
