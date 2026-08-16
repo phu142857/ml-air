@@ -48,6 +48,7 @@ import { normalizeStatus } from "@/lib/status-style"
 import { normalizeSearchHref } from "@/lib/search-href"
 import { useCanSeeExecutionNav } from "@/lib/hub-nav-access"
 import { isTraceIdFormat } from "@/lib/trace-id"
+import { usePaletteContextCommands } from "@/hooks/use-palette-context-commands"
 import { fuzzyFilter } from "@/lib/command-palette/fuzzy"
 import {
   loadPinnedCommandIds,
@@ -236,6 +237,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     },
     [closePalette, rememberRecent],
   )
+
+  const contextEntries = usePaletteContextCommands({ closePalette, openTrace })
 
   const handlePinToggle = useCallback((commandId: string) => {
     setPinnedIds(togglePinnedCommandId(commandId))
@@ -491,8 +494,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     const navigation = staticEntries.filter((entry) => entry.section === "navigation")
     const actions = staticEntries.filter((entry) => entry.section === "actions")
     const appearance = staticEntries.filter((entry) => entry.section === "appearance")
-    return [...pinnedEntries, ...recentEntries, ...navigation, ...actions, ...resourceEntries, ...appearance]
-  }, [staticEntries, pinnedEntries, recentEntries, resourceEntries])
+    return [
+      ...pinnedEntries,
+      ...recentEntries,
+      ...contextEntries,
+      ...navigation,
+      ...actions,
+      ...resourceEntries,
+      ...appearance,
+    ]
+  }, [staticEntries, pinnedEntries, recentEntries, contextEntries, resourceEntries])
 
   const filteredEntries = useMemo(() => {
     if (!trimmedQuery) return idleEntries
@@ -574,7 +585,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     key={entry.id}
                     value={entry.id}
                     onSelect={entry.onSelect}
-                    className="group mb-0.5 interactive-row flex items-center gap-3 rounded-lg px-2 py-2.5 aria-selected:bg-accent/70"
+                    className="group mb-0.5 interactive-row pressable flex items-center gap-3 rounded-md px-2 py-2.5 aria-selected:bg-accent/70 data-[selected=true]:shadow-sm"
                   >
                     <CommandPaletteItem entry={entry} />
                   </CommandItem>

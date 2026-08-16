@@ -37,8 +37,12 @@ export default function IdentityAuditDetailPage() {
       <SettingsPageHeader
         title={data?.action || "Audit event"}
         description="Full audit event payload and actor context."
-        backHref="/identity/dashboard"
-        backLabel="Audit logs"
+        breadcrumb={{
+          listHref: "/identity/dashboard",
+          listLabel: "Audit",
+          currentLabel: data?.action ?? eventId,
+          middleSegments: data?.action ? [{ label: eventId, mono: true }] : [],
+        }}
         badge={data ? <IdentityStatusBadge state={data.result === "success" ? "active" : "locked"} /> : undefined}
       />
 

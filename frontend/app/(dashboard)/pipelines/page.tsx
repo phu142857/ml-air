@@ -163,7 +163,7 @@ export default function PipelinesPage() {
                   aria-label="Filter pipelines"
                 />
               </div>
-              <div className="scroll-region min-h-0 max-h-[min(70vh,640px)] flex-1">
+              <div className="scroll-region scroll-region-gutter min-h-0 max-h-[min(70vh,640px)] flex-1">
                 <table className="w-full text-left text-sm">
                   <thead className="sticky top-0 z-10 border-b border-border bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <tr>

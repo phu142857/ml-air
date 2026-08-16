@@ -26,15 +26,15 @@ export function detailTabListClassName(className?: string) {
  *  `TabsContent` detects `scroll-region` and insets children so panels don’t touch the scrollbar.
  */
 export function tabPanelScrollClassName(className?: string) {
-  return cn("scroll-region mt-0", className)
+  return cn("scroll-region scroll-region-gutter mt-0", className)
 }
 
 export function detailTabTriggerClassName(className?: string) {
   return cn(
     "inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-3",
     "text-[13px] font-medium whitespace-nowrap transition-default",
-    "text-muted-foreground hover:text-foreground hover:bg-background/55",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+    "text-muted-foreground hover:text-foreground hover:bg-background/55 active:bg-background/75",
+    "pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50",
     "data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:text-primary",
     "data-[state=active]:ring-1 data-[state=active]:ring-border",

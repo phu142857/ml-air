@@ -401,7 +401,7 @@ export const TraceSpanDetailsPane = forwardRef<
             {onCollapse ? (
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={onCollapse}
                 aria-label="Collapse detail panel"
                 title="Collapse detail panel"
@@ -412,7 +412,7 @@ export const TraceSpanDetailsPane = forwardRef<
           </div>
         </div>
       </div>
-      <div ref={contentRef} className="scroll-region flex min-h-0 flex-1 flex-col px-4">
+      <div ref={contentRef} className="scroll-region scroll-region-gutter flex min-h-0 flex-1 flex-col px-4">
         {isLoading ? (
           <p className="py-4 text-sm text-muted-foreground">Loading trace…</p>
         ) : !data ? (

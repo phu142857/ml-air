@@ -1,7 +1,8 @@
 "use client"
 
-import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { FormSaveBar } from "@/components/mlops/layout/form-save-bar"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { cn } from "@/lib/utils"
 
 export function SettingsFormFooter({
@@ -21,10 +22,32 @@ export function SettingsFormFooter({
   saveLabel?: string
   cancelLabel?: string
   className?: string
-  /** When true, always render actions (Save disabled until dirty). */
+  /** When true, always render actions (Save disabled until dirty). Uses a fixed save bar when dirty. */
   alwaysShow?: boolean
 }) {
-  if (!dirty && !alwaysShow) return null
+  useUnsavedChangesGuard(dirty)
+
+  if (dirty) {
+    const useFixedBar = Boolean(alwaysShow)
+
+    return (
+      <FormSaveBar
+        dirty
+        saving={saving}
+        onSave={onSave}
+        onCancel={onCancel}
+        saveLabel={saveLabel === "Save" ? "Save changes" : saveLabel}
+        cancelLabel={cancelLabel === "Cancel" ? "Discard" : cancelLabel}
+        placement={useFixedBar ? "fixed" : "sticky"}
+        className={cn(
+          useFixedBar && "md:left-[var(--sidebar-width,16rem)]",
+          className,
+        )}
+      />
+    )
+  }
+
+  if (!alwaysShow) return null
 
   return (
     <div
@@ -32,26 +55,13 @@ export function SettingsFormFooter({
       role="region"
       aria-label="Form actions"
     >
-      {dirty ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 transition-colors duration-150"
-          onClick={onCancel}
-          disabled={saving}
-        >
-          {cancelLabel}
-        </Button>
-      ) : null}
       <Button
         type="button"
         size="sm"
         className="h-8 transition-colors duration-150"
         onClick={onSave}
-        disabled={!dirty || saving}
+        disabled
       >
-        {saving ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
         {saveLabel}
       </Button>
     </div>

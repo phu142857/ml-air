@@ -169,7 +169,8 @@ export function RunTasksUsageTable({
                   <Fragment key={task.task_id}>
                     <TableRow
                       className={cn(
-                        "cursor-pointer border-border/50 hover:bg-muted/30",
+                        "interactive-row group cursor-pointer border-border/50 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+                        "hover:bg-muted/40 active:bg-muted/55",
                         isExpanded && "bg-muted/40",
                       )}
                       onClick={() => onToggleTask(task.task_id)}
@@ -188,7 +189,7 @@ export function RunTasksUsageTable({
                           <Link
                             href={taskHref}
                             onClick={(e) => e.stopPropagation()}
-                            className="truncate text-xs font-medium text-primary hover:text-primary/80"
+                            className="truncate text-xs font-medium link-primary"
                           >
                             {label}
                           </Link>

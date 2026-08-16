@@ -366,7 +366,7 @@ function LineagePageInner() {
             <ScopePinnedInline message={SCOPE_AGGREGATE_LINEAGE} />
           </div>
         ) : null}
-        <div className="relative min-h-0 flex-1 scroll-region">
+        <div className="relative min-h-0 flex-1 scroll-region scroll-region-gutter">
           {!mode ? (
             <div className="flex h-full items-center justify-center p-8">
               <MlopsEmptyState

@@ -32,7 +32,7 @@ export function SubpageBreadcrumb({ segments, className }: SubpageBreadcrumbProp
             />
           )}
           {segment.href ? (
-            <Link href={segment.href} className="link-primary shrink-0">
+            <Link href={segment.href} className="link-primary interactive-row shrink-0 rounded-sm px-1 py-0.5">
               {segment.label}
             </Link>
           ) : (

@@ -131,7 +131,7 @@ export function LifecyclePageSkeleton() {
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden px-4 py-4 sm:px-6 min-[1200px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="scroll-region min-h-0">
+        <div className="scroll-region scroll-region-gutter min-h-0">
           <AuditTimelineSkeleton count={6} />
         </div>
         <div className="min-h-0 overflow-hidden rounded-md border border-border bg-card">

@@ -356,7 +356,7 @@ function MetricPickerSearch({
             <button
               key={key}
               type="button"
-              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] hover:bg-accent"
+              className="interactive-row flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               onClick={() => {
                 onAdd(key);
                 setQuery("");
@@ -469,7 +469,7 @@ function MetricPanelCard({
                 {key}
                 <button
                   type="button"
-                  className="rounded-sm p-0.5 hover:bg-muted"
+                  className="pressable rounded-sm p-0.5 hover:bg-muted active:bg-muted/80"
                   aria-label={`Remove ${key}`}
                   onClick={() => onRemoveMetric(key)}
                 >

@@ -200,7 +200,7 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!tenantIds.length || busy}
-            className="h-8 max-w-[200px] gap-2 rounded-md text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground"
+            className="h-8 max-w-[200px] gap-2 rounded-md text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground pressable"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
             <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -251,7 +251,7 @@ export function ScopeSwitcher() {
             variant="ghost"
             size="sm"
             disabled={!projectsForTenant.length || busy}
-            className="h-8 max-w-[220px] gap-2 rounded-md text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground"
+            className="h-8 max-w-[220px] gap-2 rounded-md text-foreground/90 transition-default hover:bg-muted/80 hover:text-foreground pressable"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
             <FolderKanban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

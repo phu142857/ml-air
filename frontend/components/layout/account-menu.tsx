@@ -61,7 +61,7 @@ export function AccountMenu() {
           type="button"
           variant="outline"
           size="icon"
-          className="h-9 w-9 shrink-0 rounded-full border-border bg-background p-0 text-muted-foreground transition-default hover:bg-accent/40 hover:text-foreground"
+          className="h-9 w-9 shrink-0 rounded-full border-border bg-background p-0 text-muted-foreground transition-default hover:bg-accent/40 hover:text-foreground pressable"
           aria-label="Account menu"
         >
           <Avatar className="h-8 w-8">

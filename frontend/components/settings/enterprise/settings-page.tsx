@@ -1,9 +1,18 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
+import { ResourceDetailBreadcrumb, MlopsPageError, MlopsPageLoading, type BreadcrumbSegment } from "@/components/mlops/layout"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+
+export type SettingsBreadcrumbProps = {
+  listHref: string
+  listLabel: string
+  currentLabel: string
+  currentMono?: boolean
+  middleSegments?: BreadcrumbSegment[]
+}
 
 export function SettingsPage({
   children,
@@ -18,20 +27,8 @@ export function SettingsPage({
 }) {
   return (
     <div className={cn("flex min-h-0 w-full min-w-0 flex-1 flex-col gap-6", className)}>
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading…
-        </div>
-      ) : null}
-      {error ? (
-        <p
-          className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
+      {loading ? <MlopsPageLoading label="Loading…" inline className="text-sm" /> : null}
+      {error ? <MlopsPageError title="Failed to load" message={error} /> : null}
       {children}
     </div>
   )
@@ -41,6 +38,7 @@ export function SettingsPageHeader({
   title,
   description,
   badge,
+  breadcrumb,
   backHref,
   backLabel = "Back",
   actions,
@@ -49,6 +47,7 @@ export function SettingsPageHeader({
   title?: string
   description?: string
   badge?: React.ReactNode
+  breadcrumb?: SettingsBreadcrumbProps
   backHref?: string
   backLabel?: string
   actions?: React.ReactNode
@@ -58,12 +57,17 @@ export function SettingsPageHeader({
 
   return (
     <header className="space-y-3 border-b border-border pb-6">
-      {backHref ? (
+      {breadcrumb ? (
+        <ResourceDetailBreadcrumb
+          {...breadcrumb}
+          className="-mx-0 mb-1 rounded-none border-x-0 border-t-0 bg-transparent px-0 py-0"
+        />
+      ) : backHref ? (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="-ml-2 h-8 gap-1.5 px-2 text-muted-foreground transition-colors duration-150"
+          className="-ml-2 h-8 gap-1.5 px-2 text-muted-foreground transition-colors duration-150 pressable"
           asChild
         >
           <Link href={backHref}>

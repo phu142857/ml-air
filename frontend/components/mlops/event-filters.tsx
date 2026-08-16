@@ -219,7 +219,7 @@ export function EventFilters({
           variant="ghost"
           size="sm"
           onClick={onClearFilters}
-          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 text-xs text-muted-foreground hover:text-foreground pressable"
         >
           <X className="mr-1 h-3 w-3" />
           Clear

@@ -117,7 +117,7 @@ export function SemanticEventCard({ ev }: { ev: TraceDetailEvent }) {
         onClick={() => expandable && setExpanded((v) => !v)}
         className={cn(
           "flex w-full items-start gap-2 p-3 text-left transition-default",
-          expandable && "cursor-pointer hover:bg-muted/50",
+          expandable && "interactive-row cursor-pointer hover:bg-muted/50 active:bg-muted/65",
         )}
         disabled={!expandable}
         aria-expanded={expandable ? expanded : undefined}
@@ -191,7 +191,7 @@ export function AuditEventCard({ ev }: { ev: TraceDetailAuditEvent }) {
         onClick={() => expandable && setExpanded((v) => !v)}
         className={cn(
           "flex w-full items-start gap-2 p-3 text-left transition-default",
-          expandable && "cursor-pointer hover:bg-muted/50",
+          expandable && "interactive-row cursor-pointer hover:bg-muted/50 active:bg-muted/65",
         )}
         disabled={!expandable}
         aria-expanded={expandable ? expanded : undefined}

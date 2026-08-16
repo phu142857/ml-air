@@ -9,10 +9,12 @@ import { CommandPalette } from "@/components/command-palette"
 import { TraceExplorerDialog } from "@/components/mlops/trace-link"
 import { TraceUrlSync } from "@/components/mlops/trace-url-sync"
 import { PageTransition } from "@/components/mlops/interaction"
+import { ShortcutHelpDialog } from "@/components/mlops/shortcut-help-dialog"
 import { useAppContext } from "@/lib/app-context"
 import { HubAuthGuard } from "@/components/auth/hub-auth-guard"
 import { useAuthSessionWatch } from "@/hooks/use-auth-session-watch"
 import { useScopeChangeRedirect } from "@/hooks/use-scope-change-redirect"
+import { useNavChords } from "@/hooks/use-nav-chords"
 
 interface RouteShellProps {
   children: React.ReactNode
@@ -26,11 +28,13 @@ function ScopeChangeRedirectListener() {
 export function RouteShell({ children }: RouteShellProps) {
   const pathname = usePathname()
   const [commandOpen, setCommandOpen] = useState(false)
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
   const [traceDialogId, setTraceDialogId] = useState<string | null>(null)
   const { tenantId, projectId } = useAppContext()
   const scopePinned = tenantId !== "all" && projectId !== "all"
 
   useAuthSessionWatch()
+  useNavChords(useCallback(() => setShortcutHelpOpen(true), []))
 
   const handleOpenTraceFromUrl = useCallback((traceId: string) => {
     setTraceDialogId(traceId)
@@ -70,6 +74,7 @@ export function RouteShell({ children }: RouteShellProps) {
         </div>
       </SidebarInset>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      <ShortcutHelpDialog open={shortcutHelpOpen} onOpenChange={setShortcutHelpOpen} />
       <TraceUrlSync enabled={openTraceDialogFromUrl} onOpen={handleOpenTraceFromUrl} />
       {traceDialogId ? (
         <TraceExplorerDialog

@@ -70,7 +70,7 @@ function TabsContent({
       <TabsPrimitive.Content
         data-slot="tabs-content"
         className={cn(
-          'scroll-region mt-0 min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
+          'scroll-region scroll-region-gutter mt-0 min-h-0 flex-1 outline-none data-[state=inactive]:hidden',
         )}
         {...props}
       >

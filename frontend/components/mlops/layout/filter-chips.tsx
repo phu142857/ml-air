@@ -51,7 +51,7 @@ export function FilterChips({
           type="button"
           onClick={() => onChange(opt.id)}
           className={cn(
-            "rounded-md border border-transparent px-3 py-1 text-xs font-medium transition-default",
+            "rounded-md border border-transparent px-3 py-1 text-xs font-medium transition-default pressable",
             value === opt.id
               ? activeClassForTone(opt.tone ?? "default", variant)
               : opt.tone === "failed"

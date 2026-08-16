@@ -59,7 +59,7 @@ export function TraceListPane({
             {onCollapse ? (
               <button
                 type="button"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-default hover:bg-muted hover:text-foreground pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={onCollapse}
                 aria-label="Collapse trace list"
                 title="Collapse trace list"
@@ -88,7 +88,7 @@ export function TraceListPane({
 
       <div
         ref={listRef}
-        className="scroll-region min-h-0 flex-1 px-2 py-2"
+        className="scroll-region scroll-region-gutter min-h-0 flex-1 px-2 py-2"
         role="listbox"
         aria-label="Traces"
       >
@@ -125,10 +125,10 @@ export function TraceListPane({
                   aria-selected={selected}
                   onClick={() => onSelectTrace(item.trace_id)}
                   className={cn(
-                    "flex w-full flex-col gap-1 rounded-lg border px-2.5 py-2 text-left transition-default",
+                    "interactive-row flex w-full flex-col gap-1 rounded-lg border px-2.5 py-2 text-left outline-none transition-default focus-visible:ring-2 focus-visible:ring-ring/50",
                     selected
-                      ? "border-primary/30 bg-primary/10 hover:border-primary/50"
-                      : "border-transparent hover:border-border hover:bg-muted/40",
+                      ? "border-primary/30 bg-primary/10 hover:border-primary/50 active:bg-primary/15"
+                      : "border-transparent hover:border-border hover:bg-muted/40 active:bg-muted/55",
                   )}
                 >
                   <span className="flex min-w-0 items-center justify-between gap-2">

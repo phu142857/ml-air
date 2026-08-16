@@ -203,7 +203,7 @@ function LifecycleContent() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 gap-2 text-xs"
+            className="h-8 gap-2 text-xs pressable"
             disabled={exporting || !token.trim()}
             onClick={() => void handleExport()}
           >
@@ -286,7 +286,7 @@ function LifecycleContent() {
               <div className="h-full w-1/3 animate-pulse bg-primary/70" />
             </div>
           ) : null}
-          <div className="scroll-region min-h-0 flex-1">
+          <div className="scroll-region scroll-region-gutter min-h-0 flex-1">
             {filteredEvents.length === 0 ? (
               <MlopsEmptyState icon={History} title="No events" />
             ) : (

@@ -23,8 +23,8 @@ export function CommandPaletteItem({ entry }: CommandPaletteItemProps) {
 
   return (
     <>
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/35">
-        <Icon className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/35 transition-colors duration-150 group-hover:border-border group-hover:bg-muted/55 group-data-[selected=true]:border-primary/30 group-data-[selected=true]:bg-primary/10">
+        <Icon className="h-4 w-4 text-muted-foreground transition-colors duration-150 group-hover:text-foreground group-data-[selected=true]:text-primary" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 flex-1 text-left">
         <div className="truncate text-sm font-medium text-foreground">{entry.label}</div>
@@ -42,7 +42,7 @@ export function CommandPaletteItem({ entry }: CommandPaletteItemProps) {
           variant="ghost"
           size="icon"
           className={cn(
-            "h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100 hover:opacity-100 focus-visible:opacity-100",
+            "h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-all duration-150 group-hover:opacity-100 group-data-[selected=true]:opacity-100 hover:bg-muted/60 focus-visible:opacity-100",
             entry.pinned && "opacity-100 text-primary",
           )}
           aria-label={entry.pinned ? "Unpin command" : "Pin command"}

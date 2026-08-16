@@ -29,7 +29,7 @@ export function DashboardKpiStrip({ stats }: DashboardKpiStripProps) {
         <Link
           key={stat.label}
           href={stat.href}
-          className="group bg-card px-3 py-2.5 transition-default hover:bg-muted/40"
+          className="group interactive-row bg-card px-3 py-2.5 outline-none transition-default hover:bg-muted/40 active:bg-muted/55 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
         >
           <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             {stat.label}

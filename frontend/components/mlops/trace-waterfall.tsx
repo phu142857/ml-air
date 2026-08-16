@@ -657,7 +657,7 @@ export function TraceWaterfallView({
           data-trace-region="waterfall"
           className="flex min-h-0 flex-1 flex-col outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <div className="scroll-region min-h-0 flex-1" role="grid" aria-label="Trace waterfall" aria-rowcount={rows.length}>
+          <div className="scroll-region scroll-region-gutter min-h-0 flex-1" role="grid" aria-label="Trace waterfall" aria-rowcount={rows.length}>
           {rows.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No spans match the current filter.</p>
           ) : (
@@ -669,7 +669,7 @@ export function TraceWaterfallView({
                   {showHeader ? (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 border-b border-border/60 bg-muted/25 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-default hover:bg-muted/50"
+                      className="interactive-row flex w-full items-center gap-2 border-b border-border/60 bg-muted/25 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
                       onClick={() =>
                         setCollapsedSections((prev) => ({ ...prev, [section.id]: !prev[section.id] }))
                       }

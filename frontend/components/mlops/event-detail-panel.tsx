@@ -75,7 +75,7 @@ function DetailBody({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain">
+      <div className="scroll-region scroll-region-gutter min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain">
         <div className="space-y-5 p-4">
           {/* Actor */}
           <section>
@@ -187,7 +187,7 @@ function DetailBody({
                     <button
                       type="button"
                       onClick={() => onSelect(r)}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+                      className="interactive-row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
                     >
                       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{r.sentence}</span>

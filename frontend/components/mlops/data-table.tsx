@@ -1358,7 +1358,7 @@ export function DataTable<T>({
                         return (
                           <div
                             key={column.id}
-                            className="flex items-center gap-1 rounded-md px-1 py-1 hover:bg-accent/60"
+                            className="interactive-row flex items-center gap-1 rounded-md px-1 py-1"
                           >
                             <DropdownMenuCheckboxItem
                               checked={isVisible}
@@ -1442,7 +1442,7 @@ export function DataTable<T>({
                       <button
                         key={`${column.id}-${value}`}
                         type="button"
-                        className="inline-flex max-w-full items-center gap-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground transition-default hover:bg-accent"
+                        className="interactive-row inline-flex max-w-full items-center gap-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground transition-default pressable"
                         onClick={() => updateFilter(column.id, value, false)}
                       >
                         <span className="shrink-0 font-medium text-foreground">{headerLabel(column.header)}:</span>
@@ -1465,7 +1465,7 @@ export function DataTable<T>({
                     <button
                       key={`sort-${sort.id}`}
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] text-muted-foreground transition-default hover:bg-accent"
+                      className="interactive-row inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 text-[11px] text-muted-foreground transition-default pressable"
                       onClick={() => clearSort(sort.id)}
                       title="Remove sort"
                     >
@@ -1680,7 +1680,7 @@ export function DataTable<T>({
                           <div className="relative flex min-w-0 items-center pr-2">
                             <button
                               type="button"
-                              className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                              className="interactive-row pressable inline-flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                               title="Click to sort · Shift+click for multi-sort"
                               onClick={(e) => toggleSort(column.id, e.shiftKey)}
                             >

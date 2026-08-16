@@ -32,7 +32,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       variant="outline"
       size="icon"
       className={cn(
-        "relative h-8 w-8 shrink-0 rounded-md border-border/70 bg-muted/30 text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        "relative h-8 w-8 shrink-0 rounded-md border-border/70 bg-muted/30 text-muted-foreground hover:bg-accent/50 hover:text-foreground pressable",
         className,
       )}
       onClick={() => setTheme(isDark ? "light" : "dark")}

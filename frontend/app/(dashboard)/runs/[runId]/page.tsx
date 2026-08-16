@@ -18,6 +18,7 @@ import {
   ListTodo,
   Activity,
   FileDown,
+  Copy,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -33,11 +34,14 @@ import {
   DetailTabList,
   MetadataGrid,
   MlopsEmptyState,
+  MlopsPageError,
+  MlopsPageLoading,
+  ResourceDetailBreadcrumb,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBackLink,
   tabPanelScrollClassName,
 } from "@/components/mlops/layout"
+import { ConfirmDestructiveDialog } from "@/components/settings/enterprise/confirm-destructive-dialog"
 import { RunMetricsSummary } from "@/components/mlops/run-metrics-summary"
 import { RunMetricsCharts } from "@/components/mlops/run-metrics-charts"
 import { TriggerRunDialog } from "@/components/mlops/trigger-run-dialog"
@@ -48,7 +52,7 @@ import { useRunExecutionGraph } from "@/hooks/use-run-execution-graph"
 import { useExecutionStore } from "@/lib/execution-store"
 import { mergeRunListRow, mergeTaskListRow } from "@/lib/execution-live-merge"
 import { cn, formatDateTimeCompact, formatApiClientError } from "@/lib/utils"
-import { toastError, toastSuccess } from "@/lib/toast-actions"
+import { toastError, toastSuccess, copyWithToast } from "@/lib/toast-actions"
 import { formatRuntimeSeconds } from "@/lib/usage-format"
 import { computeRunWallDurationSeconds } from "@/lib/run-duration"
 import { useWallClockNow } from "@/hooks/use-wall-clock-now"
@@ -236,11 +240,13 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   const isTabLoading = useTabLoading(tab)
   const [rerunOpen, setRerunOpen] = useState(false)
   const [rerunMode, setRerunMode] = useState<"simple" | "gated">("simple")
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [exportingMetrics, setExportingMetrics] = useState(false)
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelRun(tenantId, projectId, runId, token),
     onSuccess: async () => {
+      setCancelDialogOpen(false)
       toastSuccess("Run cancellation requested", runId)
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.detail(runId) })
       await queryClient.invalidateQueries({ queryKey: mlairKeys.run.tasks(runId) })
@@ -566,7 +572,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   if (runQuery.isFetched && !runQuery.isLoading && !run && !runQuery.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SubpageBackLink href="/runs" label="Back to runs" />
+        <ResourceDetailBreadcrumb listHref="/runs" listLabel="Runs" currentLabel={runId} />
         <ResourcePageHeader accent="zinc" icon={Play} title="Run not found" subtitle={runId} className="border-b-0" />
         <div className="flex flex-1 items-center justify-center p-6">
           <MlopsEmptyState
@@ -586,7 +592,22 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
-        <SubpageBackLink href="/runs" label="Back to runs" />
+        <ResourceDetailBreadcrumb
+          listHref="/runs"
+          listLabel="Runs"
+          currentLabel={runId}
+          middleSegments={
+            run?.pipeline_id
+              ? [
+                  {
+                    label: run.pipeline_id,
+                    href: `/pipelines/${encodeURIComponent(run.pipeline_id)}`,
+                    mono: true,
+                  },
+                ]
+              : []
+          }
+        />
         <ResourcePageHeader
           accent="zinc"
           icon={Play}
@@ -601,6 +622,16 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           className="border-b-0"
           actions={
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2 border-border bg-card text-xs pressable"
+                onClick={() => void copyWithToast(runId, { successTitle: "Run ID copied" })}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy ID
+              </Button>
               {run ? (
                 <StatusBadge status={statusToMlopsBadge(run.status)} label={status.label} size="sm" />
               ) : null}
@@ -653,8 +684,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 }
                 onClick={() => {
                   if (!run) return
-                  if (!window.confirm(`Cancel run ${runId}? Running tasks may continue until they finish.`)) return
-                  cancelMutation.mutate()
+                  setCancelDialogOpen(true)
                 }}
               >
                 {cancelMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
@@ -684,9 +714,11 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
 
         {runQuery.isError ? (
           <div className="shrink-0 px-4 pt-3 sm:px-6">
-            <div className="rounded-lg border border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] px-4 py-3 text-sm text-[color:var(--status-failed-fg)]">
-              {formatApiClientError(runQuery.error)}
-            </div>
+            <MlopsPageError
+              title="Failed to load run"
+              message={formatApiClientError(runQuery.error)}
+              onRetry={() => void runQuery.refetch()}
+            />
           </div>
         ) : null}
 
@@ -699,10 +731,7 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
         <TabsContent value="overview" className={tabPanelScrollClassName("space-y-6")}>
           <RunTabPanel loading={isTabLoading && !runQuery.isLoading} variant={RUN_TAB_SKELETON.overview}>
             {runQuery.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading run…
-              </div>
+              <MlopsPageLoading label="Loading run…" inline />
             ) : run ? (
               <>
                 {runEnvironmentMetadataItems.length > 0 ? (
@@ -930,6 +959,17 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
           </RunTabPanel>
         </TabsContent>
       </Tabs>
+
+      <ConfirmDestructiveDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        title="Cancel run?"
+        description={`Cancel run ${runId}? Running tasks may continue until they finish.`}
+        impact={["Run status will move to cancelled", "In-flight tasks may not stop immediately"]}
+        confirmLabel="Cancel run"
+        onConfirm={() => cancelMutation.mutate()}
+        pending={cancelMutation.isPending}
+      />
     </div>
   )
 }

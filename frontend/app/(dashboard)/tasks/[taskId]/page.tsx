@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { useRealtimeQueryPolling, resolveActiveExecutionRefetchInterval } from "@/lib/realtime-query-polling"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { ListTodo, Loader2 } from "lucide-react"
+import { ListTodo, Loader2, Copy } from "lucide-react"
 import {
   fetchRunUsageSamples,
   fetchTaskResolved,
@@ -25,10 +25,12 @@ import {
   DetailSection,
   MetadataGrid,
   MlopsEmptyState,
+  MlopsPageError,
+  MlopsPageLoading,
   PageScrollBody,
+  ResourceDetailBreadcrumb,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBackLink,
   pageHeaderActionClass,
 } from "@/components/mlops/layout"
 import { RunResourceTimeline } from "@/components/mlops/run-resource-timeline"
@@ -38,7 +40,7 @@ import { JsonPayloadPanel } from "@/components/mlops/json-payload-panel"
 import { StatusBadge } from "@/components/mlops/status-badge"
 import { parseTaskScopeHint, taskScopeHintKey } from "@/lib/task-detail-href"
 import { cn, formatApiClientError, formatDateTimeCompact } from "@/lib/utils"
-import { toastError, toastSuccess } from "@/lib/toast-actions"
+import { toastError, toastSuccess, copyWithToast } from "@/lib/toast-actions"
 import { isScopePinned } from "@/lib/scope"
 import { isActiveExecutionStatus, statusToMlopsBadge } from "@/lib/status-style"
 
@@ -90,7 +92,7 @@ function TaskDetailContent() {
     return s.tasksByRun[runIdHint]?.[taskId]
   })
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: mlairKeys.task.detail(taskId, scopeKey),
     queryFn: () =>
       fetchTaskResolved(tenantId, projectId, taskId, token, {
@@ -188,7 +190,7 @@ function TaskDetailContent() {
   if (!isLoading && !isError && !task) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SubpageBackLink href="/tasks" label="Back to tasks" />
+        <ResourceDetailBreadcrumb listHref="/tasks" listLabel="Tasks" currentLabel={taskId} />
         <ResourcePageHeader accent="zinc" icon={ListTodo} title="Task not found" subtitle={taskId} />
         <div className="flex flex-1 items-center justify-center p-6">
           <MlopsEmptyState
@@ -207,7 +209,16 @@ function TaskDetailContent() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBackLink href="/tasks" label="Back to tasks" />
+      <ResourceDetailBreadcrumb
+        listHref="/tasks"
+        listLabel="Tasks"
+        currentLabel={taskId}
+        middleSegments={
+          taskRunId
+            ? [{ label: "Run", href: `/runs/${encodeURIComponent(taskRunId)}` }]
+            : []
+        }
+      />
       <ResourcePageHeader
         icon={ListTodo}
         accent="zinc"
@@ -227,6 +238,16 @@ function TaskDetailContent() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={cn(pageHeaderActionClass, "pressable")}
+              onClick={() => void copyWithToast(taskId, { successTitle: "Task ID copied" })}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy ID
+            </Button>
             {taskRunId ? (
               <Button
                 type="button"
@@ -269,18 +290,13 @@ function TaskDetailContent() {
         }
       >
         {isLoading ? (
-          <div className="panel-surface p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Resolving task scope…
-            </div>
-          </div>
+          <MlopsPageLoading label="Resolving task scope…" minHeight="6rem" />
         ) : isError ? (
-          <div className="panel-surface p-4">
-            <div className="rounded-md border border-red-500/40 bg-[color:var(--status-failed-bg)] px-3 py-2 text-sm text-red-300">
-              {formatApiClientError(error)}
-            </div>
-          </div>
+          <MlopsPageError
+            title="Failed to load task"
+            message={formatApiClientError(error)}
+            onRetry={() => void refetch()}
+          />
         ) : task ? (
           <div className="flex min-w-0 w-full flex-col gap-6">
             <div className="panel-surface min-w-0 p-4">

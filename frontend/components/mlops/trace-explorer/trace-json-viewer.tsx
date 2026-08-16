@@ -111,7 +111,7 @@ function JsonTreeNode({
       <button
         type="button"
         className={cn(
-          "flex w-full items-center gap-1 rounded-sm py-1 text-left font-mono text-xs text-foreground transition-default hover:bg-muted/50",
+          "interactive-row flex w-full items-center gap-1 rounded-sm py-1 text-left font-mono text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         )}
         style={{ paddingLeft: depth * 12 }}
         onClick={() => setCollapsed((prev) => !prev)}

@@ -471,7 +471,7 @@
 
   .interactive-row {
     outline: none;
-    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
     transition-duration: var(--motion-duration-fast);
     transition-timing-function: var(--motion-ease);
   }
@@ -480,8 +480,42 @@
     @apply bg-muted/40;
   }
 
+  .interactive-row:active {
+    @apply bg-muted/55;
+  }
+
   .interactive-row:focus-visible {
     @apply bg-muted/50 ring-2 ring-ring/45 ring-offset-2 ring-offset-background;
+  }
+
+  .interactive-row[data-selected="true"],
+  .interactive-row[aria-selected="true"] {
+    @apply bg-muted/50;
+  }
+
+  .pressable {
+    transition-property: transform, background-color, border-color, color, opacity;
+    transition-duration: var(--motion-duration-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  .pressable:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .interactive-surface {
+    @apply rounded-md border border-transparent;
+    transition-property: color, background-color, border-color, box-shadow;
+    transition-duration: var(--motion-duration-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  .interactive-surface:hover {
+    @apply border-border/80 bg-muted/25;
+  }
+
+  .interactive-surface:active {
+    @apply bg-muted/40;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -557,6 +591,17 @@
     @apply px-4 sm:px-6;
   }
 
+  /* Breathing room between scrollport content and the vertical scrollbar. */
+  .scroll-region-gutter {
+    padding-inline-end: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .scroll-region-gutter {
+      padding-inline-end: 1rem;
+    }
+  }
+
   [data-floating-menu] {
     z-index: var(--z-floating);
     overscroll-behavior: contain;
@@ -584,21 +629,29 @@
   }
 
   .link-primary {
-    @apply text-primary hover:text-primary/80;
-    transition-property: color, background-color, border-color, opacity;
+    @apply rounded-sm text-primary underline-offset-4 hover:text-primary/80 hover:underline;
+    transition-property: color, background-color, border-color, opacity, text-decoration-color;
     transition-duration: 150ms;
     transition-timing-function: ease-out;
   }
 
+  .link-primary:active {
+    @apply text-primary/70;
+  }
+
   .list-item-hover {
     @apply rounded-md border border-transparent px-2.5 py-1.5;
-    transition-property: color, background-color, border-color, opacity;
+    transition-property: color, background-color, border-color, opacity, transform;
     transition-duration: 150ms;
     transition-timing-function: ease-out;
   }
 
   .list-item-hover:hover {
     @apply border-border bg-muted;
+  }
+
+  .list-item-hover:active {
+    @apply bg-muted/80;
   }
 
   .input-enhanced {

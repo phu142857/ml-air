@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/mlops/status-badge";
+import { MlopsPageError } from "@/components/mlops/layout";
 import {
   SettingsEmptyState,
   SettingsPage,
@@ -214,9 +215,11 @@ export function PluginsSettingsTab() {
         ) : null}
 
         {pluginsQuery.isError ? (
-          <p className="rounded-lg border border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] px-3 py-2 text-xs text-red-300">
-            {(pluginsQuery.error as Error)?.message || "Failed to load plugins"}
-          </p>
+          <MlopsPageError
+            title="Failed to load plugins"
+            message={(pluginsQuery.error as Error)?.message || "Failed to load plugins"}
+            onRetry={() => void pluginsQuery.refetch()}
+          />
         ) : null}
 
         {loadErrors.length > 0 ? (

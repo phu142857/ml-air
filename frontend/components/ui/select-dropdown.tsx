@@ -70,7 +70,7 @@ export function SelectDropdown({
               role="option"
               aria-selected={opt.value === value}
               className={cn(
-                "w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted/80",
+                "interactive-row w-full px-3 py-2 text-left text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
                 opt.value === value ? "bg-muted text-foreground" : "text-foreground",
               )}
               onMouseDown={(e) => e.preventDefault()}
@@ -101,7 +101,7 @@ export function SelectDropdown({
           setOpen((o) => !o);
         }}
         className={cn(
-          "flex w-full min-w-0 items-center justify-between gap-2 panel-surface px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50",
+          "pressable flex w-full min-w-0 items-center justify-between gap-2 panel-surface px-3 py-2 text-left text-sm text-foreground disabled:pointer-events-none disabled:opacity-50",
           buttonClassName,
         )}
       >

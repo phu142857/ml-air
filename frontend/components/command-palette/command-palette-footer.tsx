@@ -22,6 +22,7 @@ export function CommandPaletteFooter({ scopeLabel }: CommandPaletteFooterProps) 
         <FooterHint keys="↑↓" label="Navigate" />
         <FooterHint keys="↵" label="Open" />
         <FooterHint keys="esc" label="Close" />
+        <FooterHint keys="?" label="Shortcuts" />
       </div>
       {scopeLabel ? <span className="truncate font-mono">{scopeLabel}</span> : null}
     </div>

@@ -112,16 +112,16 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
       <div className="min-w-0 pb-6">
         <div
           className={cn(
-            "w-full rounded-md border border-border bg-card text-left transition-colors duration-150",
-            "hover:bg-muted/20",
-            isSelected && "border-primary/40 bg-primary/[0.03]",
+            "w-full rounded-md border border-border bg-card text-left outline-none transition-colors duration-150",
+            "interactive-row cursor-pointer hover:bg-muted/40 active:bg-muted/55",
+            isSelected && "border-primary/40 bg-primary/[0.03] ring-1 ring-primary/20",
             isNew && "border-primary/30",
           )}
         >
           <button
             type="button"
             onClick={() => onSelect(event)}
-            className="w-full px-3 py-2.5 text-left"
+            className="w-full px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
           >
             <div className="flex items-center gap-2">
               <Avatar className="size-6 border border-border/60">
@@ -134,7 +134,7 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
                   <Link
                     href={event.actor.href}
                     onClick={(e) => e.stopPropagation()}
-                    className="truncate text-xs font-semibold text-foreground hover:underline"
+                    className="truncate text-xs font-semibold text-foreground link-primary"
                   >
                     {event.actor.name}
                   </Link>
@@ -181,7 +181,7 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
                 <Link
                   href={event.resource.href}
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 font-medium text-foreground/80 hover:text-primary hover:underline"
+                  className="inline-flex items-center gap-1 font-medium text-foreground/80 link-primary"
                 >
                   {targetLabel}
                   <ExternalLink className="size-3 opacity-60" aria-hidden />
@@ -210,7 +210,7 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
             <div className="border-t border-border/60">
               <button
                 type="button"
-                className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                className="interactive-row flex w-full items-center gap-1.5 rounded-sm px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation()
                   setExpanded((v) => !v)

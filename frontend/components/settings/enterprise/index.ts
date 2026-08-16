@@ -1,4 +1,4 @@
-export { SettingsPage, SettingsPageHeader } from "./settings-page";
+export { SettingsPage, SettingsPageHeader, type SettingsBreadcrumbProps } from "./settings-page";
 export { SettingsSection } from "./settings-section";
 export { MetadataList, type MetadataItem } from "./metadata-list";
 export { IdentityStatusBadge } from "./identity-status-badge";

@@ -249,7 +249,7 @@ export default function SearchPage() {
     <Suspense
       fallback={
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="scroll-region p-6">
+          <div className="scroll-region scroll-region-gutter p-6">
             <ListTableSkeleton rows={6} />
           </div>
         </div>

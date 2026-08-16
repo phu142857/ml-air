@@ -479,7 +479,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                 return (
                   <tr
                     key={isSynthetic ? `new:${displayIdx}` : row_index}
-                    className="group border-b border-border/60 hover:bg-muted/20"
+                    className="group interactive-row border-b border-border/60 outline-none hover:bg-muted/30 active:bg-muted/45"
                     style={{ height: rowH }}
                   >
                     {editable ? (
@@ -489,7 +489,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-[var(--status-failed-bg)] hover:text-[color:var(--status-failed-fg)]"
+                            className="pressable h-6 w-6 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-[var(--status-failed-bg)] hover:text-[color:var(--status-failed-fg)]"
                             title="Delete this row"
                             onClick={() => {
                               if (isSynthetic) {
@@ -519,7 +519,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted"
+                            className="pressable h-6 w-6 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted active:bg-muted/80"
                             title="Insert empty row after this one"
                             onClick={() => insertRowAfter(row_index)}
                           >
@@ -594,7 +594,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                      className="pressable h-7 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
                       onClick={() => {
                         const lastRow = csvRows[csvRows.length - 1];
                         insertRowAfter(lastRow ? lastRow.row_index : -1);
@@ -630,7 +630,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-5 w-5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-[var(--status-failed-bg)] hover:text-[color:var(--status-failed-fg)]"
+                          className="pressable h-5 w-5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-[var(--status-failed-bg)] hover:text-[color:var(--status-failed-fg)]"
                           title="Delete this line"
                           onClick={() => {
                             if (isSynthetic) {
@@ -660,7 +660,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-5 w-5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted"
+                          className="pressable h-5 w-5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted active:bg-muted/80"
                           title="Insert empty line after"
                           onClick={() => insertLineAfter(line_index)}
                         >
@@ -718,7 +718,7 @@ export const DatasetVersionScrollEditor = forwardRef<
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  className="pressable h-7 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     const lastLine = jsonlLines[jsonlLines.length - 1];
                     insertLineAfter(lastLine ? lastLine.line_index : -1);

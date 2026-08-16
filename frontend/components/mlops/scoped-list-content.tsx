@@ -1,7 +1,7 @@
 "use client"
 
 import { ListTableSkeleton } from "@/components/mlops/list-table-skeleton"
-import { MlopsEmptyState } from "@/components/mlops/layout"
+import { MlopsEmptyState, MlopsPageError } from "@/components/mlops/layout"
 import type { LucideIcon } from "lucide-react"
 
 interface ScopedListContentProps {
@@ -37,14 +37,13 @@ export function ScopedListContent({
 
   return (
     <>
-      {isError && (
-        <div
-          role="alert"
-          className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {errorMessage}
-        </div>
-      )}
+      {isError ? (
+        <MlopsPageError
+          title="Failed to load data"
+          message={errorMessage}
+          className="mb-3"
+        />
+      ) : null}
       {isEmpty ? (
         emptyContent ?? (
           <MlopsEmptyState

@@ -7,13 +7,16 @@ import {
   FilterChips,
   MetadataGrid,
   MlopsEmptyState,
+  MlopsPageError,
+  MlopsPageLoading,
   PageScrollBody,
+  ResourceDetailBreadcrumb,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBackLink,
 } from "@/components/mlops/layout";
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
 import { useTabLoading } from "@/hooks/use-tab-loading";
+import { ConfirmDestructiveDialog } from "@/components/settings/enterprise/confirm-destructive-dialog";
 import { Badge } from "@/components/ui/badge";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -219,6 +222,7 @@ export default function DatasetHubPage() {
   const [retentionMaxAgeDays, setRetentionMaxAgeDays] = useState("");
   const [retentionProtectReferenced, setRetentionProtectReferenced] = useState(true);
   const [retentionMsg, setRetentionMsg] = useState("");
+  const [retentionApplyOpen, setRetentionApplyOpen] = useState(false);
   const [retentionPreview, setRetentionPreview] = useState<{
     eligible_count: number;
     candidates: Array<{ version_id: string; version?: string | null; reasons: string[] }>;
@@ -304,6 +308,7 @@ export default function DatasetHubPage() {
   const retentionApplyMutation = useMutation({
     mutationFn: () => applyDatasetRetention(tenantId, projectId, datasetId, token, false),
     onSuccess: async (data) => {
+      setRetentionApplyOpen(false);
       const count = (data.deleted || []).length;
       const msg = `Deleted ${count} version(s)`;
       setRetentionMsg(msg);
@@ -1238,16 +1243,38 @@ export default function DatasetHubPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBackLink href="/datasets" label="Back to datasets" />
-      <ResourcePageHeader
-        icon={Database}
-        accent="zinc"
-        title={dataset ? `Dataset · ${dataset.name}` : "Dataset"}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" asChild className="h-8 border-border bg-card text-xs">
-              <Link href="/datasets">All datasets</Link>
-            </Button>
+      <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
+        <ResourceDetailBreadcrumb
+          listHref="/datasets"
+          listLabel="Datasets"
+          currentLabel={dataset?.name ?? datasetId}
+          currentMono={!dataset?.name}
+          middleSegments={
+            dataset?.name
+              ? [{ label: datasetId, mono: true }]
+              : []
+          }
+        />
+        <ResourcePageHeader
+          icon={Database}
+          accent="zinc"
+          title={dataset ? `Dataset · ${dataset.name}` : "Dataset"}
+          className="border-b-0"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 border-border bg-card text-xs pressable"
+                onClick={() => void copyWithToast(datasetId, { successTitle: "Dataset ID copied" })}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy ID
+              </Button>
+              <Button variant="outline" size="sm" asChild className="h-8 border-border bg-card text-xs">
+                <Link href="/datasets">All datasets</Link>
+              </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1290,6 +1317,7 @@ export default function DatasetHubPage() {
           </div>
         }
       />
+      </div>
 
       <DetailTabBar
         accent="zinc"
@@ -1303,9 +1331,11 @@ export default function DatasetHubPage() {
       >
 
         {datasetQuery.isError && datasetQuery.isFetched ? (
-          <div className={STATUS_CALLOUT_CLASS.failed}>
-            Could not load dataset (check scope or id).
-          </div>
+          <MlopsPageError
+            title="Failed to load dataset"
+            message="Could not load dataset (check scope or id)."
+            onRetry={() => void datasetQuery.refetch()}
+          />
         ) : null}
 
         {downloadMsg ? (
@@ -1391,9 +1421,13 @@ export default function DatasetHubPage() {
               {!scopePinned ? (
                 <p className="text-sm text-muted-foreground">Pin tenant and project to list runs.</p>
               ) : datasetRunsQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading runs…</p>
+                <MlopsPageLoading label="Loading runs…" minHeight="6rem" />
               ) : datasetRunsQuery.isError ? (
-                <p className={feedbackMessageClass("failed", "sm")}>{formatApiClientError(datasetRunsQuery.error)}</p>
+                <MlopsPageError
+                  title="Failed to load runs"
+                  message={formatApiClientError(datasetRunsQuery.error)}
+                  onRetry={() => void datasetRunsQuery.refetch()}
+                />
               ) : datasetRunsQuery.items.length === 0 ? (
                 <MlopsEmptyState icon={Play} title="No runs" />
               ) : (
@@ -1501,16 +1535,7 @@ export default function DatasetHubPage() {
                         !retentionEnabled ||
                         !retentionPreview?.eligible_count
                       }
-                      onClick={() => {
-                        if (
-                          !window.confirm(
-                            `Delete ${retentionPreview?.eligible_count ?? 0} dataset version(s)? This cannot be undone.`
-                          )
-                        ) {
-                          return;
-                        }
-                        retentionApplyMutation.mutate();
-                      }}
+                      onClick={() => setRetentionApplyOpen(true)}
                     >
                       Apply purge
                     </Button>
@@ -2217,6 +2242,21 @@ export default function DatasetHubPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDestructiveDialog
+        open={retentionApplyOpen}
+        onOpenChange={setRetentionApplyOpen}
+        title="Apply retention purge?"
+        description={`Permanently delete ${retentionPreview?.eligible_count ?? 0} dataset version(s) matching the retention policy?`}
+        impact={[
+          "Eligible versions are removed from storage",
+          "Referenced versions may be skipped when protection is enabled",
+          "This action cannot be undone",
+        ]}
+        confirmLabel="Apply purge"
+        onConfirm={() => retentionApplyMutation.mutate()}
+        pending={retentionApplyMutation.isPending}
+      />
 
       <Dialog open={deleteDatasetOpen} onOpenChange={setDeleteDatasetOpen}>
         <DialogContent className="max-w-md">

@@ -52,7 +52,7 @@ export function GlassButton({
     <button
       type="button"
       className={cn(
-        "panel-surface group relative inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-default disabled:cursor-not-allowed disabled:opacity-50",
+        "panel-surface group relative inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-default pressable disabled:cursor-not-allowed disabled:opacity-50",
         variantStyles[resolved],
         className,
       )}

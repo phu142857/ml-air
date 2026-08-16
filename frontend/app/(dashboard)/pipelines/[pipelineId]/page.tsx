@@ -1,12 +1,14 @@
 "use client";
 
-import { Database, GitBranch, GitCompare, History } from "lucide-react";
+import { Copy, Database, GitBranch, GitCompare, History } from "lucide-react";
 import {
   DetailSection,
+  MlopsPageError,
+  MlopsPageLoading,
   PageScrollBody,
+  ResourceDetailBreadcrumb,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBackLink,
   pageHeaderActionClass,
 } from "@/components/mlops/layout";
 
@@ -29,6 +31,7 @@ import { mlairKeys } from "@/lib/query-keys";
 import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { useAppContext } from "@/lib/app-context";
 import { formatRelativeTime } from "@/lib/utils";
+import { copyWithToast } from "@/lib/toast-actions";
 import { formatVersionLabel } from "@/lib/version-label";
 
 export default function PipelineDetailPage() {
@@ -128,22 +131,38 @@ export default function PipelineDetailPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBackLink href="/pipelines" label="Back to pipelines" />
-      <ResourcePageHeader
-        icon={GitBranch}
-        accent="zinc"
-        title="Pipeline"
-        subtitle={pageSubtitle}
-        actions={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              className={pageHeaderActionClass}
-              asChild
-            >
-              <Link href="/pipelines">All pipelines</Link>
-            </Button>
+      <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
+        <ResourceDetailBreadcrumb
+          listHref="/pipelines"
+          listLabel="Pipelines"
+          currentLabel={pipelineId}
+        />
+        <ResourcePageHeader
+          icon={GitBranch}
+          accent="zinc"
+          title="Pipeline"
+          subtitle={pageSubtitle}
+          className="border-b-0"
+          actions={
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={pageHeaderActionClass}
+                onClick={() => void copyWithToast(pipelineId, { successTitle: "Pipeline ID copied" })}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy ID
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={pageHeaderActionClass}
+                asChild
+              >
+                <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>Versions</Link>
+              </Button>
             <Button
               size="sm"
               className="h-8 gap-1.5 text-xs"
@@ -166,6 +185,7 @@ export default function PipelineDetailPage() {
           </div>
         }
       />
+      </div>
       <PageScrollBody
         header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
       >
@@ -279,21 +299,21 @@ export default function PipelineDetailPage() {
               Pin a tenant and project in the header to load pipeline topology.
             </div>
           ) : dagView === "latest-run" && latestRunId && runOverlayLoading ? (
-            <div className="flex min-h-[260px] items-center justify-center inset-surface text-sm text-muted-foreground">
-              Loading run overlay…
-            </div>
+            <MlopsPageLoading label="Loading run overlay…" minHeight="16rem" />
           ) : dagView === "latest-run" && latestRunId && runGraphQuery.isError ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              Could not load run overlay: {String(runGraphQuery.error)}
-            </div>
+            <MlopsPageError
+              title="Could not load run overlay"
+              message={String(runGraphQuery.error)}
+              onRetry={() => void runGraphQuery.refetch()}
+            />
           ) : topologyLoading && dagView === "config" ? (
-            <div className="flex min-h-[260px] items-center justify-center inset-surface text-sm text-muted-foreground">
-              Loading topology…
-            </div>
+            <MlopsPageLoading label="Loading topology…" minHeight="16rem" />
           ) : topologyQuery.isError && dagView === "config" ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              Could not load topology: {String(topologyQuery.error)}
-            </div>
+            <MlopsPageError
+              title="Could not load topology"
+              message={String(topologyQuery.error)}
+              onRetry={() => void topologyQuery.refetch()}
+            />
           ) : dagPipeline ? (
             <PipelineDAG key={`${pipelineId}-${dagView}-${latestRunId || "cfg"}`} pipeline={dagPipeline} taskScope={dagTaskScope} />
           ) : (

@@ -252,8 +252,13 @@ export default function IdentityServiceAccountDetailPage() {
       <SettingsPageHeader
         title={sa?.name || "Service account"}
         description="Credentials, assignments, and lifecycle for this service account."
-        backHref="/identity/service-accounts"
-        backLabel="Service accounts"
+        breadcrumb={{
+          listHref: "/identity/service-accounts",
+          listLabel: "Service accounts",
+          currentLabel: sa?.name ?? saId,
+          currentMono: !sa?.name,
+          middleSegments: sa?.name ? [{ label: saId, mono: true }] : [],
+        }}
         badge={sa ? <IdentityStatusBadge state={sa.state} /> : null}
       />
 

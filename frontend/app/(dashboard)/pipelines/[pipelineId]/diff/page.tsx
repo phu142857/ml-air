@@ -4,19 +4,22 @@ import { Suspense, useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { FileDiff } from "lucide-react";
+import { FileDiff, Copy } from "lucide-react";
 import { getPipelineVersionDiff, listPipelineVersionsApi } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import {
   DetailSection,
   MlopsEmptyState,
+  MlopsPageError,
+  MlopsPageLoading,
   PageScrollBody,
+  ResourceDetailBreadcrumb,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBackLink,
   pageHeaderActionClass,
 } from "@/components/mlops/layout";
+import { copyWithToast } from "@/lib/toast-actions";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_PIPELINE_DETAIL } from "@/lib/scope-messages";
 import { DataTable, type DataTableColumn } from "@/components/mlops/data-table";
@@ -117,25 +120,50 @@ function DiffPageInner() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <SubpageBackLink
-        href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}
-        label="Back to versions"
-      />
-      <ResourcePageHeader
-        icon={FileDiff}
-        accent="zinc"
-        title="Config diff"
-        actions={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button variant="outline" size="sm" className={pageHeaderActionClass} asChild>
-              <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>Versions</Link>
-            </Button>
+      <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
+        <ResourceDetailBreadcrumb
+          listHref="/pipelines"
+          listLabel="Pipelines"
+          currentLabel="Config diff"
+          middleSegments={[
+            {
+              label: pipelineId,
+              href: `/pipelines/${encodeURIComponent(pipelineId)}`,
+              mono: true,
+            },
+            {
+              label: "Versions",
+              href: `/pipelines/${encodeURIComponent(pipelineId)}/versions`,
+            },
+          ]}
+        />
+        <ResourcePageHeader
+          icon={FileDiff}
+          accent="zinc"
+          title="Config diff"
+          className="border-b-0"
+          actions={
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={pageHeaderActionClass}
+                onClick={() => void copyWithToast(pipelineId, { successTitle: "Pipeline ID copied" })}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy ID
+              </Button>
+              <Button variant="outline" size="sm" className={pageHeaderActionClass} asChild>
+                <Link href={`/pipelines/${encodeURIComponent(pipelineId)}/versions`}>Versions</Link>
+              </Button>
             <Button variant="outline" size="sm" className={pageHeaderActionClass} asChild>
               <Link href={`/pipelines/${encodeURIComponent(pipelineId)}`}>DAG</Link>
             </Button>
           </div>
         }
       />
+      </div>
       <PageScrollBody
         header={!scopePinned ? <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINE_DETAIL} /> : null}
       >
@@ -182,9 +210,13 @@ function DiffPageInner() {
         {!canDiff ? (
           <p className="text-sm text-muted-foreground">Select two different versions to compare.</p>
         ) : diffQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading diff…</p>
+          <MlopsPageLoading label="Loading diff…" minHeight="10rem" />
         ) : diffQuery.isError ? (
-          <p className="text-sm text-red-300">Failed to load diff.</p>
+          <MlopsPageError
+            title="Failed to load diff"
+            message="Could not compare the selected versions."
+            onRetry={() => void diffQuery.refetch()}
+          />
         ) : details.length === 0 ? (
           <MlopsEmptyState icon={FileDiff} title="No differences" />
         ) : (
@@ -208,10 +240,8 @@ export default function PipelineDiffPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="scroll-region p-6">
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
+          <MlopsPageLoading label="Loading diff page…" minHeight="12rem" />
         </div>
       }
     >

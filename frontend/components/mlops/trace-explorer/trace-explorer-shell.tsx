@@ -169,21 +169,21 @@ export function TraceExplorerShell({
 
       <TabsContent
         value="events"
-        className="scroll-region mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
+        className="scroll-region scroll-region-gutter mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
       >
         <TraceEventsPanel data={data} isLoading={isLoading} error={scopeError} />
       </TabsContent>
 
       <TabsContent
         value="logs"
-        className="scroll-region mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
+        className="scroll-region scroll-region-gutter mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
       >
         <TraceLogsPanel data={data} isLoading={isLoading} error={scopeError} />
       </TabsContent>
 
       <TabsContent
         value="runs"
-        className="scroll-region mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
+        className="scroll-region scroll-region-gutter mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
       >
         <TraceRunsPanel data={data} isLoading={isLoading} error={scopeError} />
       </TabsContent>
@@ -191,7 +191,7 @@ export function TraceExplorerShell({
       {hasServiceGraph ? (
         <TabsContent
           value="services"
-          className="scroll-region mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
+          className="scroll-region scroll-region-gutter mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
         >
           <TraceServicesPanel data={data} isLoading={isLoading} error={scopeError} />
         </TabsContent>
@@ -200,7 +200,7 @@ export function TraceExplorerShell({
       {hasExecutionGraph ? (
         <TabsContent
           value="graph"
-          className="scroll-region mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
+          className="scroll-region scroll-region-gutter mt-0 min-h-0 flex-1 px-4 py-4 data-[state=inactive]:hidden"
         >
           <TraceExecutionGraphPanel
             data={data}

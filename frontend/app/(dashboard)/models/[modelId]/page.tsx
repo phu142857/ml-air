@@ -1,15 +1,15 @@
 "use client";
 
-import { Box, FolderUp, Play } from "lucide-react";
+import { Box, Copy, FolderUp, Play } from "lucide-react";
 import {
   DetailSection,
   DetailTabList,
   FilterChips,
   MetadataGrid,
   MlopsEmptyState,
+  ResourceDetailBreadcrumb,
   ResourcePageHeader,
   ScopePinnedInline,
-  SubpageBackLink,
   pageHeaderActionClass,
   tabPanelScrollClassName,
 } from "@/components/mlops/layout";
@@ -67,7 +67,7 @@ import {
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { formatApiClientError, formatDateTimeCompact } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
-import { toastError, toastSuccess } from "@/lib/toast-actions";
+import { toastError, toastSuccess, copyWithToast } from "@/lib/toast-actions";
 import { useServingSlotsHttpFeature } from "@/lib/use-serving-slots-http-feature";
 import { ImportModelDialog } from "@/components/mlops/import-model-dialog";
 import { ModelPipelineMappingCard } from "@/components/mlops/model-pipeline-mapping-card";
@@ -619,7 +619,17 @@ export default function ModelDetailPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border/70 bg-background/60 overflow-hidden">
-        <SubpageBackLink href="/models" label="Back to models" />
+        <ResourceDetailBreadcrumb
+          listHref="/models"
+          listLabel="Models"
+          currentLabel={model?.name ?? modelId}
+          currentMono={!model?.name}
+          middleSegments={
+            model?.name
+              ? [{ label: modelId, mono: true }]
+              : []
+          }
+        />
         <ResourcePageHeader
           icon={Box}
           accent="zinc"
@@ -627,6 +637,16 @@ export default function ModelDetailPage() {
           className="border-b-0"
           actions={
             <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={pageHeaderActionClass}
+                onClick={() => void copyWithToast(modelId, { successTitle: "Model ID copied" })}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy ID
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

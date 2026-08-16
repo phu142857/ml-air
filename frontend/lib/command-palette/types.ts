@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 export type CommandPaletteSection =
   | "pinned"
   | "recent"
+  | "context"
   | "navigation"
   | "actions"
   | "search"
@@ -58,6 +59,7 @@ export interface PaletteListEntry {
 export const SECTION_LABELS: Record<CommandPaletteSection, string> = {
   pinned: "Pinned",
   recent: "Recent",
+  context: "This page",
   navigation: "Navigation",
   actions: "Actions",
   search: "Search",
@@ -68,6 +70,7 @@ export const SECTION_LABELS: Record<CommandPaletteSection, string> = {
 export const SECTION_ORDER: CommandPaletteSection[] = [
   "pinned",
   "recent",
+  "context",
   "navigation",
   "actions",
   "resources",

@@ -144,7 +144,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="flex w-full items-start gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/50"
+            className="interactive-row flex w-full items-start gap-3 rounded-lg p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
           >
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -172,7 +172,7 @@ function AuditTimelineItem({ event, isLast, isNew }: AuditTimelineItemProps) {
                   {event.resource.href ? (
                     <Link
                       href={event.resource.href}
-                      className="font-medium text-primary hover:text-primary/80"
+                      className="font-medium link-primary"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {formatResourceTarget(event)}

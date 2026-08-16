@@ -95,8 +95,8 @@ function DataTableBodyRowInner<T>({
       aria-selected={selectable ? isChecked : undefined}
       aria-rowindex={rowIndex + 2}
       className={cn(
-        "group border-border/50 outline-none transition-colors duration-150",
-        "hover:bg-muted/40 data-[selected=true]:bg-muted/50",
+        "group interactive-row border-border/50 outline-none transition-colors duration-150",
+        "hover:bg-muted/40 active:bg-muted/55 data-[selected=true]:bg-muted/50",
         "focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
         onRowClick && "cursor-pointer",
         isChecked && "bg-primary/5",

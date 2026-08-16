@@ -142,8 +142,12 @@ export default function IdentityUserDetailPage() {
       <SettingsPageHeader
         title={user?.username || "User"}
         description="Account metadata, assignments, and lifecycle actions."
-        backHref="/identity/users"
-        backLabel="Users"
+        breadcrumb={{
+          listHref: "/identity/users",
+          listLabel: "Users",
+          currentLabel: user?.username ?? userId,
+          currentMono: !user?.username,
+        }}
         secondaryActions={
           isGlobalAdmin ? (
             <Badge variant="outline" className="text-[10px]">
