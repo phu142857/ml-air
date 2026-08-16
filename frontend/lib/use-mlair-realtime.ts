@@ -143,7 +143,9 @@ function keysDatasetHubSurface(tenantId: string, projectId: string, datasetId: s
     [...mlairKeys.datasets.readinessEvaluations(tenantId, projectId, datasetId)],
     [...mlairKeys.datasets.trainingEligibility(tenantId, projectId, datasetId)],
     [...mlairKeys.datasets.trainingPolicies(tenantId, projectId, datasetId)],
-    [...mlairKeys.datasetRuns(tenantId, projectId, datasetId)]
+    [...mlairKeys.datasetRuns(tenantId, projectId, datasetId)],
+    ["dataset-version-quality", tenantId, projectId, datasetId],
+    ["dataset-version-provenance", tenantId, projectId, datasetId],
   ];
 }
 

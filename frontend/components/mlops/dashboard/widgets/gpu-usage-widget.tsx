@@ -7,6 +7,7 @@ import { WidgetSkeleton } from "@/components/mlops/interaction"
 import { MlopsEmptyState } from "@/components/mlops/layout"
 import { fetchProjectUsage, fetchTenantUsage } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import {
   formatAvgPeak,
   formatPct,
@@ -29,16 +30,19 @@ export function GpuUsageWidget({
   showProjectUsage,
   showTenantUsage,
 }: GpuUsageWidgetProps) {
+  const poll = useRealtimeQueryPolling()
   const projectQuery = useQuery({
     queryKey: mlairKeys.usage.project(tenantId, projectId ?? "", 30),
     queryFn: () => fetchProjectUsage(tenantId, projectId!, token, { days: 30 }),
     enabled: showProjectUsage && Boolean(tenantId && projectId && token),
+    ...poll,
   })
 
   const tenantQuery = useQuery({
     queryKey: mlairKeys.usage.tenant(tenantId, 30),
     queryFn: () => fetchTenantUsage(tenantId, token, { days: 30 }),
     enabled: showTenantUsage && Boolean(tenantId && token),
+    ...poll,
   })
 
   const query = showProjectUsage ? projectQuery : tenantQuery

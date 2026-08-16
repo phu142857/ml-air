@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { fetchDatasetVersionDiff, type DatasetVersionItem } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { formatDateTimeCompact } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
 
@@ -25,6 +26,7 @@ function deltaLabel(value: number, suffix = ""): string {
 }
 
 export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token, versions }: Props) {
+  const poll = useRealtimeQueryPolling();
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [compare, setCompare] = useState(false);
@@ -38,6 +40,7 @@ export function DatasetVersionDiffPanel({ tenantId, projectId, datasetId, token,
     queryKey: mlairKeys.datasets.versionDiff(tenantId, projectId, datasetId, fromId, toId),
     queryFn: () => fetchDatasetVersionDiff(tenantId, projectId, datasetId, fromId, toId, token),
     enabled: compare && Boolean(fromId && toId && fromId !== toId && token),
+    ...poll,
   });
 
   if (versions.length < 2) return null;

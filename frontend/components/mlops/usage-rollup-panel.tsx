@@ -14,6 +14,7 @@ import {
   type UsageSummaryRecord,
 } from "@/lib/api"
 import { mlairKeys } from "@/lib/query-keys"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import {
   formatAvgPeak,
   formatBytes,
@@ -191,16 +192,19 @@ export function UsageRollupPanel({
   mode,
   days = 30,
 }: UsageRollupPanelProps) {
+  const poll = useRealtimeQueryPolling()
   const projectQuery = useQuery({
     queryKey: mlairKeys.usage.project(tenantId, projectId ?? "", days),
     queryFn: () => fetchProjectUsage(tenantId, projectId!, token, { days }),
     enabled: mode === "project" && Boolean(tenantId && projectId && token),
+    ...poll,
   })
 
   const tenantQuery = useQuery({
     queryKey: mlairKeys.usage.tenant(tenantId, days),
     queryFn: () => fetchTenantUsage(tenantId, token, { days }),
     enabled: mode === "tenant" && Boolean(tenantId && token),
+    ...poll,
   })
 
   const query = mode === "project" ? projectQuery : tenantQuery

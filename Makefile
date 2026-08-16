@@ -264,7 +264,7 @@ seed-metrics-demo:
 
 .PHONY: seed-demo
 seed-demo:
-	python -m mlair seed
+	python -m mlair seed demo
 
 .PHONY: seed-phase5-demo
 seed-phase5-demo:

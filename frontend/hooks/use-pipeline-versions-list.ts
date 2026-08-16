@@ -5,12 +5,14 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { fetchPipelineVersionsPage, type PipelineVersionItem } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 
 const PIPELINE_VERSIONS_PAGE_SIZE = 20;
 
 /** Pipeline config versions with cursor pagination. */
 export function usePipelineVersionsList(pipelineId: string, enabled = true) {
   const { tenantId, projectId, token } = useAppContext();
+  const poll = useRealtimeQueryPolling();
 
   const query = useInfiniteQuery({
     queryKey: mlairKeys.pipelines.versionsInfinite(tenantId, projectId, pipelineId),
@@ -23,6 +25,7 @@ export function usePipelineVersionsList(pipelineId: string, enabled = true) {
     getNextPageParam: (last) =>
       last.has_more && last.next_cursor ? last.next_cursor : undefined,
     enabled: enabled && Boolean(pipelineId && token?.trim()),
+    ...poll,
   });
 
   const items: PipelineVersionItem[] = query.data?.pages.flatMap((p) => p.items) ?? [];

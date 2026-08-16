@@ -52,6 +52,7 @@ export default function PipelineDetailPage() {
     queryKey: mlairKeys.pipelines.versions(tenantId, projectId, pipelineId),
     queryFn: () => fetchPipelineVersions(tenantId, projectId, pipelineId, token),
     enabled: Boolean(token?.trim()) && scopePinned,
+    ...poll,
   });
 
   const pipelineRow = useMemo(

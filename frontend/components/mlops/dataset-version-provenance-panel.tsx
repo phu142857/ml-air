@@ -7,6 +7,7 @@ import { GitBranch } from "lucide-react";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { fetchDatasetVersionProvenance, type DatasetVersionItem } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { formatDateTimeCompact } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
 
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, token, versions, onOpenAccumulation }: Props) {
+  const poll = useRealtimeQueryPolling();
   const [versionId, setVersionId] = useState("");
 
   const options = versions.map((v) => ({
@@ -31,6 +33,7 @@ export function DatasetVersionProvenancePanel({ tenantId, projectId, datasetId, 
     queryKey: mlairKeys.datasets.versionProvenance(tenantId, projectId, datasetId, versionId),
     queryFn: () => fetchDatasetVersionProvenance(tenantId, projectId, datasetId, versionId, token),
     enabled: Boolean(versionId && token),
+    ...poll,
   });
 
   if (!versions.length) return null;

@@ -17,6 +17,7 @@ import { fetchAuditTimeline, fetchAuditTimelinePage } from "@/lib/api"
 import type { AuditTimelineItem } from "@/lib/api"
 import { useAppContext } from "@/lib/app-context"
 import { mlairKeys } from "@/lib/query-keys"
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling"
 import { SCOPE_AGGREGATE_DASHBOARD } from "@/lib/scope-messages"
 import { isScopePinned } from "@/lib/scope"
 import { formatApiClientError } from "@/lib/utils"
@@ -39,6 +40,8 @@ export default function DashboardPage() {
     failedRuns,
   } = useDashboardStats()
 
+  const poll = useRealtimeQueryPolling()
+
   const auditQ = useQuery({
     queryKey: mlairKeys.audit.timeline(tenantId, projectId, {}),
     queryFn: async () => {
@@ -50,6 +53,7 @@ export default function DashboardPage() {
       return { items: res.items }
     },
     enabled: Boolean(token?.trim()),
+    ...poll,
   })
 
   const blockedReadinessCount =

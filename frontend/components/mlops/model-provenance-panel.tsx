@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { fetchModelProvenance } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { formatVersionLabel } from "@/lib/version-label";
 
 type Props = {
@@ -17,11 +18,13 @@ type Props = {
 };
 
 export function ModelProvenancePanel({ tenantId, projectId, modelId, token, version }: Props) {
+  const poll = useRealtimeQueryPolling();
   const [open, setOpen] = useState(false);
   const provQuery = useQuery({
     queryKey: mlairKeys.models.provenance(tenantId, projectId, modelId, version ?? null),
     queryFn: () => fetchModelProvenance(tenantId, projectId, modelId, token, version ?? undefined),
     enabled: open && Boolean(token),
+    ...poll,
   });
 
   return (

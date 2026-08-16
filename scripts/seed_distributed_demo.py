@@ -48,7 +48,7 @@ _DEMO_CLUSTERS: tuple[tuple[str, str, str, dict, dict, str, int], ...] = (
         "demo-cluster-apac",
         "ap-singapore",
         "http://apac.mlair-demo.local:8080",
-        {"env": "demo", "tier": "gpu", "agent_version": "1.4.2"},
+        {"env": "demo", "tier": "gpu", "agent_version": "1.4.2", "tenant": "retail", "project": "vision-qa"},
         {
             "gpu_available": 8,
             "gpu_used": 2,
@@ -64,7 +64,7 @@ _DEMO_CLUSTERS: tuple[tuple[str, str, str, dict, dict, str, int], ...] = (
         "demo-cluster-apac-standby",
         "ap-singapore",
         "http://apac-standby.mlair-demo.local:8080",
-        {"env": "demo", "tier": "cpu", "agent_version": "1.4.1"},
+        {"env": "demo", "tier": "cpu", "agent_version": "1.4.1", "tenant": "retail", "project": "forecast"},
         {
             "gpu_available": 4,
             "gpu_used": 0,
@@ -80,7 +80,7 @@ _DEMO_CLUSTERS: tuple[tuple[str, str, str, dict, dict, str, int], ...] = (
         "demo-cluster-vn",
         "vn-hanoi",
         "http://vn.mlair-demo.local:8080",
-        {"env": "demo", "tier": "gpu", "agent_version": "1.4.0"},
+        {"env": "demo", "tier": "gpu", "agent_version": "1.4.0", "tenant": "healthcare", "project": "radiology"},
         {
             "gpu_available": 4,
             "gpu_used": 1,
@@ -96,7 +96,7 @@ _DEMO_CLUSTERS: tuple[tuple[str, str, str, dict, dict, str, int], ...] = (
         "demo-cluster-us",
         "us-virginia",
         "http://us.mlair-demo.local:8080",
-        {"env": "demo", "tier": "gpu", "agent_version": "1.3.9"},
+        {"env": "demo", "tier": "gpu", "agent_version": "1.3.9", "tenant": "manufacturing", "project": "qc-line"},
         {
             "gpu_available": 8,
             "gpu_used": 0,

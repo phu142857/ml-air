@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { Suspense, useState, useEffect, useCallback } from "react"
 import { usePathname } from "next/navigation"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "./app-sidebar"
@@ -12,9 +12,15 @@ import { PageTransition } from "@/components/mlops/interaction"
 import { useAppContext } from "@/lib/app-context"
 import { HubAuthGuard } from "@/components/auth/hub-auth-guard"
 import { useAuthSessionWatch } from "@/hooks/use-auth-session-watch"
+import { useScopeChangeRedirect } from "@/hooks/use-scope-change-redirect"
 
 interface RouteShellProps {
   children: React.ReactNode
+}
+
+function ScopeChangeRedirectListener() {
+  useScopeChangeRedirect()
+  return null
 }
 
 export function RouteShell({ children }: RouteShellProps) {
@@ -56,6 +62,9 @@ export function RouteShell({ children }: RouteShellProps) {
       <AppSidebar />
       <SidebarInset className="relative flex h-svh max-h-svh min-h-0 flex-col overflow-hidden bg-background">
         <Topbar onOpenCommandPalette={() => setCommandOpen(true)} />
+        <Suspense fallback={null}>
+          <ScopeChangeRedirectListener />
+        </Suspense>
         <div className="relative z-[2] flex min-h-0 flex-1 flex-col overflow-hidden">
           <PageTransition routeKey={pathname}>{children}</PageTransition>
         </div>

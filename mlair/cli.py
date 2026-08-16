@@ -14,7 +14,7 @@ from mlair.commands.doctor import run_doctor
 from mlair.commands.health import run_health
 from mlair.commands.legacy_http import cmd_logs, cmd_run
 from mlair.commands.remove import run_remove_demo
-from mlair.commands.seed import run_seed
+from mlair.commands.seed import DEMO_TARGET, SEED_STAGE_NAMES, run_seed
 from mlair.commands.serve import (
     run_build,
     run_dev_api_server,
@@ -121,12 +121,12 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("--limit", type=int, default=200)
     logs.set_defaults(func="_cmd_logs")
 
-    seed = sub.add_parser("seed", help="Create demo data")
+    seed = sub.add_parser("seed", help="Create demo data (use: mlair seed demo)")
     seed.add_argument(
         "target",
         nargs="?",
-        choices=("all",),
-        help="Use `all` to run every demo seed script (default: primary hub demo)",
+        choices=(DEMO_TARGET, "all", *SEED_STAGE_NAMES),
+        help=f"`{DEMO_TARGET}` = full Hub demo (all stages); or run one stage only",
     )
     seed.set_defaults(func="_cmd_seed")
 

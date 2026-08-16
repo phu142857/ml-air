@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { useAuditTimelineInfinite } from "@/hooks/use-audit-timeline-infinite";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { formatDateTimeCompact } from "@/lib/utils";
 import { formatVersionLabel } from "@/lib/version-label";
 
@@ -203,6 +204,7 @@ export function ModelVersionComparePanel({
   token,
   versions,
 }: Scope & { versions: ModelVersionItem[] }) {
+  const poll = useRealtimeQueryPolling();
   const [leftVer, setLeftVer] = useState<number | "">("");
   const [rightVer, setRightVer] = useState<number | "">("");
 
@@ -219,12 +221,14 @@ export function ModelVersionComparePanel({
     queryFn: () =>
       fetchModelProvenance(tenantId, projectId, modelId, token, Number(leftVer)),
     enabled: Boolean(token && leftVer),
+    ...poll,
   });
   const rightProv = useQuery({
     queryKey: mlairKeys.models.provenance(tenantId, projectId, modelId, rightVer === "" ? null : rightVer),
     queryFn: () =>
       fetchModelProvenance(tenantId, projectId, modelId, token, Number(rightVer)),
     enabled: Boolean(token && rightVer),
+    ...poll,
   });
 
   const fields: CompareField[] = useMemo(() => {

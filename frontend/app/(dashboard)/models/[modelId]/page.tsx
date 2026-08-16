@@ -49,7 +49,8 @@ import { mlairKeys } from "@/lib/query-keys";
 import { useAppContext } from "@/lib/app-context";
 import { isScopePinned } from "@/lib/scope";
 import { SCOPE_AGGREGATE_MODEL_DETAIL } from "@/lib/scope-messages";
-import { realtimeFallbackPolling } from "@/lib/realtime-fallback-polling";
+import { useRealtimeQueryPolling, resolveActiveExecutionRefetchInterval } from "@/lib/realtime-query-polling";
+import { isActiveExecutionStatus } from "@/lib/status-style";
 import {
   canPromoteVersionToStage,
   canRollbackVersionToStage,
@@ -141,20 +142,22 @@ export default function ModelDetailPage() {
     return () => window.removeEventListener("mlair-runtime-config-updated", sync);
   }, []);
 
+  const poll = useRealtimeQueryPolling();
+
   const modelsQuery = useQuery({
     queryKey: mlairKeys.models.list(tenantId, projectId),
     queryFn: () => fetchModels(tenantId, projectId, token),
-    ...realtimeFallbackPolling()
+    ...poll,
   });
   const versionsQuery = useQuery({
     queryKey: mlairKeys.models.versions(tenantId, projectId, modelId),
     queryFn: () => fetchModelVersions(tenantId, projectId, modelId, token),
-    ...realtimeFallbackPolling()
+    ...poll,
   });
   const modelStatusQuery = useQuery({
     queryKey: mlairKeys.models.status(tenantId, projectId, modelId),
     queryFn: () => fetchModelStatus(tenantId, projectId, modelId, token),
-    ...realtimeFallbackPolling()
+    ...poll,
   });
   const recentRunsQuery = useQuery({
     queryKey: mlairKeys.models.recentRuns(
@@ -172,13 +175,20 @@ export default function ModelDetailPage() {
       return rows.filter(Boolean) as Array<any>;
     },
     enabled: !!versionsQuery.data?.items?.length,
-    ...realtimeFallbackPolling()
+    refetchInterval: (q) =>
+      resolveActiveExecutionRefetchInterval(
+        poll,
+        (q.state.data as Array<{ status?: string }> | undefined)?.find((r) =>
+          isActiveExecutionStatus(r.status),
+        )?.status,
+      ),
+    refetchOnWindowFocus: poll.refetchOnWindowFocus,
   });
 
   const triggerPolicyQuery = useQuery({
     queryKey: mlairKeys.models.triggerPolicy(tenantId, projectId, modelId),
     queryFn: () => fetchModelTriggerPolicy(tenantId, projectId, modelId, token),
-    ...realtimeFallbackPolling()
+    ...poll,
   });
 
   useEffect(() => {
@@ -200,6 +210,7 @@ export default function ModelDetailPage() {
     queryFn: () => fetchDatasets(tenantId, projectId, token),
     enabled: Boolean(token && scopePinned && tab === "policy"),
     staleTime: 60_000,
+    ...poll,
   });
 
   const triggerVersionsQuery = useQuery({
@@ -207,6 +218,7 @@ export default function ModelDetailPage() {
     queryFn: () => fetchDatasetVersions(tenantId, projectId, triggerDatasetId, token),
     enabled: Boolean(token && scopePinned && triggerDatasetId),
     staleTime: 30_000,
+    ...poll,
   });
 
   const triggerDatasetOptions = useMemo(() => {
@@ -289,7 +301,7 @@ export default function ModelDetailPage() {
     queryKey: mlairKeys.models.serving(tenantId, projectId, modelId),
     queryFn: () => fetchModelServing(tenantId, projectId, modelId, token),
     enabled: servingSlotsUi && Boolean(modelId && token && projectId !== "all"),
-    ...realtimeFallbackPolling()
+    ...poll,
   });
 
   const approvalMutation = useMutation({

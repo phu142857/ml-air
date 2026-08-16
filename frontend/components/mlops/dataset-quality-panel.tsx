@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3 } from "lucide-react";
 import { fetchDatasetVersionQuality, type DatasetVersionItem } from "@/lib/api";
 import { mlairKeys } from "@/lib/query-keys";
+import { useRealtimeQueryPolling } from "@/lib/realtime-query-polling";
 import { formatVersionLabel } from "@/lib/version-label";
 
 type Props = {
@@ -20,10 +21,12 @@ function barWidth(count: number, total: number): string {
 }
 
 export function DatasetQualityPanel({ tenantId, projectId, datasetId, token, version }: Props) {
+  const poll = useRealtimeQueryPolling();
   const qualityQuery = useQuery({
     queryKey: mlairKeys.datasets.versionQuality(tenantId, projectId, datasetId, version.version_id),
     queryFn: () => fetchDatasetVersionQuality(tenantId, projectId, datasetId, version.version_id, token),
     enabled: Boolean(token && version.version_id),
+    ...poll,
   });
 
   const quality = qualityQuery.data;

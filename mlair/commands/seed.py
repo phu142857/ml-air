@@ -1,4 +1,4 @@
-"""``mlair seed`` — create full demo data across all MLAir surfaces."""
+"""``mlair seed demo`` — create full demo data across all MLAir surfaces."""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ import sys
 
 from mlair.paths import repo_root
 
-# Order matters: enable features → core hub data → specialized demos → governance → distributed.
+DEMO_TARGET = "demo"
+
+# Order matters: enable features → hub (+ multi-scope) → specialized demos → distributed.
 _SEED_PIPELINE: tuple[tuple[str, str], ...] = (
     ("features", "seed_enable_features.py"),
-    ("demo", "seed_demo.py"),
+    ("hub", "seed_demo.py"),
     ("metrics", "seed_metrics_demo.py"),
     ("phase5", "seed_phase5_demo.py"),
     ("resolve", "seed_resolve_demo.py"),
@@ -20,6 +22,7 @@ _SEED_PIPELINE: tuple[tuple[str, str], ...] = (
 )
 
 _SCRIPT_BY_NAME = {name: script for name, script in _SEED_PIPELINE}
+SEED_STAGE_NAMES = tuple(name for name, _ in _SEED_PIPELINE)
 
 
 def _run_script(script_name: str) -> int:
@@ -33,15 +36,20 @@ def _run_script(script_name: str) -> int:
 
 
 def run_seed(*, target: str | None = None) -> int:
-    """``mlair seed`` and ``mlair seed all`` seed every demo surface."""
-    if target == "all" or target is None:
+    """``mlair seed demo`` runs the full demo pipeline."""
+    if target in (DEMO_TARGET, "all"):
         targets = _SEED_PIPELINE
-    else:
+    elif target:
         script = _SCRIPT_BY_NAME.get(target)
         if not script:
             print(f"[mlair] unknown seed target: {target}", file=sys.stderr)
+            print(f"[mlair] use: mlair seed {DEMO_TARGET}", file=sys.stderr)
             return 2
         targets = ((target, script),)
+    else:
+        print(f"[mlair] usage: mlair seed {DEMO_TARGET}", file=sys.stderr)
+        print(f"[mlair] optional stages: {', '.join(SEED_STAGE_NAMES)}", file=sys.stderr)
+        return 2
 
     failed = False
     for name, script in targets:

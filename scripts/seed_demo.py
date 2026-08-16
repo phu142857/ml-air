@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Rich Hub demo seed for screenshots: SUCCESS / FAILED / RUNNING + lineage.
+Also registers extra tenant/project scopes when run as the default scope (via
+``mlair seed demo``).
 
 Works with ML_AIR_TASK_EXECUTION_MODE=external (all-in-one default) by leasing
 and completing tasks like an external worker.
 
-  make seed-demo
+  mlair seed demo
   python3 scripts/seed_demo.py
 """
 
@@ -26,12 +28,15 @@ from pathlib import Path
 _scripts = Path(__file__).resolve().parent
 if str(_scripts) not in sys.path:
     sys.path.insert(0, str(_scripts))
-from identity_smoke_token import resolve_smoke_bearer_token  # noqa: E402
+from identity_smoke_token import clear_smoke_token_cache, resolve_smoke_bearer_token  # noqa: E402
 from smoke_common import require_api_reachable  # noqa: E402
 
 BASE = os.getenv("ML_AIR_BASE_URL", "http://localhost:8080").rstrip("/")
 TENANT = os.getenv("ML_AIR_TENANT_ID", "default")
 PROJECT = os.getenv("ML_AIR_PROJECT_ID", "default_project")
+LIGHT = os.getenv("SEED_DEMO_LIGHT", "0").strip().lower() in {"1", "true", "yes", "on"}
+SKIP_MULTI_SCOPES = os.getenv("SEED_DEMO_SKIP_MULTI_SCOPES", "0").strip().lower() in {"1", "true", "yes", "on"}
+TERM_TIMEOUT = int(os.getenv("SEED_DEMO_TERM_TIMEOUT", "180" if LIGHT else "150"))
 
 
 def req(method: str, path: str, token: str, body: dict | None = None, timeout: int = 30) -> tuple[int, dict]:
@@ -464,16 +469,36 @@ def ensure_model(token: str, name: str, run_id: str) -> str:
 
 def main() -> int:
     require_api_reachable(BASE)
+
+    if (
+        not LIGHT
+        and not SKIP_MULTI_SCOPES
+        and TENANT == "default"
+        and PROJECT == "default_project"
+    ):
+        from seed_multi_scope_demo import seed_extra_scopes
+
+        print("[INFO] seeding extra tenant/project scopes")
+        scope_rc = seed_extra_scopes()
+        if scope_rc != 0:
+            print(f"[WARN] extra-scope seed exit {scope_rc}", file=sys.stderr)
+
+    clear_smoke_token_cache()
     token = resolve_smoke_bearer_token("maintainer")
     tag = str(int(time.time() * 1000))
     is_external = external_mode(token)
+    print(f"[INFO] seed_demo tenant={TENANT} project={PROJECT} light={LIGHT}")
     print(f"[INFO] execution_mode={'external' if is_external else 'internal'}")
 
-    datasets_spec = [
-        ("retail_shelf_v3", 120),
-        ("defect_inspection_v2", 90),
-        ("ops_telemetry_buffer", 60),
-    ]
+    datasets_spec = (
+        [("retail_shelf_v3", 120)]
+        if LIGHT
+        else [
+            ("retail_shelf_v3", 120),
+            ("defect_inspection_v2", 90),
+            ("ops_telemetry_buffer", 60),
+        ]
+    )
     created: dict[str, tuple[str, str]] = {}
     for name, rows in datasets_spec:
         ds_id, ver_id = ensure_dataset(token, name, rows)
@@ -501,9 +526,10 @@ def main() -> int:
     ensure_pipeline(token, "demo_success_pipeline", primary, tasks=success_tasks)
     ensure_pipeline(token, "always_fail_demo_pipeline", primary, tasks=fail_tasks)
     ensure_pipeline(token, "demo_running_pipeline", primary, tasks=running_tasks)
-    # Extra SUCCESS variant for compare UI
-    ensure_pipeline(token, "demo_success_candidate_pipeline", primary, tasks=success_tasks)
+    if not LIGHT:
+        ensure_pipeline(token, "demo_success_candidate_pipeline", primary, tasks=success_tasks)
 
+    worker_id = os.getenv("SEED_DEMO_WORKER_ID", f"seed-demo-worker-{TENANT}-{PROJECT}")
     stop = threading.Event()
     drainer = None
     if is_external:
@@ -515,7 +541,7 @@ def main() -> int:
                 "capabilities": ["echo_tracking"],
                 "fail_pipeline_prefixes": ("always_fail",),
                 "hold_pipeline_prefixes": ("demo_running",),
-                "worker_id": "seed-demo-worker",
+                "worker_id": worker_id,
             },
             daemon=True,
         )
@@ -541,15 +567,17 @@ def main() -> int:
             label="success",
             tag=tag,
         )
-        candidate_id = trigger_run(
-            token,
-            pipeline_id="demo_success_candidate_pipeline",
-            dataset_id=dataset_id,
-            dataset_name=primary,
-            dataset_version_id=dataset_version_id,
-            label="success-candidate",
-            tag=tag,
-        )
+        candidate_id: str | None = None
+        if not LIGHT:
+            candidate_id = trigger_run(
+                token,
+                pipeline_id="demo_success_candidate_pipeline",
+                dataset_id=dataset_id,
+                dataset_name=primary,
+                dataset_version_id=dataset_version_id,
+                label="success-candidate",
+                tag=tag,
+            )
         failed_id = trigger_run(
             token,
             pipeline_id="always_fail_demo_pipeline",
@@ -560,112 +588,105 @@ def main() -> int:
             tag=tag,
         )
 
-        success_status = wait_terminal(success_id, token, 150)
-        candidate_status = wait_terminal(candidate_id, token, 150)
-        failed_status = wait_terminal(failed_id, token, 150)
+        success_status = wait_terminal(success_id, token, TERM_TIMEOUT)
+        candidate_status = "SKIPPED"
+        if candidate_id:
+            candidate_status = wait_terminal(candidate_id, token, TERM_TIMEOUT)
+        failed_status = wait_terminal(failed_id, token, TERM_TIMEOUT)
         print(f"[OK] success run {success_id} → {success_status}")
-        print(f"[OK] candidate run {candidate_id} → {candidate_status}")
+        if candidate_id:
+            print(f"[OK] candidate run {candidate_id} → {candidate_status}")
         print(f"[OK] failed run {failed_id} → {failed_status}")
         print(f"[OK] running run {running_id} (intentionally left in-flight)")
 
-        for rid, variant in (
+        log_targets: list[tuple[str, str]] = [
             (success_id, "success"),
-            (candidate_id, "success"),
             (failed_id, "failed"),
             (running_id, "running"),
-        ):
+        ]
+        if candidate_id:
+            log_targets.insert(1, (candidate_id, "success"))
+        for rid, variant in log_targets:
             log_curve(token, rid, variant=variant)
 
         ingest_lineage(token, success_id, dataset_id, dataset_version_id, primary, tag, task_key="train")
         ingest_lineage(
             token, success_id, dataset_id, dataset_version_id, primary, f"{tag}-eval", task_key="evaluate"
         )
-        ingest_lineage(token, candidate_id, dataset_id, dataset_version_id, primary, f"{tag}-c", task_key="train")
+        if candidate_id:
+            ingest_lineage(token, candidate_id, dataset_id, dataset_version_id, primary, f"{tag}-c", task_key="train")
 
-        # Cross-dataset lineage flavour (defect → derived artifact) via success evaluate task
-        defect_id, defect_ver = created["defect_inspection_v2"]
-        ingest_lineage(
-            token,
-            success_id,
-            defect_id,
-            defect_ver,
-            "defect_inspection_v2",
-            f"{tag}-defect",
-            task_key="evaluate",
-        )
+        if not LIGHT:
+            defect_id, defect_ver = created["defect_inspection_v2"]
+            ingest_lineage(
+                token,
+                success_id,
+                defect_id,
+                defect_ver,
+                "defect_inspection_v2",
+                f"{tag}-defect",
+                task_key="evaluate",
+            )
 
         model_id = ensure_model(token, "shelf-detector", success_id)
         print(f"[OK] model shelf-detector id={model_id}")
 
-        cmp_code, cmp_body = req(
-            "POST",
-            f"/v1/tenants/{TENANT}/projects/{PROJECT}/runs/compare",
-            token,
-            {"run_ids": [success_id, candidate_id], "baseline_run_id": success_id},
-        )
-        print(f"[OK] compare {cmp_code}" if cmp_code in {200, 201} else f"[WARN] compare {cmp_code} {cmp_body}")
+        if not LIGHT and candidate_id:
+            cmp_code, cmp_body = req(
+                "POST",
+                f"/v1/tenants/{TENANT}/projects/{PROJECT}/runs/compare",
+                token,
+                {"run_ids": [success_id, candidate_id], "baseline_run_id": success_id},
+            )
+            print(f"[OK] compare {cmp_code}" if cmp_code in {200, 201} else f"[WARN] compare {cmp_code} {cmp_body}")
 
         # Confirm held RUNNING is still not terminal
         _, running_body = req("GET", f"/v1/tenants/{TENANT}/projects/{PROJECT}/runs/{running_id}", token)
         running_status = str((running_body or {}).get("status") or "").upper()
         print(f"[OK] running status probe → {running_status}")
 
-        # Second FAILED flavour for list density
-        failed2 = trigger_run(
-            token,
-            pipeline_id="always_fail_demo_pipeline",
-            dataset_id=dataset_id,
-            dataset_name=primary,
-            dataset_version_id=dataset_version_id,
-            label="failed-retry",
-            tag=f"{tag}b",
-        )
-        failed2_status = wait_terminal(failed2, token, 120)
-        log_curve(token, failed2, variant="failed")
-        print(f"[OK] failed-retry run {failed2} → {failed2_status}")
+        failed2: str | None = None
+        failed2_status = "SKIPPED"
+        if not LIGHT:
+            failed2 = trigger_run(
+                token,
+                pipeline_id="always_fail_demo_pipeline",
+                dataset_id=dataset_id,
+                dataset_name=primary,
+                dataset_version_id=dataset_version_id,
+                label="failed-retry",
+                tag=f"{tag}b",
+            )
+            failed2_status = wait_terminal(failed2, token, min(TERM_TIMEOUT, 120))
+            log_curve(token, failed2, variant="failed")
+            print(f"[OK] failed-retry run {failed2} → {failed2_status}")
 
         out = {
             "status": "ok",
+            "tenant": TENANT,
+            "project": PROJECT,
+            "light": LIGHT,
             "execution_mode": "external" if is_external else "internal",
             "datasets": {k: {"id": v[0], "version_id": v[1]} for k, v in created.items()},
             "runs": {
                 "success": {"id": success_id, "status": success_status},
-                "success_candidate": {"id": candidate_id, "status": candidate_status},
+                "success_candidate": {"id": candidate_id, "status": candidate_status} if candidate_id else None,
                 "failed": {"id": failed_id, "status": failed_status},
-                "failed_retry": {"id": failed2, "status": failed2_status},
+                "failed_retry": {"id": failed2, "status": failed2_status} if failed2 else None,
                 "running": {"id": running_id, "status": running_status or "RUNNING (held)"},
             },
             "model_id": model_id,
-            "hub": {
-                "login": f"{BASE}/login",
-                "datasets": f"{BASE}/datasets",
-                "dataset": f"{BASE}/datasets/{dataset_id}",
-                "runs": f"{BASE}/runs",
-                "run_success": f"{BASE}/runs/{success_id}",
-                "run_failed": f"{BASE}/runs/{failed_id}",
-                "run_running": f"{BASE}/runs/{running_id}",
-                "models": f"{BASE}/models",
-                "model": f"{BASE}/models/{model_id}",
-                "lineage": f"{BASE}/lineage?run={success_id}",
-                "compare": f"{BASE}/runs/compare?ids={success_id},{candidate_id}",
-            },
-            "screenshot_tips": [
-                "Runs list: filter/sort to show SUCCESS / FAILED / RUNNING together",
-                "Open success run → Metrics + Tasks timeline + Lineage tab",
-                "Open failed run → error on train task (nan_loss_spike)",
-                "Open running run → in-progress DAG (held by seed worker)",
-                "Lineage deep-link from success run (dataset → model/eval artifacts)",
-                "Dataset Hub retail_shelf_v3 → Versions / Run-Train",
-                "Models → shelf-detector staging version from success run",
-            ],
         }
         print(json.dumps(out, indent=2))
-        ok = (
-            success_status == "SUCCESS"
-            and candidate_status == "SUCCESS"
-            and failed_status == "FAILED"
-            and running_status in {"RUNNING", "QUEUED", "PENDING"}
-        )
+        ok = success_status == "SUCCESS" and failed_status == "FAILED" and running_status in {
+            "RUNNING",
+            "QUEUED",
+            "PENDING",
+        }
+        if LIGHT:
+            ok = bool(created) and running_status in {"RUNNING", "QUEUED", "PENDING"}
+        if candidate_id:
+            ok = ok and candidate_status == "SUCCESS"
         return 0 if ok else 1
     finally:
         stop.set()

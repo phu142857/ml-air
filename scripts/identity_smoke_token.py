@@ -11,6 +11,11 @@ import urllib.request
 _TOKEN_CACHE: str | None = None
 
 
+def clear_smoke_token_cache() -> None:
+    global _TOKEN_CACHE
+    _TOKEN_CACHE = None
+
+
 def _legacy_enabled() -> bool:
     return os.getenv("ML_AIR_LEGACY_STATIC_TOKENS", "0").strip().lower() not in {"0", "false", "no", "off"}
 
