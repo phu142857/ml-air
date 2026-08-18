@@ -2,8 +2,6 @@
   <img src="./mlair-logo.png" alt="MLAir logo" width="240" />
 </p>
 
-<h1 align="center">MLAir</h1>
-
 <p align="center">
   <strong>Lifecycle operating system for ML</strong> — immutable dataset versions, policy-backed readiness, gated runs, and model promotion.
 </p>
