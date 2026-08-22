@@ -160,26 +160,12 @@ export function timelineIconTone(event: AuditEvent): string {
 
 export type TimelineCardChip = { label: string; value: string }
 
-/** Minimal context chips for timeline cards — technical IDs belong in the detail panel. */
+/** Extra context only — resource name already appears in the event sentence. */
 export function buildTimelineCardChips(event: AuditEvent): TimelineCardChip[] {
   const chips: TimelineCardChip[] = []
-  const push = (label: string, value: string) => {
-    const v = value.trim()
-    if (!v || isOpaqueId(v)) return
-    chips.push({ label, value: v })
-  }
-
   const pipeline = String(event.metadata?.pipeline_name ?? "").trim()
-  if (pipeline) push("Pipeline", pipeline)
-
-  if (event.eventType === "run" || event.resource.type.includes("run")) {
-    const runLabel = shortResourceLabel(event)
-    if (runLabel.startsWith("Run #")) chips.push({ label: "Run", value: runLabel.replace(/^Run /, "") })
-    else push("Run", runLabel)
+  if (pipeline && !isOpaqueId(pipeline)) {
+    chips.push({ label: "Pipeline", value: pipeline })
   }
-
-  if (event.eventType === "dataset") push("Dataset", shortResourceLabel(event))
-  if (event.eventType === "model") push("Model", shortResourceLabel(event))
-
-  return chips.slice(0, 2)
+  return chips
 }

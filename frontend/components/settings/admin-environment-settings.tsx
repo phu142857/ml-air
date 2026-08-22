@@ -128,9 +128,9 @@ export function AdminEnvironmentSettings() {
       </SettingsSection>
 
       <SettingsSection id="catalog" title={`Catalog (${filtered.length})`}>
-        <div className="overflow-hidden rounded-md border border-border">
+        <div>
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
+            <thead className="border-b border-border/40 bg-background text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">Key</th>
                 <th className="px-3 py-2 font-medium">Layer</th>

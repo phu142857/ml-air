@@ -228,6 +228,7 @@ export default function DatasetsPage() {
 
       <PageScrollBody
         variant="workspace"
+        flush
         header={isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DATASETS} /> : null}
       >
         <ScopedListContent
@@ -237,9 +238,11 @@ export default function DatasetsPage() {
           isEmpty={items.length === 0}
           emptyIcon={Database}
           emptyTitle="No datasets"
+          surface="flat"
         >
           <MlopsDataTable
             className="min-h-0 flex-1"
+            variant="flat"
             tableId="datasets-list"
             columns={datasetTableColumns}
             data={items}
@@ -250,7 +253,7 @@ export default function DatasetsPage() {
             stickyFirstColumn
           />
           {showLoadMore ? (
-            <div className="flex justify-center border-t border-border/60 py-4">
+            <div className="flex justify-center border-t border-border/40 py-3">
               <Button
                 type="button"
                 variant="outline"

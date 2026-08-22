@@ -102,7 +102,7 @@ export function ModelEvaluationsPanel({ modelId, defaultVersion }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="border-b border-border/40 pb-4">
         <h3 className="mb-3 text-sm font-medium text-foreground">Run evaluation gate</h3>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">

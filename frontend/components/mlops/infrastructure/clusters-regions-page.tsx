@@ -361,11 +361,11 @@ function ClustersRegionsPageContent({
               </label>
             </PageToolbar>
 
-            <section className="panel-surface overflow-hidden">
+            <section className="overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-xs">
                   <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
+                    <tr className="border-b border-border/40 text-left text-muted-foreground">
                       <th className="px-3 py-2 font-medium">Region / Cluster</th>
                       <th className="px-3 py-2 font-medium">Clusters</th>
                       <th className="px-3 py-2 font-medium">Health</th>

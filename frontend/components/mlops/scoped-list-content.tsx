@@ -13,6 +13,8 @@ interface ScopedListContentProps {
   emptyTitle: string
   emptyContent?: React.ReactNode
   skeletonRows?: number
+  /** Match list-page table chrome. Default `flat` = no nested Panel. */
+  surface?: "panel" | "flat"
   children: React.ReactNode
 }
 
@@ -25,12 +27,13 @@ export function ScopedListContent({
   emptyTitle,
   emptyContent,
   skeletonRows = 6,
+  surface = "flat",
   children,
 }: ScopedListContentProps) {
   if (isLoading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <ListTableSkeleton rows={skeletonRows} />
+        <ListTableSkeleton rows={skeletonRows} variant={surface} />
       </div>
     )
   }
@@ -49,6 +52,7 @@ export function ScopedListContent({
           <MlopsEmptyState
             icon={EmptyIcon}
             title={emptyTitle}
+            className={surface === "flat" ? "border-none bg-transparent" : undefined}
           />
         )
       ) : (

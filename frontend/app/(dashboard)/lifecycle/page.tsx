@@ -4,7 +4,6 @@ import { Suspense, useState, useMemo, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { History, Download, Search, MousePointer2 } from "lucide-react"
 import { LifecycleTimeline } from "@/components/mlops/lifecycle-timeline"
-import { LifecycleProjectionPanel } from "@/components/mlops/lifecycle-projection-panel"
 import { EventDetailPanel } from "@/components/mlops/event-detail-panel"
 import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
 import {
@@ -245,8 +244,6 @@ function LifecycleContent() {
       <div className="page-toolbar shrink-0 space-y-3">
         {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}
 
-        {!isAggregate ? <LifecycleProjectionPanel /> : null}
-
         <div
           className={cn(
             "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 transition-opacity duration-300",
@@ -254,7 +251,7 @@ function LifecycleContent() {
           )}
         >
           {statCards.map((stat) => (
-            <div key={stat.label} className="rounded-md border border-border bg-card px-3 py-2">
+            <div key={stat.label} className="px-0 py-2">
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {stat.label}
               </p>
@@ -350,7 +347,7 @@ function LifecycleContent() {
 
         {isSplit ? (
           <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-l border-border/40">
               {showDetail ? (
                 detailPanel
               ) : (

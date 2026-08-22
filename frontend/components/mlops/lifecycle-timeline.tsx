@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
-import { Clock, ExternalLink } from "lucide-react"
+import { Clock } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -14,7 +14,6 @@ import {
   buildTimelineCardChips,
   resolveTimelineIcon,
   resolveTimelineIconKind,
-  shortResourceLabel,
   timelineIconTone,
 } from "@/lib/timeline-display"
 
@@ -68,7 +67,6 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
   const chips = buildTimelineCardChips(event)
   const spinIcon = iconKind === "run_running"
   const statusLabel = statusDisplayLabel(event)
-  const targetLabel = shortResourceLabel(event)
 
   return (
     <li
@@ -141,7 +139,10 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
           <button
             type="button"
             onClick={() => onSelect(event)}
-            className="interactive-row w-full cursor-pointer px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
+            className={cn(
+              "interactive-row w-full cursor-pointer px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+              chips.length === 0 && "pb-2.5",
+            )}
           >
             <div className="flex items-start justify-between gap-2">
               <p className="min-w-0 text-sm font-medium leading-snug text-foreground">{event.sentence}</p>
@@ -154,20 +155,9 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
             </div>
           </button>
 
-          <div className="px-3 pb-2.5 text-xs text-muted-foreground">
-            {event.resource.href ? (
-              <Link
-                href={event.resource.href}
-                className="inline-flex items-center gap-1 font-medium text-foreground/80 link-primary"
-              >
-                {targetLabel}
-                <ExternalLink className="size-3 opacity-60" aria-hidden />
-              </Link>
-            ) : (
-              <span className="font-medium text-foreground/70">{targetLabel}</span>
-            )}
-            {chips.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1">
+          {chips.length > 0 ? (
+            <div className="px-3 pb-2.5">
+              <div className="flex flex-wrap gap-1">
                 {chips.map((c) => (
                   <span
                     key={`${c.label}-${c.value}`}
@@ -178,8 +168,8 @@ function TimelineItem({ event, isSelected, isNew, isLast, onSelect }: TimelineIt
                   </span>
                 ))}
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </li>

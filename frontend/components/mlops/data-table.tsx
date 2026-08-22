@@ -111,6 +111,8 @@ import { useDebouncedTrue } from "@/hooks/use-debounced-true"
 
 export type { DataTableDensity, DataTableRowAction }
 
+export type DataTableVariant = "panel" | "flat"
+
 type Density = DataTableDensity
 type SortDirection = DataTableSortDirection
 
@@ -150,6 +152,8 @@ interface DataTableProps<T> {
   emptyMessage?: string
   emptyTitle?: string
   className?: string
+  /** `flat` (default) sits on the page canvas; `panel` nests toolbar+table in a card. */
+  variant?: DataTableVariant
   tableId?: string
   loading?: boolean
   loadingRows?: number
@@ -267,7 +271,14 @@ function snapshotLayout(
   return { visibility, columnOrder, pinned, columnWidths }
 }
 
-function renderLoadingTable(columnCount: number, rowCount: number, density: Density) {
+function renderLoadingTable(
+  columnCount: number,
+  rowCount: number,
+  density: Density,
+  variant: DataTableVariant = "flat",
+) {
+  const isFlat = variant === "flat"
+  const headerBg = isFlat ? "bg-background" : "bg-card"
   return (
     <div
       className="min-h-0 flex-1 overflow-auto overscroll-contain motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
@@ -277,10 +288,10 @@ function renderLoadingTable(columnCount: number, rowCount: number, density: Dens
       aria-label="Loading table rows"
     >
       <Table container={false} className={cn("table-fixed min-w-full", DENSITY_ROW_CLASS[density])}>
-        <TableHeader className="sticky top-0 z-20 bg-card">
-          <TableRow className="border-border/70 hover:bg-transparent">
+        <TableHeader className={cn("sticky top-0 z-20 border-b", isFlat ? "border-border/40" : "border-border", headerBg)}>
+          <TableRow className={cn(isFlat ? "border-border/40" : "border-border/70", "hover:bg-transparent")}>
             {Array.from({ length: columnCount }).map((_, i) => (
-              <TableHead key={i} className="bg-card">
+              <TableHead key={i} className={headerBg}>
                 <div className="skeleton-pulse h-3 w-20 rounded bg-muted" />
               </TableHead>
             ))}
@@ -288,7 +299,10 @@ function renderLoadingTable(columnCount: number, rowCount: number, density: Dens
         </TableHeader>
         <TableBody>
           {Array.from({ length: rowCount }).map((_, rowIndex) => (
-            <TableRow key={rowIndex} className="border-border/50 hover:bg-transparent">
+            <TableRow
+              key={rowIndex}
+              className={cn(isFlat ? "border-border/20" : "border-border/50", "hover:bg-transparent")}
+            >
               {Array.from({ length: columnCount }).map((__, cellIndex) => (
                 <TableCell key={cellIndex}>
                   <div
@@ -315,6 +329,7 @@ export function DataTable<T>({
   emptyMessage = "No rows",
   emptyTitle = "No data",
   className,
+  variant = "flat",
   tableId,
   loading = false,
   loadingRows = 8,
@@ -1177,14 +1192,29 @@ export function DataTable<T>({
       ? bulkActions({ selectedRows, selectedIds: [...selectedIds] })
       : bulkActions
 
+  const isFlat = variant === "flat"
+  const surfaceBg = isFlat ? "bg-background" : "bg-card"
+
   return (
     <div
-      className={cn("panel-surface flex w-full min-w-0 flex-col overflow-hidden p-1", className)}
+      className={cn(
+        "flex w-full min-w-0 flex-col overflow-hidden",
+        isFlat ? "bg-transparent" : "panel-surface p-1",
+        className,
+      )}
       data-datatable-root="true"
+      data-variant={variant}
       aria-busy={loading || undefined}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
-        <div className="shrink-0 border-b border-border bg-card/80 px-3 py-2.5">
+        <div
+          className={cn(
+            "shrink-0",
+            isFlat
+              ? "border-b border-border/40 bg-transparent px-0 py-2.5"
+              : "border-b border-border bg-card/80 px-3 py-2.5",
+          )}
+        >
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {searchable ? (
@@ -1497,7 +1527,14 @@ export function DataTable<T>({
             ) : null}
 
             {selectable && selectedIds.size > 0 ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
+              <div
+                className={cn(
+                  "flex flex-wrap items-center gap-2",
+                  isFlat
+                    ? "bg-muted/15 px-0 py-2"
+                    : "rounded-lg border border-border bg-muted/30 px-2.5 py-2",
+                )}
+              >
                 <span className="text-xs font-medium text-foreground">
                   {selectedIds.size} selected
                 </span>
@@ -1556,7 +1593,12 @@ export function DataTable<T>({
           </div>
         ) : hardLoading ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {renderLoadingTable(Math.max(visibleColumns.length + (selectable ? 1 : 0), 3), loadingRows, density)}
+            {renderLoadingTable(
+              Math.max(visibleColumns.length + (selectable ? 1 : 0), 3),
+              loadingRows,
+              density,
+              variant,
+            )}
           </div>
         ) : processedRows.length === 0 ? (
           <div className="flex min-h-[16rem] flex-1 items-center justify-center p-4">
@@ -1616,14 +1658,16 @@ export function DataTable<T>({
                 </colgroup>
                 <TableHeader
                   className={cn(
-                    stickyHeader && "sticky top-0 z-20 border-b border-border bg-card",
+                    stickyHeader && "sticky top-0 z-20",
+                    stickyHeader && (isFlat ? "border-b border-border/40 bg-background" : "border-b border-border bg-card"),
                   )}
                 >
-                  <TableRow className="border-border/70 hover:bg-transparent">
+                  <TableRow className={cn(isFlat ? "border-border/40" : "border-border/70", "hover:bg-transparent")}>
                     {selectable ? (
                       <TableHead
                         className={cn(
-                          "sticky left-0 z-30 w-10 bg-card px-2",
+                          "sticky left-0 z-30 w-10 px-2",
+                          surfaceBg,
                           stickyHeader && "top-0",
                           stickyEdgeShadow &&
                             "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-3 after:translate-x-full after:bg-gradient-to-r after:from-black/10 after:to-transparent dark:after:from-black/40",
@@ -1664,11 +1708,12 @@ export function DataTable<T>({
                             left: isPinned ? pinnedOffsets[column.id] : undefined,
                           }}
                           className={cn(
-                            "relative overflow-hidden border-border/70 bg-card text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+                            "relative overflow-hidden text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
+                            isFlat ? "border-border/40 bg-background" : "border-border/70 bg-card",
                             alignClass(),
                             stickyHeader && "top-0",
                             isPinned &&
-                              "sticky z-30 border-r border-border bg-card",
+                              cn("sticky z-30 border-r", isFlat ? "border-border/40" : "border-border", surfaceBg),
                             isLastPinned &&
                               stickyEdgeShadow &&
                               "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-3 after:translate-x-full after:bg-gradient-to-r after:from-black/10 after:to-transparent dark:after:from-black/40",
@@ -1761,6 +1806,7 @@ export function DataTable<T>({
                         onCopyRow={copySingleRow}
                         contextMenu={contextMenu}
                         rowActions={rowActions}
+                        variant={variant}
                         rowRef={(node) => {
                           rowRefs.current[localIndex] = node
                         }}
@@ -1781,7 +1827,12 @@ export function DataTable<T>({
             </div>
 
             <div
-              className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/60 px-3 py-2"
+              className={cn(
+                "flex shrink-0 flex-wrap items-center justify-between gap-3",
+                isFlat
+                  ? "border-t border-border/40 bg-transparent px-0 py-2"
+                  : "border-t border-border bg-card/60 px-3 py-2",
+              )}
               role="navigation"
               aria-label="Table pagination"
             >

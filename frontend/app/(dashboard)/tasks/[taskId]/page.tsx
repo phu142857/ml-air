@@ -299,7 +299,7 @@ function TaskDetailContent() {
           />
         ) : task ? (
           <div className="flex min-w-0 w-full flex-col gap-6">
-            <div className="panel-surface min-w-0 p-4">
+            <div className="min-w-0 p-4">
               <h2 className="mb-4 text-sm font-medium text-foreground/90">Summary</h2>
               <MetadataGrid
                 columns={2}

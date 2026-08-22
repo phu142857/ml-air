@@ -1,4 +1,3 @@
-import { Panel } from "@/components/ui/panel"
 import { cn } from "@/lib/utils"
 
 interface DetailSectionProps {
@@ -24,9 +23,9 @@ export function DetailSection({
   const showHeader = Boolean(title || description || headerActions)
 
   return (
-    <Panel padded={false} className={className}>
+    <section className={className}>
       {showHeader ? (
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5">
+        <div className="flex items-center justify-between gap-3 border-b border-border/40 px-0 py-2.5">
           <div className="min-w-0 flex-1">
             {title ? (
               <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
@@ -40,7 +39,7 @@ export function DetailSection({
           ) : null}
         </div>
       ) : null}
-      <div className={cn("p-4", bodyClassName)}>{children}</div>
-    </Panel>
+      <div className={cn("px-0 py-3", bodyClassName)}>{children}</div>
+    </section>
   )
 }

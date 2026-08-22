@@ -238,13 +238,13 @@ export default function PipelineDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="panel-surface min-w-0 px-4 py-3">
+          <div className="min-w-0 px-0 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline id</p>
             <p className="mt-1 truncate font-mono text-sm text-foreground/90" title={resolvedPipelineId}>
               {resolvedPipelineId}
             </p>
           </div>
-          <div className="panel-surface min-w-0 px-4 py-3">
+          <div className="min-w-0 px-0 py-3">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest run</p>
             <p className="mt-1 min-w-0 text-sm text-foreground/90">
               {latestRunId ? (

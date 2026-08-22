@@ -71,6 +71,7 @@ export default function DashboardPage() {
       />
 
       <PageScrollBody
+        flush={false}
         header={
           isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_DASHBOARD} /> : null
         }

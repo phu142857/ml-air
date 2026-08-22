@@ -50,9 +50,9 @@ function TypeIcon({ type }: { type: SearchResultItem["type"] }) {
 
 function SearchSkeleton() {
   return (
-    <div className="divide-y divide-border/80 overflow-hidden panel-surface">
+    <div className="divide-y divide-border/20">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-3">
+        <div key={i} className="flex animate-pulse items-center gap-4 px-0 py-3">
           <div className="h-8 w-8 rounded-md bg-muted/80" />
           <div className="flex-1 space-y-2">
             <div className="h-3 w-48 rounded bg-muted/80" />
@@ -140,7 +140,7 @@ function SearchPageInner() {
               onChange={(id) => pushSearch(input || q, id as SearchType)}
             />
             <form
-              className="panel-surface p-1"
+              className="border-b border-border/40 pb-2"
               onSubmit={(e) => {
                 e.preventDefault()
                 pushSearch(input, type)
@@ -185,14 +185,14 @@ function SearchPageInner() {
             title="No matches"
           />
         ) : (
-          <div className="divide-y divide-border/80 overflow-hidden panel-surface">
+          <div className="divide-y divide-border/20">
             {items.map((result, i) => {
               const at = result.updated_at || result.created_at
               return (
               <Link
                 key={`${result.type}-${resultLabel(result)}-${i}`}
                 href={normalizeSearchHref(result)}
-                className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                className="group flex items-center gap-3 px-0 py-2.5 transition-colors hover:bg-accent/50"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/60">
                   <TypeIcon type={result.type} />

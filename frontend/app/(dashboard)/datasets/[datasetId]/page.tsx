@@ -1625,7 +1625,7 @@ export default function DatasetHubPage() {
               onPolicyMutated={refetchPolicyReadiness}
             />
             {readinessQuery.data ? (
-              <div className="panel-surface min-w-0 p-3 text-sm">
+              <div className="min-w-0 text-sm">
                 <div className="mb-3 flex flex-wrap items-center gap-2 text-foreground">
                   <span className="text-muted-foreground">Status:</span>
                   <span
@@ -2007,7 +2007,7 @@ export default function DatasetHubPage() {
       ) : null}
 
       {activeTab === "versions" ? (
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4 pt-4">
             {versionsQuery.isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (versionsQuery.data?.items || []).length === 0 ? (

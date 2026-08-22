@@ -153,8 +153,8 @@ export default function PipelinesPage() {
           skeletonRows={4}
         >
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-card">
-              <div className="shrink-0 border-b border-border px-3 py-2">
+            <div className="flex min-h-0 flex-col overflow-hidden">
+              <div className="shrink-0 border-b border-border/40 px-0 py-2.5">
                 <Input
                   placeholder="Filter pipelines…"
                   value={listQuery}
@@ -165,7 +165,7 @@ export default function PipelinesPage() {
               </div>
               <div className="scroll-region scroll-region-gutter min-h-0 max-h-[min(70vh,640px)] flex-1">
                 <table className="w-full text-left text-sm">
-                  <thead className="sticky top-0 z-10 border-b border-border bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <thead className="sticky top-0 z-10 border-b border-border/40 bg-background text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2 font-medium">Pipeline</th>
                       <th className="hidden px-2 py-2 font-medium sm:table-cell">Status</th>
@@ -185,7 +185,7 @@ export default function PipelinesPage() {
                               type="button"
                               onClick={() => setSelectedId(pipeline.pipeline_id)}
                               className={cn(
-                                "interactive-row grid w-full grid-cols-1 items-center gap-1 border-0 border-b border-border px-3 py-2 text-left sm:grid-cols-[1fr_auto_auto]",
+                                "interactive-row grid w-full grid-cols-1 items-center gap-1 border-0 border-b border-border/20 px-0 py-2 text-left hover:bg-accent/50 sm:grid-cols-[1fr_auto_auto]",
                                 isSelected && "bg-primary/[0.04] ring-1 ring-inset ring-primary/20",
                               )}
                               aria-current={isSelected ? "true" : undefined}
@@ -226,7 +226,7 @@ export default function PipelinesPage() {
                 </table>
               </div>
               {showLoadMore ? (
-                <div className="shrink-0 border-t border-border p-2 text-center">
+                <div className="shrink-0 border-t border-border/40 p-2 text-center">
                   <Button
                     type="button"
                     variant="outline"
@@ -314,7 +314,7 @@ export default function PipelinesPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-md border border-border bg-card p-3">
+                  <div className="overflow-hidden">
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Pipeline topology
                     </h3>

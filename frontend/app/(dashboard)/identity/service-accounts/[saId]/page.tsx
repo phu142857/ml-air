@@ -326,9 +326,9 @@ export default function IdentityServiceAccountDetailPage() {
                 onAction={() => document.getElementById("sa-scope-form")?.scrollIntoView({ behavior: "smooth" })}
               />
             ) : (
-              <ul className="mb-4 divide-y divide-border/60 rounded-md border border-border/60">
+              <ul className="mb-4 divide-y divide-border/20">
                 {(scopesQuery.data || []).map((s) => (
-                  <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                  <li key={s.id} className="flex items-center justify-between gap-3 px-0 py-3 text-sm">
                     <span className="font-mono text-xs">
                       {s.tenant_id} · {s.all_projects ? "all projects" : s.project_ids.join(", ")}
                     </span>
@@ -402,9 +402,9 @@ export default function IdentityServiceAccountDetailPage() {
                 onAction={() => issue.mutate()}
               />
             ) : (
-              <ul className="divide-y divide-border/60 rounded-md border border-border/60">
+              <ul className="divide-y divide-border/20">
                 {(credsQuery.data || []).map((c) => (
-                  <li key={c.token_id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                  <li key={c.token_id} className="flex flex-wrap items-center justify-between gap-2 px-0 py-3 text-sm">
                     <div className="min-w-0">
                       <p className="font-mono text-xs">{c.token_id}</p>
                       <p className="text-xs text-muted-foreground">

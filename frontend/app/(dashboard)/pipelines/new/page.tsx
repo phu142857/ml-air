@@ -23,7 +23,7 @@ export default function NewPipelinePage() {
         />
         <ResourcePageHeader icon={GitBranch} accent="zinc" title="Import pipeline" className="shrink-0 border-b-0" />
       </div>
-      <PageScrollBody>
+      <PageScrollBody flush={false}>
         {!scopePinned ? (
           <ScopePinnedInline message={SCOPE_AGGREGATE_PIPELINES} />
         ) : (

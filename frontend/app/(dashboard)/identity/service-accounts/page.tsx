@@ -93,9 +93,9 @@ export default function IdentityServiceAccountsPage() {
             onAction={() => setOpen(true)}
           />
         ) : (
-          <div className="overflow-hidden rounded-md border border-border/60">
+          <div>
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-[1] bg-muted/95 backdrop-blur-sm">
+              <thead className="sticky top-0 z-[1] border-b border-border/40 bg-background">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Status</th>
@@ -105,7 +105,7 @@ export default function IdentityServiceAccountsPage() {
               </thead>
               <tbody>
                 {accounts.map((sa) => (
-                  <tr key={sa.id} className="border-t border-border/60 hover:bg-muted/30">
+                  <tr key={sa.id} className="border-b border-border/20 hover:bg-accent/50">
                     <td className="px-4 py-3 font-medium">{sa.name}</td>
                     <td className="px-4 py-3">
                       <IdentityStatusBadge state={sa.state} />

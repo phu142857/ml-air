@@ -50,7 +50,7 @@ function StatCard({
   value: number;
 }) {
   return (
-    <div className="rounded-md border border-border bg-card px-3 py-2">
+    <div className="px-0 py-2">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{value}</p>
     </div>
@@ -132,9 +132,9 @@ export default function IdentityAuditLogsPage() {
             title="No events found"
           />
         ) : (
-          <div className="overflow-hidden rounded-md border border-border/60">
+          <div>
             <table className="w-full text-sm">
-              <thead className="bg-muted/60">
+              <thead className="border-b border-border/40 bg-background">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Time</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Action</th>
@@ -144,7 +144,7 @@ export default function IdentityAuditLogsPage() {
               </thead>
               <tbody>
                 {events.map((event) => (
-                  <tr key={event.id} className="border-t border-border/60 hover:bg-muted/30">
+                  <tr key={event.id} className="border-b border-border/20 hover:bg-accent/50">
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{formatWhen(event.occurred_at)}</td>
                     <td className="px-4 py-3">
                       <Link href={`/identity/audit/${event.id}`} className="font-medium text-primary hover:underline">

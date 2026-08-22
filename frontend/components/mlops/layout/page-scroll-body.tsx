@@ -9,6 +9,8 @@ interface PageScrollBodyProps {
   header?: React.ReactNode
   /** `workspace` fills the viewport below chrome (trace-style); `scroll` uses page scroll. */
   variant?: "scroll" | "workspace"
+  /** When false, keep vertical padding/gap (dashboard widgets, multi-step forms). Default flush for list/detail canvases. */
+  flush?: boolean
 }
 
 /**
@@ -23,18 +25,39 @@ export function PageScrollBody({
   className,
   header,
   variant = "scroll",
+  flush = true,
 }: PageScrollBodyProps) {
   return (
-    <div className={cn("page-body", variant === "workspace" && "min-h-0", className)}>
-      {header ? <div className="scroll-region-pad shrink-0">{header}</div> : null}
+    <div
+      className={cn(
+        flush ? "page-body-flush" : "page-body",
+        variant === "workspace" && "min-h-0",
+        className,
+      )}
+    >
+      {header ? (
+        <div className={cn("scroll-region-pad shrink-0", flush && "py-3")}>{header}</div>
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {variant === "workspace" ? (
-          <div className="scroll-region-pad flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div
+            className={cn(
+              "scroll-region-pad flex min-h-0 flex-1 flex-col overflow-hidden",
+              flush ? "gap-0" : "gap-4",
+            )}
+          >
             {children}
           </div>
         ) : (
           <div className="scroll-region">
-            <div className="scroll-region-pad flex flex-col gap-4 pb-4">{children}</div>
+            <div
+              className={cn(
+                "scroll-region-pad flex flex-col",
+                flush ? "gap-0 pb-0" : "gap-4 pb-4",
+              )}
+            >
+              {children}
+            </div>
           </div>
         )}
       </div>

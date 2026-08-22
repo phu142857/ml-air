@@ -57,6 +57,7 @@ type DataTableBodyRowProps<T> = {
   contextMenu: boolean
   rowActions?: DataTableRowAction<T>[]
   rowRef: (node: HTMLTableRowElement | null) => void
+  variant?: "panel" | "flat"
 }
 
 function DataTableBodyRowInner<T>({
@@ -81,7 +82,12 @@ function DataTableBodyRowInner<T>({
   contextMenu,
   rowActions,
   rowRef,
+  variant = "flat",
 }: DataTableBodyRowProps<T>) {
+  const isFlat = variant === "flat"
+  const stickyCellBg = isFlat
+    ? "bg-background group-hover:bg-accent/50 group-data-[selected=true]:bg-accent/40 group-focus-visible:bg-accent/40"
+    : "bg-card group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50 group-focus-visible:bg-muted/50"
   const stickyShadowClass = stickyEdgeShadow
     ? "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-3 after:translate-x-full after:bg-gradient-to-r after:from-black/10 after:to-transparent dark:after:from-black/40"
     : ""
@@ -95,9 +101,10 @@ function DataTableBodyRowInner<T>({
       aria-selected={selectable ? isChecked : undefined}
       aria-rowindex={rowIndex + 2}
       className={cn(
-        "group interactive-row border-border/50 outline-none transition-colors duration-150",
-        "hover:bg-muted/40 active:bg-muted/55 data-[selected=true]:bg-muted/50",
-        "focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+        "group border-b outline-none transition-colors duration-150",
+        isFlat
+          ? "border-border/20 hover:bg-accent/50 active:bg-accent/60 data-[selected=true]:bg-accent/40 focus-visible:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
+          : "interactive-row border-border/50 hover:bg-muted/40 active:bg-muted/55 data-[selected=true]:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
         onRowClick && "cursor-pointer",
         isChecked && "bg-primary/5",
         rowClassName?.(row),
@@ -109,7 +116,8 @@ function DataTableBodyRowInner<T>({
       {selectable ? (
         <TableCell
           className={cn(
-            "sticky left-0 z-20 bg-card px-2 group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50 group-focus-visible:bg-muted/50",
+            "sticky left-0 z-20 px-2",
+            stickyCellBg,
             stickyShadowClass && !columns.some((c) => pinnedColumns.includes(c.id))
               ? stickyShadowClass
               : "",
@@ -141,8 +149,7 @@ function DataTableBodyRowInner<T>({
               "max-w-0 overflow-hidden text-left",
               !column.wrap && "whitespace-nowrap",
               column.wrap && "whitespace-normal",
-              isPinned &&
-                "sticky z-10 border-r border-border bg-card group-hover:bg-muted/40 group-data-[selected=true]:bg-muted/50 group-focus-visible:bg-muted/50",
+              isPinned && cn("sticky z-10 border-r", isFlat ? "border-border/40" : "border-border", stickyCellBg),
               isLastPinned && stickyShadowClass,
               column.className,
             )}
