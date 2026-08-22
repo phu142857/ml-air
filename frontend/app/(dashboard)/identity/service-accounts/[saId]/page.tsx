@@ -251,7 +251,6 @@ export default function IdentityServiceAccountDetailPage() {
     <SettingsPage loading={saQuery.isLoading} error={saQuery.error ? (saQuery.error as Error).message : null}>
       <SettingsPageHeader
         title={sa?.name || "Service account"}
-        description="Credentials, assignments, and lifecycle for this service account."
         breadcrumb={{
           listHref: "/identity/service-accounts",
           listLabel: "Service accounts",

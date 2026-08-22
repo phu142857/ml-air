@@ -132,7 +132,6 @@ export default function SettingsProfilePage() {
     <SettingsPage loading={meQuery.isLoading} error={meQuery.error ? String((meQuery.error as Error).message) : null}>
       <SettingsPageHeader
         title="Profile"
-        description="Manage your personal account information."
       />
 
       {me ? (
@@ -184,7 +183,6 @@ export default function SettingsProfilePage() {
             <SettingsSection
               id="general"
               title="General"
-              description="Update your account information."
               headerActions={
                 <SettingsFormFooter
                   dirty={dirty}
@@ -231,7 +229,6 @@ export default function SettingsProfilePage() {
           <SettingsSection
             id="metadata"
             title="Metadata"
-            description="Account details from the identity service."
           >
             <MetadataList
               items={[
@@ -250,7 +247,6 @@ export default function SettingsProfilePage() {
           <SettingsSection
             id="permissions"
             title="Permissions"
-            description="Your effective platform permissions."
           >
             {me.assignments?.length ? (
               <ul className="divide-y divide-border">

@@ -24,7 +24,7 @@ import type { PluginItem } from "@/lib/api";
 import { toastError, toastSuccess } from "@/lib/toast-actions";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 
-export function PluginsSettingsTab() {
+export function PluginsSettingsTab({ embedded = false }: { embedded?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { token } = useAppContext();
   const [selectedPlugin, setSelectedPlugin] = useState("");
@@ -181,17 +181,17 @@ export function PluginsSettingsTab() {
     [toggleMutation],
   );
 
-  return (
-    <SettingsPage>
-      <SettingsPageHeader
-        title="Integrations"
-        description="Plugins loaded into the Hub and their enablement state."
-      />
+  const body = (
+    <>
+      {!embedded ? (
+        <SettingsPageHeader
+          title="Integrations"
+        />
+      ) : null}
 
       <SettingsSection
         id="registry"
         title="Loaded plugins"
-        description="Reload the registry after deploying plugin packages."
         headerActions={
           <Button
             type="button"
@@ -321,6 +321,12 @@ export function PluginsSettingsTab() {
           </p>
         ) : null}
       </SettingsSection>
-    </SettingsPage>
+    </>
   );
+
+  if (embedded) {
+    return <div className="min-h-0 flex-1 overflow-auto">{body}</div>;
+  }
+
+  return <SettingsPage>{body}</SettingsPage>;
 }

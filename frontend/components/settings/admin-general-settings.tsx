@@ -61,7 +61,6 @@ export function AdminGeneralSettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="General"
-        description="Platform-wide Hub defaults."
       />
 
       <SettingsSection id="metadata" title="Metadata" description="Last published system settings document.">

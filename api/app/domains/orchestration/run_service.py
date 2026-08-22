@@ -26,6 +26,39 @@ from app.domains.observability.trace_service import get_trace_id
 logger = logging.getLogger("mlair.api.run_service")
 
 
+def _scheduling_hints(override_config: dict | None) -> dict[str, Any]:
+    sched = (override_config or {}).get("scheduling")
+    if not isinstance(sched, dict):
+        return {}
+    return sched
+
+
+def _maybe_place_run(
+    *,
+    run_id: str,
+    tenant_id: str,
+    project_id: str,
+    override_config: dict | None,
+) -> dict[str, Any] | None:
+    try:
+        from app.domains.distributed.global_scheduler_service import auto_place_run_if_enabled, placement_summary
+
+        sched = _scheduling_hints(override_config)
+        placement = auto_place_run_if_enabled(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            gpu_required=bool(sched.get("gpu_required")),
+            region_preference=sched.get("region_preference"),
+            cluster_labels=dict(sched.get("cluster_labels") or {}),
+            latency_budget_ms=sched.get("latency_budget_ms"),
+        )
+        return placement_summary(placement) if placement else None
+    except Exception:
+        logger.exception("run_placement_failed run_id=%s", run_id)
+        return None
+
+
 def _parse_updated_at_dt(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value
@@ -241,6 +274,13 @@ def create_run(
                 created=True,
             )
 
+    placement = _maybe_place_run(
+        run_id=str(created[0]),
+        tenant_id=tenant_id,
+        project_id=project_id,
+        override_config=ovrd_cfg,
+    )
+
     publish_run_event(
         {
             "event_type": "run_created",
@@ -258,6 +298,7 @@ def create_run(
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
             "override_config": ovrd_cfg,
+            "placement": placement,
         }
     )
     logger.info(
@@ -280,6 +321,7 @@ def create_run(
             "trace_id": trace_id,
             "replay_of_run_id": replay_of_run_id,
             "replay_from_task_id": replay_from_task_id,
+            "placement": placement,
         },
     )
     rt.emit_run_created(

@@ -61,7 +61,6 @@ export default function SettingsPreferencesPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="Preferences"
-        description="Customize appearance and workspace defaults for this browser."
       />
 
       <SettingsSection id="appearance" title="Appearance" description="Theme and density for the Hub UI.">

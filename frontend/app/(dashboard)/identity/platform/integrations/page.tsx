@@ -1,5 +1,5 @@
-import { PluginsSettingsTab } from "@/components/settings/plugins-settings-tab";
+import { IntegrationsHub } from "@/components/settings/integrations-hub";
 
 export default function IdentityPlatformIntegrationsPage() {
-  return <PluginsSettingsTab />;
+  return <IntegrationsHub />;
 }

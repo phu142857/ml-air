@@ -20,6 +20,7 @@ from app.domains.governance.model_registry_service import (
     get_model_provenance,
     get_model_status,
     get_model_version_approval,
+    list_model_approval_queue,
     list_model_serving_slots,
     list_model_versions,
     list_models,
@@ -33,7 +34,15 @@ from app.domains.governance.model_registry_service import (
     set_model_serving_slot,
     update_model_version_approval,
     upsert_model_pipeline_mapping,
+    APPROVAL_PENDING_APPROVER,
+    APPROVAL_APPROVED,
+    APPROVAL_REJECTED,
 )
+from app.domains.governance.model_stakeholder_service import (
+    list_model_stakeholders,
+    replace_model_stakeholders,
+)
+from app.domains.governance.process_rbac_service import authorize_model_process_action
 from app.domains.governance.admission_explain_service import explain_run_admission, preview_trigger_policy
 from app.settings import get_settings
 from app.plugins.compatibility_service import (
@@ -64,7 +73,9 @@ from app.domains.orchestration import pipeline_version_service
 from app.domains.orchestration import search_service
 from app.dataset_source_type import canonical_dataset_source_type
 from app.domains.lifecycle import lineage_service
+from app.domains.lifecycle import lifecycle_projection_service
 from app.domains.lifecycle import readiness_service
+from app.domains.governance import model_evaluation_service
 from app.domains.lifecycle import realtime_events as rt
 from app.domains.observability import semantic_metrics
 from app.domains.observability.semantic_observability_model import (
@@ -99,7 +110,9 @@ from app.domains.orchestration.tracking_service import (
     compare_runs,
     create_experiment,
     export_run_metrics,
+    get_experiment,
     get_run_tracking,
+    list_experiment_runs_page,
     list_experiments,
     list_experiments_page,
     log_artifact,
@@ -112,6 +125,10 @@ from app.domains.observability import usage_service
 from datetime import datetime, timezone
 from app.domains.orchestration.manifest_service import upsert_task_manifest
 from app.domains.governance import trigger_policy_service
+from app.domains.governance import production_monitoring_service
+from app.domains.governance import slo_service
+from app.domains.governance import closed_loop_service
+from app.domains.governance import agent_integration_service
 from app.domains.governance import dataset_retention_service
 from app.domains.governance import scope_context_service
 from app.domains.governance.tenant_quota_service import TenantQuotaExceeded, assert_within_quota
@@ -327,6 +344,57 @@ class PluginToggleIn(BaseModel):
 class CreateExperimentIn(BaseModel):
     name: str = Field(min_length=1)
     description: str | None = None
+
+
+class RecordModelEvaluationIn(BaseModel):
+    status: str = Field(min_length=1)
+    metrics: dict[str, float] = Field(default_factory=dict)
+    benchmark_name: str = "default"
+    run_id: str | None = None
+    baseline_version: int | None = Field(default=None, ge=1)
+    source: str | None = None
+    reasons: list[dict[str, Any]] | list[str] | None = None
+
+
+class EvaluateModelVersionIn(BaseModel):
+    metrics: dict[str, float] = Field(default_factory=dict)
+    gates: dict[str, dict[str, float]] | None = None
+    benchmark_name: str = "default"
+    run_id: str | None = None
+    baseline_version: int | None = Field(default=None, ge=1)
+    source: str | None = None
+
+
+class ProductionMetricSampleIn(BaseModel):
+    metric_key: str = Field(min_length=1)
+    value: float
+    version: int | None = Field(default=None, ge=1)
+    labels: dict[str, Any] = Field(default_factory=dict)
+
+
+class IngestProductionMetricsIn(BaseModel):
+    samples: list[ProductionMetricSampleIn] = Field(default_factory=list)
+    source: str = "production"
+
+
+class SloRuleIn(BaseModel):
+    metric_key: str = Field(min_length=1)
+    operator: str = Field(min_length=1)
+    threshold: float
+    severity: str = "warning"
+    enabled: bool = True
+
+
+class ReplaceSloRulesIn(BaseModel):
+    items: list[SloRuleIn] = Field(default_factory=list)
+
+
+class ClosedLoopPolicyIn(BaseModel):
+    monitoring_enabled: bool = True
+    auto_retrain_on_breach: bool = False
+    auto_promote_on_eval_pass: bool = False
+    auto_rollback_on_breach: bool = False
+    drift_psi_threshold: float = 0.2
 
 
 class LogParamIn(BaseModel):
@@ -666,6 +734,15 @@ class PromoteModelVersionIn(BaseModel):
 class ModelApprovalUpdateIn(BaseModel):
     approval_status: str = Field(min_length=1)
     reason: str | None = None
+
+
+class ModelStakeholderIn(BaseModel):
+    user_id: str = Field(min_length=1)
+    role: str = Field(min_length=1)
+
+
+class ReplaceModelStakeholdersIn(BaseModel):
+    items: list[ModelStakeholderIn] = Field(default_factory=list)
 
 
 class SetServingSlotIn(BaseModel):
@@ -1363,6 +1440,16 @@ def get_run_v1(tenant_id: str, project_id: str, run_id: str, authorization: str 
     run = get_run(run_id)
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:
         raise HTTPException(status_code=404, detail="run_not_found")
+    try:
+        from app.domains.distributed.config import global_scheduler_enabled
+        from app.domains.distributed.global_scheduler_service import get_placement, placement_summary
+
+        if global_scheduler_enabled():
+            placement = placement_summary(get_placement(run_id))
+            if placement:
+                run = {**run, "placement": placement}
+    except Exception:
+        pass
     return run
 
 
@@ -1977,6 +2064,48 @@ def list_experiments_v1(
         list_experiments_page,
         tenant_id=tenant_id,
         project_id=project_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/experiments/{experiment_id}")
+def get_experiment_v1(
+    tenant_id: str,
+    project_id: str,
+    experiment_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_experiment(tenant_id, project_id, experiment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="experiment_not_found")
+    return row
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/experiments/{experiment_id}/runs")
+def list_experiment_runs_v1(
+    tenant_id: str,
+    project_id: str,
+    experiment_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_experiment(tenant_id, project_id, experiment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="experiment_not_found")
+    page = guarded_page(
+        list_experiment_runs_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        experiment_id=experiment_id,
         limit=limit,
         offset=offset,
         cursor=cursor,
@@ -3098,6 +3227,18 @@ def get_execution_projection_v1(
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     return execution_projection_service.get_execution_projection(tenant_id, project_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/lifecycle-projection")
+def get_lifecycle_projection_v1(
+    tenant_id: str,
+    project_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Unified read-only lifecycle snapshot (models, datasets, runs, stages)."""
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return lifecycle_projection_service.get_lifecycle_projection(tenant_id, project_id)
 
 
 @router.get("/tenants/{tenant_id}/projects/{project_id}/semantic-events/replay")
@@ -4277,6 +4418,140 @@ def list_model_versions_v1(
     return {"items": list_model_versions(model_id)}
 
 
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/evaluations")
+def list_model_evaluations_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    limit: int = 20,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    version: int | None = Query(default=None, ge=1),
+    status: str | None = Query(default=None),
+    benchmark_name: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    page = guarded_page(
+        model_evaluation_service.list_model_evaluations_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        version=version,
+        status=status,
+        benchmark_name=benchmark_name,
+        source=source,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/evaluations")
+def list_model_version_evaluations_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    limit: int = 20,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    benchmark_name: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    return list_model_evaluations_v1(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        version=version,
+        status=status,
+        benchmark_name=benchmark_name,
+        source=source,
+        authorization=authorization,
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/evaluations")
+def record_model_evaluation_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    payload: RecordModelEvaluationIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    versions = {int(v["version"]) for v in list_model_versions(model_id)}
+    if int(version) not in versions:
+        raise HTTPException(status_code=404, detail="model_version_not_found")
+    try:
+        evaluation_id = model_evaluation_service.record_model_evaluation(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            version=int(version),
+            status=payload.status,
+            metrics=payload.metrics,
+            benchmark_name=payload.benchmark_name,
+            run_id=payload.run_id,
+            baseline_version=payload.baseline_version,
+            source=payload.source,
+            reasons=payload.reasons,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"evaluation_id": evaluation_id, "status": payload.status.strip().lower()}
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/evaluations/evaluate")
+def evaluate_model_version_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    payload: EvaluateModelVersionIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    versions = {int(v["version"]) for v in list_model_versions(model_id)}
+    if int(version) not in versions:
+        raise HTTPException(status_code=404, detail="model_version_not_found")
+    try:
+        return model_evaluation_service.persist_model_evaluation_with_gates(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            version=int(version),
+            metrics=payload.metrics,
+            gates=payload.gates,
+            benchmark_name=payload.benchmark_name,
+            run_id=payload.run_id,
+            baseline_version=payload.baseline_version,
+            source=payload.source or "automated",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/next-artifact-uri")
 def preview_model_artifact_uri_v1(
     tenant_id: str, project_id: str, model_id: str, authorization: str | None = Header(default=None)
@@ -4376,10 +4651,38 @@ def put_model_version_approval_v1(
     authorization: str | None = Header(default=None),
 ) -> dict:
     principal = authenticate_bearer(authorization)
-    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
     if not row:
         raise HTTPException(status_code=404, detail="model_not_found")
+    status_norm = str(payload.approval_status or "").strip().lower()
+    if status_norm == APPROVAL_PENDING_APPROVER:
+        authorize_model_process_action(
+            principal,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            action="model.review",
+        )
+    elif status_norm == APPROVAL_APPROVED:
+        authorize_model_process_action(
+            principal,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            action="model.approve",
+        )
+    elif status_norm == APPROVAL_REJECTED:
+        authorize_model_process_action(
+            principal,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            action="model.reject",
+        )
+    else:
+        authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    actor_user_id = principal.user_id if principal.principal_kind == "user" else None
     try:
         return update_model_version_approval(
             tenant_id=tenant_id,
@@ -4388,11 +4691,278 @@ def put_model_version_approval_v1(
             version=version,
             approval_status=payload.approval_status,
             reason=payload.reason,
+            actor_user_id=actor_user_id,
         )
     except ValueError as exc:
-        if str(exc) == "invalid_approval_status":
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        code = str(exc)
+        if code in {"invalid_approval_status", "invalid_approval_transition", "approval_requires_reviewer_step", "evaluation_gate_failed"}:
+            raise HTTPException(status_code=422, detail=code) from exc
+        raise HTTPException(status_code=404, detail=code) from exc
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/governance/approval-queue")
+def list_governance_approval_queue_v1(
+    tenant_id: str,
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return {"items": list_model_approval_queue(tenant_id=tenant_id, project_id=project_id, limit=limit)}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/stakeholders")
+def list_model_stakeholders_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return {"items": list_model_stakeholders(tenant_id=tenant_id, project_id=project_id, model_id=model_id)}
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/stakeholders")
+def replace_model_stakeholders_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: ReplaceModelStakeholdersIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    authorize_model_process_action(
+        principal,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        action="model.stakeholder.manage",
+    )
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        items = replace_model_stakeholders(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            assignments=[{"user_id": i.user_id, "role": i.role} for i in payload.items],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"items": items}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/lifecycle/recommendations")
+def get_lifecycle_recommendations_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    return agent_integration_service.get_lifecycle_recommendations(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/production-metrics")
+def ingest_production_metrics_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: IngestProductionMetricsIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    out = production_monitoring_service.ingest_production_metrics(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        samples=[s.model_dump() for s in payload.samples],
+        source=payload.source,
+    )
+    eval_out = closed_loop_service.evaluate_model_closed_loop(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+    )
+    return {**out, "closed_loop": eval_out}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/production-metrics")
+def list_production_metrics_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = Query(default=None),
+    metric_key: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    page = guarded_page(
+        production_monitoring_service.list_production_metrics_page,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        limit=limit,
+        offset=offset,
+        cursor=cursor,
+        metric_key=metric_key,
+    )
+    return page_response(page, include_offset=offset > 0 and not cursor)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/slo-rules")
+def list_slo_rules_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return {"items": slo_service.list_slo_rules(tenant_id=tenant_id, project_id=project_id, model_id=model_id)}
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/slo-rules")
+def replace_slo_rules_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: ReplaceSloRulesIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    try:
+        items = slo_service.replace_slo_rules(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            rules=[i.model_dump() for i in payload.items],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"items": items}
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/closed-loop-policy")
+def get_closed_loop_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return closed_loop_service.get_closed_loop_policy(tenant_id, project_id, model_id)
+
+
+@router.put("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/closed-loop-policy")
+def put_closed_loop_policy_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    payload: ClosedLoopPolicyIn,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return closed_loop_service.upsert_closed_loop_policy(
+        tenant_id,
+        project_id,
+        model_id,
+        monitoring_enabled=payload.monitoring_enabled,
+        auto_retrain_on_breach=payload.auto_retrain_on_breach,
+        auto_promote_on_eval_pass=payload.auto_promote_on_eval_pass,
+        auto_rollback_on_breach=payload.auto_rollback_on_breach,
+        drift_psi_threshold=payload.drift_psi_threshold,
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/closed-loop/evaluate")
+def evaluate_model_closed_loop_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return closed_loop_service.evaluate_model_closed_loop(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+    )
+
+
+@router.post("/tenants/{tenant_id}/projects/{project_id}/closed-loop/evaluate")
+def evaluate_scope_closed_loop_v1(
+    tenant_id: str,
+    project_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    return closed_loop_service.evaluate_scope_closed_loop(tenant_id=tenant_id, project_id=project_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/closed-loop/events")
+def list_closed_loop_events_v1(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    row = get_model(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return {
+        "items": closed_loop_service.list_closed_loop_events(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            model_id=model_id,
+            limit=limit,
+        )
+    }
 
 
 if _serving_slots_http_enabled():

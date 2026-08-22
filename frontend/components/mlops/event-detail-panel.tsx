@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, ExternalLink, X } from "
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import type { AuditEvent } from "@/lib/audit-event"
 import { findRelatedEvents, neighborEvents } from "@/lib/event-explorer"
@@ -146,7 +147,7 @@ function DetailBody({
                 Raw Payload
               </button>
               {rawOpen ? (
-                <pre className="mt-2 max-h-48 overflow-auto break-all rounded-md border border-border bg-muted/30 p-3 text-[11px] leading-relaxed">
+                <pre className="mt-2 max-h-48 overflow-auto break-all rounded-md border border-border bg-muted/30 p-3 text-xs leading-relaxed">
                   {JSON.stringify(event.metadata, null, 2)}
                 </pre>
               ) : null}
@@ -256,17 +257,26 @@ export function EventDetailPanel({
   mode = "embedded",
   className,
 }: EventDetailPanelProps) {
-  if (!event || !open) return null
-
   if (mode === "sheet") {
-    // Lazy import path avoided — sheet mode unused by Lifecycle page.
-    // Keep a simple full-height embed fallback if called.
     return (
-      <div className={cn("flex h-full min-h-0 flex-col overflow-hidden", className)}>
-        <DetailBody event={event} allEvents={allEvents} onSelect={onSelect} onClose={onClose} />
-      </div>
+      <Sheet open={open && !!event} onOpenChange={(next) => { if (!next) onClose() }}>
+        <SheetContent
+          side="right"
+          className={cn(
+            "w-full gap-0 p-0 sm:max-w-md [&>button]:hidden",
+            className,
+          )}
+        >
+          <SheetTitle className="sr-only">Event details</SheetTitle>
+          {event ? (
+            <DetailBody event={event} allEvents={allEvents} onSelect={onSelect} onClose={onClose} />
+          ) : null}
+        </SheetContent>
+      </Sheet>
     )
   }
+
+  if (!event || !open) return null
 
   return (
     <div className={cn("flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>

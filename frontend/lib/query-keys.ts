@@ -9,6 +9,16 @@ export const mlairKeys = {
   plugins: {
     all: () => ["plugins"] as const
   },
+  integrations: {
+    subscriptions: (tenantId: string, projectId: string) =>
+      ["integration-subscriptions", tenantId, projectId] as const,
+    semanticWebhooks: (tenantId: string, projectId: string) =>
+      ["semantic-webhook-subscriptions", tenantId, projectId] as const,
+    domainWebhooks: (tenantId: string, projectId: string) =>
+      ["domain-webhook-subscriptions", tenantId, projectId] as const,
+    notificationChannels: (tenantId: string, projectId: string) =>
+      ["notification-channels", tenantId, projectId] as const,
+  },
   runs: {
     list: (tenantId: string, projectId: string) => ["runs", tenantId, projectId] as const,
     listInfinite: (tenantId: string, projectId: string) =>
@@ -100,6 +110,10 @@ export const mlairKeys = {
     ["dataset-runs", datasetId, tenantId, projectId] as const,
   datasetRunsInfinite: (tenantId: string, projectId: string, datasetId: string) =>
     ["dataset-runs", datasetId, tenantId, projectId, "infinite"] as const,
+  governance: {
+    approvalQueue: (tenantId: string, projectId: string) =>
+      ["governance-approval-queue", tenantId, projectId] as const,
+  },
   models: {
     list: (tenantId: string, projectId: string) => ["models", tenantId, projectId] as const,
     listInfinite: (tenantId: string, projectId: string) =>
@@ -131,7 +145,32 @@ export const mlairKeys = {
       modelId: string,
       version: number,
       targetStage: string
-    ) => ["model-promotion-eligibility", tenantId, projectId, modelId, version, targetStage] as const
+    ) => ["model-promotion-eligibility", tenantId, projectId, modelId, version, targetStage] as const,
+    stakeholders: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-stakeholders", tenantId, projectId, modelId] as const,
+    closedLoopPolicy: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-closed-loop-policy", tenantId, projectId, modelId] as const,
+    productionMetrics: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-production-metrics", tenantId, projectId, modelId] as const,
+    sloRules: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-slo-rules", tenantId, projectId, modelId] as const,
+    closedLoopEvents: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-closed-loop-events", tenantId, projectId, modelId] as const,
+    evaluationsInfinite: (
+      tenantId: string,
+      projectId: string,
+      modelId: string,
+      filters: { version?: number; status?: string } = {}
+    ) =>
+      [
+        "model-evaluations",
+        tenantId,
+        projectId,
+        modelId,
+        "infinite",
+        filters.version ?? "all",
+        filters.status ?? "all",
+      ] as const,
   },
   execution: {
     projection: (tenantId: string, projectId: string) =>
@@ -191,6 +230,16 @@ export const mlairKeys = {
   },
   lifecycle: (tenantId: string, projectId: string) =>
     ["lifecycle", tenantId, projectId] as const,
+  lifecycleProjection: (tenantId: string, projectId: string) =>
+    ["lifecycle-projection", tenantId, projectId] as const,
+  experiments: {
+    listInfinite: (tenantId: string, projectId: string) =>
+      ["experiments-infinite", tenantId, projectId] as const,
+    detail: (tenantId: string, projectId: string, experimentId: string) =>
+      ["experiment", tenantId, projectId, experimentId] as const,
+    runsInfinite: (tenantId: string, projectId: string, experimentId: string) =>
+      ["experiment-runs", tenantId, projectId, experimentId, "infinite"] as const,
+  },
   semantic: {
     outbox: (tenantId: string, projectId: string, modelId: string) =>
       ["semantic-outbox", tenantId, projectId, modelId] as const,

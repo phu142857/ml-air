@@ -1266,7 +1266,6 @@ export default function DatasetHubPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 border-border bg-card text-xs pressable"
                 onClick={() => void copyWithToast(datasetId, { successTitle: "Dataset ID copied" })}
               >
                 <Copy className="h-3.5 w-3.5" />

@@ -85,6 +85,17 @@ export const API_BASE: string = ({
   valueOf: () => getApiBaseUrl()
 } as unknown) as string;
 
+export type RunPlacementSummary = {
+  placement_id?: string;
+  cluster_id?: string;
+  cluster_name?: string;
+  region_id?: string;
+  region_code?: string;
+  node_pool?: string | null;
+  node_id?: string | null;
+  score?: number | null;
+};
+
 export type RunItem = {
   run_id: string;
   tenant_id: string;
@@ -99,6 +110,7 @@ export type RunItem = {
   config_snapshot?: Record<string, unknown> | null;
   override_config?: Record<string, unknown> | null;
   environment?: RunEnvironment | null;
+  placement?: RunPlacementSummary | null;
 };
 
 export type RunEnvironment = {
@@ -507,7 +519,12 @@ export function taskIdPathSegment(taskId: string): string {
   return encodeURIComponent(normalizeTaskId(taskId));
 }
 
-export type ModelApprovalStatus = "pending_manual_approval" | "approved" | "rejected";
+export type ModelApprovalStatus =
+  | "pending_manual_approval"
+  | "pending_reviewer"
+  | "pending_approver"
+  | "approved"
+  | "rejected";
 
 export type ModelVersionItem = {
   version_id: string;
@@ -1425,6 +1442,59 @@ export type SemanticEventEnvelope = {
   payload?: Record<string, unknown>;
 };
 
+export type LifecycleProjection = {
+  version: number;
+  generated_at: string;
+  tenant_id: string;
+  project_id: string;
+  summary: {
+    model_count: number;
+    dataset_count: number;
+    active_runs: number;
+    runs_last_7d: number;
+    stages: Record<string, number>;
+  };
+  models: Array<{
+    model_id: string;
+    name: string;
+    latest_version: number | null;
+    stage: string | null;
+    approval_status: string | null;
+    version_created_at: string | null;
+    latest_eval_status: string | null;
+  }>;
+  datasets: Array<{
+    dataset_id: string;
+    name: string;
+    readiness_status: string | null;
+    readiness_evaluated_at: string | null;
+  }>;
+  runs_by_status: Record<string, number>;
+};
+
+export type ExperimentItem = {
+  experiment_id: string;
+  tenant_id: string;
+  project_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ModelEvaluationItem = {
+  evaluation_id: string;
+  version: number;
+  run_id?: string | null;
+  benchmark_name: string;
+  status: string;
+  metrics: Record<string, number>;
+  baseline_version?: number | null;
+  source: string;
+  evaluated_at: string;
+  reasons: Array<Record<string, unknown>>;
+};
+
 export type ExecutionProjection = {
   version?: number;
   updated_at?: string;
@@ -1462,6 +1532,165 @@ export async function fetchExecutionProjection(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ExecutionProjection;
+}
+
+export async function fetchLifecycleProjection(
+  tenantId: string,
+  projectId: string,
+  token: string,
+): Promise<LifecycleProjection> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/lifecycle-projection`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as LifecycleProjection;
+}
+
+export async function fetchExperimentsPage(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null },
+): Promise<CursorPage<ExperimentItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams();
+  q.set("limit", String(Math.max(1, Math.floor(opts?.limit ?? 50))));
+  if (opts?.cursor) q.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/experiments?${q}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as CursorPage<ExperimentItem>;
+}
+
+export async function fetchExperiment(
+  tenantId: string,
+  projectId: string,
+  experimentId: string,
+  token: string,
+): Promise<ExperimentItem> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/experiments/${encodeURIComponent(experimentId)}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ExperimentItem;
+}
+
+export async function createExperiment(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  body: { name: string; description?: string | null },
+): Promise<ExperimentItem> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/experiments`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ExperimentItem;
+}
+
+export async function fetchExperimentRunsPage(
+  tenantId: string,
+  projectId: string,
+  experimentId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null },
+): Promise<CursorPage<RunItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams();
+  q.set("limit", String(Math.max(1, Math.floor(opts?.limit ?? 50))));
+  if (opts?.cursor) q.set("cursor", opts.cursor);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/experiments/${encodeURIComponent(experimentId)}/runs?${q}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as CursorPage<RunItem>;
+}
+
+export async function fetchModelEvaluationsPage(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  opts?: {
+    limit?: number;
+    cursor?: string | null;
+    version?: number;
+    status?: string;
+    benchmarkName?: string;
+    source?: string;
+  },
+): Promise<CursorPage<ModelEvaluationItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams();
+  q.set("limit", String(Math.max(1, Math.floor(opts?.limit ?? 20))));
+  if (opts?.cursor) q.set("cursor", opts.cursor);
+  if (opts?.version != null) q.set("version", String(opts.version));
+  const st = String(opts?.status || "").trim().toLowerCase();
+  if (st && st !== "all") q.set("status", st);
+  const bench = String(opts?.benchmarkName || "").trim();
+  if (bench && bench !== "all") q.set("benchmark_name", bench);
+  const src = String(opts?.source || "").trim().toLowerCase();
+  if (src && src !== "all") q.set("source", src);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/evaluations?${q}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as CursorPage<ModelEvaluationItem>;
+}
+
+export async function evaluateModelVersion(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  version: number,
+  token: string,
+  body: {
+    metrics: Record<string, number>;
+    gates?: Record<string, { min?: number; max?: number }>;
+    benchmark_name?: string;
+    run_id?: string | null;
+    baseline_version?: number | null;
+    source?: string | null;
+  },
+): Promise<{
+  evaluation_id: string;
+  status: string;
+  reasons: Array<Record<string, unknown>>;
+  evaluated_at: string;
+  metrics: Record<string, number>;
+}> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/versions/${version}/evaluations/evaluate`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
 }
 
 export async function fetchSemanticEventReplay(
@@ -3459,7 +3688,7 @@ export async function fetchModelTriggerPolicy(tenantId: string, projectId: strin
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as {
-    trigger_mode: "manual" | "auto_ready" | "schedule";
+    trigger_mode: "manual" | "auto_ready" | "schedule" | "drift" | "slo_breach";
     debounce_minutes: number;
     schedule_cron: string;
     dataset_id?: string | null;
@@ -3478,7 +3707,7 @@ export async function updateModelTriggerPolicy(
   modelId: string,
   token: string,
   payload: {
-    trigger_mode: "manual" | "auto_ready" | "schedule";
+    trigger_mode: "manual" | "auto_ready" | "schedule" | "drift" | "slo_breach";
     debounce_minutes: number;
     schedule_cron?: string | null;
     dataset_id?: string | null;
@@ -3495,7 +3724,7 @@ export async function updateModelTriggerPolicy(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as {
-    trigger_mode: "manual" | "auto_ready" | "schedule";
+    trigger_mode: "manual" | "auto_ready" | "schedule" | "drift" | "slo_breach";
     debounce_minutes: number;
     schedule_cron: string;
     dataset_id?: string | null;
@@ -3739,6 +3968,269 @@ export async function updateModelVersionApproval(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ModelVersionItem;
+}
+
+export type ModelStakeholderItem = {
+  stakeholder_id: string;
+  model_id: string;
+  user_id: string;
+  role: "owner" | "reviewer" | "executor" | "approver";
+  username?: string | null;
+  created_at: string;
+};
+
+export type ApprovalQueueItem = {
+  model_id: string;
+  model_name: string;
+  version: number;
+  approval_status: string;
+  approval_reason?: string | null;
+  approval_updated_at?: string | null;
+  reviewed_by?: string | null;
+  approved_by?: string | null;
+};
+
+export async function fetchModelStakeholders(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+): Promise<{ items: ModelStakeholderItem[] }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/stakeholders`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: ModelStakeholderItem[] };
+}
+
+export async function replaceModelStakeholders(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  items: Array<{ user_id: string; role: string }>,
+): Promise<{ items: ModelStakeholderItem[] }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/stakeholders`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: ModelStakeholderItem[] };
+}
+
+export async function fetchGovernanceApprovalQueue(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  limit = 50,
+): Promise<{ items: ApprovalQueueItem[] }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/governance/approval-queue?limit=${limit}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: ApprovalQueueItem[] };
+}
+
+export type ProductionMetricItem = {
+  sample_id: string;
+  version?: number | null;
+  metric_key: string;
+  value: number;
+  labels?: Record<string, unknown>;
+  source: string;
+  recorded_at: string;
+};
+
+export type ClosedLoopPolicy = {
+  tenant_id: string;
+  project_id: string;
+  model_id: string;
+  monitoring_enabled: boolean;
+  auto_retrain_on_breach: boolean;
+  auto_promote_on_eval_pass: boolean;
+  auto_rollback_on_breach: boolean;
+  drift_psi_threshold: number;
+  updated_at?: string | null;
+  source?: string;
+};
+
+export type SloRuleItem = {
+  rule_id: string;
+  metric_key: string;
+  operator: string;
+  threshold: number;
+  severity: string;
+  enabled: boolean;
+  created_at: string;
+};
+
+export type ClosedLoopEventItem = {
+  event_id: string;
+  event_type: string;
+  severity: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export async function fetchProductionMetricsPage(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  opts?: { limit?: number; cursor?: string | null; metricKey?: string },
+): Promise<CursorPage<ProductionMetricItem>> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams();
+  q.set("limit", String(Math.max(1, Math.floor(opts?.limit ?? 30))));
+  if (opts?.cursor) q.set("cursor", opts.cursor);
+  if (opts?.metricKey) q.set("metric_key", opts.metricKey);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/production-metrics?${q}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as CursorPage<ProductionMetricItem>;
+}
+
+export async function ingestProductionMetrics(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  body: { samples: Array<{ metric_key: string; value: number; version?: number }>; source?: string },
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/production-metrics`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+export async function fetchClosedLoopPolicy(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+): Promise<ClosedLoopPolicy> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/closed-loop-policy`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ClosedLoopPolicy;
+}
+
+export async function updateClosedLoopPolicy(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  body: Partial<ClosedLoopPolicy>,
+): Promise<ClosedLoopPolicy> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/closed-loop-policy`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as ClosedLoopPolicy;
+}
+
+export async function fetchSloRules(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+): Promise<{ items: SloRuleItem[] }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/slo-rules`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: SloRuleItem[] };
+}
+
+export async function replaceSloRules(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  body: { items: Array<{ metric_key: string; operator: string; threshold: number; severity?: string; enabled?: boolean }> },
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/slo-rules`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: SloRuleItem[] };
+}
+
+export async function evaluateClosedLoop(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+) {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/closed-loop/evaluate`,
+    { method: "POST", headers: authHeaders(token) },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { actions?: Array<Record<string, unknown>> };
+}
+
+export async function fetchClosedLoopEvents(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  limit = 50,
+): Promise<{ items: ClosedLoopEventItem[] }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/closed-loop/events?limit=${limit}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: ClosedLoopEventItem[] };
 }
 
 /** Requires API `ML_AIR_ENABLE_SERVING_SLOTS_HTTP=1` (GET .../serving mounted at process start). */

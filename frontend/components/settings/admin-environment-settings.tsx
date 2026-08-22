@@ -79,7 +79,6 @@ export function AdminEnvironmentSettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="Environment"
-        description="Catalog of process env keys and how they map to L4 settings."
       />
 
       <SettingsSection id="summary" title="Coverage" description="How many keys fall into each configuration layer.">

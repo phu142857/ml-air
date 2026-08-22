@@ -26,7 +26,6 @@ export type TraceExplorerShellProps = {
   traceSearch: string;
   onTraceSearchChange: (value: string) => void;
   listLoading?: boolean;
-  onRefreshTraces?: () => void;
   onOpenLogsTab?: () => void;
   urlSpanId?: string | null;
   urlZoom?: [number, number] | null;
@@ -46,7 +45,6 @@ export function TraceExplorerShell({
   traceSearch,
   onTraceSearchChange,
   listLoading,
-  onRefreshTraces,
   onOpenLogsTab,
   urlSpanId,
   urlZoom,
@@ -156,7 +154,6 @@ export function TraceExplorerShell({
           traceSearch={traceSearch}
           onTraceSearchChange={onTraceSearchChange}
           listLoading={listLoading}
-          onRefreshTraces={onRefreshTraces}
           onOpenLogsTab={onOpenLogsTab ?? (() => setActiveTab("logs"))}
           urlSpanId={urlSpanId}
           urlZoom={urlZoom}

@@ -84,7 +84,6 @@ function TracesPageContent() {
               traceSearch={search}
               onTraceSearchChange={setSearch}
               listLoading={listQuery.isLoading}
-              onRefreshTraces={() => void listQuery.refetch()}
               urlSpanId={url.spanId}
               urlZoom={url.zoom}
               urlQ={url.q}

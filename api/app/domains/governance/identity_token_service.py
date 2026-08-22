@@ -11,7 +11,7 @@ from jwt import InvalidTokenError
 from app.domains.governance.identity_errors import invalid_token
 
 IDENTITY_ISSUER = "mlair-identity"
-ROLE_WEIGHT = {"viewer": 1, "maintainer": 2, "admin": 3}
+ROLE_WEIGHT = {"viewer": 1, "approver": 2, "maintainer": 2, "admin": 3}
 
 
 def _secret() -> str:

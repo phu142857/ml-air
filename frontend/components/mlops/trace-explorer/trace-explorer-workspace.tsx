@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
-import { Copy, Download, Link2, List, Loader2, Maximize2, Minimize2, Minus, PanelRight, Play, Plus, RefreshCw, RotateCcw, Route, ScanSearch, Search } from "lucide-react";
+import { Copy, Download, Link2, List, Loader2, Maximize2, Minimize2, Minus, PanelRight, Play, Plus, RotateCcw, Route, ScanSearch, Search } from "lucide-react";
 
 import { MlopsEmptyState } from "@/components/mlops/layout";
 import { TraceListPane } from "@/components/mlops/trace-explorer/trace-list-pane";
@@ -54,7 +54,6 @@ export type TraceExplorerWorkspaceProps = {
   traceSearch: string;
   onTraceSearchChange: (value: string) => void;
   listLoading?: boolean;
-  onRefreshTraces?: () => void;
   onOpenLogsTab?: () => void;
   urlSpanId?: string | null;
   urlZoom?: [number, number] | null;
@@ -72,7 +71,6 @@ export function TraceExplorerWorkspace({
   traceSearch,
   onTraceSearchChange,
   listLoading,
-  onRefreshTraces,
   onOpenLogsTab,
   urlSpanId,
   urlZoom,
@@ -88,7 +86,7 @@ export function TraceExplorerWorkspace({
   const workspace = useTraceWorkspaceState({ tenantId, projectId });
   const inspector = useTraceInspector();
 
-  const { data, isLoading, isFetching, refetch } = useTraceDetail(
+  const { data, isLoading } = useTraceDetail(
     tenantId,
     projectId,
     token,
@@ -568,11 +566,6 @@ export function TraceExplorerWorkspace({
     }
   };
 
-  const handleRefresh = useCallback(() => {
-    onRefreshTraces?.();
-    if (normalized) void refetch();
-  }, [normalized, onRefreshTraces, refetch]);
-
   const listEmptyAction = useMemo(
     () =>
       !listLoading && traceList.length === 0 && !traceSearch.trim() ? (
@@ -674,11 +667,7 @@ export function TraceExplorerWorkspace({
         <div className="min-h-0 flex-1 overflow-hidden">
           {!normalized ? (
             <div className="flex h-full items-center justify-center p-6">
-              <TraceWorkspaceEmpty
-                onTriggerRun={() => setTriggerOpen(true)}
-                onRefresh={handleRefresh}
-                refreshing={listLoading || isFetching}
-              />
+              <TraceWorkspaceEmpty onTriggerRun={() => setTriggerOpen(true)} />
             </div>
           ) : isLoading ? (
             <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
@@ -727,9 +716,7 @@ export function TraceExplorerWorkspace({
     ),
     [
       focusedFlatIndex,
-      handleRefresh,
       hoveredStepId,
-      isFetching,
       isLoading,
       listLoading,
       normalized,
@@ -834,30 +821,13 @@ export function TraceExplorerWorkspace({
             )}
             Export
           </Button>
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="h-8 gap-1.5 px-2.5 text-xs"
-            disabled={!normalized || isFetching}
-            onClick={() => void refetch()}
-          >
-            {isFetching ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            )}
-            Refresh
-          </Button>
         </div>
       </div>
     ),
     [
       data,
       exporting,
-      isFetching,
       normalized,
-      refetch,
       workspace.resetLayout,
       workspace.waterfallFullscreen,
       inspector.inspectorEnabled,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from typing import Any
 
@@ -11,6 +12,7 @@ from app.domains.distributed import region_registry_service as region_svc
 from app.domains.distributed.config import global_scheduler_enabled
 from app.domains.shared.db_service import db_conn
 
+logger = logging.getLogger(__name__)
 
 def place_run(
     *,
@@ -63,6 +65,51 @@ def place_run(
         "node_id": node_id,
         "score": score,
         "rationale": rationale,
+    }
+
+
+def auto_place_run_if_enabled(
+    *,
+    run_id: str,
+    tenant_id: str,
+    project_id: str,
+    gpu_required: bool = False,
+    region_preference: str | None = None,
+    cluster_labels: dict[str, str] | None = None,
+    latency_budget_ms: int | None = None,
+) -> dict[str, Any] | None:
+    """Best-effort placement when global scheduler is enabled; never raises."""
+    if not global_scheduler_enabled():
+        return None
+    try:
+        return place_run(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            gpu_required=gpu_required,
+            region_preference=region_preference,
+            cluster_labels=cluster_labels or {},
+            latency_budget_ms=latency_budget_ms,
+        )
+    except RuntimeError as exc:
+        logger.warning("auto_place_run_failed run_id=%s err=%s", run_id, exc)
+        return None
+
+
+def placement_summary(placement: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not placement:
+        return None
+    cluster = placement.get("cluster") if isinstance(placement.get("cluster"), dict) else {}
+    region = placement.get("region") if isinstance(placement.get("region"), dict) else {}
+    return {
+        "placement_id": placement.get("placement_id"),
+        "cluster_id": cluster.get("cluster_id") or placement.get("cluster_id"),
+        "cluster_name": cluster.get("name"),
+        "region_id": region.get("region_id") or placement.get("region_id"),
+        "region_code": region.get("code"),
+        "node_pool": placement.get("node_pool"),
+        "node_id": placement.get("node_id"),
+        "score": placement.get("score"),
     }
 
 

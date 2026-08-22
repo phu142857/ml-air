@@ -55,7 +55,6 @@ export default function IdentitySettingsPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="Authentication Policy"
-        description="Password and session policy for interactive users."
       />
 
       <SettingsSection id="metadata" title="Metadata" description="Last published system settings document.">

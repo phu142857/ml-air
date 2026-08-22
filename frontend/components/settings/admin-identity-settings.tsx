@@ -54,7 +54,6 @@ export function AdminIdentitySettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="Identity & Access"
-        description="Lockout, password, and bootstrap policy for the platform."
       />
 
       <SettingsSection id="metadata" title="Metadata" description="Last published system settings document.">

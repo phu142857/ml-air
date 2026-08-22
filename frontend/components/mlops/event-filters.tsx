@@ -78,7 +78,7 @@ const RESULT_OPTIONS: FilterOption<EventResult>[] = [
 ]
 
 const SEVERITY_OPTIONS: FilterOption<Severity>[] = [
-  { value: "all", label: "All Severities" },
+  { value: "all", label: "All severities" },
   { value: "info", label: "Info" },
   { value: "warning", label: "Warning" },
   { value: "error", label: "Error" },
@@ -86,11 +86,11 @@ const SEVERITY_OPTIONS: FilterOption<Severity>[] = [
 ]
 
 const TIME_RANGE_OPTIONS: FilterOption<TimeRange>[] = [
-  { value: "1h", label: "Last Hour" },
-  { value: "24h", label: "Last 24h" },
-  { value: "7d", label: "Last 7 Days" },
-  { value: "30d", label: "Last 30 Days" },
-  { value: "all", label: "All Time" },
+  { value: "1h", label: "Last hour" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "all", label: "All time" },
 ]
 
 /** Min width in `ch` so trigger fits the longest option label (+ chevron). */
@@ -98,8 +98,6 @@ function minWidthCh(labels: string[]): CSSProperties {
   const longest = Math.max(...labels.map((l) => l.length), 0)
   return { minWidth: `${longest + 3.5}ch` }
 }
-
-const TRIGGER_CLASS = "h-8 w-fit border-border bg-card text-xs"
 
 interface FilterSelectProps<T extends string> {
   value: T
@@ -118,7 +116,7 @@ function FilterSelect<T extends string>({
 
   return (
     <Select value={value} onValueChange={(v) => onValueChange(v as T)}>
-      <SelectTrigger className={TRIGGER_CLASS} style={widthStyle}>
+      <SelectTrigger size="sm" style={widthStyle} aria-label={placeholder}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
@@ -181,7 +179,7 @@ export function EventFilters({
         value={targetValue}
         onValueChange={(v) => onTargetTypeChange(v === "all" ? "" : v)}
       >
-        <SelectTrigger className={TRIGGER_CLASS} style={targetWidthStyle}>
+        <SelectTrigger size="sm" style={targetWidthStyle} aria-label="Resource">
           <SelectValue placeholder="Resource" />
         </SelectTrigger>
         <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
@@ -215,13 +213,8 @@ export function EventFilters({
       />
 
       {activeFilters > 0 ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="h-8 text-xs text-muted-foreground hover:text-foreground pressable"
-        >
-          <X className="mr-1 h-3 w-3" />
+        <Button variant="ghost" size="sm" onClick={onClearFilters}>
+          <X className="size-3.5" />
           Clear
         </Button>
       ) : null}

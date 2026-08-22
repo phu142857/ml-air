@@ -81,10 +81,9 @@ export default function IdentitySessionsPage() {
     >
       <SettingsPageHeader
         title="Sessions"
-        description="Active identity sessions across the platform."
       />
 
-      <SettingsSection id="sessions" title="Active sessions" description="Revoke sessions that should no longer be trusted.">
+      <SettingsSection id="sessions" title="Active sessions">
         {expiredCount > 0 ? (
           <p className="mb-3 text-xs text-muted-foreground">
             Hidden {expiredCount} expired session{expiredCount > 1 ? "s" : ""} from the list.

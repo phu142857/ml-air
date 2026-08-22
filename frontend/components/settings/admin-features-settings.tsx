@@ -54,7 +54,6 @@ export function AdminFeaturesSettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="Features"
-        description="Toggle platform feature flags without restarting process env."
       />
       <p className="text-sm text-muted-foreground">
         All policy feature flags from <code className="text-xs">.env.example</code> / L4{" "}

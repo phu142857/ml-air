@@ -7,15 +7,11 @@ import { Button } from "@/components/ui/button";
 
 export type TraceWorkspaceEmptyProps = {
   onTriggerRun: () => void;
-  onRefresh: () => void;
-  refreshing?: boolean;
   className?: string;
 };
 
 export function TraceWorkspaceEmpty({
   onTriggerRun,
-  onRefresh,
-  refreshing,
   className,
 }: TraceWorkspaceEmptyProps) {
   return (
@@ -24,21 +20,10 @@ export function TraceWorkspaceEmpty({
       title="No trace selected"
       className={className}
       action={
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button type="button" size="sm" onClick={onTriggerRun}>
-            <Play className="h-3.5 w-3.5" aria-hidden />
-            Trigger Run
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={refreshing}
-            onClick={onRefresh}
-          >
-            Refresh
-          </Button>
-        </div>
+        <Button type="button" size="sm" onClick={onTriggerRun}>
+          <Play className="h-3.5 w-3.5" aria-hidden />
+          Trigger Run
+        </Button>
       }
     />
   );

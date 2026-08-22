@@ -66,13 +66,11 @@ export function SessionsPanel() {
     >
       <SettingsPageHeader
         title="Sessions"
-        description="Devices and browsers currently signed in to your account."
       />
 
       <SettingsSection
         id="sessions"
         title="Active sessions"
-        description="Revoke any session you do not recognize."
       >
         {items.length === 0 && !sessionsQuery.isLoading ? (
           <SettingsEmptyState

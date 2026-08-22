@@ -20,7 +20,6 @@ export default function SettingsAboutPage() {
     <SettingsPage>
       <SettingsPageHeader
         title="About"
-        description="Product identity and runtime metadata for this Hub."
       />
 
       <SettingsSection id="brand" title="Brand" description="MLAir control plane.">

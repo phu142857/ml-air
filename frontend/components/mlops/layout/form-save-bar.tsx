@@ -53,7 +53,7 @@ export function FormSaveBar({
         >
           {cancelLabel}
         </Button>
-        <Button type="button" size="sm" className="h-8 pressable" onClick={onSave} disabled={saving}>
+        <Button type="button" size="sm" onClick={onSave} disabled={saving}>
           {saving ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
           {saveLabel}
         </Button>

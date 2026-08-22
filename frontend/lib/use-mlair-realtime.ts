@@ -60,6 +60,10 @@ const IMMEDIATE_INVALIDATE_KEY_HEADS = new Set([
   "datasets",
   "models",
   "execution-projection",
+  "lifecycle-projection",
+  "governance-approval-queue",
+  "model-production-metrics",
+  "model-closed-loop-events",
   "tasks-recent",
 ]);
 

@@ -54,7 +54,6 @@ export function AdminObservabilitySettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="Observability"
-        description="Tracing, metrics, and diagnostic defaults."
       />
 
       <SettingsSection id="metadata" title="Metadata" description="Last published system settings document.">

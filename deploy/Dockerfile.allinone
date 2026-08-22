@@ -30,7 +30,7 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_PUBLIC_MLAIR_REALTIME_WS=${NEXT_PUBLIC_MLAIR_REALTIME_WS}
 COPY --from=frontend-deps /app/node_modules ./node_modules
 COPY frontend .
-RUN npm run build
+RUN --network=host npm run build
 
 FROM ${PYTHON_IMAGE} AS py-builder
 WORKDIR /build

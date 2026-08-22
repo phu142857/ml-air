@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { DetailTabSkeleton } from "@/components/mlops/detail-tab-skeleton";
 import { DataTable as MlopsDataTable, type DataTableColumn } from "@/components/mlops/data-table";
-import type { ModelVersionItem } from "@/lib/api";
+import type { ModelVersionItem, ModelApprovalStatus } from "@/lib/api";
 import { StatusBadge } from "@/components/mlops/status-badge";
 import { useTabLoading } from "@/hooks/use-tab-loading";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,9 @@ import {
   modelStagePillClass,
   nextPromotionStage,
   previousPromotionStage,
+  primaryApprovalAction,
   promotionBlockMessage,
+  isPendingApprovalStatus,
   transitionKind,
   type PromotionGovernanceFeatures,
 } from "@/lib/model-governance-ui";
@@ -77,6 +79,9 @@ import {
   ModelStageTimeline,
   ModelVersionComparePanel,
 } from "@/components/mlops/model-governance-panels";
+import { ModelEvaluationsPanel } from "@/components/mlops/model-evaluations-panel";
+import { ModelStakeholdersPanel } from "@/components/mlops/model-stakeholders-panel";
+import { ModelClosedLoopPanel } from "@/components/mlops/model-closed-loop-panel";
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
@@ -84,6 +89,9 @@ const MODEL_TABS = [
   { id: "overview", label: "Overview" },
   { id: "policy", label: "Trigger policy" },
   { id: "versions", label: "Versions" },
+  { id: "evaluations", label: "Evaluations" },
+  { id: "stakeholders", label: "Stakeholders" },
+  { id: "monitoring", label: "Monitoring" },
   { id: "runs", label: "Recent runs" },
 ] as const;
 
@@ -91,6 +99,9 @@ const MODEL_TAB_SKELETON: Record<string, "grid" | "table"> = {
   overview: "grid",
   policy: "grid",
   versions: "table",
+  evaluations: "table",
+  stakeholders: "grid",
+  monitoring: "grid",
   runs: "table",
 };
 
@@ -114,7 +125,7 @@ export default function ModelDetailPage() {
   const scopePinned = isScopePinned(tenantId, projectId);
   const [stageFilter, setStageFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule">("manual");
+  const [triggerMode, setTriggerMode] = useState<"manual" | "auto_ready" | "schedule" | "drift" | "slo_breach">("manual");
   const [debounceMinutes, setDebounceMinutes] = useState("10");
   const [scheduleCron, setScheduleCron] = useState("0 */6 * * *");
   const [maxParallelTasks, setMaxParallelTasks] = useState("");
@@ -305,7 +316,7 @@ export default function ModelDetailPage() {
   });
 
   const approvalMutation = useMutation({
-    mutationFn: (p: { version: number; approval_status: "approved" | "rejected" }) =>
+    mutationFn: (p: { version: number; approval_status: ModelApprovalStatus }) =>
       updateModelVersionApproval(tenantId, projectId, modelId, p.version, token, {
         approval_status: p.approval_status,
         reason: p.approval_status === "rejected" ? "rejected via UI" : null
@@ -480,6 +491,8 @@ export default function ModelDetailPage() {
         filterOptions: [
           { label: "Approved", value: "approved" },
           { label: "Rejected", value: "rejected" },
+          { label: "Pending reviewer", value: "pending_reviewer" },
+          { label: "Pending approver", value: "pending_approver" },
           { label: "Pending", value: "pending_manual_approval" },
           { label: "None", value: "none" },
         ],
@@ -487,17 +500,37 @@ export default function ModelDetailPage() {
           `${v.approval_status || ""} ${modelApprovalDisplayLabel(v.approval_status) || ""}`,
         cell: (v) => {
           const status = v.approval_status;
-          if (status === "pending_manual_approval" && projectId !== "all") {
+          const primary = primaryApprovalAction(status);
+          if (isPendingApprovalStatus(status) && projectId !== "all") {
             return (
               <div className="flex flex-nowrap gap-1">
-                <button
-                  type="button"
-                  className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                  disabled={approvalMutation.isPending}
-                  onClick={() => approvalMutation.mutate({ version: v.version, approval_status: "approved" })}
-                >
-                  Approve
-                </button>
+                {primary ? (
+                  <button
+                    type="button"
+                    className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                    disabled={approvalMutation.isPending}
+                    onClick={() =>
+                      approvalMutation.mutate({
+                        version: v.version,
+                        approval_status: primary.nextStatus,
+                      })
+                    }
+                  >
+                    {primary.label}
+                  </button>
+                ) : null}
+                {status === "pending_manual_approval" ? (
+                  <button
+                    type="button"
+                    className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                    disabled={approvalMutation.isPending}
+                    onClick={() =>
+                      approvalMutation.mutate({ version: v.version, approval_status: "approved" })
+                    }
+                  >
+                    Approve
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="rounded-md bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-60"
@@ -816,7 +849,7 @@ export default function ModelDetailPage() {
       <DetailSection title="Trigger policy" accentBorder="violet">
         <div className="panel-surface mb-4 p-3">
           <h3 className="mb-2 text-xs font-semibold text-foreground">Auto Trigger Config</h3>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
             <label className="flex items-center gap-2 text-xs text-foreground">
               <input
                 type="radio"
@@ -843,6 +876,24 @@ export default function ModelDetailPage() {
                 onChange={() => setTriggerMode("schedule")}
               />
               Schedule (cron)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-foreground">
+              <input
+                type="radio"
+                name="trigger-mode"
+                checked={triggerMode === "drift"}
+                onChange={() => setTriggerMode("drift")}
+              />
+              On drift
+            </label>
+            <label className="flex items-center gap-2 text-xs text-foreground">
+              <input
+                type="radio"
+                name="trigger-mode"
+                checked={triggerMode === "slo_breach"}
+                onChange={() => setTriggerMode("slo_breach")}
+              />
+              On SLO breach
             </label>
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -959,6 +1010,39 @@ export default function ModelDetailPage() {
           ) : null}
         </div>
       </DetailSection>
+        )}
+        </TabsContent>
+
+        <TabsContent value="evaluations" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "evaluations" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.evaluations} />
+        ) : (
+          <DetailSection title="Model evaluations" accentBorder="none">
+            <ModelEvaluationsPanel
+              modelId={modelId}
+              defaultVersion={allVersions[0]?.version ?? null}
+            />
+          </DetailSection>
+        )}
+        </TabsContent>
+
+        <TabsContent value="stakeholders" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "stakeholders" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.stakeholders} />
+        ) : (
+          <DetailSection title="Stakeholders" accentBorder="none">
+            <ModelStakeholdersPanel modelId={modelId} />
+          </DetailSection>
+        )}
+        </TabsContent>
+
+        <TabsContent value="monitoring" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "monitoring" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.monitoring} />
+        ) : (
+          <DetailSection title="Production monitoring & closed-loop" accentBorder="none">
+            <ModelClosedLoopPanel modelId={modelId} />
+          </DetailSection>
         )}
         </TabsContent>
 

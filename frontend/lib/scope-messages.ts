@@ -19,6 +19,15 @@ export const SCOPE_AGGREGATE_RUNS =
 export const SCOPE_AGGREGATE_MODELS =
   "Pin tenant and project in the header to filter registry models and promotions to one workspace."
 
+export const SCOPE_AGGREGATE_EXPERIMENTS =
+  "Pin tenant and project in the header to list and create experiments in one workspace."
+
+export const SCOPE_AGGREGATE_EXPERIMENT_DETAIL =
+  "Pin tenant and project in the header to view experiment runs and metadata."
+
+export const SCOPE_AGGREGATE_APPROVALS =
+  "Pin tenant and project in the header to view the model approval queue."
+
 export const SCOPE_AGGREGATE_TASKS =
   "Pin tenant and project in the header to filter the task fan-out to one workspace."
 

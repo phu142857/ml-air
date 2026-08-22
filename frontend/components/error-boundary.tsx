@@ -160,37 +160,22 @@ export function ErrorDisplay({
       {/* Action buttons */}
       <div className="mt-6 flex items-center gap-3">
         {onGoBack && (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onGoBack}
-            className="h-9 gap-2 pressable bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
+          <Button variant="outline" size="sm" onClick={onGoBack}>
             <ArrowLeft className="h-4 w-4" />
             Go Back
           </Button>
         )}
         {onGoHome && (
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onGoHome}
-            className="h-9 gap-2 pressable bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
+          <Button variant="outline" size="sm" onClick={onGoHome}>
             <Home className="h-4 w-4" />
             Home
           </Button>
         )}
         {onRetry && (
-          <Button 
+          <Button
             size="sm"
+            variant={errorType === "not-found" ? "default" : "destructive"}
             onClick={onRetry}
-            className={cn(
-              "h-9 gap-2 pressable",
-              errorType === "not-found" 
-                ? "bg-primary hover:bg-primary/90 text-white"
-                : "bg-red-600 hover:bg-red-500 text-white"
-            )}
           >
             <RefreshCw className="h-4 w-4" />
             Try Again

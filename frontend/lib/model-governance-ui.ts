@@ -124,6 +124,12 @@ export function promotionBlockMessage(
   if (row.approval_status === "pending_manual_approval") {
     return `Cannot move to ${target}: pending manual approval.`;
   }
+  if (row.approval_status === "pending_reviewer") {
+    return `Cannot move to ${target}: pending reviewer approval.`;
+  }
+  if (row.approval_status === "pending_approver") {
+    return `Cannot move to ${target}: pending final approver.`;
+  }
   if (kind === "rollback" && features?.rollback_requires_approval) {
     return `Rollback to ${target} requires approval.`;
   }
@@ -144,6 +150,9 @@ export function modelApprovalPillClass(approvalStatus?: string): string {
   if (approvalStatus === "pending_manual_approval") {
     return `${approvalPillBase} border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]`;
   }
+  if (approvalStatus === "pending_reviewer" || approvalStatus === "pending_approver") {
+    return `${approvalPillBase} border-[var(--status-pending-border)] bg-[var(--status-pending-bg)] text-[color:var(--status-pending-fg)]`;
+  }
   return `${approvalPillBase} border-border bg-muted/40 text-muted-foreground`;
 }
 
@@ -152,7 +161,29 @@ export function modelApprovalDisplayLabel(approvalStatus?: string): string | nul
   if (approvalStatus === "approved") return "Approved";
   if (approvalStatus === "rejected") return "Rejected";
   if (approvalStatus === "pending_manual_approval") return null;
+  if (approvalStatus === "pending_reviewer") return "Pending reviewer";
+  if (approvalStatus === "pending_approver") return "Pending approver";
   return approvalStatus?.trim() ? approvalStatus : null;
+}
+
+export function isPendingApprovalStatus(status?: string): boolean {
+  return (
+    status === "pending_manual_approval" ||
+    status === "pending_reviewer" ||
+    status === "pending_approver"
+  );
+}
+
+export function primaryApprovalAction(
+  status?: string,
+): { label: string; nextStatus: "pending_approver" | "approved" } | null {
+  if (status === "pending_reviewer" || status === "pending_manual_approval") {
+    return { label: "Submit review", nextStatus: "pending_approver" };
+  }
+  if (status === "pending_approver") {
+    return { label: "Approve", nextStatus: "approved" };
+  }
+  return null;
 }
 
 const stagePillBase = "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs";

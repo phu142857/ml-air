@@ -36,7 +36,6 @@ export default function IdentityAuditDetailPage() {
     <SettingsPage loading={isLoading} error={error ? String((error as Error).message) : null}>
       <SettingsPageHeader
         title={data?.action || "Audit event"}
-        description="Full audit event payload and actor context."
         breadcrumb={{
           listHref: "/identity/dashboard",
           listLabel: "Audit",

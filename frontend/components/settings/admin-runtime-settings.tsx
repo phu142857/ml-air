@@ -67,7 +67,6 @@ export function AdminRuntimeSettings() {
     <SettingsPage>
       <SettingsPageHeader
         title="Runtime"
-        description="Execution, governance, quotas, and webhook defaults."
       />
 
       <SettingsSection id="metadata" title="Metadata" description="Last published system settings document.">

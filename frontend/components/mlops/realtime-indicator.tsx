@@ -101,10 +101,9 @@ export function RealtimeIndicator() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
+          <div
             aria-label={config.label}
-            className="flex max-w-[10rem] items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 transition-default hover:bg-muted/50 pressable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:max-w-none"
+            className="flex max-w-[10rem] cursor-default items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 sm:max-w-none"
           >
             <div className="relative shrink-0">
               <div className={cn("h-2 w-2 rounded-full", config.dotClass)} />
@@ -120,7 +119,7 @@ export function RealtimeIndicator() {
             <span className={cn("hidden truncate text-xs font-medium sm:inline", config.textClass)}>
               {config.label}
             </span>
-          </button>
+          </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
           <div className="flex flex-col gap-1">

@@ -36,6 +36,45 @@ export type GlobalDashboard = {
   replication?: { pending: number; synced: number };
 };
 
+export type FederationItem = {
+  federation_id: string;
+  name: string;
+  parent_federation_id?: string | null;
+  scope: string;
+  config?: Record<string, unknown>;
+  regions?: Array<{ region_id: string; tenant_scope?: string | null; policy_scope?: Record<string, unknown> }>;
+  created_at?: string | null;
+};
+
+export type EdgeNodeItem = {
+  edge_id: string;
+  cluster_id: string;
+  name: string;
+  deployment_kind: string;
+  sync_mode: string;
+  last_sync_at?: string | null;
+  config?: Record<string, unknown>;
+  created_at?: string | null;
+};
+
+export type DrSnapshotItem = {
+  snapshot_id: string;
+  scope: string;
+  region_id?: string | null;
+  created_at?: string | null;
+};
+
+export type RunPlacementSummary = {
+  placement_id?: string;
+  cluster_id?: string;
+  cluster_name?: string;
+  region_id?: string;
+  region_code?: string;
+  node_pool?: string | null;
+  node_id?: string | null;
+  score?: number | null;
+};
+
 export async function fetchGlobalDashboard(token: string): Promise<GlobalDashboard> {
   const res = await fetch(`${API_BASE}/v1/distributed/observability/global`, {
     headers: headers(token),
@@ -65,4 +104,51 @@ export async function fetchRegions(token: string): Promise<{ items: Region[] }> 
   const res = await fetch(`${API_BASE}/v1/distributed/regions`, { headers: headers(token), cache: "no-store" });
   if (!res.ok) throw new Error(await res.text());
   return (await res.json()) as { items: Region[] };
+}
+
+export async function fetchFederations(token: string): Promise<{ items: FederationItem[] }> {
+  const res = await fetch(`${API_BASE}/v1/distributed/federations`, { headers: headers(token), cache: "no-store" });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as { items: FederationItem[] };
+}
+
+export async function fetchEdgeNodes(token: string, clusterId?: string): Promise<{ items: EdgeNodeItem[] }> {
+  const q = clusterId ? `?cluster_id=${encodeURIComponent(clusterId)}` : "";
+  const res = await fetch(`${API_BASE}/v1/distributed/edge-nodes${q}`, { headers: headers(token), cache: "no-store" });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as { items: EdgeNodeItem[] };
+}
+
+export async function syncEdgeNode(token: string, edgeId: string) {
+  const res = await fetch(`${API_BASE}/v1/distributed/edge-nodes/${encodeURIComponent(edgeId)}/sync`, {
+    method: "POST",
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as Record<string, unknown>;
+}
+
+export async function fetchDrSnapshots(token: string): Promise<{ items: DrSnapshotItem[] }> {
+  const res = await fetch(`${API_BASE}/v1/distributed/dr/snapshots`, { headers: headers(token), cache: "no-store" });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as { items: DrSnapshotItem[] };
+}
+
+export async function createDrSnapshot(token: string, body?: { scope?: string; region_id?: string }) {
+  const res = await fetch(`${API_BASE}/v1/distributed/dr/snapshots`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(body ?? { scope: "global" }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as DrSnapshotItem & { item_counts?: Record<string, number> };
+}
+
+export async function restoreDrSnapshot(token: string, snapshotId: string, dryRun = true) {
+  const res = await fetch(
+    `${API_BASE}/v1/distributed/dr/snapshots/${encodeURIComponent(snapshotId)}/restore?dry_run=${dryRun ? "true" : "false"}`,
+    { method: "POST", headers: headers(token) },
+  );
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as Record<string, unknown>;
 }

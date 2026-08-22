@@ -316,7 +316,7 @@ def _load_trigger_policies() -> list[dict]:
                        dataset_id, dataset_version_id, training_policy_id,
                        max_parallel_tasks
                 FROM model_trigger_policies
-                WHERE trigger_mode IN ('auto_ready', 'schedule')
+                WHERE trigger_mode IN ('auto_ready', 'schedule', 'drift', 'slo_breach')
                 """
             )
             rows = cur.fetchall()
@@ -506,6 +506,31 @@ def _trigger_policy_run(policy: dict, reason: str) -> tuple[bool, str]:
         )
         return True, "triggered"
     return False, "api_error"
+
+
+def _load_closed_loop_scopes() -> list[tuple[str, str]]:
+    with connect(_db_url(), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT tenant_id, project_id
+                FROM model_closed_loop_policies
+                WHERE monitoring_enabled = TRUE
+                """
+            )
+            return [(str(r[0]), str(r[1])) for r in cur.fetchall()]
+
+
+def _process_closed_loop_policies() -> None:
+    for tenant_id, project_id in _load_closed_loop_scopes():
+        path = f"/v1/tenants/{tenant_id}/projects/{project_id}/closed-loop/evaluate"
+        out = _api_post(path, {}, timeout=30)
+        if out is None:
+            logger.warning(
+                "closed_loop_evaluate_failed tenant_id=%s project_id=%s",
+                tenant_id,
+                project_id,
+            )
 
 
 def _process_trigger_policies() -> None:
@@ -1606,9 +1631,24 @@ def _requeue_expired_leases(client: Redis) -> int:
 
 
 def _pop_next_run(client: Redis) -> tuple[str | None, str]:
-    fifo = client.blpop("mlair:runs:new", timeout=1)
-    if fifo:
-        return str(fifo[1]), "fifo"
+    local_cluster_id = os.getenv("ML_AIR_CLUSTER_ID", "").strip()
+    max_scan = max(1, int(os.getenv("ML_AIR_SCHEDULER_CLUSTER_SCAN_LIMIT", "32")))
+    for _ in range(max_scan):
+        fifo = client.blpop("mlair:runs:new", timeout=1)
+        if not fifo:
+            return None, "none"
+        raw_payload = str(fifo[1])
+        if not local_cluster_id:
+            return raw_payload, "fifo"
+        try:
+            run_event = json.loads(raw_payload)
+        except json.JSONDecodeError:
+            return raw_payload, "fifo"
+        placement = run_event.get("placement") if isinstance(run_event.get("placement"), dict) else {}
+        target_cluster = str(placement.get("cluster_id") or "").strip()
+        if not target_cluster or target_cluster == local_cluster_id:
+            return raw_payload, "fifo"
+        client.rpush("mlair:runs:new", raw_payload)
     return None, "none"
 
 
@@ -1624,7 +1664,9 @@ def main() -> None:
         10, int(os.getenv("ML_AIR_DATASET_MATERIALIZATION_TICK_SECONDS", str(policy_interval_seconds)))
     )
     lease_reap_interval_seconds = max(2, int(os.getenv("ML_AIR_LEASE_REAP_INTERVAL_SECONDS", "5")))
+    closed_loop_interval_seconds = max(30, int(os.getenv("ML_AIR_CLOSED_LOOP_TICK_SECONDS", "60")))
     next_policy_tick = 0.0
+    next_closed_loop_tick = 0.0
     next_materialization_tick = 0.0
     next_lease_reap_tick = 0.0
     start_http_server(metrics_port)
@@ -1672,6 +1714,14 @@ def main() -> None:
             else:
                 SCHEDULER_TICK_LOCK_SKIPPED_TOTAL.labels(tick="trigger_policy").inc()
             next_policy_tick = loop_started + policy_interval_seconds
+        if loop_started >= next_closed_loop_tick:
+            lock_ttl = max(5, closed_loop_interval_seconds - 1)
+            if _try_acquire_scheduler_tick_lock(client, "closed_loop", lock_ttl):
+                try:
+                    _process_closed_loop_policies()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("process_closed_loop_policies_failed err=%s", exc)
+            next_closed_loop_tick = loop_started + closed_loop_interval_seconds
         if loop_started >= next_materialization_tick:
             lock_ttl = max(5, materialization_interval_seconds - 1)
             if _try_acquire_scheduler_tick_lock(client, "dataset_materialization", lock_ttl):

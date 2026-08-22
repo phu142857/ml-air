@@ -4,8 +4,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   Database,
+  FlaskConical,
   GitBranch,
   History,
+  ShieldCheck,
   Play,
   ListTodo,
   Search,
@@ -39,6 +41,8 @@ type NavItem = {
 const lifecycleNav: NavItem[] = [
   { title: "Datasets", href: "/datasets", icon: Database },
   { title: "Lifecycle", href: "/lifecycle", icon: History },
+  { title: "Approvals", href: "/governance/approvals", icon: ShieldCheck },
+  { title: "Experiments", href: "/experiments", icon: FlaskConical },
   { title: "Traces", href: "/traces", icon: Route },
   { title: "Models", href: "/models", icon: Box },
   { title: "Lineage", href: "/lineage", icon: Network },

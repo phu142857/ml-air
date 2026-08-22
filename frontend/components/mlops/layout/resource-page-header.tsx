@@ -20,9 +20,8 @@ interface ResourcePageHeaderProps {
   className?: string
 }
 
-/** Standard header action button classes for ResourcePageHeader. */
-export const pageHeaderActionClass =
-  "h-8 gap-1.5 border-border bg-card text-xs text-muted-foreground hover:text-foreground"
+/** Header actions: use Button variant="outline" size="sm" (or default for the primary CTA). */
+export const pageHeaderActionClass = ""
 
 export function ResourcePageHeader({
   icon: Icon,

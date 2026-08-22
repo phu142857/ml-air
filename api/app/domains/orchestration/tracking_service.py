@@ -122,6 +122,100 @@ def list_experiments(
     return list_experiments_page(tenant_id, project_id, limit=limit, offset=offset, cursor=cursor).items
 
 
+def get_experiment(tenant_id: str, project_id: str, experiment_id: str) -> dict | None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT experiment_id, tenant_id, project_id, name, description, created_at, updated_at
+                FROM experiments
+                WHERE tenant_id = %s AND project_id = %s AND experiment_id = %s
+                """,
+                (tenant_id, project_id, experiment_id),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    return {
+        "experiment_id": row[0],
+        "tenant_id": row[1],
+        "project_id": row[2],
+        "name": row[3],
+        "description": row[4],
+        "created_at": row[5].isoformat(),
+        "updated_at": row[6].isoformat(),
+    }
+
+
+def list_experiment_runs_page(
+    tenant_id: str,
+    project_id: str,
+    experiment_id: str,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    cursor: str | None = None,
+) -> PageResult:
+    params = resolve_page_params(limit=limit, offset=offset, cursor=cursor, default_limit=50, max_limit=200)
+    lim_sql, lim_params = sql_limit_offset(params)
+    keyset_sql, keyset_args = keyset_where_desc(
+        params,
+        primary_col="created_at",
+        tie_col="run_id",
+        cursor_primary_key="created_at",
+        cursor_tie_key="run_id",
+    )
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            if params.mode == "offset":
+                cur.execute(
+                    f"""
+                SELECT run_id, pipeline_id, status, environment, created_at, updated_at
+                FROM runs
+                WHERE tenant_id = %s AND project_id = %s AND experiment_id = %s{keyset_sql}
+                ORDER BY created_at DESC, run_id DESC
+                LIMIT %s OFFSET %s
+                """,
+                    (
+                        tenant_id,
+                        project_id,
+                        experiment_id,
+                        *keyset_args,
+                        params.limit + 1,
+                        params.offset,
+                    ),
+                )
+            else:
+                cur.execute(
+                    f"""
+                SELECT run_id, pipeline_id, status, environment, created_at, updated_at
+                FROM runs
+                WHERE tenant_id = %s AND project_id = %s AND experiment_id = %s{keyset_sql}
+                ORDER BY created_at DESC, run_id DESC
+                {lim_sql}
+                """,
+                    (tenant_id, project_id, experiment_id, *keyset_args, *lim_params),
+                )
+            rows = cur.fetchall()
+    items = [
+        {
+            "run_id": row[0],
+            "pipeline_id": row[1],
+            "status": row[2],
+            "environment": row[3] or {},
+            "created_at": row[4].isoformat(),
+            "updated_at": row[5].isoformat(),
+        }
+        for row in rows
+    ]
+    return finalize_page(
+        items,
+        params.limit,
+        offset=params.offset if params.mode == "offset" else None,
+        cursor_from_item=lambda r: {"created_at": r["created_at"], "run_id": r["run_id"]},
+    )
+
+
 def _emit_tracking_point(
     run_id: str,
     *,

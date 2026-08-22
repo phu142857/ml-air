@@ -6,7 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Search, Server } from "lucide-react";
 
 import { ClusterDetailDrawer } from "@/components/mlops/infrastructure/cluster-detail-drawer";
-import { MlopsEmptyState, PageScrollBody, PageToolbar, ResourcePageHeader } from "@/components/mlops/layout";
+import { DrSnapshotsPanel } from "@/components/mlops/infrastructure/dr-snapshots-panel";
+import { EdgeNodesPanel } from "@/components/mlops/infrastructure/edge-nodes-panel";
+import { FederationAdminPanel } from "@/components/mlops/infrastructure/federation-admin-panel";
+import { MlopsEmptyState, PageScrollBody, PageToolbar, ResourcePageHeader, DetailTabList } from "@/components/mlops/layout";
 import { Input } from "@/components/ui/input";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { Switch } from "@/components/ui/switch";
@@ -42,6 +45,14 @@ import {
 } from "@/lib/infrastructure-view";
 import { resolveInfraRefetchInterval } from "@/lib/realtime-query-polling";
 import { cn, formatApiClientError } from "@/lib/utils";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+
+const INFRA_TABS = [
+  { id: "clusters", label: "Clusters" },
+  { id: "federation", label: "Federation" },
+  { id: "edge", label: "Edge" },
+  { id: "dr", label: "DR" },
+] as const;
 
 const HEALTH_FILTER_OPTIONS = [
   { value: "all", label: "All health" },
@@ -143,15 +154,27 @@ function SummaryCard({
   );
 }
 
-export function ClustersRegionsPage() {
+export function ClustersRegionsPage({
+  activeTab: activeTabProp,
+  onTabChange,
+}: {
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+} = {}) {
   return (
     <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading infrastructure…</p>}>
-      <ClustersRegionsPageContent />
+      <ClustersRegionsPageContent activeTab={activeTabProp} onTabChange={onTabChange} />
     </Suspense>
   );
 }
 
-function ClustersRegionsPageContent() {
+function ClustersRegionsPageContent({
+  activeTab: activeTabProp,
+  onTabChange,
+}: {
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token, tenantId, accessibleScopes } = useAppContext();
@@ -161,6 +184,9 @@ function ClustersRegionsPageContent() {
   const [healthFilter, setHealthFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
   const [showEmptyRegions, setShowEmptyRegions] = useState(true);
+  const [internalTab, setInternalTab] = useState("clusters");
+  const tab = activeTabProp ?? internalTab;
+  const setTab = onTabChange ?? setInternalTab;
 
   useEffect(() => {
     const clusterFromUrl = searchParams.get("cluster");
@@ -274,7 +300,10 @@ function ClustersRegionsPageContent() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResourcePageHeader className="shrink-0" icon={Server} accent="zinc" title="Infrastructure" />
-      <PageScrollBody>
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <DetailTabList accent="zinc" tabs={[...INFRA_TABS]} />
+        <PageScrollBody>
+          <TabsContent value="clusters" className="mt-0">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading infrastructure…</p>
         ) : error ? (
@@ -379,7 +408,18 @@ function ClustersRegionsPageContent() {
             </section>
           </div>
         )}
-      </PageScrollBody>
+          </TabsContent>
+          <TabsContent value="federation" className="mt-0">
+            <FederationAdminPanel />
+          </TabsContent>
+          <TabsContent value="edge" className="mt-0">
+            <EdgeNodesPanel />
+          </TabsContent>
+          <TabsContent value="dr" className="mt-0">
+            <DrSnapshotsPanel />
+          </TabsContent>
+        </PageScrollBody>
+      </Tabs>
 
       <ClusterDetailDrawer
         clusterId={selectedClusterId}

@@ -626,7 +626,6 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 gap-2 border-border bg-card text-xs pressable"
                 onClick={() => void copyWithToast(runId, { successTitle: "Run ID copied" })}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -734,6 +733,25 @@ export default function RunDetailPage({ params }: { params: Promise<{ runId: str
               <MlopsPageLoading label="Loading run…" inline />
             ) : run ? (
               <>
+                {run.placement?.cluster_id ? (
+                  <DetailSection title="Scheduler placement" accentBorder="violet">
+                    <MetadataGrid
+                      columns={2}
+                      items={[
+                        { label: "Cluster", value: run.placement.cluster_name ?? run.placement.cluster_id ?? "—", mono: true },
+                        { label: "Region", value: run.placement.region_code ?? run.placement.region_id ?? "—", mono: true },
+                        { label: "Node pool", value: run.placement.node_pool ?? "—", mono: true },
+                        { label: "Node", value: run.placement.node_id ?? "—", mono: true },
+                        {
+                          label: "Score",
+                          value: run.placement.score != null ? String(run.placement.score) : "—",
+                          mono: true,
+                        },
+                      ]}
+                    />
+                  </DetailSection>
+                ) : null}
+
                 {runEnvironmentMetadataItems.length > 0 ? (
                   <DetailSection title="Environment" accentBorder="sky">
                     <MetadataGrid columns={2} items={runEnvironmentMetadataItems} />

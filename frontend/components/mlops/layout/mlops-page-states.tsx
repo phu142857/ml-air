@@ -37,7 +37,7 @@ export function MlopsPageError({
           </div>
         </div>
         {onRetry ? (
-          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 pressable" onClick={onRetry}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onRetry}>
             {retryLabel}
           </Button>
         ) : null}

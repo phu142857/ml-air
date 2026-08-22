@@ -2,8 +2,9 @@
 
 import { Suspense, useState, useMemo, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { History, Download, Search, Loader2 } from "lucide-react"
+import { History, Download, Search, MousePointer2 } from "lucide-react"
 import { LifecycleTimeline } from "@/components/mlops/lifecycle-timeline"
+import { LifecycleProjectionPanel } from "@/components/mlops/lifecycle-projection-panel"
 import { EventDetailPanel } from "@/components/mlops/event-detail-panel"
 import { LifecyclePageSkeleton } from "@/components/mlops/audit-timeline-skeleton"
 import {
@@ -13,6 +14,7 @@ import {
 import { ErrorBoundary, ErrorDisplay } from "@/components/error-boundary"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLifecycle } from "@/hooks/use-lifecycle"
 import { useToast } from "@/hooks/use-toast"
 import { exportAuditTimeline } from "@/lib/api"
@@ -25,6 +27,7 @@ import {
 } from "@/lib/event-explorer"
 import { MlopsEmptyState, ResourcePageHeader, ScopePinnedInline } from "@/components/mlops/layout"
 import { SCOPE_AGGREGATE_LIFECYCLE } from "@/lib/scope-messages"
+import { STATUS_CHIP_TEXT } from "@/lib/status-style"
 import { cn, downloadBlob, formatApiClientError } from "@/lib/utils"
 
 const DEFAULT_FILTERS: Omit<EventExplorerFilters, "searchQuery"> = {
@@ -149,6 +152,10 @@ function LifecycleContent() {
       filters.actorType !== "all",
       filters.targetType !== "",
       filters.result !== "all",
+      filters.action !== "",
+      filters.actor !== "",
+      filters.correlationId !== "",
+      filters.traceId !== "",
       searchQuery !== "",
     ].filter(Boolean).length
 
@@ -181,45 +188,64 @@ function LifecycleContent() {
   }
 
   const statCards = [
-    { label: "Total Events", value: stats.total },
-    { label: "Success", value: stats.successCount, tone: "text-[color:var(--status-success-fg)]" },
-    { label: "Failed", value: stats.failedCount, tone: "text-[color:var(--status-failed-fg)]" },
-    { label: "Warnings", value: stats.warningCount, tone: "text-[color:var(--status-pending-fg)]" },
-    { label: "Running", value: stats.runningCount, tone: "text-sky-600 dark:text-sky-400" },
+    { label: "Total events", value: stats.total },
+    { label: "Success", value: stats.successCount, tone: STATUS_CHIP_TEXT.success },
+    { label: "Failed", value: stats.failedCount, tone: STATUS_CHIP_TEXT.failed },
+    { label: "Warnings", value: stats.warningCount, tone: STATUS_CHIP_TEXT.pending },
+    { label: "Running", value: stats.runningCount, tone: STATUS_CHIP_TEXT.running },
   ]
 
   const showDetail = detailOpen && !!selectedEvent
+  const exportDisabled = exporting || !token.trim()
+  const exportHint = !token.trim()
+    ? "Apply a session token in Settings."
+    : "Export the current filtered view"
+
+  const detailPanel = (
+    <EventDetailPanel
+      event={selectedEvent}
+      allEvents={filteredEvents}
+      open={showDetail}
+      onClose={handleCloseDetail}
+      onSelect={handleSelectEvent}
+      mode={isSplit ? "embedded" : "sheet"}
+    />
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* ── Level 1: Header ── */}
       <ResourcePageHeader
         className="shrink-0"
         icon={History}
         accent="zinc"
         title="Lifecycle"
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-2 text-xs pressable"
-            disabled={exporting || !token.trim()}
-            onClick={() => void handleExport()}
-          >
-            {exporting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Download className="size-3.5" />
-            )}
-            Export
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={exportDisabled}
+                  onClick={() => void handleExport()}
+                  loading={exporting}
+                  loadingText="Export"
+                >
+                  <Download className="size-3.5" />
+                  Export
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{exportHint}</TooltipContent>
+          </Tooltip>
         }
       />
 
-      {/* ── Level 2: Toolbar (full width, above both columns) ── */}
       <div className="page-toolbar shrink-0 space-y-3">
         {isAggregate ? <ScopePinnedInline message={SCOPE_AGGREGATE_LIFECYCLE} /> : null}
+
+        {!isAggregate ? <LifecycleProjectionPanel /> : null}
 
         <div
           className={cn(
@@ -229,7 +255,7 @@ function LifecycleContent() {
         >
           {statCards.map((stat) => (
             <div key={stat.label} className="rounded-md border border-border bg-card px-3 py-2">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {stat.label}
               </p>
               <p className={cn("mt-0.5 text-xl font-semibold tabular-nums", stat.tone ?? "text-foreground")}>
@@ -242,6 +268,7 @@ function LifecycleContent() {
         <div className="relative max-w-xl">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            aria-label="Search lifecycle events"
             placeholder="Search actor, dataset, model, pipeline, run ID, correlation…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -267,16 +294,12 @@ function LifecycleContent() {
         />
       </div>
 
-      {/* ── Level 3: Content — 60/40 grid, independent scrolls ── */}
       <div
         className={cn(
           "grid min-h-0 flex-1 gap-4 overflow-hidden px-4 py-3 sm:px-6 sm:gap-6",
-          isSplit
-            ? "grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-            : "grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)]",
+          isSplit ? "grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "grid-cols-1",
         )}
       >
-        {/* Timeline column */}
         <section className="relative flex min-h-0 min-w-0 flex-col overflow-hidden">
           {isRefreshing ? (
             <div
@@ -288,7 +311,17 @@ function LifecycleContent() {
           ) : null}
           <div className="scroll-region scroll-region-gutter min-h-0 flex-1">
             {filteredEvents.length === 0 ? (
-              <MlopsEmptyState icon={History} title="No events" />
+              <MlopsEmptyState
+                icon={History}
+                title={activeFilters > 0 ? "No matching events" : "No events"}
+                action={
+                  activeFilters > 0 ? (
+                    <Button type="button" variant="outline" size="sm" onClick={handleClearFilters}>
+                      Clear filters
+                    </Button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className={cn("w-full pb-6", isRefreshing && "opacity-95")}>
                 <LifecycleTimeline
@@ -315,34 +348,27 @@ function LifecycleContent() {
           </div>
         </section>
 
-        {/* Detail column — always in grid below toolbar; sticky within its cell */}
-        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-          <div
-            className={cn(
-              "flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card",
-              isSplit && "sticky top-0",
-            )}
-          >
-            {showDetail ? (
-              <EventDetailPanel
-                event={selectedEvent}
-                allEvents={filteredEvents}
-                open
-                onClose={handleCloseDetail}
-                onSelect={handleSelectEvent}
-                mode="embedded"
-              />
-            ) : (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-                <p className="text-sm font-medium text-muted-foreground">Select an event</p>
-                <p className="max-w-[16rem] text-xs text-muted-foreground/80">
-                  Event details, actor, and payload appear here.
-                </p>
-              </div>
-            )}
-          </div>
-        </aside>
+        {isSplit ? (
+          <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card">
+              {showDetail ? (
+                detailPanel
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+                  <div className="mb-1 flex h-9 w-9 items-center justify-center rounded-md border border-border/60 bg-muted/30">
+                    <MousePointer2 className="size-4 text-muted-foreground" aria-hidden />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">Select an event</p>
+                  <p className="max-w-[16rem] text-xs text-muted-foreground/80">
+                    Details, actor, and payload appear here.
+                  </p>
+                </div>
+              )}
+            </div>
+          </aside>
+        ) : null}
       </div>
+      {!isSplit ? detailPanel : null}
     </div>
   )
 }
@@ -350,13 +376,7 @@ function LifecycleContent() {
 export default function LifecyclePage() {
   return (
     <ErrorBoundary>
-      <Suspense
-        fallback={
-          <div className="flex h-full items-center justify-center p-8 text-sm text-muted-foreground">
-            Loading lifecycle…
-          </div>
-        }
-      >
+      <Suspense fallback={<LifecyclePageSkeleton />}>
         <LifecycleContent />
       </Suspense>
     </ErrorBoundary>

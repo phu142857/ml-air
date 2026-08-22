@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.domains.lifecycle import lineage_service, readiness_service
 from app.domains.shared.db_service import db_conn
 
-VALID_MODES = {"manual", "auto_ready", "schedule"}
+VALID_MODES = {"manual", "auto_ready", "schedule", "drift", "slo_breach"}
 
 
 def _normalize_data_anchor(

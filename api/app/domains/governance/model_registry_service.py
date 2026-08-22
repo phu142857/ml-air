@@ -31,9 +31,22 @@ from app.domains.shared.events import build_event_context, get_event_bus
 logger = logging.getLogger(__name__)
 
 APPROVAL_PENDING = "pending_manual_approval"
+APPROVAL_PENDING_REVIEWER = "pending_reviewer"
+APPROVAL_PENDING_APPROVER = "pending_approver"
 APPROVAL_APPROVED = "approved"
 APPROVAL_REJECTED = "rejected"
-VALID_APPROVAL_STATUSES = frozenset({APPROVAL_PENDING, APPROVAL_APPROVED, APPROVAL_REJECTED})
+PENDING_APPROVAL_STATUSES = frozenset(
+    {APPROVAL_PENDING, APPROVAL_PENDING_REVIEWER, APPROVAL_PENDING_APPROVER}
+)
+VALID_APPROVAL_STATUSES = frozenset(
+    {
+        APPROVAL_PENDING,
+        APPROVAL_PENDING_REVIEWER,
+        APPROVAL_PENDING_APPROVER,
+        APPROVAL_APPROVED,
+        APPROVAL_REJECTED,
+    }
+)
 VALID_SERVING_SLOTS = frozenset({"candidate", "challenger", "champion", "canary"})
 
 
@@ -109,7 +122,7 @@ def compute_promotion_eligibility(
             if ast == APPROVAL_REJECTED:
                 code = "approval_rejected"
                 message = "Version approval was rejected; approve again or register a new version."
-            elif ast == APPROVAL_PENDING:
+            elif ast in PENDING_APPROVAL_STATUSES:
                 code = "approval_pending"
                 message = "Manual approval required before promotion to this stage."
             else:
@@ -174,7 +187,7 @@ def evaluate_promotion_eligibility(
 
 def _version_row_to_dict(row: tuple) -> dict:
     """Map SELECT/RETURNING row: version_id, model_id, version, run_id, artifact_uri, stage, created_at, approval_*, stage_updated_at."""
-    return {
+    out = {
         "version_id": row[0],
         "model_id": row[1],
         "version": row[2],
@@ -187,6 +200,11 @@ def _version_row_to_dict(row: tuple) -> dict:
         "approval_updated_at": row[9].isoformat() if row[9] else None,
         "stage_updated_at": row[10].isoformat() if len(row) > 10 and row[10] else None,
     }
+    if len(row) > 11:
+        out["reviewed_by"] = row[11]
+    if len(row) > 12:
+        out["approved_by"] = row[12]
+    return out
 
 
 def create_model(tenant_id: str, project_id: str, name: str, description: str | None = None) -> dict:
@@ -448,7 +466,7 @@ def create_model_version(model_id: str, run_id: str | None, artifact_uri: str | 
                     run_id,
                     resolved_artifact_uri,
                     stage,
-                    APPROVAL_PENDING,
+                    APPROVAL_PENDING_REVIEWER,
                     None,
                     now,
                 ),
@@ -565,7 +583,7 @@ def create_model_version_from_upload(
                     run_id,
                     artifact_uri,
                     stage,
-                    APPROVAL_PENDING,
+                    APPROVAL_PENDING_REVIEWER,
                     None,
                     now,
                 ),
@@ -674,7 +692,7 @@ def create_model_version_from_uploads(
                     run_id,
                     artifact_uri,
                     stage,
-                    APPROVAL_PENDING,
+                    APPROVAL_PENDING_REVIEWER,
                     None,
                     now,
                 ),
@@ -1155,6 +1173,75 @@ def get_model_version_approval(tenant_id: str, project_id: str, model_id: str, v
     }
 
 
+def _require_evaluation_for_approval() -> bool:
+    return os.getenv("ML_AIR_REQUIRE_EVALUATION_FOR_APPROVAL", "0").strip().lower() in {"1", "true", "yes"}
+
+
+def _two_step_approval_required(tenant_id: str, project_id: str, model_id: str) -> bool:
+    from app.domains.governance.model_stakeholder_service import list_model_stakeholders
+
+    rows = list_model_stakeholders(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    return any(str(r.get("role") or "") in {"reviewer", "approver"} for r in rows)
+
+
+def _latest_evaluation_passed(tenant_id: str, project_id: str, model_id: str, version: int) -> bool:
+    from app.domains.governance.model_evaluation_service import get_latest_model_evaluation
+
+    row = get_latest_model_evaluation(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        version=int(version),
+    )
+    return bool(row and str(row.get("status") or "") == "passed")
+
+
+def list_model_approval_queue(
+    *,
+    tenant_id: str,
+    project_id: str,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    lim = max(1, min(int(limit), 200))
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.model_id,
+                    m.name,
+                    mv.version,
+                    mv.approval_status,
+                    mv.approval_reason,
+                    mv.approval_updated_at,
+                    mv.reviewed_by,
+                    mv.approved_by
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s
+                  AND m.project_id = %s
+                  AND mv.approval_status = ANY(%s)
+                ORDER BY mv.approval_updated_at DESC NULLS LAST, mv.version DESC
+                LIMIT %s
+                """,
+                (tenant_id, project_id, list(PENDING_APPROVAL_STATUSES), lim),
+            )
+            rows = cur.fetchall()
+    return [
+        {
+            "model_id": r[0],
+            "model_name": r[1],
+            "version": int(r[2]),
+            "approval_status": r[3],
+            "approval_reason": r[4],
+            "approval_updated_at": r[5].isoformat() if r[5] and hasattr(r[5], "isoformat") else None,
+            "reviewed_by": r[6],
+            "approved_by": r[7],
+        }
+        for r in rows
+    ]
+
+
 def update_model_version_approval(
     tenant_id: str,
     project_id: str,
@@ -1162,17 +1249,64 @@ def update_model_version_approval(
     version: int,
     approval_status: str,
     reason: str | None = None,
+    *,
+    actor_user_id: str | None = None,
 ) -> dict:
     st = str(approval_status or "").strip()
     if st not in VALID_APPROVAL_STATUSES:
         raise ValueError("invalid_approval_status")
     now = datetime.now(timezone.utc)
+    two_step = _two_step_approval_required(tenant_id, project_id, model_id)
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
+                SELECT mv.approval_status
+                FROM model_versions mv
+                JOIN models m ON m.model_id = mv.model_id
+                WHERE m.tenant_id = %s AND m.project_id = %s
+                  AND m.model_id = %s AND mv.version = %s
+                """,
+                (tenant_id, project_id, model_id, int(version)),
+            )
+            current_row = cur.fetchone()
+            if not current_row:
+                raise ValueError("model_version_not_found")
+            current_status = str(current_row[0] or "")
+
+            if st == APPROVAL_PENDING_APPROVER:
+                if current_status not in PENDING_APPROVAL_STATUSES:
+                    raise ValueError("invalid_approval_transition")
+            elif st == APPROVAL_APPROVED:
+                if two_step and current_status not in {APPROVAL_PENDING_APPROVER}:
+                    if current_status in PENDING_APPROVAL_STATUSES:
+                        raise ValueError("approval_requires_reviewer_step")
+                    raise ValueError("invalid_approval_transition")
+                if not two_step and current_status not in PENDING_APPROVAL_STATUSES:
+                    raise ValueError("invalid_approval_transition")
+                if _require_evaluation_for_approval() and not _latest_evaluation_passed(
+                    tenant_id, project_id, model_id, int(version)
+                ):
+                    raise ValueError("evaluation_gate_failed")
+            elif st == APPROVAL_REJECTED:
+                if current_status not in PENDING_APPROVAL_STATUSES and current_status != APPROVAL_APPROVED:
+                    raise ValueError("invalid_approval_transition")
+
+            reviewed_by = None
+            approved_by = None
+            if st == APPROVAL_PENDING_APPROVER:
+                reviewed_by = actor_user_id
+            if st == APPROVAL_APPROVED:
+                approved_by = actor_user_id
+
+            cur.execute(
+                """
                 UPDATE model_versions mv
-                SET approval_status = %s, approval_reason = %s, approval_updated_at = %s
+                SET approval_status = %s,
+                    approval_reason = %s,
+                    approval_updated_at = %s,
+                    reviewed_by = COALESCE(%s, reviewed_by),
+                    approved_by = COALESCE(%s, approved_by)
                 WHERE mv.model_id = %s
                   AND mv.version = %s
                   AND EXISTS (
@@ -1181,9 +1315,21 @@ def update_model_version_approval(
                       AND m.tenant_id = %s AND m.project_id = %s AND m.model_id = %s
                   )
                 RETURNING mv.version_id, mv.model_id, mv.version, mv.run_id, mv.artifact_uri, mv.stage,
-                    mv.created_at, mv.approval_status, mv.approval_reason, mv.approval_updated_at, mv.stage_updated_at
+                    mv.created_at, mv.approval_status, mv.approval_reason, mv.approval_updated_at, mv.stage_updated_at,
+                    mv.reviewed_by, mv.approved_by
                 """,
-                (st, reason, now, model_id, int(version), tenant_id, project_id, model_id),
+                (
+                    st,
+                    reason,
+                    now,
+                    reviewed_by,
+                    approved_by,
+                    model_id,
+                    int(version),
+                    tenant_id,
+                    project_id,
+                    model_id,
+                ),
             )
             row = cur.fetchone()
             if not row:

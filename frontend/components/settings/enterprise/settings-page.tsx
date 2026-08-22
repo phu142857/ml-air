@@ -36,7 +36,6 @@ export function SettingsPage({
 
 export function SettingsPageHeader({
   title,
-  description,
   badge,
   breadcrumb,
   backHref,
@@ -45,7 +44,6 @@ export function SettingsPageHeader({
   secondaryActions,
 }: {
   title?: string
-  description?: string
   badge?: React.ReactNode
   breadcrumb?: SettingsBreadcrumbProps
   backHref?: string
@@ -53,7 +51,7 @@ export function SettingsPageHeader({
   actions?: React.ReactNode
   secondaryActions?: React.ReactNode
 }) {
-  const showHeading = Boolean(title || description || badge || secondaryActions || actions)
+  const showHeading = Boolean(title || badge || secondaryActions || actions)
 
   return (
     <header className="space-y-3 border-b border-border pb-6">
@@ -78,17 +76,14 @@ export function SettingsPageHeader({
       ) : null}
       {showHeading ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              {title ? (
-                <h1 className="font-heading text-[2rem] font-bold leading-tight tracking-tight text-foreground">
-                  {title}
-                </h1>
-              ) : null}
-              {badge}
-              {secondaryActions}
-            </div>
-            {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {title ? (
+              <h1 className="font-heading text-[2rem] font-bold leading-tight tracking-tight text-foreground">
+                {title}
+              </h1>
+            ) : null}
+            {badge}
+            {secondaryActions}
           </div>
           {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
         </div>

@@ -42,6 +42,121 @@ def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
     return _json_request("POST", path, payload)
 
 
+def _put(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return _json_request("PUT", path, payload)
+
+
+def _get(path: str) -> dict[str, Any]:
+    return _json_request("GET", path)
+
+
+def ingest_production_metrics(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    *,
+    samples: list[dict[str, Any]],
+    source: str | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"samples": samples}
+    if source:
+        body["source"] = source
+    return _post(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/production-metrics",
+        body,
+    )
+
+
+def record_model_evaluation(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    *,
+    status: str,
+    metrics: dict[str, float],
+    benchmark_name: str = "default",
+    run_id: str | None = None,
+    baseline_version: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "status": status,
+        "metrics": metrics,
+        "benchmark_name": benchmark_name,
+    }
+    if run_id:
+        payload["run_id"] = run_id
+    if baseline_version is not None:
+        payload["baseline_version"] = baseline_version
+    return _post(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/evaluations",
+        payload,
+    )
+
+
+def evaluate_model_version(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+    *,
+    metrics: dict[str, float],
+    gates: dict[str, dict[str, float]] | None = None,
+    benchmark_name: str = "default",
+    run_id: str | None = None,
+    baseline_version: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"metrics": metrics, "benchmark_name": benchmark_name}
+    if gates:
+        payload["gates"] = gates
+    if run_id:
+        payload["run_id"] = run_id
+    if baseline_version is not None:
+        payload["baseline_version"] = baseline_version
+    return _post(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions/{version}/evaluations/evaluate",
+        payload,
+    )
+
+
+def update_trigger_policy(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    *,
+    trigger_mode: str,
+    debounce_minutes: int = 10,
+    schedule_cron: str | None = None,
+    dataset_id: str | None = None,
+    dataset_version_id: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "trigger_mode": trigger_mode,
+        "debounce_minutes": debounce_minutes,
+    }
+    if schedule_cron:
+        payload["schedule_cron"] = schedule_cron
+    if dataset_id:
+        payload["dataset_id"] = dataset_id
+    if dataset_version_id:
+        payload["dataset_version_id"] = dataset_version_id
+    return _put(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy",
+        payload,
+    )
+
+
+def evaluate_closed_loop(tenant_id: str, project_id: str, model_id: str) -> dict[str, Any]:
+    return _post(
+        f"/v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/closed-loop/evaluate",
+        {},
+    )
+
+
+def get_trigger_policy(tenant_id: str, project_id: str, model_id: str) -> dict[str, Any]:
+    return _get(f"/v1/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/trigger-policy")
+
+
 def log_param(key: str, value: Any) -> dict[str, Any]:
     tenant, project, run_id = _tracking_scope()
     return _post(

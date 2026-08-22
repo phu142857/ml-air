@@ -90,7 +90,6 @@ export default function IdentityAuditLogsPage() {
     >
       <SettingsPageHeader
         title="Audit Logs"
-        description="Security and administration events across the platform."
       />
 
       {dashboardQuery.data ? (

@@ -74,13 +74,11 @@ export default function IdentityServiceAccountsPage() {
     <SettingsPage loading={isLoading} error={error ? formatApiClientError(error) : null}>
       <SettingsPageHeader
         title="Service accounts"
-        description="Non-interactive identities for automation and integrations."
       />
 
       <SettingsSection
         id="directory"
         title="Directory"
-        description="All service accounts in this platform."
         headerActions={
           <Button size="sm" className="h-8 gap-1.5 text-xs transition-colors duration-150" onClick={() => setOpen(true)}>
             <Plus className="h-3.5 w-3.5" />

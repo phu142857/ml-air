@@ -242,7 +242,7 @@ function TaskDetailContent() {
               type="button"
               variant="outline"
               size="sm"
-              className={cn(pageHeaderActionClass, "pressable")}
+              className={pageHeaderActionClass}
               onClick={() => void copyWithToast(taskId, { successTitle: "Task ID copied" })}
             >
               <Copy className="h-3.5 w-3.5" />

@@ -75,13 +75,11 @@ export default function IdentityUsersPage() {
     <SettingsPage loading={isLoading} error={error ? formatApiClientError(error) : null}>
       <SettingsPageHeader
         title="Users"
-        description="Manage interactive user accounts and their lifecycle state."
       />
 
       <SettingsSection
         id="directory"
         title="Directory"
-        description="Search and filter the user directory."
         headerActions={
           <Button size="sm" className="h-8 gap-1.5 text-xs transition-colors duration-150" onClick={() => setOpen(true)}>
             <Plus className="h-3.5 w-3.5" />

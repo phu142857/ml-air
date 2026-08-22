@@ -111,10 +111,9 @@ export default function SettingsSecurityPage() {
     <SettingsPage loading={mfaStatus.isLoading} error={mfaStatus.error ? String((mfaStatus.error as Error).message) : null}>
       <SettingsPageHeader
         title="Security"
-        description="Manage password and multi-factor authentication."
       />
 
-      <SettingsSection id="password" title="Password" description="Change the password for your account.">
+      <SettingsSection id="password" title="Password">
         <div className="grid max-w-md gap-5">
           <div className="space-y-2">
             <Label htmlFor="current-password" className="text-[13px]">Current password</Label>
@@ -177,7 +176,6 @@ export default function SettingsSecurityPage() {
       <SettingsSection
         id="mfa"
         title="Multi-factor authentication"
-        description="Add an authenticator app for stronger account security."
       >
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Status</p>
@@ -263,7 +261,7 @@ export default function SettingsSecurityPage() {
         )}
       </SettingsSection>
 
-      <SettingsSection id="recovery" title="Recovery" description="Generate one-time codes to regain access if you lose your authenticator.">
+      <SettingsSection id="recovery" title="Recovery">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Recovery methods</p>
           <p className="text-sm font-medium text-foreground">

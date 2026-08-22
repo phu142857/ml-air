@@ -10,10 +10,11 @@ from mlair.paths import repo_root
 
 DEMO_TARGET = "demo"
 
-# Order matters: enable features → hub (+ multi-scope) → specialized demos → distributed.
+# Order matters: enable features → hub (+ multi-scope) → MLOps sprint → specialized demos → distributed.
 _SEED_PIPELINE: tuple[tuple[str, str], ...] = (
     ("features", "seed_enable_features.py"),
     ("hub", "seed_demo.py"),
+    ("mlops", "seed_mlops_features_demo.py"),
     ("metrics", "seed_metrics_demo.py"),
     ("phase5", "seed_phase5_demo.py"),
     ("resolve", "seed_resolve_demo.py"),

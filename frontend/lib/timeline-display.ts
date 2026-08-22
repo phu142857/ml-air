@@ -146,13 +146,15 @@ export function resolveTimelineIcon(event: AuditEvent): LucideIcon {
 export function timelineIconTone(event: AuditEvent): string {
   const kind = resolveTimelineIconKind(event)
   if (kind === "run_failed" || kind === "rejection" || kind === "pipeline_failed")
-    return "border-destructive/50 bg-destructive/10 text-destructive"
+    return "border-[color:var(--status-failed-border)] bg-[color:var(--status-failed-bg)] text-[color:var(--status-failed-fg)]"
   if (kind === "run_completed" || kind === "approval" || kind === "model_promoted")
-    return "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-  if (kind === "run_running") return "border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+    return "border-[color:var(--status-success-border)] bg-[color:var(--status-success-bg)] text-[color:var(--status-success-fg)]"
+  if (kind === "run_running")
+    return "border-[color:var(--status-running-border)] bg-[color:var(--status-running-bg)] text-[color:var(--status-running-fg)]"
   if (kind === "run_cancelled" || kind === "dataset_deleted" || kind === "model_deleted")
-    return "border-muted-foreground/40 bg-muted text-muted-foreground"
-  if (event.severity === "warning") return "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+    return "border-border bg-muted text-muted-foreground"
+  if (event.severity === "warning")
+    return "border-[color:var(--status-pending-border)] bg-[color:var(--status-pending-bg)] text-[color:var(--status-pending-fg)]"
   return "border-border bg-background text-muted-foreground"
 }
 

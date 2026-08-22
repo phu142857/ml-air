@@ -141,7 +141,6 @@ export default function IdentityUserDetailPage() {
     <SettingsPage loading={userQuery.isLoading} error={userQuery.error ? (userQuery.error as Error).message : null}>
       <SettingsPageHeader
         title={user?.username || "User"}
-        description="Account metadata, assignments, and lifecycle actions."
         breadcrumb={{
           listHref: "/identity/users",
           listLabel: "Users",

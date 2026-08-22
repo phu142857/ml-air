@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from app.settings import get_settings
 
-ROLE_WEIGHT = {"viewer": 1, "maintainer": 2, "admin": 3}
+ROLE_WEIGHT = {"viewer": 1, "approver": 2, "maintainer": 2, "admin": 3}
 _JWKS_CACHE: dict[str, dict] = {}
 _JWKS_CACHE_EXPIRES_AT = 0.0
 
