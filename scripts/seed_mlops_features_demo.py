@@ -407,6 +407,57 @@ def seed_trigger_policies(token: str, model_id: str) -> None:
             print(f"[WARN] trigger preview {mode}: {code} {preview}")
 
 
+def seed_configuration_entries(token: str, model_id: str) -> None:
+    """Seed cp_configuration_entries overrides + default policy rules."""
+    code, _ = req(
+        "PUT",
+        f"{prefix()}/configuration/overrides/monitoring.drift.threshold",
+        token,
+        {
+            "scope_level": "project",
+            "value": 0.25,
+            "enabled": True,
+        },
+    )
+    if code == 200:
+        print("[OK] configuration project override monitoring.drift.threshold=0.25")
+    else:
+        print(f"[WARN] configuration project override: {code}")
+
+    code, _ = req(
+        "PUT",
+        f"{prefix()}/configuration/overrides/mlops.experiment.enabled",
+        token,
+        {"scope_level": "project", "value": True, "enabled": True},
+    )
+    if code == 200:
+        print("[OK] configuration mlops.experiment.enabled=true (project)")
+    else:
+        print(f"[WARN] configuration experiment flag: {code}")
+
+    for rule_id, rule_kind in (
+        ("policy-drift-demo", "drift_threshold"),
+        ("policy-slo-demo", "slo_breach"),
+        ("policy-retrain-demo", "retrain_on_breach"),
+    ):
+        code, body = req(
+            "PUT",
+            f"{prefix()}/policy/rules/{rule_id}",
+            token,
+            {
+                "resource_type": "model",
+                "resource_id": model_id,
+                "rule_kind": rule_kind,
+                "config": {"resource_id": model_id},
+                "enabled": True,
+            },
+        )
+        if code == 200:
+            print(f"[OK] policy rule {rule_kind}")
+        else:
+            print(f"[WARN] policy rule {rule_kind}: {code} {body}")
+
+
 def verify_surfaces(token: str, model_id: str, experiment_id: str) -> dict:
     out: dict = {}
     code, projection = req("GET", f"{prefix()}/lifecycle-projection", token)
@@ -453,6 +504,14 @@ def verify_surfaces(token: str, model_id: str, experiment_id: str) -> dict:
     else:
         print(f"[WARN] model evaluations list: {code} {evals}")
 
+    code, cfg = req("GET", f"{prefix()}/models/{model_id}/configuration/effective", token)
+    if code == 200:
+        n = len(cfg.get("items") or [])
+        print(f"[OK] effective configuration ({n} keys)")
+        out["effective_configuration_count"] = n
+    else:
+        print(f"[WARN] effective configuration: {code} {cfg}")
+
     return out
 
 
@@ -477,6 +536,7 @@ def main() -> int:
         seed_stakeholders(token, model_id, actor_id)
         seed_evaluations(token, model_id, version)
         seed_closed_loop(token, model_id)
+        seed_configuration_entries(token, model_id)
         seed_trigger_policies(token, model_id)
         exp = seed_experiment(token, tag)
         checks = verify_surfaces(token, model_id, exp["experiment_id"])

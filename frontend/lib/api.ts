@@ -4126,6 +4126,34 @@ export async function ingestProductionMetrics(
   return data;
 }
 
+export type EffectiveConfigurationSource = {
+  scope_level: string;
+  tenant_id?: string | null;
+  project_id?: string | null;
+  environment_id?: string | null;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  entry_id?: string | null;
+  version?: number | null;
+  source_kind: string;
+};
+
+export type EffectiveConfigurationItem = {
+  key: string;
+  value: unknown;
+  value_type: string;
+  source: EffectiveConfigurationSource;
+  inherited: boolean;
+  chain: Array<Record<string, unknown>>;
+  resolved_at: string;
+};
+
+export type EffectiveConfigurationResponse = {
+  context: Record<string, string | null | undefined>;
+  items: EffectiveConfigurationItem[];
+  resolved_at: string;
+};
+
 export async function fetchClosedLoopPolicy(
   tenantId: string,
   projectId: string,
@@ -4140,6 +4168,74 @@ export async function fetchClosedLoopPolicy(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as ClosedLoopPolicy;
+}
+
+export async function fetchModelEffectiveConfiguration(
+  tenantId: string,
+  projectId: string,
+  modelId: string,
+  token: string,
+  opts?: { prefix?: string; keys?: string },
+): Promise<EffectiveConfigurationResponse> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams();
+  if (opts?.prefix) q.set("prefix", opts.prefix);
+  if (opts?.keys) q.set("keys", opts.keys);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/models/${encodeURIComponent(modelId)}/configuration/effective${suffix}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as EffectiveConfigurationResponse;
+}
+
+export async function putConfigurationOverride(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  key: string,
+  body: {
+    scope_level: string;
+    value: unknown;
+    enabled?: boolean;
+    resource_type?: string;
+    resource_id?: string;
+  },
+): Promise<EffectiveConfigurationItem> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/configuration/overrides/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as EffectiveConfigurationItem;
+}
+
+export async function resetConfigurationOverride(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  key: string,
+  params: { scope_level: string; resource_type?: string; resource_id?: string },
+): Promise<EffectiveConfigurationItem> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = new URLSearchParams({ scope_level: params.scope_level });
+  if (params.resource_type) q.set("resource_type", params.resource_type);
+  if (params.resource_id) q.set("resource_id", params.resource_id);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/configuration/overrides/${encodeURIComponent(key)}?${q}`,
+    { method: "DELETE", headers: authHeaders(token) },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as EffectiveConfigurationItem;
 }
 
 export async function updateClosedLoopPolicy(
@@ -4198,6 +4294,107 @@ export async function replaceSloRules(
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data as { items: SloRuleItem[] };
+}
+
+export type PolicyRuleItem = {
+  rule_id: string;
+  tenant_id: string;
+  project_id: string;
+  resource_type: string;
+  resource_id: string | null;
+  rule_kind: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+};
+
+export async function fetchPolicyRules(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  opts?: { resourceType?: string },
+): Promise<{ items: PolicyRuleItem[] }> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const q = opts?.resourceType ? `?resource_type=${encodeURIComponent(opts.resourceType)}` : "";
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/policy/rules${q}`,
+    { headers: authHeaders(token), cache: "no-store" },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as { items: PolicyRuleItem[] };
+}
+
+export async function upsertPolicyRule(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  ruleId: string,
+  body: {
+    resource_type?: string;
+    resource_id?: string | null;
+    rule_kind: string;
+    config?: Record<string, unknown>;
+    enabled?: boolean;
+  },
+): Promise<PolicyRuleItem> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/policy/rules/${encodeURIComponent(ruleId)}`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data as PolicyRuleItem;
+}
+
+export async function deletePolicyRule(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  ruleId: string,
+): Promise<void> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/policy/rules/${encodeURIComponent(ruleId)}`,
+    { method: "DELETE", headers: authHeaders(token) },
+  );
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(JSON.stringify(data));
+  }
+}
+
+export async function evaluatePolicy(
+  tenantId: string,
+  projectId: string,
+  token: string,
+  body: {
+    resource_type?: string;
+    resource_id?: string | null;
+    telemetry?: Record<string, unknown>;
+  },
+): Promise<{
+  evaluated_rules: number;
+  skipped_rules: number;
+  configuration: Record<string, unknown>;
+  actions: Array<{ action_type: string; severity: string; reason: string; metadata: Record<string, unknown> }>;
+}> {
+  const scopedProjectId = normalizeProjectId(projectId);
+  const res = await fetch(
+    `${API_BASE}/v1/tenants/${tenantId}/projects/${scopedProjectId}/policy/evaluate`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
 }
 
 export async function evaluateClosedLoop(

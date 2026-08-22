@@ -64,6 +64,7 @@ class FeatureFlags:
     global_identity: bool
     global_observability: bool
     extension_platform: bool
+    experiments_enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,4 +168,5 @@ class Settings:
             "global_identity": f.global_identity,
             "global_observability": f.global_observability,
             "extension_platform": f.extension_platform,
+            "experiments_enabled": f.experiments_enabled,
         }

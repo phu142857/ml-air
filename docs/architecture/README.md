@@ -72,6 +72,7 @@ See [Event Processing](./event-processing.md) and [Lifecycle semantic event flow
 
 ## Related docs
 
+- [Control Plane configuration contract](./control-plane.md) — scoped configuration, provenance, resolver boundary (Step 3 / P0 source of truth)
 - [Event Processing](./event-processing.md)
 - [Domain Events](./domain-events.md)
 - [Developer Guide](./developer-guide.md)

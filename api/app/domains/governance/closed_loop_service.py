@@ -33,6 +33,27 @@ DEFAULT_POLICY = {
 }
 
 
+def _model_resolution_context(tenant_id: str, project_id: str, model_id: str) -> "ResolutionContext":
+    from app.domains.configuration.types import ResolutionContext
+
+    return ResolutionContext(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        resource_type="model",
+        resource_id=model_id,
+    )
+
+
+def _resolve_model_config(tenant_id: str, project_id: str, model_id: str, key: str, default: Any = None) -> Any:
+    from app.domains.configuration.configuration_resolver import ConfigurationResolver
+
+    effective = ConfigurationResolver().resolve(
+        key,
+        context=_model_resolution_context(tenant_id, project_id, model_id),
+    )
+    return effective.value if effective.value is not None else default
+
+
 def get_closed_loop_policy(tenant_id: str, project_id: str, model_id: str) -> dict[str, Any]:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -316,11 +337,64 @@ def evaluate_model_closed_loop(
 ) -> dict[str, Any]:
     """Run monitoring → detection → optional actions for one model."""
     policy = get_closed_loop_policy(tenant_id, project_id, model_id)
-    if not policy.get("monitoring_enabled"):
+    monitoring_enabled = bool(
+        _resolve_model_config(
+            tenant_id,
+            project_id,
+            model_id,
+            "monitoring.drift.enabled",
+            policy.get("monitoring_enabled"),
+        )
+    )
+    if not monitoring_enabled:
         return {"model_id": model_id, "skipped": True, "reason": "monitoring_disabled"}
 
     actions: list[dict[str, Any]] = []
     breaches = slo_service.evaluate_slo_rules(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
+    psi_threshold = float(
+        _resolve_model_config(
+            tenant_id,
+            project_id,
+            model_id,
+            "monitoring.drift.threshold",
+            policy.get("drift_psi_threshold") or 0.2,
+        )
+    )
+    auto_rollback = bool(
+        _resolve_model_config(
+            tenant_id, project_id, model_id, "automation.rollback.enabled", policy.get("auto_rollback_on_breach")
+        )
+    )
+    auto_retrain = bool(
+        _resolve_model_config(
+            tenant_id, project_id, model_id, "automation.retrain.enabled", policy.get("auto_retrain_on_breach")
+        )
+    )
+    auto_promote = bool(
+        _resolve_model_config(
+            tenant_id, project_id, model_id, "automation.deploy.enabled", policy.get("auto_promote_on_eval_pass")
+        )
+    )
+
+    policy_eval = __import__(
+        "app.domains.policy.policy_engine", fromlist=["PolicyEngine"]
+    ).PolicyEngine().evaluate(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        resource_type="model",
+        resource_id=model_id,
+        telemetry={"slo_breaches": breaches, "breaches": breaches},
+    )
+    for action in policy_eval.actions:
+        actions.append(
+            {
+                "type": action.action_type,
+                "reason": action.reason,
+                "metadata": action.metadata,
+                "source": "policy_engine",
+            }
+        )
+
     if breaches:
         event_id = _record_closed_loop_event(
             tenant_id=tenant_id,
@@ -338,11 +412,11 @@ def evaluate_model_closed_loop(
             payload={"event_id": event_id, "breaches": breaches},
         )
         actions.append({"type": "slo.breached", "breaches": breaches})
-        if policy.get("auto_rollback_on_breach"):
+        if auto_rollback:
             rb = _maybe_auto_rollback(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
             if rb:
                 actions.append(rb)
-        if policy.get("auto_retrain_on_breach"):
+        if auto_retrain:
             tr = _maybe_trigger_retrain(
                 tenant_id=tenant_id,
                 project_id=project_id,
@@ -356,9 +430,27 @@ def evaluate_model_closed_loop(
         tenant_id=tenant_id,
         project_id=project_id,
         model_id=model_id,
-        psi_threshold=float(policy.get("drift_psi_threshold") or 0.2),
+        psi_threshold=psi_threshold,
     )
     if drift:
+        drift_policy = __import__(
+            "app.domains.policy.policy_engine", fromlist=["PolicyEngine"]
+        ).PolicyEngine().evaluate(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_type="model",
+            resource_id=model_id,
+            telemetry={"drift": drift, "drift_psi": drift.get("psi"), "reason": "drift_detected"},
+        )
+        for action in drift_policy.actions:
+            actions.append(
+                {
+                    "type": action.action_type,
+                    "reason": action.reason,
+                    "metadata": action.metadata,
+                    "source": "policy_engine",
+                }
+            )
         event_id = _record_closed_loop_event(
             tenant_id=tenant_id,
             project_id=project_id,
@@ -375,7 +467,7 @@ def evaluate_model_closed_loop(
             payload={"event_id": event_id, **drift},
         )
         actions.append({"type": "drift.detected", **drift})
-        if policy.get("auto_retrain_on_breach"):
+        if auto_retrain:
             tr = _maybe_trigger_retrain(
                 tenant_id=tenant_id,
                 project_id=project_id,
@@ -385,7 +477,7 @@ def evaluate_model_closed_loop(
             if tr:
                 actions.append(tr)
 
-    if policy.get("auto_promote_on_eval_pass"):
+    if auto_promote:
         promo = _maybe_auto_promote_challenger(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
         if promo:
             actions.append(promo)

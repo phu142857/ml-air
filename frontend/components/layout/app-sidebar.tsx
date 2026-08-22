@@ -59,6 +59,16 @@ const executionNav: NavItem[] = [
   { title: "Tasks", href: "/tasks", icon: ListTodo },
 ]
 
+function buildLifecycleNav(): NavItem[] {
+  const f = getRuntimeConfig()?.features ?? {}
+  return lifecycleNav.filter((item) => {
+    if (item.href === "/experiments") {
+      return Boolean(f.experiments_enabled)
+    }
+    return true
+  })
+}
+
 function buildDistributedNav(): NavItem[] {
   const f = getRuntimeConfig()?.features ?? {}
   if (f.global_observability || f.multi_cluster || f.multi_region) {
@@ -122,7 +132,7 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent className="gap-0.5 py-2">
-        <NavGroup label="Lifecycle" items={lifecycleNav} />
+        <NavGroup label="Lifecycle" items={buildLifecycleNav()} />
         <NavGroup label="Overview" items={platformNav} />
         {showExecutionNav ? (
           <NavGroup label="Execution" items={executionNav} />

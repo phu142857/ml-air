@@ -64,6 +64,7 @@ const IMMEDIATE_INVALIDATE_KEY_HEADS = new Set([
   "governance-approval-queue",
   "model-production-metrics",
   "model-closed-loop-events",
+  "model-effective-configuration",
   "tasks-recent",
 ]);
 
@@ -385,6 +386,18 @@ function keysForEvent(
         [...mlairKeys.models.status(tenantId, projectId, mid)],
         ["model-recent-runs", tenantId, projectId, mid]
       );
+    }
+    return keys;
+  }
+  if (t === "configuration.updated") {
+    const keys: unknown[][] = [[...mlairKeys.audit.timeline(tenantId, projectId)]];
+    const resourceId =
+      (typeof (ev.payload as { resource_id?: string })?.resource_id === "string"
+        ? (ev.payload as { resource_id?: string }).resource_id
+        : undefined) || (typeof rid === "string" ? rid : undefined);
+    const resourceType = (ev.payload as { resource_type?: string })?.resource_type;
+    if (resourceId && resourceType === "model") {
+      keys.push([...mlairKeys.models.effectiveConfiguration(tenantId, projectId, resourceId)]);
     }
     return keys;
   }

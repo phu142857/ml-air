@@ -15,6 +15,7 @@ from app.domains.governance.promotion_policy import (
     rollback_requires_approval,
     transition_kind,
 )
+from app.domains.lifecycle.lifecycle_fsm import LifecycleFSM
 from app.domains.shared.db_service import db_conn
 from app.domains.shared.pagination import (
     PageResult,
@@ -79,6 +80,22 @@ def _promotion_requires_approval_for_stage(stage: str) -> bool:
     return stage_norm in _stages_requiring_approval()
 
 
+def _has_passing_evaluation(
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+) -> bool:
+    from app.domains.governance.model_evaluation_service import has_passing_model_evaluation
+
+    return has_passing_model_evaluation(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        model_id=model_id,
+        version=int(version),
+    )
+
+
 def compute_promotion_eligibility(
     *,
     model_id: str,
@@ -87,6 +104,8 @@ def compute_promotion_eligibility(
     current_stage: str | None,
     approval_status: str | None,
     artifact_uri: str | None,
+    tenant_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict:
     """Pure eligibility evaluation (also used by promote + GET promotion-eligibility)."""
     target = (target_stage or "production").strip().lower() or "production"
@@ -100,20 +119,44 @@ def compute_promotion_eligibility(
     reasons: list[dict] = []
     eligible = True
 
-    allowed, trans_code, trans_msg, _ = evaluate_stage_transition(
-        current_stage=current_stage,
-        target_stage=target,
-    )
-    if not allowed and trans_code:
-        eligible = False
-        reasons.append(
-            {
-                "code": trans_code,
-                "message": trans_msg or trans_code,
-                "canonical_code": "GOVERNANCE_BLOCKED" if trans_code != "already_at_stage" else None,
-                "promote_error": trans_code,
-            }
+    if tenant_id and project_id:
+        fsm = LifecycleFSM()
+        has_passing = _has_passing_evaluation(tenant_id, project_id, model_id, version)
+        decision = fsm.evaluate_stage_transition(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            current_stage=current_stage,
+            target_stage=target,
+            has_passing_evaluation=has_passing,
+            resource_id=model_id,
         )
+        if not decision.allowed and decision.error_code:
+            eligible = False
+            reasons.append(
+                {
+                    "code": decision.error_code,
+                    "message": decision.message or decision.error_code,
+                    "canonical_code": "GOVERNANCE_BLOCKED"
+                    if decision.error_code != "already_at_stage"
+                    else None,
+                    "promote_error": decision.error_code,
+                }
+            )
+    else:
+        allowed, trans_code, trans_msg, _ = evaluate_stage_transition(
+            current_stage=current_stage,
+            target_stage=target,
+        )
+        if not allowed and trans_code:
+            eligible = False
+            reasons.append(
+                {
+                    "code": trans_code,
+                    "message": trans_msg or trans_code,
+                    "canonical_code": "GOVERNANCE_BLOCKED" if trans_code != "already_at_stage" else None,
+                    "promote_error": trans_code,
+                }
+            )
 
     if requires_approval and eligible:
         ast = str(approval_status or "")
@@ -182,6 +225,8 @@ def evaluate_promotion_eligibility(
         current_stage=row[2],
         approval_status=row[3],
         artifact_uri=row[4],
+        tenant_id=tenant_id,
+        project_id=project_id,
     )
 
 
@@ -806,6 +851,11 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
+                "SELECT tenant_id, project_id FROM models WHERE model_id = %s",
+                (model_id,),
+            )
+            scope_row = cur.fetchone()
+            cur.execute(
                 """
                 SELECT mv.model_id, mv.version, mv.stage, mv.approval_status, mv.artifact_uri
                 FROM model_versions mv
@@ -816,6 +866,8 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
             row_g = cur.fetchone()
     if not row_g:
         raise ValueError("model_version_not_found")
+    tenant_id = str(scope_row[0]) if scope_row else None
+    project_id = str(scope_row[1]) if scope_row else None
     elig = compute_promotion_eligibility(
         model_id=str(row_g[0]),
         version=int(row_g[1]),
@@ -823,6 +875,8 @@ def promote_model_version(model_id: str, version: int, stage: str = "production"
         current_stage=row_g[2],
         approval_status=row_g[3],
         artifact_uri=row_g[4],
+        tenant_id=tenant_id,
+        project_id=project_id,
     )
     if not elig["eligible"]:
         for reason in elig["reasons"]:

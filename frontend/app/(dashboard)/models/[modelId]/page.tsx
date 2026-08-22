@@ -82,6 +82,8 @@ import {
 import { ModelEvaluationsPanel } from "@/components/mlops/model-evaluations-panel";
 import { ModelStakeholdersPanel } from "@/components/mlops/model-stakeholders-panel";
 import { ModelClosedLoopPanel } from "@/components/mlops/model-closed-loop-panel";
+import { EffectiveConfigPanel } from "@/components/mlops/effective-config-panel";
+import { ModelPolicyRulesPanel } from "@/components/mlops/model-policy-rules-panel";
 
 const SERVING_SLOTS = ["champion", "candidate", "challenger", "canary"] as const;
 
@@ -91,6 +93,8 @@ const MODEL_TABS = [
   { id: "versions", label: "Versions" },
   { id: "evaluations", label: "Evaluations" },
   { id: "stakeholders", label: "Stakeholders" },
+  { id: "configuration", label: "Configuration" },
+  { id: "policies", label: "Policies" },
   { id: "monitoring", label: "Monitoring" },
   { id: "runs", label: "Recent runs" },
 ] as const;
@@ -101,6 +105,8 @@ const MODEL_TAB_SKELETON: Record<string, "grid" | "table"> = {
   versions: "table",
   evaluations: "table",
   stakeholders: "grid",
+  configuration: "table",
+  policies: "table",
   monitoring: "grid",
   runs: "table",
 };
@@ -777,7 +783,7 @@ export default function ModelDetailPage() {
           ) : null}
           {scopePinned && versionsQuery.data?.items?.length ? (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <div className="panel-surface p-3">
+              <div className="min-w-0">
                 <h3 className="mb-3 text-sm font-semibold text-foreground">Stage transition timeline</h3>
                 <ModelStageTimeline
                   tenantId={tenantId}
@@ -787,7 +793,7 @@ export default function ModelDetailPage() {
                   versions={versionsQuery.data.items}
                 />
               </div>
-              <div className="panel-surface p-3">
+              <div className="min-w-0">
                 <h3 className="mb-3 text-sm font-semibold text-foreground">Approval history</h3>
                 <ModelApprovalHistory
                   tenantId={tenantId}
@@ -847,7 +853,7 @@ export default function ModelDetailPage() {
           <DetailTabSkeleton variant={MODEL_TAB_SKELETON.policy} />
         ) : (
       <DetailSection title="Trigger policy" accentBorder="violet">
-        <div className="panel-surface mb-4 p-3">
+        <div className="mb-4">
           <h3 className="mb-2 text-xs font-semibold text-foreground">Auto Trigger Config</h3>
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
             <label className="flex items-center gap-2 text-xs text-foreground">
@@ -1036,6 +1042,26 @@ export default function ModelDetailPage() {
         )}
         </TabsContent>
 
+        <TabsContent value="configuration" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "configuration" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.configuration} />
+        ) : (
+          <DetailSection title="Effective configuration" accentBorder="none">
+            <EffectiveConfigPanel modelId={modelId} />
+          </DetailSection>
+        )}
+        </TabsContent>
+
+        <TabsContent value="policies" className={tabPanelScrollClassName("space-y-6")}>
+        {isTabLoading && tab === "policies" ? (
+          <DetailTabSkeleton variant={MODEL_TAB_SKELETON.policies} />
+        ) : (
+          <DetailSection title="Policy rules" accentBorder="none">
+            <ModelPolicyRulesPanel modelId={modelId} />
+          </DetailSection>
+        )}
+        </TabsContent>
+
         <TabsContent value="monitoring" className={tabPanelScrollClassName("space-y-6")}>
         {isTabLoading && tab === "monitoring" ? (
           <DetailTabSkeleton variant={MODEL_TAB_SKELETON.monitoring} />
@@ -1054,9 +1080,9 @@ export default function ModelDetailPage() {
         {!(recentRunsQuery.data || []).length ? (
           <MlopsEmptyState icon={Play} title="No recent runs" />
         ) : (
-          <ul className="panel-surface divide-y divide-border overflow-hidden">
+          <ul className="divide-y divide-border/20">
             {(recentRunsQuery.data || []).map((r) => (
-              <li key={r.run_id} className="flex flex-wrap items-center justify-between gap-2 bg-muted/30 px-3 py-2.5">
+              <li key={r.run_id} className="flex flex-wrap items-center justify-between gap-2 px-0 py-2.5 hover:bg-accent/50">
                 <Link href={`/runs/${encodeURIComponent(r.run_id)}`} className="font-mono text-xs text-primary hover:text-primary/80">
                   {r.run_id}
                 </Link>

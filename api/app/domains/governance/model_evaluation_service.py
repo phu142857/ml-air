@@ -169,6 +169,31 @@ def get_latest_model_evaluation(
     return _row_to_dict(row)
 
 
+def has_passing_model_evaluation(
+    *,
+    tenant_id: str,
+    project_id: str,
+    model_id: str,
+    version: int,
+) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM model_evaluations
+                WHERE tenant_id = %s
+                  AND project_id = %s
+                  AND model_id = %s
+                  AND version = %s
+                  AND LOWER(status) = 'passed'
+                LIMIT 1
+                """,
+                (tenant_id, project_id, model_id, int(version)),
+            )
+            return cur.fetchone() is not None
+
+
 def _row_to_dict(row: tuple) -> dict[str, Any]:
     metrics_raw = row[5]
     reasons_raw = row[9]

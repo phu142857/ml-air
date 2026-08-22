@@ -15,6 +15,8 @@ from app.api.routes.projection_routes import router as projection_router
 from app.api.routes.governance_routes import router as governance_router
 from app.api.routes.distributed_routes import router as distributed_router
 from app.api.routes.system_settings_routes import router as system_settings_router
+from app.api.routes.policy_routes import router as policy_router
+from app.api.routes.configuration_routes import router as configuration_router
 from app.api.routes.worker_tasks import router as worker_tasks_router
 from app.otel_api import (
     attach_mlair_trace_id_to_current_span,
@@ -58,6 +60,8 @@ app.include_router(projection_router, prefix="/v1")
 app.include_router(governance_router, prefix="/v1")
 app.include_router(distributed_router, prefix="/v1")
 app.include_router(system_settings_router, prefix="/v1")
+app.include_router(configuration_router, prefix="/v1")
+app.include_router(policy_router, prefix="/v1")
 app.include_router(worker_tasks_router, prefix="/v1")
 HEALTH_REQUESTS_TOTAL = Counter("mlair_api_health_requests_total", "Total number of health endpoint requests")
 HEALTH_REQUEST_DURATION_SECONDS = Histogram(

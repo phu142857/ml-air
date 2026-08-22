@@ -90,6 +90,7 @@ class EventType(str, Enum):
     TRAINING_POLICY_UPDATED = "training.policy.updated"
     TRAINING_TRIGGERED = "training.triggered"
     TRAINING_COMPLETED = "training.completed"
+    CONFIGURATION_UPDATED = "configuration.updated"
 
 
 def realtime_enabled() -> bool:
@@ -732,3 +733,29 @@ def _parse_row_updated_at(value: Any) -> datetime | None:
         except ValueError:
             return None
     return None
+
+
+def emit_configuration_updated(
+    *,
+    tenant_id: str,
+    project_id: str,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    key: str,
+    version: int | None = None,
+) -> None:
+    publish_mlair_event(
+        build_event(
+            event_type=EventType.CONFIGURATION_UPDATED,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            resource_id=resource_id,
+            trace_id=get_trace_id(),
+            payload={
+                "key": key,
+                "version": version,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+            },
+        )
+    )

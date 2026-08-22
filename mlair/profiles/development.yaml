@@ -42,6 +42,7 @@ features:
   replay_require_checksum: true
   replay_require_signed_manifest: true
   manifest_strict_key_lifecycle: true
+  experiments_enabled: true
 
 observability:
   otel_enabled: true

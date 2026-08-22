@@ -2046,6 +2046,10 @@ def create_experiment_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
+    from app.domains.configuration.experiments_feature import experiments_enabled_for_project
+
+    if not experiments_enabled_for_project(tenant_id=tenant_id, project_id=project_id):
+        raise HTTPException(status_code=403, detail="EXPERIMENTS_DISABLED")
     return create_experiment(tenant_id=tenant_id, project_id=project_id, name=payload.name, description=payload.description)
 
 
@@ -2060,6 +2064,10 @@ def list_experiments_v1(
 ) -> dict:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    from app.domains.configuration.experiments_feature import experiments_enabled_for_project
+
+    if not experiments_enabled_for_project(tenant_id=tenant_id, project_id=project_id):
+        return page_response({"items": [], "has_more": False}, include_offset=offset > 0)
     page = guarded_page(
         list_experiments_page,
         tenant_id=tenant_id,

@@ -58,6 +58,7 @@ FEATURE_ENV_MAP: dict[str, str] = {
     "global_identity": "ML_AIR_GLOBAL_IDENTITY",
     "global_observability": "ML_AIR_GLOBAL_OBSERVABILITY",
     "extension_platform": "ML_AIR_EXTENSION_PLATFORM",
+    "experiments_enabled": "ML_AIR_FEATURE_EXPERIMENTS_ENABLED",
 }
 
 

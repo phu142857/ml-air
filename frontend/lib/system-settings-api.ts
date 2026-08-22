@@ -114,6 +114,7 @@ export const FEATURE_FLAG_META: Array<{ key: string; label: string; group: strin
   { key: "replay_require_signed_manifest", label: "Replay require signed manifest", group: "Governance" },
   { key: "manifest_strict_key_lifecycle", label: "Manifest strict key lifecycle", group: "Governance" },
   { key: "tenant_quota_enforce", label: "Enforce tenant quotas", group: "Governance" },
+  { key: "experiments_enabled", label: "Experiment management", group: "Hub" },
   { key: "dataset_hub_v2", label: "Dataset Hub v2", group: "Hub" },
   { key: "scope_debug_panel", label: "Scope debug panel", group: "Hub" },
   { key: "serving_slots_http", label: "Serving slots HTTP", group: "Hub" },

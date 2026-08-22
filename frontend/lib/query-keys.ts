@@ -156,6 +156,10 @@ export const mlairKeys = {
       ["model-slo-rules", tenantId, projectId, modelId] as const,
     closedLoopEvents: (tenantId: string, projectId: string, modelId: string) =>
       ["model-closed-loop-events", tenantId, projectId, modelId] as const,
+    effectiveConfiguration: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-effective-configuration", tenantId, projectId, modelId] as const,
+    policyRules: (tenantId: string, projectId: string, modelId: string) =>
+      ["model-policy-rules", tenantId, projectId, modelId] as const,
     evaluationsInfinite: (
       tenantId: string,
       projectId: string,
