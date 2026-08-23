@@ -35,9 +35,18 @@ class _LifecycleNoopCounter:
 def _lifecycle_counter(name: str, documentation: str, labelnames: tuple[str, ...] | None = None) -> Any:
     if _PrometheusCounter is None:
         return _LifecycleNoopCounter()
-    if labelnames:
-        return _PrometheusCounter(name, documentation, list(labelnames))
-    return _PrometheusCounter(name, documentation)
+    try:
+        if labelnames:
+            return _PrometheusCounter(name, documentation, list(labelnames))
+        return _PrometheusCounter(name, documentation)
+    except ValueError:
+        from prometheus_client import REGISTRY
+
+        collectors = getattr(REGISTRY, "_names_to_collectors", {}) or {}
+        existing = collectors.get(name)
+        if existing is None and name.endswith("_total"):
+            existing = collectors.get(name[: -len("_total")])
+        return existing or _LifecycleNoopCounter()
 
 
 LIFECYCLE_TRAINING_TRIGGERED_TOTAL = _lifecycle_counter(

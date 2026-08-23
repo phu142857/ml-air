@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, Body, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import JSONResponse
 from prometheus_client import Counter
 from pydantic import BaseModel, Field
 
@@ -530,6 +531,20 @@ def _enforce_tenant_quota(tenant_id: str, resource: str, *, project_id: str | No
         ) from exc
 
 
+def _create_run_admitted(**kwargs):
+    """Create a run through ACCEPT | DEFER | REJECT. DEFER returns HTTP 202."""
+    from app.domains.governance.admission_queue_service import admit_create_run
+
+    outcome = admit_create_run(kwargs, create_fn=create_run)
+    status_code = int(outcome.get("http_status") or 200)
+    body = outcome["body"]
+    if status_code == 202:
+        return JSONResponse(status_code=202, content=body)
+    if status_code >= 400:
+        raise HTTPException(status_code=status_code, detail=body)
+    return body
+
+
 def _serving_slots_http_enabled() -> bool:
     return get_settings().features.serving_slots_http
 
@@ -765,6 +780,7 @@ class AdmissionExplainIn(BaseModel):
     model_id: str | None = None
     target_stage: str = "production"
     version: int | None = Field(default=None, ge=1)
+    resources: dict | None = None
 
 
 class ScopeSwitchIn(BaseModel):
@@ -953,7 +969,7 @@ def trigger_run_v1(
     _ensure_strict_dataset_version_for_declared_inputs(merged_ov, pipeline_cfg)
     _ensure_declared_readiness_inputs(merged_ov, pipeline_cfg)
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
-    run = create_run(
+    return _create_run_admitted(
         tenant_id=tenant_id,
         project_id=project_id,
         pipeline_id=payload.pipeline_id,
@@ -968,7 +984,6 @@ def trigger_run_v1(
         use_latest_pipeline_version=use_latest_pv,
         override_config=merged_ov,
     )
-    return run
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/runs/trigger")
@@ -1064,7 +1079,7 @@ def trigger_run_by_model_dataset_v1(
     )
 
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
-    run = create_run(
+    run = _create_run_admitted(
         tenant_id=tenant_id,
         project_id=project_id,
         pipeline_id=pipeline_id,
@@ -1078,6 +1093,8 @@ def trigger_run_by_model_dataset_v1(
         use_latest_pipeline_version=False,
         override_config=override_cfg,
     )
+    if not isinstance(run, dict) or not run.get("run_id"):
+        return run
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
     _now = datetime.now(timezone.utc)
     _tr = get_trace_id()
@@ -1374,7 +1391,7 @@ def run_pipeline_with_gating_v1(
         plugin_context=merged_ctx,
     )
     _enforce_tenant_quota(tenant_id, "runs", project_id=project_id)
-    run = create_run(
+    run = _create_run_admitted(
         tenant_id=tenant_id,
         project_id=project_id,
         pipeline_id=pipeline_id,
@@ -1389,6 +1406,8 @@ def run_pipeline_with_gating_v1(
         use_latest_pipeline_version=payload.use_latest_pipeline_version,
         override_config=merged_ov,
     )
+    if not isinstance(run, dict) or not run.get("run_id"):
+        return run
     check = readiness_service.check_run_readiness(tenant_id, project_id, run["run_id"])
     if not check.get("ready"):
         semantic_metrics.record_readiness_blocked(path="pipeline_run", tenant_id=tenant_id)
@@ -4338,7 +4357,38 @@ def explain_admission_v1(
         model_id=payload.model_id,
         target_stage=payload.target_stage,
         version=payload.version,
+        resources=payload.resources,
     )
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/admission/stats")
+def admission_stats_v1(
+    tenant_id: str,
+    project_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    from app.domains.governance.admission_queue_service import admission_stats
+
+    return admission_stats(tenant_id=tenant_id, project_id=project_id)
+
+
+@router.get("/tenants/{tenant_id}/projects/{project_id}/admission/deferred/{admission_id}")
+def get_deferred_admission_v1(
+    tenant_id: str,
+    project_id: str,
+    admission_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    principal = authenticate_bearer(authorization)
+    authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
+    from app.domains.governance.admission_queue_service import get_deferred
+
+    row = get_deferred(admission_id)
+    if not row or row.get("tenant_id") != tenant_id or row.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="admission_not_found")
+    return row
 
 
 @router.post("/tenants/{tenant_id}/projects/{project_id}/models/{model_id}/versions")

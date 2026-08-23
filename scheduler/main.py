@@ -1669,6 +1669,7 @@ def main() -> None:
     next_closed_loop_tick = 0.0
     next_materialization_tick = 0.0
     next_lease_reap_tick = 0.0
+    next_admission_flush_tick = 0.0
     start_http_server(metrics_port)
     client = _redis()
     try:
@@ -1704,6 +1705,18 @@ def main() -> None:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("lease_reaper_failed err=%s", exc)
             next_lease_reap_tick = loop_started + lease_reap_interval_seconds
+        if loop_started >= next_admission_flush_tick:
+            try:
+                from app.domains.governance.admission_queue_service import flush_deferred_admissions
+
+                n = flush_deferred_admissions(limit=8)
+                if n:
+                    logger.info("admission_deferred_flushed n=%s", n)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("admission_deferred_flush_failed err=%s", exc)
+            next_admission_flush_tick = loop_started + max(
+                2, int(os.getenv("ML_AIR_ADMISSION_FLUSH_SECONDS", "5"))
+            )
         if loop_started >= next_policy_tick:
             lock_ttl = max(5, policy_interval_seconds - 1)
             if _try_acquire_scheduler_tick_lock(client, "trigger_policy", lock_ttl):

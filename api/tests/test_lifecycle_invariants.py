@@ -26,6 +26,7 @@ except Exception:
 
 from app.api.routes import v1
 from app.domains.lifecycle.evaluation_semantics import readiness_eval_result_matches_stored_row
+from app.domains.governance.admission_decision import build_resource_state
 
 
 def _features(**overrides: object) -> SimpleNamespace:
@@ -44,6 +45,10 @@ class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
     def test_all_post_runs_defaults_on(self, _settings) -> None:
         self.assertTrue(v1._strict_dataset_version_all_post_runs())
 
+    @patch(
+        "app.domains.governance.admission_queue_service.snapshot_resource_state",
+        return_value=build_resource_state(capacity={"cpu": 8, "memory_mb": 8192, "gpu": 0, "tasks": 32}),
+    )
     @patch(
         "app.api.routes.v1.get_settings",
         return_value=_features(
@@ -76,6 +81,7 @@ class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
         _eff,
         mock_create_run,
         _settings,
+        _snap,
     ) -> None:
         mock_auth.return_value = SimpleNamespace(role="maintainer", tenant_id=None, project_ids=None)
         mock_pv.return_value = {

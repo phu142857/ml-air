@@ -6,10 +6,27 @@ import unittest
 from unittest.mock import patch
 
 import app.domains.governance.trigger_policy_service as trigger_policy_service
+from app.domains.governance.admission_decision import REJECT, build_resource_state
 from app.domains.governance.admission_explain_service import explain_run_admission, preview_trigger_policy
+
+_IDLE_STATE = build_resource_state(capacity={"cpu": 8, "memory_mb": 8192, "gpu": 0, "tasks": 32})
 
 
 class TestAdmissionExplain(unittest.TestCase):
+    def setUp(self) -> None:
+        snap = patch(
+            "app.domains.governance.admission_decision.snapshot_resource_state",
+            return_value=_IDLE_STATE,
+        )
+        enf = patch(
+            "app.domains.governance.tenant_quota_service.enforcement_enabled",
+            return_value=False,
+        )
+        self.addCleanup(snap.stop)
+        self.addCleanup(enf.stop)
+        snap.start()
+        enf.start()
+
     def test_explain_admitted_when_no_gates(self) -> None:
         with (
             patch(
@@ -23,8 +40,11 @@ class TestAdmissionExplain(unittest.TestCase):
         ):
             out = explain_run_admission(tenant_id="t1", project_id="p1")
         self.assertTrue(out["admitted"])
+        self.assertEqual(out["decision"], "ACCEPT")
         self.assertFalse(out["blocking"])
+        self.assertIn("resource_state", out)
         self.assertTrue(any(c["layer"] == "tenant_quota" for c in out["checks"]))
+        self.assertTrue(any(c["layer"] == "resource_state" for c in out["checks"]))
 
     def test_explain_blocks_on_pipeline_inputs(self) -> None:
         with (
@@ -55,6 +75,7 @@ class TestAdmissionExplain(unittest.TestCase):
                 pipeline_id="pipe-1",
             )
         self.assertFalse(out["admitted"])
+        self.assertEqual(out["decision"], "REJECT")
         layer = next(c for c in out["checks"] if c["layer"] == "pipeline_inputs")
         self.assertFalse(layer["ok"])
         self.assertEqual(layer["code"], "PIPELINE_INPUTS_NOT_READY")
@@ -85,8 +106,25 @@ class TestAdmissionExplain(unittest.TestCase):
                 target_stage="production",
             )
         self.assertFalse(out["admitted"])
+        self.assertEqual(out["decision"], "REJECT")
         layer = next(c for c in out["checks"] if c["layer"] == "promotion")
         self.assertEqual(layer["code"], "GOVERNANCE_BLOCKED")
+
+    def test_explain_gpu_never_fits_is_reject(self) -> None:
+        with (
+            patch(
+                "app.domains.governance.tenant_quota_service.get_tenant_quotas",
+                return_value={},
+            ),
+            patch(
+                "app.domains.governance.tenant_quota_service.get_tenant_usage",
+                return_value={},
+            ),
+        ):
+            out = explain_run_admission(tenant_id="t1", project_id="p1", resources={"gpu": 1})
+        self.assertFalse(out["admitted"])
+        self.assertEqual(out["decision"], REJECT)
+        self.assertEqual(out["reason"], "RESOURCE_CAPACITY")
 
     def test_preview_manual_mode(self) -> None:
         with (

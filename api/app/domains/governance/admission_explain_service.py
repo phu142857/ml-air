@@ -14,6 +14,7 @@ def explain_run_admission(
     model_id: str | None = None,
     target_stage: str = "production",
     version: int | None = None,
+    resources: dict | None = None,
 ) -> dict[str, Any]:
     """
     Aggregate admission / governance blockers into one explainable payload.
@@ -22,6 +23,8 @@ def explain_run_admission(
     """
     checks: list[dict[str, Any]] = []
     blocking = False
+    quota_exceeded = False
+    policy_reason: str | None = None
 
     resolved_pipeline_id = str(pipeline_id or "").strip() or None
     if not resolved_pipeline_id and model_id:
@@ -35,14 +38,31 @@ def explain_run_admission(
 
     # Quota: catalog ceilings (projects/datasets/models/runs) — report current usage.
     try:
-        from app.domains.governance.tenant_quota_service import get_tenant_quotas, get_tenant_usage
+        from app.domains.governance.tenant_quota_service import (
+            TenantQuotaExceeded,
+            assert_within_quota,
+            enforcement_enabled,
+            get_tenant_quotas,
+            get_tenant_usage,
+        )
 
         quotas = get_tenant_quotas(tenant_id)
-        usage = get_tenant_usage(tenant_id)
+        usage = get_tenant_usage(tenant_id, project_id)
+        quota_ok = True
+        quota_code = None
+        if enforcement_enabled():
+            try:
+                assert_within_quota(tenant_id, "runs", project_id=project_id)
+            except TenantQuotaExceeded as exc:
+                quota_ok = False
+                quota_exceeded = True
+                quota_code = "TENANT_QUOTA"
+                policy_reason = policy_reason or "TENANT_QUOTA"
         checks.append(
             {
                 "layer": "tenant_quota",
-                "ok": True,
+                "ok": quota_ok,
+                "code": quota_code,
                 "quotas": quotas,
                 "usage": usage,
                 "message": "Quota snapshot (enforced at create/upload boundaries).",
@@ -82,6 +102,7 @@ def explain_run_admission(
             ok = bool(ready.get("ready")) if isinstance(ready, dict) else bool(ready)
             if not ok:
                 blocking = True
+                policy_reason = policy_reason or "PIPELINE_INPUTS_NOT_READY"
             checks.append(
                 {
                     "layer": "pipeline_inputs",
@@ -95,6 +116,7 @@ def explain_run_admission(
             )
         except Exception as exc:
             blocking = True
+            policy_reason = policy_reason or "PIPELINE_INPUTS_NOT_READY"
             checks.append(
                 {
                     "layer": "pipeline_inputs",
@@ -113,6 +135,7 @@ def explain_run_admission(
             dv = lineage_service.get_dataset_version(tenant_id, project_id, dataset_version_id)
             if not dv:
                 blocking = True
+                policy_reason = policy_reason or "dataset_version_not_found"
                 checks.append(
                     {
                         "layer": "training_policy",
@@ -132,6 +155,7 @@ def explain_run_admission(
                 ok = bool(elig.get("ready")) if isinstance(elig, dict) else bool(elig)
                 if not ok:
                     blocking = True
+                    policy_reason = policy_reason or "MLAIR_READINESS_NOT_ELIGIBLE"
                 checks.append(
                     {
                         "layer": "training_policy",
@@ -151,6 +175,7 @@ def explain_run_admission(
             }
             if fatal:
                 blocking = True
+                policy_reason = policy_reason or "TRAINING_POLICY_REQUIRED"
             checks.append(
                 {
                     "layer": "training_policy",
@@ -178,10 +203,12 @@ def explain_run_admission(
                     }
                 )
                 blocking = True
+                policy_reason = policy_reason or "GOVERNANCE_BLOCKED"
             else:
                 ok = bool(promo.get("eligible"))
                 if not ok:
                     blocking = True
+                    policy_reason = policy_reason or "GOVERNANCE_BLOCKED"
                 checks.append(
                     {
                         "layer": "promotion",
@@ -194,13 +221,54 @@ def explain_run_admission(
         except Exception as exc:
             checks.append({"layer": "promotion", "ok": False, "code": "promotion_eval_failed", "message": str(exc)})
             blocking = True
+            policy_reason = policy_reason or "GOVERNANCE_BLOCKED"
 
+    from app.domains.governance.admission_decision import (
+        ACCEPT,
+        classify_admission,
+        parse_demand,
+        snapshot_resource_state,
+    )
+
+    demand = parse_demand(resources=resources)
+    try:
+        resource_state = snapshot_resource_state(tenant_id=tenant_id, project_id=project_id)
+    except Exception:
+        from app.domains.governance.admission_decision import build_resource_state
+
+        resource_state = build_resource_state()
+    resource_decision, resource_reason = classify_admission(
+        resource_state=resource_state,
+        demand=demand,
+    )
+    checks.append(
+        {
+            "layer": "resource_state",
+            "ok": resource_decision == ACCEPT,
+            "code": None if resource_decision == ACCEPT else resource_reason,
+            "decision": resource_decision,
+            "demand": demand,
+            "detail": resource_state,
+            "message": "Cluster/tenant ResourceState (CPU, memory, GPU, task slots).",
+        }
+    )
+    decision, reason = classify_admission(
+        policy_blocking=blocking,
+        policy_reason=policy_reason,
+        quota_exceeded=quota_exceeded,
+        resource_state=resource_state,
+        demand=demand,
+    )
     return {
         "tenant_id": tenant_id,
         "project_id": project_id,
         "pipeline_id": resolved_pipeline_id,
-        "admitted": not blocking,
-        "blocking": blocking,
+        "admitted": decision == ACCEPT,
+        "blocking": blocking or quota_exceeded,
+        "decision": decision,
+        "reason": reason,
+        "demand": demand,
+        "resource_state": resource_state,
         "checks": checks,
     }
 

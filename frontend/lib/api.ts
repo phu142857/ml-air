@@ -3767,6 +3767,8 @@ export async function previewModelTriggerPolicy(
     admission?: {
       admitted: boolean;
       blocking: boolean;
+      decision?: "ACCEPT" | "REJECT" | "DEFER";
+      reason?: string | null;
       checks: Array<Record<string, unknown>>;
     };
   };
@@ -3792,9 +3794,13 @@ export async function explainAdmission(
   });
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
-  return data as {
+    return data as {
     admitted: boolean;
     blocking: boolean;
+    decision?: "ACCEPT" | "REJECT" | "DEFER";
+    reason?: string | null;
+    demand?: Record<string, number>;
+    resource_state?: Record<string, unknown>;
     pipeline_id?: string | null;
     checks: Array<Record<string, unknown>>;
   };

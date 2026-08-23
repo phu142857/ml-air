@@ -58,6 +58,8 @@ eligibility(D, MV?, policy?) → { eligible_models[], blocked_models[], reasons[
 
 **Execution gate** (train/run): `blocked_by_gate` on `training.triggered` when readiness/eligibility fails at trigger time.
 
+**Admission ternary (P1):** `explain_run_admission` and gated `POST .../runs` decide `ACCEPT | REJECT | DEFER` from policy/quota plus `ResourceState` (CPU/memory/GPU/task slots, tenant budget). REJECT is 4xx; DEFER is HTTP 202 + FIFO `admission_deferred` (scheduler flush). `GET .../admission/stats` exposes `deferred_ratio`.
+
 ## Event semantics (closed set v1)
 
 Canonical types are enumerated in [`realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py) and [realtime-event-envelope.md](../api/realtime-event-envelope.md).

@@ -25,7 +25,16 @@ class _NoopCounter:
 def _counter(name: str, documentation: str, labelnames: list[str]) -> Any:
     if _PrometheusCounter is None:
         return _NoopCounter()
-    return _PrometheusCounter(name, documentation, labelnames)
+    try:
+        return _PrometheusCounter(name, documentation, labelnames)
+    except ValueError:
+        from prometheus_client import REGISTRY
+
+        collectors = getattr(REGISTRY, "_names_to_collectors", {}) or {}
+        existing = collectors.get(name)
+        if existing is None and name.endswith("_total"):
+            existing = collectors.get(name[: -len("_total")])
+        return existing or _NoopCounter()
 
 
 READINESS_BLOCKED_TOTAL = _counter(
@@ -38,6 +47,12 @@ ELIGIBILITY_DENIED_TOTAL = _counter(
     "mlair_eligibility_denied_total",
     "POST .../readiness/evaluate persisted an evaluation with ready=false (dataset + policy eligibility).",
     ["source", "reason", "tenant_id"],
+)
+
+ADMISSION_DECISION_TOTAL = _counter(
+    "mlair_admission_decision_total",
+    "Governance-aware admission decisions (ACCEPT, REJECT, DEFER).",
+    ["decision", "reason", "tenant_id"],
 )
 
 _ALLOWED_READINESS_PATHS = frozenset({"runs_trigger", "pipeline_run"})
@@ -88,5 +103,33 @@ def record_eligibility_denied_persist(
     ELIGIBILITY_DENIED_TOTAL.labels(
         source=normalize_audit_source(source),
         reason=primary_eligibility_denial_reason(result),
+        tenant_id=normalize_tenant_metric_label(tenant_id),
+    ).inc()
+
+
+_ALLOWED_ADMISSION_DECISIONS = frozenset({"accept", "reject", "defer"})
+_ALLOWED_ADMISSION_REASONS = frozenset(
+    {
+        "ok",
+        "policy_blocked",
+        "tenant_quota",
+        "resource_capacity",
+        "resource_busy",
+        "tenant_budget",
+        "pipeline_inputs_not_ready",
+        "mlair_readiness_not_eligible",
+        "governance_blocked",
+        "training_policy_required",
+        "dataset_version_not_found",
+    }
+)
+
+
+def record_admission_decision(*, decision: str, reason: str, tenant_id: str | None = None) -> None:
+    d = normalize_label(str(decision or ""), _ALLOWED_ADMISSION_DECISIONS, default="reject")
+    r = normalize_label(str(reason or "ok"), _ALLOWED_ADMISSION_REASONS, default="other")
+    ADMISSION_DECISION_TOTAL.labels(
+        decision=d,
+        reason=r,
         tenant_id=normalize_tenant_metric_label(tenant_id),
     ).inc()
