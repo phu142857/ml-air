@@ -31,6 +31,12 @@ Tenant and project scope are always read from the **`runs`** row in the database
 | **Internal** ([default](../concepts/task-execution-mode.md)) | Executor flush → `live[]` (~every 1s while RUNNING) | After task completes → `task_usage` | **No** |
 | **External** | Worker **`heartbeat`** with `usage` | Worker **`complete`/`fail`** with `resource_usage` + optional `usage_samples` | **Yes** |
 
+**P0 independent observation (internal):** the executor also samples **kernel cgroup/procfs** for the task PID. Worker/psutil `resource_usage` stays **advisory**. `GET .../tasks/{id}/usage` sets `attribution_source` to `observed` when kernel samples exist, otherwise `reported`.
+
+Tables: `task_resource_bindings` (pid, cgroup_path), `task_usage_observed`. Flag: `ML_AIR_INDEPENDENT_OBSERVATION_ENABLED=1` (default on).
+
+Prometheus / cAdvisor / DCGM scrape is **not** in this phase.
+
 ## Internal executor (Hybrid A + C)
 
 When a task runs in the **built-in executor** (`ML_AIR_TASK_EXECUTION_MODE=internal`):

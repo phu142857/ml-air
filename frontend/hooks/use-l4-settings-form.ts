@@ -109,7 +109,7 @@ export function stateFromL4(s: L4Settings): L4FormState {
     traceSampleRatio: String(s.telemetry?.trace_sample_ratio ?? 1),
     datasetArtifactRoot: String(s.runtime?.dataset_artifact_root || "file:///mlair/artifacts/datasets"),
     modelArtifactRoot: String(s.runtime?.model_artifact_root || "file:///mlair/artifacts/models"),
-    taskExecutionMode: s.runtime?.task_execution_mode === "internal" ? "internal" : "external",
+    taskExecutionMode: s.runtime?.task_execution_mode === "external" ? "external" : "internal",
     taskLeaseSeconds: String(s.runtime?.task_lease_seconds ?? 300),
     leaseReapIntervalSeconds: String(s.runtime?.lease_reap_interval_seconds ?? 5),
     logLevel: String(s.runtime?.log_level || "INFO"),

@@ -6,7 +6,7 @@
 
 | Mode | Who executes the task | Default |
 |------|------------------------|---------|
-| **`internal`** | MLAir **built-in executor** (Redis queue → `executor` container) | Yes (quickstart) |
+| **`internal`** | MLAir **built-in executor** (Redis queue → `executor` container) | Yes (all profiles) |
 | **`external`** | **Your worker process** (lease → run → complete/fail API) | Opt-in |
 
 Set the **same value** on **API** and **scheduler**. See [External worker execution](../guides/external-worker-execution.md) for external setup.

@@ -27,7 +27,11 @@ class EnvConfigCatalogTests(unittest.TestCase):
         self.assertGreater(len(features), 20)
         self.assertTrue(all(e.layer == "l4" and e.l4_path for e in features))
 
-    def test_secrets_marked(self) -> None:
+    def test_task_execution_mode_catalog_default_is_internal(self) -> None:
+        entries = {e.key: e for e in build_env_config_catalog()}
+        mode = entries["ML_AIR_TASK_EXECUTION_MODE"]
+        self.assertEqual(mode.example_default, "internal")
+        self.assertEqual(mode.l4_path, "runtime.task_execution_mode")
         secrets = [e for e in build_env_config_catalog() if e.key == "ML_AIR_IDENTITY_JWT_SECRET"]
         self.assertEqual(len(secrets), 1)
         self.assertEqual(secrets[0].layer, "secret")

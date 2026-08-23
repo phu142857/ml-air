@@ -49,7 +49,7 @@ class SystemSettingsDocumentTests(unittest.TestCase):
     def test_seed_includes_runtime(self) -> None:
         seed = build_seed_settings({"features": {}})
         self.assertIn("runtime", seed)
-        self.assertEqual(seed["runtime"]["task_execution_mode"], "external")
+        self.assertEqual(seed["runtime"]["task_execution_mode"], "internal")
         self.assertEqual(seed["runtime"]["task_lease_seconds"], 300)
 
     def test_validate_runtime_mode(self) -> None:
@@ -72,6 +72,15 @@ class SystemSettingsDocumentTests(unittest.TestCase):
         self.assertFalse(filled["features"]["otel_enabled"])
         self.assertIn("runtime", filled)
         self.assertIn("task_lease_seconds", filled["runtime"])
+        self.assertEqual(filled["runtime"]["task_execution_mode"], "internal")
+
+    def test_validate_empty_execution_mode_defaults_internal(self) -> None:
+        current = build_seed_settings({"features": {}})
+        merged = validate_settings_patch(
+            current,
+            {"runtime": {"task_execution_mode": ""}},
+        )
+        self.assertEqual(merged["runtime"]["task_execution_mode"], "internal")
 
 
 if __name__ == "__main__":

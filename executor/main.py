@@ -66,6 +66,7 @@ def _run_plugin_subprocess(
     plugin_name: str,
     context: dict,
     monitor: Any | None = None,
+    observer: Any | None = None,
 ) -> dict:
     timeout_seconds = int(os.getenv("ML_AIR_PLUGIN_TIMEOUT_SECONDS", "120"))
     runner_module = os.getenv("ML_AIR_PLUGIN_RUNNER_MODULE", "mlair_runner")
@@ -86,6 +87,8 @@ def _run_plugin_subprocess(
 
     if monitor is not None:
         monitor.start(proc.pid)
+    if observer is not None:
+        observer.start(proc.pid)
 
     try:
         stdout, stderr = proc.communicate(input=json.dumps(context), timeout=timeout_seconds)
@@ -449,17 +452,24 @@ def main() -> None:
             rss_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
             from sdk.resource_monitor import TaskResourceMonitor, merge_resource_usage, resource_monitor_enabled
+            from sdk.independent_observation import IndependentObserver, independent_observation_enabled
 
             monitor: TaskResourceMonitor | None = None
+            observer: IndependentObserver | None = None
             usage_report: dict[str, Any] | None = None
+            observe_report: dict[str, Any] | None = None
             if resource_monitor_enabled():
                 monitor = TaskResourceMonitor(task_id=str(task.get("task_id") or ""))
+            if independent_observation_enabled():
+                observer = IndependentObserver()
 
             http_task_cfg = task.get("http_task") if task.get("task_type") == "http" else None
             plugin_name = task.get("plugin_name")
             if not http_task_cfg and not plugin_name:
                 if monitor is not None:
                     monitor.start(os.getpid())
+                if observer is not None:
+                    observer.start(os.getpid())
                 time.sleep(duration)
             status = "SUCCESS"
             plugin_exec = None
@@ -472,6 +482,8 @@ def main() -> None:
             if http_task_cfg and isinstance(http_task_cfg, dict):
                 if monitor is not None:
                     monitor.start(os.getpid())
+                if observer is not None:
+                    observer.start(os.getpid())
                 from http_task_runner import run_http_task
 
                 http_ctx = dict(task.get("context", {}))
@@ -490,6 +502,7 @@ def main() -> None:
                     plugin_name=plugin_name,
                     context=task.get("context", {}),
                     monitor=monitor,
+                    observer=observer,
                 )
                 if not plugin_exec.get("ok"):
                     status = "FAILED"
@@ -507,6 +520,12 @@ def main() -> None:
 
             if monitor is not None:
                 usage_report = monitor.stop()
+            if observer is not None:
+                try:
+                    observe_report = observer.stop()
+                except Exception:
+                    logger.exception("independent_observer_stop_failed task_id=%s", task.get("task_id"))
+                    observe_report = None
 
             finished_at = datetime.now(timezone.utc).isoformat()
             wall_seconds = time.perf_counter() - task_start
@@ -602,6 +621,11 @@ def main() -> None:
                 done_payload["resource_monitor"] = resource_monitor_meta
             if resource_events:
                 done_payload["resource_events"] = resource_events
+            if observe_report:
+                if observe_report.get("resource_identity"):
+                    done_payload["resource_identity"] = observe_report["resource_identity"]
+                if observe_report.get("observed_usage"):
+                    done_payload["observed_usage"] = observe_report["observed_usage"]
             if resource_monitor_enabled() and monitor is not None:
                 has_samples = bool(usage_samples)
                 ru = resource_usage if isinstance(resource_usage, dict) else {}

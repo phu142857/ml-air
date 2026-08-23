@@ -304,6 +304,153 @@ def ingest_task_usage_from_done_event(done_event: dict[str, Any]) -> None:
                 params,
             )
 
+    _ingest_independent_observation(done_event, tenant_id=tenant_id, project_id=project_id)
+
+
+def _ingest_independent_observation(
+    done_event: dict[str, Any],
+    *,
+    tenant_id: str,
+    project_id: str,
+) -> None:
+    task_id = str(done_event.get("task_id") or "").strip()
+    run_id = str(done_event.get("run_id") or "").strip()
+    if not task_id or not run_id:
+        return
+    identity = done_event.get("resource_identity")
+    observed = done_event.get("observed_usage")
+    if not isinstance(identity, dict) and not isinstance(observed, dict):
+        return
+    try:
+        with connect(_db_url(), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                if isinstance(identity, dict):
+                    pid_raw = identity.get("pid")
+                    try:
+                        pid_val = int(pid_raw) if pid_raw is not None else None
+                    except (TypeError, ValueError):
+                        pid_val = None
+                    cur.execute(
+                        """
+                        INSERT INTO task_resource_bindings (
+                            task_id, run_id, worker_id, hostname, pid, cgroup_path, bound_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                        ON CONFLICT (task_id) DO UPDATE SET
+                            run_id = EXCLUDED.run_id,
+                            worker_id = EXCLUDED.worker_id,
+                            hostname = EXCLUDED.hostname,
+                            pid = EXCLUDED.pid,
+                            cgroup_path = EXCLUDED.cgroup_path,
+                            bound_at = EXCLUDED.bound_at
+                        """,
+                        (
+                            task_id,
+                            run_id,
+                            str(identity.get("worker_id") or "") or None,
+                            str(identity.get("hostname") or "") or None,
+                            pid_val,
+                            str(identity.get("cgroup_path") or "") or None,
+                        ),
+                    )
+                if isinstance(observed, dict):
+                    def _f(key: str) -> float | None:
+                        val = observed.get(key)
+                        if val is None:
+                            return None
+                        try:
+                            return float(val)
+                        except (TypeError, ValueError):
+                            return None
+
+                    source = str(observed.get("observation_source") or "none").strip() or "none"
+                    cur.execute(
+                        """
+                        INSERT INTO task_usage_observed (
+                            task_id, run_id, tenant_id, project_id,
+                            cpu_time_seconds, memory_mb_peak, cpu_percent_peak,
+                            duration_seconds, sample_count, observation_source, payload, observed_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW()
+                        )
+                        ON CONFLICT (task_id) DO UPDATE SET
+                            cpu_time_seconds = EXCLUDED.cpu_time_seconds,
+                            memory_mb_peak = EXCLUDED.memory_mb_peak,
+                            cpu_percent_peak = EXCLUDED.cpu_percent_peak,
+                            duration_seconds = EXCLUDED.duration_seconds,
+                            sample_count = EXCLUDED.sample_count,
+                            observation_source = EXCLUDED.observation_source,
+                            payload = EXCLUDED.payload,
+                            observed_at = NOW()
+                        """,
+                        (
+                            task_id,
+                            run_id,
+                            tenant_id,
+                            project_id,
+                            _f("cpu_time_seconds"),
+                            _f("memory_mb_peak"),
+                            _f("cpu_percent_peak"),
+                            _f("duration_seconds"),
+                            int(observed.get("sample_count") or 0),
+                            source,
+                            json.dumps(observed),
+                        ),
+                    )
+    except Exception:
+        logger.exception(
+            "independent_observation_ingest_failed run_id=%s task_id=%s",
+            run_id,
+            task_id,
+        )
+
+
+def _load_observed_and_binding(task_id: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    tid = str(task_id or "").strip()
+    if not tid:
+        return None, None
+    try:
+        with connect(_db_url(), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT cpu_time_seconds, memory_mb_peak, cpu_percent_peak,
+                           duration_seconds, sample_count, observation_source
+                    FROM task_usage_observed WHERE task_id = %s LIMIT 1
+                    """,
+                    (tid,),
+                )
+                obs_row = cur.fetchone()
+                cur.execute(
+                    """
+                    SELECT worker_id, hostname, pid, cgroup_path
+                    FROM task_resource_bindings WHERE task_id = %s LIMIT 1
+                    """,
+                    (tid,),
+                )
+                bind_row = cur.fetchone()
+    except Exception:
+        logger.exception("independent_observation_lookup_failed task_id=%s", tid)
+        return None, None
+    observed = None
+    if obs_row:
+        observed = {
+            "cpu_time_seconds": float(obs_row[0]) if obs_row[0] is not None else None,
+            "memory_mb_peak": float(obs_row[1]) if obs_row[1] is not None else None,
+            "cpu_percent_peak": float(obs_row[2]) if obs_row[2] is not None else None,
+            "duration_seconds": float(obs_row[3]) if obs_row[3] is not None else None,
+            "sample_count": int(obs_row[4] or 0),
+            "observation_source": str(obs_row[5] or "none"),
+        }
+    binding = None
+    if bind_row:
+        binding = {
+            "worker_id": bind_row[0],
+            "hostname": bind_row[1],
+            "pid": bind_row[2],
+            "cgroup_path": bind_row[3],
+        }
+    return observed, binding
+
 
 def rollup_run_usage(run_id: str) -> None:
     """Aggregate task_usage → run_usage."""
@@ -535,10 +682,18 @@ def get_task_usage(*, tenant_id: str, project_id: str, task_id: str) -> dict[str
 
 def get_task_usage_bundle(*, tenant_id: str, project_id: str, task_id: str) -> dict[str, Any]:
     tid = str(task_id or "").strip()
-    usage = get_task_usage(tenant_id=tenant_id, project_id=project_id, task_id=tid)
+    reported = get_task_usage(tenant_id=tenant_id, project_id=project_id, task_id=tid)
+    observed, binding = _load_observed_and_binding(tid)
+    from sdk.independent_observation import prefer_observed_usage
+
+    merged = prefer_observed_usage(reported=reported, observed=observed)
     return {
         "task_id": tid,
-        "usage": usage,
+        "usage": merged["usage"],
+        "reported_usage": merged["reported_usage"],
+        "observed_usage": merged["observed_usage"],
+        "resource_identity": binding,
+        "attribution_source": merged["attribution_source"],
         "enabled": usage_tracking_enabled(),
     }
 
@@ -766,10 +921,26 @@ def get_run_usage_bundle(run_id: str) -> dict[str, Any]:
         if snapshot:
             live.append(snapshot)
 
+    observed_by_task: dict[str, dict[str, Any]] = {}
+    for t in tasks:
+        tid = str(t.get("task_id") or "")
+        obs, _bind = _load_observed_and_binding(tid)
+        if obs:
+            observed_by_task[tid] = obs
+    from sdk.independent_observation import prefer_observed_usage
+
+    attributed_tasks: list[dict[str, Any]] = []
+    for t in tasks:
+        tid = str(t.get("task_id") or "")
+        merged = prefer_observed_usage(reported=t, observed=observed_by_task.get(tid))
+        row = dict(merged["usage"] or t)
+        row["attribution_source"] = merged["attribution_source"]
+        attributed_tasks.append(row)
+
     return {
         "run_id": rid,
         "usage": usage,
-        "tasks": tasks,
+        "tasks": attributed_tasks,
         "live": live,
         "enabled": usage_tracking_enabled(),
     }

@@ -165,7 +165,7 @@ def build_env_config_catalog() -> list[CatalogEntry]:
         # --- C. Storage / runtime (L4) ---
         CatalogEntry("ML_AIR_DATASET_ARTIFACT_ROOT", "runtime", "url", "l4", "Default dataset artifact root URI", l4_path="runtime.dataset_artifact_root", example_default="file:///mlair/artifacts/datasets"),
         CatalogEntry("ML_AIR_DEFAULT_MODEL_ARTIFACT_ROOT", "runtime", "url", "l4", "Default model artifact root URI", l4_path="runtime.model_artifact_root", example_default="file:///mlair/artifacts/models"),
-        CatalogEntry("ML_AIR_TASK_EXECUTION_MODE", "runtime", "string", "l4", "Task execution mode: internal | external", l4_path="runtime.task_execution_mode", example_default="external"),
+        CatalogEntry("ML_AIR_TASK_EXECUTION_MODE", "runtime", "string", "l4", "Task execution mode: internal | external", l4_path="runtime.task_execution_mode", example_default="internal"),
         CatalogEntry("ML_AIR_TASK_LEASE_SECONDS", "runtime", "int", "l4", "External worker lease TTL (seconds)", l4_path="runtime.task_lease_seconds", example_default="300"),
         CatalogEntry("ML_AIR_LEASE_REAP_INTERVAL_SECONDS", "runtime", "int", "l4", "Lease reaper interval (seconds)", l4_path="runtime.lease_reap_interval_seconds", example_default="5"),
         CatalogEntry("ML_AIR_LOG_LEVEL", "runtime", "string", "l4", "API/process log level", l4_path="runtime.log_level", restart_required=True, example_default="INFO"),

@@ -3,8 +3,9 @@
 Also registers extra tenant/project scopes when run as the default scope (via
 ``mlair seed demo``).
 
-Works with ML_AIR_TASK_EXECUTION_MODE=external (all-in-one default) by leasing
-and completing tasks like an external worker.
+Works with both execution modes. Default is internal (built-in executor).
+When ML_AIR_TASK_EXECUTION_MODE=external, leases and completes tasks like an
+external worker.
 
   mlair seed demo
   python3 scripts/seed_demo.py

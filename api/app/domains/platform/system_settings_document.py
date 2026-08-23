@@ -51,7 +51,7 @@ def _default_runtime() -> dict[str, Any]:
     return {
         "dataset_artifact_root": "file:///mlair/artifacts/datasets",
         "model_artifact_root": "file:///mlair/artifacts/models",
-        "task_execution_mode": "external",
+        "task_execution_mode": "internal",
         "task_lease_seconds": 300,
         "lease_reap_interval_seconds": 5,
         "log_level": "INFO",
@@ -173,7 +173,7 @@ def validate_settings_patch(current: dict[str, Any], patch: dict[str, Any]) -> d
 
     runtime = merged.get("runtime")
     if isinstance(runtime, dict):
-        mode = str(runtime.get("task_execution_mode") or "external").strip().lower()
+        mode = str(runtime.get("task_execution_mode") or "internal").strip().lower()
         if mode not in _TASK_EXECUTION_MODES:
             raise ValueError("runtime.task_execution_mode must be internal or external")
         runtime["task_execution_mode"] = mode
