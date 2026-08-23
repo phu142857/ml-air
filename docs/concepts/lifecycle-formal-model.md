@@ -60,6 +60,8 @@ eligibility(D, MV?, policy?) → { eligible_models[], blocked_models[], reasons[
 
 **Admission ternary (P1):** `explain_run_admission` and gated `POST .../runs` decide `ACCEPT | REJECT | DEFER` from policy/quota plus `ResourceState` (CPU/memory/GPU/task slots, tenant budget). REJECT is 4xx; DEFER is HTTP 202 + FIFO `admission_deferred` (scheduler flush). `GET .../admission/stats` exposes `deferred_ratio`.
 
+**Evaluation harness (P2):** `python scripts/eval_harness.py` records API/admission p50–p99, scheduler tasks/sec, queue latency, worker-crash RTO, and observed usage vs harness `VmRSS`. See [evaluation harness](../guides/evaluation-harness.md).
+
 ## Event semantics (closed set v1)
 
 Canonical types are enumerated in [`realtime_events.py`](../../api/app/domains/lifecycle/realtime_events.py) and [realtime-event-envelope.md](../api/realtime-event-envelope.md).

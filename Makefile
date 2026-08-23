@@ -289,6 +289,17 @@ smoke-quickstart:
 	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
 	python scripts/smoke_quickstart.py
 
+.PHONY: test-eval-harness
+test-eval-harness:
+	cd api && PYTHONPATH=.:../scripts python -m unittest tests.test_eval_harness -q
+
+.PHONY: eval-harness
+eval-harness:
+	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \
+	ML_AIR_TENANT_ID=$(ML_AIR_TENANT_ID) \
+	ML_AIR_PROJECT_ID=$(ML_AIR_PROJECT_ID) \
+	python scripts/eval_harness.py --profile smoke
+
 .PHONY: day6-check
 day6-check:
 	ML_AIR_BASE_URL=$(ML_AIR_BASE_URL) \

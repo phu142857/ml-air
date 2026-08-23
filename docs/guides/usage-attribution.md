@@ -41,6 +41,8 @@ Tables: `task_resource_bindings` (pid, cgroup_path), `task_usage_observed`. Flag
 
 Prometheus / cAdvisor / DCGM scrape is **not** in this phase.
 
+Quantitative eval (API/admission latency, scheduler tasks/sec, queue, worker-crash RTO, observed vs `/proc` VmRSS): [Evaluation harness](./evaluation-harness.md).
+
 ## Internal executor (Hybrid A + C)
 
 When a task runs in the **built-in executor** (`ML_AIR_TASK_EXECUTION_MODE=internal`):

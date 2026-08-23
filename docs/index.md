@@ -105,6 +105,7 @@ Model registry quick reference: [Model governance](./guides/model-governance.md)
 - [Trace explorer](./guides/use-trace-explorer.md)
 - [Set up Prometheus](./guides/setup-prometheus.md)
 - [Production maturity](./guides/production-maturity.md)
+- [Evaluation harness](./guides/evaluation-harness.md)
 - [Resource usage contract v1](./guides/resource-usage-contract-v1.md)
 
 ### UI and scope

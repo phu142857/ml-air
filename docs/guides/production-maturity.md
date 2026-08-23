@@ -53,6 +53,8 @@ Executor consumes priority queues: `mlair:tasks:high`, `mlair:tasks:default`, `m
 
 ## Not in MVP
 
-- Chaos testing harness
+- Network-partition / disk-full chaos
 - Formal multi-worker orchestration proofs
 - Tenant-aware alert routing (use external Prometheus/Grafana on infra metrics)
+
+Worker-crash RTO and API/admission p50–p99: [Evaluation harness](./evaluation-harness.md).
