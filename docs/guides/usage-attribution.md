@@ -33,6 +33,10 @@ Tenant and project scope are always read from the **`runs`** row in the database
 
 **P0 independent observation (internal):** the executor also samples **kernel cgroup/procfs** for the task PID. Worker/psutil `resource_usage` stays **advisory**. `GET .../tasks/{id}/usage` sets `attribution_source` to `observed` when kernel samples exist, otherwise `reported`.
 
+**P0.1 trust model:** `telemetry_trust` is `TRUSTED` (kernel observation exists and agrees with the worker, or no worker metrics), `ADVISORY` (worker report only), or `UNTRUSTED` (CPU/memory mismatch beyond thresholds, or neither source). SoT numbers still come from the kernel when observation exists — mismatch does **not** fall back to the worker. `trust_reason`: `observed` | `worker_only` | `mismatch` | `missing`.
+
+Thresholds (env): `ML_AIR_TELEMETRY_MISMATCH_REL=0.25`, `ML_AIR_TELEMETRY_MISMATCH_MEM_MB=1`, `ML_AIR_TELEMETRY_MISMATCH_CPU_SEC=0.5`. Tiny CPU deltas below `CPU_SEC` are ignored so short stub tasks do not flap.
+
 Tables: `task_resource_bindings` (pid, cgroup_path), `task_usage_observed`. Flag: `ML_AIR_INDEPENDENT_OBSERVATION_ENABLED=1` (default on).
 
 Prometheus / cAdvisor / DCGM scrape is **not** in this phase.
@@ -156,7 +160,7 @@ Response:
 
 `GET /v1/tenants/{tenant}/projects/{project}/tasks/{task_id}/usage`
 
-Response: `{ task_id, usage, enabled }` — single-task bundle for task detail.
+Response: `{ task_id, usage, reported_usage, observed_usage, resource_identity, attribution_source, telemetry_trust, trust_reason, enabled }` — single-task bundle. `usage` is the SoT overlay (observed wins). Run `tasks[]` rows include the same `attribution_source` / `telemetry_trust` / `trust_reason` fields.
 
 `GET /v1/tenants/{tenant}/projects/{project}/usage?days=30&top_runs=10`
 

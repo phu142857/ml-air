@@ -2,6 +2,9 @@
 
 Worker/psutil telemetry remains advisory. Numbers here come from the kernel,
 not from a worker-reported CPU percent.
+
+Trust on read: TRUSTED (observed agrees), ADVISORY (worker only),
+UNTRUSTED (mismatch or missing telemetry).
 """
 
 from __future__ import annotations
@@ -15,6 +18,11 @@ from pathlib import Path
 from typing import Any
 
 
+TRUSTED = "TRUSTED"
+ADVISORY = "ADVISORY"
+UNTRUSTED = "UNTRUSTED"
+
+
 def independent_observation_enabled() -> bool:
     return os.getenv("ML_AIR_INDEPENDENT_OBSERVATION_ENABLED", "1").strip().lower() not in {
         "0",
@@ -22,6 +30,33 @@ def independent_observation_enabled() -> bool:
         "no",
         "off",
     }
+
+
+def telemetry_mismatch_rel_threshold() -> float:
+    raw = os.getenv("ML_AIR_TELEMETRY_MISMATCH_REL", "0.25").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.25
+    return value if value >= 0 else 0.25
+
+
+def telemetry_mismatch_memory_mb_min() -> float:
+    raw = os.getenv("ML_AIR_TELEMETRY_MISMATCH_MEM_MB", "1").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return 1.0
+    return value if value >= 0 else 1.0
+
+
+def telemetry_mismatch_cpu_seconds_min() -> float:
+    raw = os.getenv("ML_AIR_TELEMETRY_MISMATCH_CPU_SEC", "0.5").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.5
+    return value if value >= 0 else 0.5
 
 
 def _clk_tck() -> float:
@@ -269,6 +304,107 @@ class IndependentObserver:
         }
 
 
+def _finite(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    if out != out:  # NaN
+        return None
+    return out
+
+
+def _has_kernel_observation(observed: dict[str, Any] | None) -> bool:
+    if not observed:
+        return False
+    if observed.get("observation_source") in (None, "", "none"):
+        return False
+    return (
+        observed.get("memory_mb_peak") is not None
+        or observed.get("cpu_time_seconds") is not None
+        or observed.get("cpu_percent_peak") is not None
+    )
+
+
+def _reported_cpu_seconds(reported: dict[str, Any] | None) -> float | None:
+    if not reported:
+        return None
+    for key in ("cpu_seconds", "cpu_time_seconds"):
+        value = _finite(reported.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _reported_memory_mb(reported: dict[str, Any] | None) -> float | None:
+    if not reported:
+        return None
+    peak = _finite(reported.get("memory_mb_peak"))
+    if peak is not None:
+        return peak
+    kb = _finite(reported.get("memory_rss_peak_kb"))
+    if kb is not None:
+        return kb / 1024.0
+    return None
+
+
+def _has_reported_metrics(reported: dict[str, Any] | None) -> bool:
+    return _reported_cpu_seconds(reported) is not None or _reported_memory_mb(reported) is not None
+
+
+def _relative_mismatch(observed: float, reported: float, *, abs_min: float, rel: float) -> bool:
+    if abs(observed - reported) < abs_min:
+        return False
+    denom = max(abs(observed), abs(reported), 1e-9)
+    return abs(observed - reported) / denom > rel
+
+
+def usage_mismatch(*, reported: dict[str, Any] | None, observed: dict[str, Any] | None) -> bool:
+    """True when worker report and kernel observation disagree beyond thresholds."""
+    if not reported or not observed:
+        return False
+    rel = telemetry_mismatch_rel_threshold()
+    obs_mem = _finite(observed.get("memory_mb_peak"))
+    rep_mem = _reported_memory_mb(reported)
+    if obs_mem is not None and rep_mem is not None:
+        if _relative_mismatch(
+            obs_mem, rep_mem, abs_min=telemetry_mismatch_memory_mb_min(), rel=rel
+        ):
+            return True
+    obs_cpu = _finite(observed.get("cpu_time_seconds"))
+    rep_cpu = _reported_cpu_seconds(reported)
+    if obs_cpu is not None and rep_cpu is not None:
+        if _relative_mismatch(
+            obs_cpu, rep_cpu, abs_min=telemetry_mismatch_cpu_seconds_min(), rel=rel
+        ):
+            return True
+    return False
+
+
+def classify_telemetry_trust(
+    *,
+    reported: dict[str, Any] | None,
+    observed: dict[str, Any] | None,
+) -> tuple[str, str]:
+    """Return (TRUSTED|ADVISORY|UNTRUSTED, reason).
+
+    TRUSTED: kernel observation exists and agrees with the worker (or no worker metrics).
+    ADVISORY: only worker/psutil report exists.
+    UNTRUSTED: mismatch, or neither source produced metrics.
+    """
+    has_observed = _has_kernel_observation(observed)
+    has_reported = _has_reported_metrics(reported)
+    if not has_observed and not has_reported:
+        return UNTRUSTED, "missing"
+    if not has_observed:
+        return ADVISORY, "worker_only"
+    if has_reported and usage_mismatch(reported=reported, observed=observed):
+        return UNTRUSTED, "mismatch"
+    return TRUSTED, "observed"
+
+
 def prefer_observed_usage(
     *,
     reported: dict[str, Any] | None,
@@ -277,15 +413,8 @@ def prefer_observed_usage(
     """Build API attribution: observed is source of truth when kernel samples exist."""
     reported_u = dict(reported) if isinstance(reported, dict) else None
     observed_u = dict(observed) if isinstance(observed, dict) else None
-    has_observed = bool(
-        observed_u
-        and observed_u.get("observation_source") not in (None, "", "none")
-        and (
-            observed_u.get("memory_mb_peak") is not None
-            or observed_u.get("cpu_time_seconds") is not None
-            or observed_u.get("cpu_percent_peak") is not None
-        )
-    )
+    has_observed = _has_kernel_observation(observed_u)
+    trust, reason = classify_telemetry_trust(reported=reported_u, observed=observed_u)
     usage = dict(reported_u) if reported_u else {}
     if has_observed and observed_u:
         if observed_u.get("cpu_time_seconds") is not None:
@@ -302,5 +431,7 @@ def prefer_observed_usage(
         "reported_usage": reported_u,
         "observed_usage": observed_u,
         "attribution_source": "observed" if has_observed else "reported",
+        "telemetry_trust": trust,
+        "trust_reason": reason,
     }
 

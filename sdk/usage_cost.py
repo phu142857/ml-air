@@ -694,6 +694,8 @@ def get_task_usage_bundle(*, tenant_id: str, project_id: str, task_id: str) -> d
         "observed_usage": merged["observed_usage"],
         "resource_identity": binding,
         "attribution_source": merged["attribution_source"],
+        "telemetry_trust": merged["telemetry_trust"],
+        "trust_reason": merged["trust_reason"],
         "enabled": usage_tracking_enabled(),
     }
 
@@ -935,6 +937,8 @@ def get_run_usage_bundle(run_id: str) -> dict[str, Any]:
         merged = prefer_observed_usage(reported=t, observed=observed_by_task.get(tid))
         row = dict(merged["usage"] or t)
         row["attribution_source"] = merged["attribution_source"]
+        row["telemetry_trust"] = merged["telemetry_trust"]
+        row["trust_reason"] = merged["trust_reason"]
         attributed_tasks.append(row)
 
     return {

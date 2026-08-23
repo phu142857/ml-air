@@ -298,6 +298,8 @@ export type RunUsageRecord = {
   aggregated_at?: string | null;
 } & UsageSampleStats;
 
+export type TelemetryTrust = "TRUSTED" | "ADVISORY" | "UNTRUSTED";
+
 export type TaskUsageRecord = {
   task_id: string;
   run_id?: string | null;
@@ -311,6 +313,9 @@ export type TaskUsageRecord = {
   disk_read_bytes?: number | null;
   disk_write_bytes?: number | null;
   sample_count?: number | null;
+  attribution_source?: string | null;
+  telemetry_trust?: TelemetryTrust | null;
+  trust_reason?: string | null;
 } & UsageSampleStats;
 
 export type TaskLiveUsage = {
@@ -362,6 +367,12 @@ export type RunUsageSamplesBundle = {
 export type TaskUsageBundle = {
   task_id: string;
   usage: TaskUsageRecord | null;
+  reported_usage?: TaskUsageRecord | null;
+  observed_usage?: Record<string, unknown> | null;
+  resource_identity?: Record<string, unknown> | null;
+  attribution_source?: string | null;
+  telemetry_trust?: TelemetryTrust | null;
+  trust_reason?: string | null;
   enabled: boolean;
 };
 
