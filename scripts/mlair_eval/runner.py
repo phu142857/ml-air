@@ -500,7 +500,7 @@ def scrape_scheduler_metrics(metrics_url: str) -> dict[str, float | None]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="MLair P2 evaluation harness")
-    p.add_argument("--profile", choices=("smoke", "publish"), default="smoke")
+    p.add_argument("--profile", choices=("smoke", "publish", "production"), default="smoke")
     p.add_argument(
         "--only",
         default="api,admission,submit,attribution",
@@ -509,7 +509,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--base-url", default=os.getenv("ML_AIR_BASE_URL", "http://localhost:8080"))
     p.add_argument("--tenant", default=os.getenv("ML_AIR_TENANT_ID", "default"))
     p.add_argument("--project", default=os.getenv("ML_AIR_PROJECT_ID", "default_project"))
-    p.add_argument("--timeout", type=int, default=int(os.getenv("ML_AIR_EVAL_TIMEOUT", "90")))
+    p.add_argument("--timeout", type=int, default=None, help="Per-run wait seconds (default 90, production 180)")
     p.add_argument("--api-samples", type=int, default=0, help="0 = profile default")
     p.add_argument("--metrics-url", default=os.getenv("ML_AIR_SCHEDULER_METRICS_URL", "http://localhost:9102/metrics"))
     p.add_argument("--out", default="", help="Write JSON report to this path")
@@ -524,11 +524,23 @@ def main(argv: list[str] | None = None) -> int:
     require_api_reachable(base)
     token = resolve_smoke_bearer_token("maintainer")
     client = EvalClient(base, token)
-    h = Harness(client, tenant=args.tenant, project=args.project, timeout_s=args.timeout)
+    if args.timeout is not None:
+        timeout_s = args.timeout
+    else:
+        timeout_s = int(os.getenv("ML_AIR_EVAL_TIMEOUT", "180" if args.profile == "production" else "90"))
+    h = Harness(client, tenant=args.tenant, project=args.project, timeout_s=timeout_s)
     wanted = {part.strip() for part in str(args.only).split(",") if part.strip()}
-    if args.profile == "publish" or args.crash:
+    if args.crash or args.profile == "publish":
         wanted.add("crash")
-    api_samples = args.api_samples or (200 if args.profile == "publish" else 30)
+    if args.profile == "publish":
+        api_samples = args.api_samples or 200
+        conc_sweep = (1, 10, 100)
+    elif args.profile == "production":
+        api_samples = args.api_samples or 80
+        conc_sweep = (1, 10)
+    else:
+        api_samples = args.api_samples or 30
+        conc_sweep = (1, 4)
     report: dict[str, Any] = {
         "started_at": _now(),
         "profile": args.profile,
@@ -536,24 +548,18 @@ def main(argv: list[str] | None = None) -> int:
         "tenant": args.tenant,
         "project": args.project,
         "execution_mode": h.execution_mode(),
-        "note": "RSS 7.9× is not claimed here; P3 is same-machine Airflow+MLflow.",
+        "note": "RSS 7.9× is not claimed here; P3 Airflow+MLflow is a production experiment, not in this repo.",
     }
     if "api" in wanted:
         print("[eval] API latency")
         report["api"] = {
             "concurrency_1": bench_api(h, api_samples, 1),
-            "concurrency_sweep": [
-                bench_api(h, max(8, api_samples // 2), c)
-                for c in ((1, 10, 100) if args.profile == "publish" else (1, 4))
-            ],
+            "concurrency_sweep": [bench_api(h, max(8, api_samples // 2), c) for c in conc_sweep],
         }
     if "admission" in wanted:
         print("[eval] admission latency")
         report["admission"] = {
-            "concurrency_sweep": [
-                bench_admission(h, max(8, api_samples // 2), c)
-                for c in ((1, 10, 100) if args.profile == "publish" else (1, 4))
-            ]
+            "concurrency_sweep": [bench_admission(h, max(8, api_samples // 2), c) for c in conc_sweep]
         }
     if "submit" in wanted:
         print("[eval] submit / scheduler / queue")

@@ -25,6 +25,9 @@ PUBLISH_SUBMIT_CELLS: tuple[tuple[int, int, int], ...] = (
 
 SMOKE_SUBMIT_CELLS: tuple[tuple[int, int, int], ...] = ((1, 8, 2),)
 
+# Single-tenant cells for a live production API (no eval_t00… tenant sweep).
+PRODUCTION_SUBMIT_CELLS: tuple[tuple[int, int, int], ...] = ((1, 20, 4),)
+
 
 def percentiles(values: Sequence[float], ps: Iterable[int] = PERCENTILES) -> dict[str, float | None]:
     """Linear interpolation over sorted samples. Empty input yields None."""
@@ -76,6 +79,8 @@ def submit_cells_for_profile(profile: str) -> tuple[tuple[int, int, int], ...]:
     name = (profile or "smoke").strip().lower()
     if name == "publish":
         return PUBLISH_SUBMIT_CELLS
+    if name == "production":
+        return PRODUCTION_SUBMIT_CELLS
     return SMOKE_SUBMIT_CELLS
 
 

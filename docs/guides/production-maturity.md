@@ -58,3 +58,5 @@ Executor consumes priority queues: `mlair:tasks:high`, `mlair:tasks:default`, `m
 - Tenant-aware alert routing (use external Prometheus/Grafana on infra metrics)
 
 Worker-crash RTO and API/admission p50–p99: [Evaluation harness](./evaluation-harness.md).
+
+**P3** Airflow+MLflow baseline: production host later, not composed in this repo. **P4** cost/federation/UI: frozen.

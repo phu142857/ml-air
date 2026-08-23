@@ -176,6 +176,7 @@ Optional maintainer bar before tagging: `make test-all`.
 - [Production WSS and ingress](./production-wss-ingress.md)
 - [Disaster recovery](../troubleshooting/disaster-recovery.md)
 - [Helm chart README](../../charts/ml-air/README.md)
+- [Evaluation harness](../guides/evaluation-harness.md) — `--profile production` against this API; P3 Airflow+MLflow comparison is a later production experiment, not a stack in this repo
 
 ## Done
 

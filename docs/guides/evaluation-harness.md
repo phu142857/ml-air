@@ -2,7 +2,7 @@
 
 Measure control-plane properties against a running MLAir API: API and admission latency (p50/p95/p99), scheduler tasks/sec, queue latency, worker-crash recovery time, and observed usage vs kernel ground truth.
 
-This is **not** the Airflow+MLflow RSS baseline (that is P3 on the same machine). Do not treat a 7.9× RSS claim as a result of this harness.
+This harness does **not** include an Airflow+MLflow stack. **P3** (same-machine RSS / workload vs Airflow 3.2 + MLflow 3.13) is **not configured in this repository** — ml-air stays the control-plane framework. Run that experiment later on the **production** environment. Do not reuse the paper 7.9× figure until that production re-run exists.
 
 **Related:** [Readiness and gating](../api/readiness-and-gating.md) · [Resource usage attribution](./usage-attribution.md) · [Task](../concepts/task.md) · [Run](../concepts/run.md)
 
@@ -31,8 +31,12 @@ PYTHONPATH=api:scripts python -m unittest api.tests.test_eval_harness -q
 # Live smoke (default profile)
 python scripts/eval_harness.py --profile smoke --out /tmp/mlair-eval-smoke.json
 
-# Camera-ready cells + worker-crash RTO
+# Camera-ready cells + worker-crash RTO (lab only; restarts executor)
 python scripts/eval_harness.py --profile publish --out /tmp/mlair-eval-publish.json
+
+# Production API (this framework, existing tenant; no Airflow stack, no crash unless --crash)
+python scripts/eval_harness.py --profile production \
+  --base-url https://mlair.example.com --out /tmp/mlair-eval-production.json
 
 # Subset
 python scripts/eval_harness.py --only api,admission
@@ -54,13 +58,21 @@ Login uses the same bootstrap admin as smoke scripts (`admin` / `admin-change-me
 | `crash.rto_ms` | Internal: supervisor restart of `executor` then next task start. External: lease drop until `PENDING` |
 | `attribution` | `GET .../tasks/{id}/usage` observed memory vs harness `VmRSS` from container `/proc/<pid>/status` |
 
-`--crash` is implied by `--profile publish`. Smoke skips crash unless you pass `--crash` (it restarts the executor).
+`--crash` is implied by `--profile publish` only. `--profile production` does not restart the executor unless you pass `--crash`.
+
+## Production
+
+Point `--base-url` at the deployed control plane. Login uses `ML_AIR_BOOTSTRAP_ADMIN_USERNAME` / `ML_AIR_BOOTSTRAP_ADMIN_PASSWORD` (or a maintainer token via the same smoke helper). Submit stays on **one** tenant (`--tenant` / `--project`); it does not register `eval_t00`… scopes.
+
+**P3** (idle RSS / same workload vs Airflow+MLflow) is **not** in this repository. Re-run that comparison later on the production host with the same measurement method as paper E1b. Until then, do not publish the paper 7.9× figure.
+
+**P4** (dollar chargeback, new federation/UI planes) stays frozen in this framework.
 
 ## Result
 
 JSON on stdout (and `--out`). Example smoke keys: `api`, `admission`, `submit`, `attribution`. Inspect `p50` / `p95` / `p99` under each latency block.
 
-Tenant sweep registers `eval_t00`… scopes via `POST .../projects/registry`. Quota limits may cap 50 tenants; the report then shows HTTP 429/400 on those cells.
+Tenant sweep (`--profile publish`) registers `eval_t00`… scopes via `POST .../projects/registry`. Quota limits may cap 50 tenants; the report then shows HTTP 429/400 on those cells. `--profile production` does not sweep extra tenants.
 
 ## Notes
 

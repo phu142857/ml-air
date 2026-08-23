@@ -12,6 +12,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from mlair_eval.stats import (  # noqa: E402
+    PRODUCTION_SUBMIT_CELLS,
     PUBLISH_SUBMIT_CELLS,
     percentiles,
     parse_prom_counter,
@@ -87,6 +88,11 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(tasks, {100, 1000})
         self.assertEqual(conc, {1, 10, 100})
         self.assertLess(len(cells), 3 * 2 * 3)
+
+    def test_production_stays_single_tenant(self) -> None:
+        cells = submit_cells_for_profile("production")
+        self.assertEqual(cells, PRODUCTION_SUBMIT_CELLS)
+        self.assertEqual(cells[0][0], 1)
 
     def test_summarize_n(self) -> None:
         out = summarize_latencies([1.0, 2.0, 3.0])

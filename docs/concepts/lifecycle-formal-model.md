@@ -60,7 +60,7 @@ eligibility(D, MV?, policy?) → { eligible_models[], blocked_models[], reasons[
 
 **Admission ternary (P1):** `explain_run_admission` and gated `POST .../runs` decide `ACCEPT | REJECT | DEFER` from policy/quota plus `ResourceState` (CPU/memory/GPU/task slots, tenant budget). REJECT is 4xx; DEFER is HTTP 202 + FIFO `admission_deferred` (scheduler flush). `GET .../admission/stats` exposes `deferred_ratio`.
 
-**Evaluation harness (P2):** `python scripts/eval_harness.py` records API/admission p50–p99, scheduler tasks/sec, queue latency, worker-crash RTO, and observed usage vs harness `VmRSS`. See [evaluation harness](../guides/evaluation-harness.md).
+**Evaluation harness (P2):** `python scripts/eval_harness.py` records API/admission p50–p99, scheduler tasks/sec, queue latency, worker-crash RTO, and observed usage vs harness `VmRSS`. `--profile production` targets a deployed control plane (single tenant, no executor crash). See [evaluation harness](../guides/evaluation-harness.md). **P3** (Airflow+MLflow on the same machine) is not shipped here; re-run it on production later. **P4** (cost/federation/UI) stays frozen.
 
 ## Event semantics (closed set v1)
 
