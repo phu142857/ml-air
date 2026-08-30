@@ -62,8 +62,10 @@ def _redis() -> Redis:
     return Redis.from_url(url, decode_responses=True)
 
 
+from executor.plugin_context import build_plugin_execution_context
+
+
 def _run_plugin_subprocess(
-    plugin_name: str,
     context: dict,
     monitor: Any | None = None,
     observer: Any | None = None,
@@ -498,9 +500,16 @@ def main() -> None:
                 if not http_exec.get("ok"):
                     status = "FAILED"
             elif plugin_name:
+                plugin_ctx = build_plugin_execution_context(
+                    task,
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    pipeline_id=pipeline_id,
+                    trace_id=trace_id,
+                )
                 plugin_exec = _run_plugin_subprocess(
                     plugin_name=plugin_name,
-                    context=task.get("context", {}),
+                    context=plugin_ctx,
                     monitor=monitor,
                     observer=observer,
                 )

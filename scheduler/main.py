@@ -1845,6 +1845,27 @@ def main() -> None:
                         done_event.get("run_id"),
                         done_event.get("task_id"),
                     )
+                if done_event.get("status") == "SUCCESS":
+                    try:
+                        from app.domains.orchestration.worker_task_service import (
+                            register_model_version_from_internal_task_done,
+                        )
+
+                        registered = register_model_version_from_internal_task_done(done_event)
+                        if registered:
+                            logger.info(
+                                "internal_model_version_registered run_id=%s task_id=%s model_id=%s version=%s",
+                                done_event.get("run_id"),
+                                done_event.get("task_id"),
+                                registered.get("model_id"),
+                                registered.get("version"),
+                            )
+                    except Exception:
+                        logger.exception(
+                            "internal_model_version_register_failed run_id=%s task_id=%s",
+                            done_event.get("run_id"),
+                            done_event.get("task_id"),
+                        )
                 if done_event["status"] == "SUCCESS":
                     cur_status = _get_run_status(done_event["run_id"])
                     if cur_status and str(cur_status).upper() == "CANCELLED":

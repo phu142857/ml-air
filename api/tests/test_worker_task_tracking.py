@@ -206,6 +206,55 @@ class TestWorkerTaskTracking(unittest.TestCase):
         done = mock_publish.call_args[0][0]
         self.assertEqual(done["plugin_exec"]["result"]["model_version"]["version"], 4)
 
+    @patch("app.domains.orchestration.worker_task_service.append_task_run_log")
+    @patch("app.domains.orchestration.worker_task_service.log_metric")
+    @patch("app.domains.orchestration.worker_task_service._load_task_run_row")
+    @patch("app.domains.governance.model_registry_service.list_model_versions")
+    @patch("app.domains.governance.model_registry_service.create_model_version")
+    def test_register_model_version_from_internal_task_done(
+        self,
+        mock_create_version: MagicMock,
+        mock_list_versions: MagicMock,
+        mock_load: MagicMock,
+        mock_metric: MagicMock,
+        _mock_log: MagicMock,
+    ) -> None:
+        mock_load.return_value = _running_row()
+        mock_list_versions.return_value = []
+        mock_create_version.return_value = {
+            "version_id": "mv-int",
+            "model_id": "model-1",
+            "version": 5,
+            "run_id": "run-tracking-1",
+            "artifact_uri": "file:///tmp/best.pt",
+            "stage": "staging",
+        }
+        done_event = {
+            "status": "SUCCESS",
+            "task_id": "task-1",
+            "run_id": "run-tracking-1",
+            "plugin_name": "cv_yolo_train",
+            "plugin_exec": {
+                "ok": True,
+                "result": {
+                    "artifacts": [{"path": "train/checkpoint", "uri": "file:///tmp/best.pt"}],
+                },
+            },
+        }
+
+        registered = wts.register_model_version_from_internal_task_done(done_event, worker_id="executor-yolo")
+
+        self.assertIsNotNone(registered)
+        self.assertEqual(registered["version"], 5)
+        mock_create_version.assert_called_once_with(
+            model_id="model-1",
+            run_id="run-tracking-1",
+            artifact_uri="file:///tmp/best.pt",
+            stage="staging",
+        )
+        mock_metric.assert_called_once()
+        self.assertEqual(mock_metric.call_args.kwargs["key"], "cv_yolo_train.imported_version")
+
 
 if __name__ == "__main__":
     unittest.main()

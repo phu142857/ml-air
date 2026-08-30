@@ -462,6 +462,57 @@ def _auto_register_model_version(
     return created
 
 
+def _artifacts_from_internal_plugin_exec(plugin_exec: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(plugin_exec, dict) or not plugin_exec.get("ok"):
+        return None
+    result = plugin_exec.get("result")
+    if not isinstance(result, dict):
+        return None
+    artifacts = result.get("artifacts")
+    if not isinstance(artifacts, list):
+        return None
+    return _normalize_complete_artifacts(artifacts, None) or None
+
+
+def register_model_version_from_internal_task_done(
+    done_event: dict[str, Any],
+    *,
+    worker_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Auto-register Hub model version after internal executor task_finished (parity with complete_task)."""
+    if str(done_event.get("status") or "").upper() != "SUCCESS":
+        return None
+    task_id = str(done_event.get("task_id") or "").strip()
+    if not task_id:
+        return None
+    row = _load_task_run_row(task_id)
+    if not row:
+        return None
+    plugin_name = str(
+        done_event.get("plugin_name") or row.get("plugin") or row.get("plugin_name") or "plugin"
+    )
+    artifacts = _artifacts_from_internal_plugin_exec(done_event.get("plugin_exec"))
+    wid = (worker_id or os.getenv("ML_AIR_EXECUTOR_WORKER_ID") or "executor").strip() or "executor"
+    registered = _auto_register_model_version(
+        row=row,
+        task_id=task_id,
+        plugin_name=plugin_name,
+        artifacts=artifacts,
+        worker_id=wid,
+    )
+    if registered:
+        try:
+            log_metric(
+                run_id=str(row["run_id"]),
+                key=f"{plugin_name}.imported_version",
+                value=float(int(registered.get("version") or 0)),
+                step=0,
+            )
+        except Exception:
+            pass
+    return registered
+
+
 def _persist_run_plugin_tracking(
     *,
     run_id: str,
