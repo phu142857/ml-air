@@ -1476,6 +1476,7 @@ def _enqueue_task_event(client: Redis, run_event: dict, full_task_id: str, attem
         "task_type": "http" if http_task else "plugin",
         "http_task": http_task,
         "context": run_event.get("context", {}),
+        "override_config": run_event.get("override_config", {}),
         "pipeline_version_id": run_event.get("pipeline_version_id"),
         "config_snapshot": run_event.get("config_snapshot"),
         "replay_from_task_id": run_event.get("replay_from_task_id"),
@@ -1541,7 +1542,7 @@ def _load_run_event_for_scheduler(run_id: str) -> dict | None:
                 """
                 SELECT run_id, tenant_id, project_id, pipeline_id, priority,
                        COALESCE(max_parallel_tasks, 1), pipeline_version_id, config_snapshot,
-                       replay_from_task_id, replay_of_run_id, plugin_context, plugin_name
+                       replay_from_task_id, replay_of_run_id, plugin_context, override_config, plugin_name
                 FROM runs
                 WHERE run_id = %s
                 """,
@@ -1564,6 +1565,14 @@ def _load_run_event_for_scheduler(run_id: str) -> dict | None:
             pctx = {}
     if not isinstance(pctx, dict):
         pctx = {}
+    ovrd = row[11]
+    if isinstance(ovrd, str):
+        try:
+            ovrd = json.loads(ovrd)
+        except json.JSONDecodeError:
+            ovrd = {}
+    if not isinstance(ovrd, dict):
+        ovrd = {}
     return {
         "run_id": str(row[0]),
         "tenant_id": str(row[1]),
@@ -1576,7 +1585,8 @@ def _load_run_event_for_scheduler(run_id: str) -> dict | None:
         "replay_from_task_id": row[8],
         "replay_of_run_id": row[9],
         "context": pctx,
-        "plugin_name": row[11],
+        "override_config": ovrd,
+        "plugin_name": row[12],
         "trace_id": None,
     }
 
@@ -1881,6 +1891,7 @@ def main() -> None:
                         "trace_id": done_event["trace_id"],
                         "plugin_name": done_event.get("plugin_name"),
                         "context": done_event.get("context", {}),
+                        "override_config": done_event.get("override_config", {}),
                         "pipeline_version_id": done_event.get("pipeline_version_id"),
                         "config_snapshot": done_event.get("config_snapshot"),
                         "replay_from_task_id": replay_from_task_id,
@@ -1928,6 +1939,7 @@ def main() -> None:
                             "trace_id": done_event["trace_id"],
                             "plugin_name": done_event.get("plugin_name"),
                             "context": done_event.get("context", {}),
+                            "override_config": done_event.get("override_config", {}),
                             "pipeline_version_id": done_event.get("pipeline_version_id"),
                             "config_snapshot": done_event.get("config_snapshot"),
                             "replay_from_task_id": done_event.get("replay_from_task_id"),

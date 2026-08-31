@@ -75,6 +75,36 @@ class TestPluginExecutionContext(unittest.TestCase):
         for key, value in plugin_context.items():
             self.assertEqual(ctx[key], value)
 
+    def test_override_config_wins_over_plugin_context(self) -> None:
+        task = {
+            "run_id": "bec27169",
+            "task_id": "bec27169:train",
+            "context": {
+                "batch": 8,
+                "imgsz": 640,
+                "epochs": 5,
+                "model_id": "model-1",
+                "dataset_version_id": "dv-1",
+            },
+            "override_config": {
+                "batch": 2,
+                "imgsz": 512,
+                "epochs": 10,
+                "lr0": 0.01,
+            },
+        }
+        ctx = build_plugin_execution_context(
+            task,
+            tenant_id="yolo",
+            project_id="yoloVN",
+            pipeline_id="cv-yolo-lifecycle-train",
+            trace_id="trace-bec27169",
+        )
+        self.assertEqual(ctx["batch"], 2)
+        self.assertEqual(ctx["imgsz"], 512)
+        self.assertEqual(ctx["epochs"], 10)
+        self.assertEqual(ctx["lr0"], 0.01)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from redis import Redis
 
 from sdk.mlair_tokens import resolve_platform_api_token
+from sdk.mlair_token_manager import get_platform_token_manager
 
 try:
     from app.settings.worker import manifest_strict_key_lifecycle
@@ -66,6 +67,7 @@ from executor.plugin_context import build_plugin_execution_context
 
 
 def _run_plugin_subprocess(
+    plugin_name: str,
     context: dict,
     monitor: Any | None = None,
     observer: Any | None = None,
@@ -75,6 +77,7 @@ def _run_plugin_subprocess(
     from otel_bootstrap import otel_subprocess_env
 
     child_env = {**os.environ, **otel_subprocess_env()}
+    get_platform_token_manager().sync_process_env(child_env)
     try:
         proc = subprocess.Popen(
             ["python", "-m", runner_module, plugin_name],
@@ -112,43 +115,74 @@ def _run_plugin_subprocess(
         return {"ok": False, "error": f"invalid_json_output: {exc}", "stdout": (stdout or "").strip()}
 
 
-def _api_token() -> str:
-    token = resolve_platform_api_token()
+def _api_token(*, force_refresh: bool = False) -> str:
+    token = resolve_platform_api_token() if not force_refresh else get_platform_token_manager().get_access_token(force_refresh=True)
+    if not force_refresh and not token:
+        token = get_platform_token_manager().get_access_token(force_refresh=False)
     if not token:
         raise RuntimeError(
-            "ML_AIR_SERVICE_ACCOUNT_TOKEN or ML_AIR_SA_EXECUTOR_SECRET is required (IAM Service Account)"
+            "ML_AIR_SA_EXECUTOR_SECRET, ML_AIR_REFRESH_TOKEN, or ML_AIR_AUTH_USERNAME/PASSWORD is required"
         )
     return token
 
 
+def _is_http_401(exc: BaseException) -> bool:
+    if isinstance(exc, urllib.error.HTTPError) and exc.code == 401:
+        return True
+    if isinstance(exc, urllib.error.HTTPError):
+        return False
+    message = str(exc).lower()
+    return "401" in message and "unauthorized" in message
+
+
+def _urllib_request_with_auth_retry(req: urllib.request.Request, *, timeout: float) -> None:
+    token = _api_token()
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout):
+            return
+    except urllib.error.HTTPError as exc:
+        if exc.code != 401:
+            raise
+        refreshed = get_platform_token_manager().on_http_401()
+        if not refreshed:
+            raise
+        retry = urllib.request.Request(
+            req.full_url,
+            data=req.data,
+            headers={k: v for k, v in req.header_items() if k.lower() != "authorization"},
+            method=req.get_method(),
+        )
+        retry.add_header("Authorization", f"Bearer {refreshed}")
+        with urllib.request.urlopen(retry, timeout=timeout):
+            return
+
+
 def _tracking_post(path: str, payload: dict) -> None:
     base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
-    token = _api_token()
     req = urllib.request.Request(
         url=f"{base}{path}",
         method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        headers={"Content-Type": "application/json"},
         data=json.dumps(payload).encode("utf-8"),
     )
     try:
-        with urllib.request.urlopen(req, timeout=5):
-            return
+        _urllib_request_with_auth_retry(req, timeout=5)
     except urllib.error.URLError as exc:
         logger.warning("tracking_post_failed path=%s err=%s", path, exc)
 
 
 def _api_post(path: str, payload: dict, timeout: int = 10) -> bool:
     base = os.getenv("ML_AIR_API_BASE_URL", "http://api:8080").rstrip("/")
-    token = _api_token()
     req = urllib.request.Request(
         url=f"{base}{path}",
         method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        headers={"Content-Type": "application/json"},
         data=json.dumps(payload).encode("utf-8"),
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout):
-            return True
+        _urllib_request_with_auth_retry(req, timeout=timeout)
+        return True
     except urllib.error.URLError as exc:
         logger.warning("api_post_failed path=%s err=%s", path, exc)
         return False
@@ -500,6 +534,7 @@ def main() -> None:
                 if not http_exec.get("ok"):
                     status = "FAILED"
             elif plugin_name:
+                get_platform_token_manager().sync_process_env()
                 plugin_ctx = build_plugin_execution_context(
                     task,
                     tenant_id=tenant_id,
