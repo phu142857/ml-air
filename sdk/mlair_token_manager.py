@@ -21,10 +21,8 @@ _SA_SECRET_ENVS: tuple[str, ...] = (
     "ML_AIR_SA_WORKER_SECRET",
 )
 
-_ACCESS_TOKEN_ENVS: tuple[str, ...] = (
+_JWT_ACCESS_TOKEN_ENVS: tuple[str, ...] = (
     "ML_AIR_ACCESS_TOKEN",
-    "ML_AIR_SERVICE_ACCOUNT_TOKEN",
-    "MLAIR_SERVICE_ACCOUNT_TOKEN",
     "ML_AIR_TRACKING_TOKEN",
     "ML_AIR_TOKEN",
 )
@@ -91,7 +89,7 @@ class _TokenState:
 
 
 class MLAirTokenManager:
-    """Resolve Hub API bearer tokens with SA-secret preference and JWT refresh."""
+    """Resolve Hub JWT tokens for plugin/API calls; SA secrets are worker identity only."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -108,11 +106,12 @@ class MLAirTokenManager:
         with self._lock:
             return self._state.refresh_token or _env_first(_REFRESH_TOKEN_ENVS)
 
-    def get_access_token(self, *, force_refresh: bool = False) -> str:
-        sa_secret = self.resolve_service_account_secret()
-        if sa_secret and not force_refresh:
-            return sa_secret
+    def get_worker_auth_token(self) -> str:
+        """Long-lived SA credential for worker identity / lease authentication."""
+        return self.resolve_service_account_secret()
 
+    def get_hub_jwt_token(self, *, force_refresh: bool = False) -> str:
+        """JWT bearer for Hub plugin calls (dataset download, model/version APIs)."""
         with self._lock:
             if not force_refresh and self._access_token_valid_locked():
                 return self._state.access_token
@@ -121,16 +120,11 @@ class MLAirTokenManager:
             if self._state.access_token:
                 return self._state.access_token
 
-        for name in _ACCESS_TOKEN_ENVS:
-            candidate = os.getenv(name, "").strip()
-            if not candidate:
-                continue
-            if _looks_like_jwt(candidate):
-                exp = _jwt_exp_unix(candidate)
-                if exp is not None and exp <= time.time() + self._refresh_skew_seconds:
-                    continue
-            return candidate
-        return ""
+        return self._jwt_from_env()
+
+    def get_access_token(self, *, force_refresh: bool = False) -> str:
+        """Alias for Hub JWT resolution (never returns SA secret)."""
+        return self.get_hub_jwt_token(force_refresh=force_refresh)
 
     def invalidate_access_token(self) -> None:
         with self._lock:
@@ -138,21 +132,18 @@ class MLAirTokenManager:
             self._state.expires_at = None
 
     def on_http_401(self) -> str:
-        sa_secret = self.resolve_service_account_secret()
-        if sa_secret:
-            return sa_secret
         self.invalidate_access_token()
-        return self.get_access_token(force_refresh=True)
+        return self.get_hub_jwt_token(force_refresh=True)
 
     def sync_process_env(self, target: dict[str, str] | None = None) -> dict[str, str]:
-        """Write the current effective bearer token into plugin/child process env."""
+        """Write JWT into plugin env; keep SA secret on dedicated worker auth vars."""
         env = target if target is not None else os.environ
-        token = self.get_access_token()
-        if not token:
-            return env
-        env["CV_MLAIR_TOKEN"] = token
-        env["ML_AIR_TRACKING_TOKEN"] = token
-        env["ML_AIR_TOKEN"] = token
+        jwt = self.get_hub_jwt_token()
+        if jwt:
+            env["CV_MLAIR_TOKEN"] = jwt
+            env["ML_AIR_ACCESS_TOKEN"] = jwt
+            env["ML_AIR_TRACKING_TOKEN"] = jwt
+            env["ML_AIR_TOKEN"] = jwt
         refresh = self.get_refresh_token()
         if refresh:
             env["ML_AIR_REFRESH_TOKEN"] = refresh
@@ -161,9 +152,19 @@ class MLAirTokenManager:
             for name in _SA_SECRET_ENVS:
                 if os.getenv(name, "").strip():
                     env[name] = os.getenv(name, "").strip()
-        elif _looks_like_jwt(token):
-            env["ML_AIR_ACCESS_TOKEN"] = token
+            env["ML_AIR_SERVICE_ACCOUNT_TOKEN"] = sa_secret
         return env
+
+    def _jwt_from_env(self) -> str:
+        for name in _JWT_ACCESS_TOKEN_ENVS:
+            candidate = os.getenv(name, "").strip()
+            if not candidate or not _looks_like_jwt(candidate):
+                continue
+            exp = _jwt_exp_unix(candidate)
+            if exp is not None and exp <= time.time() + self._refresh_skew_seconds:
+                continue
+            return candidate
+        return ""
 
     def _access_token_valid_locked(self) -> bool:
         token = self._state.access_token.strip()
@@ -193,15 +194,11 @@ class MLAirTokenManager:
                 return
 
         if not force_refresh:
-            for name in _ACCESS_TOKEN_ENVS:
-                candidate = os.getenv(name, "").strip()
-                if not candidate or not _looks_like_jwt(candidate):
-                    continue
-                exp = _jwt_exp_unix(candidate)
-                if exp is None or exp > time.time() + self._refresh_skew_seconds:
-                    self._state.access_token = candidate
-                    self._state.expires_at = exp
-                    return
+            candidate = self._jwt_from_env()
+            if candidate:
+                self._state.access_token = candidate
+                self._state.expires_at = _jwt_exp_unix(candidate)
+                return
 
     def _apply_token_response_locked(self, payload: dict[str, Any]) -> None:
         access = str(payload.get("access_token") or "").strip()
@@ -264,5 +261,5 @@ def get_platform_token_manager() -> MLAirTokenManager:
 
 
 def resolve_platform_api_token(*, force_refresh: bool = False) -> str:
-    """Return a valid Hub API bearer token for platform automation."""
-    return get_platform_token_manager().get_access_token(force_refresh=force_refresh)
+    """Return a valid Hub JWT for plugin/API calls (never the SA worker secret)."""
+    return get_platform_token_manager().get_hub_jwt_token(force_refresh=force_refresh)

@@ -90,6 +90,9 @@ class Harness:
         return _scope_path(tenant or self.tenant, project or self.project, suffix)
 
     def execution_mode(self) -> str:
+        forced = os.getenv("ML_AIR_TASK_EXECUTION_MODE", "").strip().lower()
+        if forced in {"internal", "external"}:
+            return forced
         call = self.client.request(
             "POST",
             "/v1/tasks/lease",
@@ -500,7 +503,7 @@ def scrape_scheduler_metrics(metrics_url: str) -> dict[str, float | None]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="MLair P2 evaluation harness")
-    p.add_argument("--profile", choices=("smoke", "publish", "production"), default="smoke")
+    p.add_argument("--profile", choices=("smoke", "publish", "production", "local-campaign"), default="smoke")
     p.add_argument(
         "--only",
         default="api,admission,submit,attribution",
@@ -538,6 +541,9 @@ def main(argv: list[str] | None = None) -> int:
     elif args.profile == "production":
         api_samples = args.api_samples or 80
         conc_sweep = (1, 10)
+    elif args.profile == "local-campaign":
+        api_samples = args.api_samples or 100
+        conc_sweep = (1, 10, 100)
     else:
         api_samples = args.api_samples or 30
         conc_sweep = (1, 4)

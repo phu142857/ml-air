@@ -489,13 +489,17 @@ def main() -> None:
 
             from sdk.resource_monitor import TaskResourceMonitor, merge_resource_usage, resource_monitor_enabled
             from sdk.independent_observation import IndependentObserver, independent_observation_enabled
+            from sdk.workload_container_monitor import WorkloadContainerMonitor, workload_container_monitor_enabled
 
             monitor: TaskResourceMonitor | None = None
+            workload_monitor: WorkloadContainerMonitor | None = None
             observer: IndependentObserver | None = None
             usage_report: dict[str, Any] | None = None
             observe_report: dict[str, Any] | None = None
             if resource_monitor_enabled():
                 monitor = TaskResourceMonitor(task_id=str(task.get("task_id") or ""))
+            if workload_container_monitor_enabled():
+                workload_monitor = WorkloadContainerMonitor(task_id=str(task.get("task_id") or ""))
             if independent_observation_enabled():
                 observer = IndependentObserver()
 
@@ -510,6 +514,7 @@ def main() -> None:
             status = "SUCCESS"
             plugin_exec = None
             http_exec = None
+            workload_report: dict[str, Any] | None = None
             # Deterministic failure mode to validate retry/backoff flow.
             if pipeline_id.startswith("fail_once") and int(task.get("attempt", 1)) == 1:
                 status = "FAILED"
@@ -542,12 +547,18 @@ def main() -> None:
                     pipeline_id=pipeline_id,
                     trace_id=trace_id,
                 )
-                plugin_exec = _run_plugin_subprocess(
-                    plugin_name=plugin_name,
-                    context=plugin_ctx,
-                    monitor=monitor,
-                    observer=observer,
-                )
+                if workload_monitor is not None:
+                    workload_monitor.start()
+                try:
+                    plugin_exec = _run_plugin_subprocess(
+                        plugin_name=plugin_name,
+                        context=plugin_ctx,
+                        monitor=monitor,
+                        observer=observer,
+                    )
+                finally:
+                    if workload_monitor is not None:
+                        workload_report = workload_monitor.stop()
                 if not plugin_exec.get("ok"):
                     status = "FAILED"
                 else:
@@ -582,9 +593,29 @@ def main() -> None:
                 "memory_rss_kb": rss_kb,
             }
             monitored_ru = (usage_report or {}).get("resource_usage") if usage_report else None
-            resource_usage = merge_resource_usage(legacy_ru, monitored_ru)
-            usage_samples = (usage_report or {}).get("usage_samples") if usage_report else None
+            workload_ru = (workload_report or {}).get("resource_usage") if workload_report else None
+            plugin_ru = None
+            plugin_samples: list[dict[str, Any]] | None = None
+            if plugin_exec and plugin_exec.get("ok"):
+                plugin_result = plugin_exec.get("result")
+                if isinstance(plugin_result, dict):
+                    plugin_ru = plugin_result.get("resource_usage")
+                    raw_samples = plugin_result.get("usage_samples")
+                    if isinstance(raw_samples, list):
+                        plugin_samples = raw_samples
+            resource_usage = merge_resource_usage(legacy_ru, monitored_ru, workload_ru, plugin_ru)
+            usage_samples = None
+            if workload_report and workload_report.get("usage_samples"):
+                usage_samples = workload_report.get("usage_samples")
+            elif plugin_samples:
+                usage_samples = plugin_samples
+            elif usage_report:
+                usage_samples = usage_report.get("usage_samples")
             resource_monitor_meta = (usage_report or {}).get("resource_monitor") if usage_report else None
+            if workload_report and workload_report.get("resource_monitor"):
+                workload_meta = workload_report.get("resource_monitor")
+                if isinstance(workload_meta, dict):
+                    resource_monitor_meta = {**(resource_monitor_meta or {}), **workload_meta}
             resource_events = (usage_report or {}).get("resource_events") if usage_report else None
             _post_manifest(task=task, plugin_result=plugin_exec, status=status)
             TASK_EXECUTED_TOTAL.labels(status=status, queue=queue_name).inc()

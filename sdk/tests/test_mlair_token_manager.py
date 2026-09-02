@@ -42,11 +42,19 @@ class MLAirTokenManagerTest(unittest.TestCase):
 
         tm._MANAGER = None
 
-    def test_prefers_service_account_secret_over_jwt(self) -> None:
+    def test_sa_secret_not_selected_as_hub_jwt(self) -> None:
         os.environ["ML_AIR_SA_EXECUTOR_SECRET"] = "sa-long-lived-secret"
         os.environ["ML_AIR_ACCESS_TOKEN"] = _jwt_with_exp(int(time.time()) + 60)
         mgr = MLAirTokenManager()
-        self.assertEqual(mgr.get_access_token(), "sa-long-lived-secret")
+        token = mgr.get_hub_jwt_token()
+        self.assertTrue(token.startswith("ey"))
+        self.assertNotEqual(token, "sa-long-lived-secret")
+
+    def test_worker_auth_token_returns_sa_secret(self) -> None:
+        os.environ["ML_AIR_SA_EXECUTOR_SECRET"] = "sa-long-lived-secret"
+        os.environ["ML_AIR_ACCESS_TOKEN"] = _jwt_with_exp(int(time.time()) + 60)
+        mgr = MLAirTokenManager()
+        self.assertEqual(mgr.get_worker_auth_token(), "sa-long-lived-secret")
 
     def test_refresh_on_expired_access_token(self) -> None:
         os.environ["ML_AIR_REFRESH_TOKEN"] = "refresh-abc"
@@ -61,12 +69,13 @@ class MLAirTokenManagerTest(unittest.TestCase):
                 "expires_in": 900,
             },
         ) as refresh:
-            token = mgr.get_access_token()
+            token = mgr.get_hub_jwt_token()
         refresh.assert_called_once_with("refresh-abc")
         self.assertEqual(token, "new-access")
         self.assertEqual(mgr.get_refresh_token(), "new-refresh")
 
-    def test_on_http_401_reacquires_when_not_using_sa_secret(self) -> None:
+    def test_on_http_401_refreshes_jwt(self) -> None:
+        os.environ["ML_AIR_SA_EXECUTOR_SECRET"] = "sa-secret"
         os.environ["ML_AIR_REFRESH_TOKEN"] = "refresh-abc"
         os.environ["ML_AIR_ACCESS_TOKEN"] = _jwt_with_exp(int(time.time()) + 600)
         mgr = MLAirTokenManager()
@@ -77,16 +86,31 @@ class MLAirTokenManagerTest(unittest.TestCase):
         ):
             token = mgr.on_http_401()
         self.assertEqual(token, "after-401")
+        self.assertNotEqual(token, "sa-secret")
 
-    def test_sync_process_env_writes_cv_token(self) -> None:
+    def test_sync_process_env_separates_jwt_and_sa(self) -> None:
         os.environ["ML_AIR_SA_EXECUTOR_SECRET"] = "sa-secret"
+        os.environ["ML_AIR_ACCESS_TOKEN"] = _jwt_with_exp(int(time.time()) + 3600)
         env: dict[str, str] = {}
         MLAirTokenManager().sync_process_env(env)
-        self.assertEqual(env["CV_MLAIR_TOKEN"], "sa-secret")
-        self.assertEqual(env["ML_AIR_TRACKING_TOKEN"], "sa-secret")
+        self.assertTrue(env["CV_MLAIR_TOKEN"].startswith("ey"))
+        self.assertNotEqual(env["CV_MLAIR_TOKEN"], "sa-secret")
+        self.assertEqual(env["ML_AIR_SERVICE_ACCOUNT_TOKEN"], "sa-secret")
+        self.assertEqual(env["ML_AIR_SA_EXECUTOR_SECRET"], "sa-secret")
+        self.assertEqual(env["ML_AIR_ACCESS_TOKEN"], env["CV_MLAIR_TOKEN"])
+
+    def test_dataset_download_uses_jwt_not_sa(self) -> None:
+        os.environ["ML_AIR_SA_EXECUTOR_SECRET"] = "sa-secret"
+        jwt = _jwt_with_exp(int(time.time()) + 3600)
+        os.environ["ML_AIR_ACCESS_TOKEN"] = jwt
+        mgr = MLAirTokenManager()
+        env: dict[str, str] = {}
+        mgr.sync_process_env(env)
+        self.assertEqual(env["CV_MLAIR_TOKEN"], jwt)
+        self.assertNotEqual(env["CV_MLAIR_TOKEN"], mgr.get_worker_auth_token())
 
     def test_long_running_ttl_simulation(self) -> None:
-        """TTL=900s, training >900s: eval-time refresh must yield a valid token."""
+        """TTL=900s, training >900s: eval-time refresh must yield a valid JWT."""
         os.environ["ML_AIR_REFRESH_TOKEN"] = "refresh-long-run"
         os.environ["ML_AIR_ACCESS_TOKEN"] = _jwt_with_exp(int(time.time()) - 1200)
         mgr = MLAirTokenManager()
@@ -97,14 +121,14 @@ class MLAirTokenManagerTest(unittest.TestCase):
         ):
             train_started = time.time() - 1200
             self.assertGreater(time.time() - train_started, 900)
-            token = mgr.get_access_token()
+            token = mgr.get_hub_jwt_token()
         self.assertEqual(token, "post-train-access")
 
     def test_valid_token_unchanged_without_refresh(self) -> None:
         os.environ["ML_AIR_ACCESS_TOKEN"] = _jwt_with_exp(int(time.time()) + 3600)
         mgr = MLAirTokenManager()
         with mock.patch.object(mgr, "_refresh_session") as refresh:
-            token = mgr.get_access_token()
+            token = mgr.get_hub_jwt_token()
         refresh.assert_not_called()
         self.assertTrue(token.startswith("ey"))
 

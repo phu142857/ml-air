@@ -28,6 +28,13 @@ SMOKE_SUBMIT_CELLS: tuple[tuple[int, int, int], ...] = ((1, 8, 2),)
 # Single-tenant cells for a live production API (no eval_t00… tenant sweep).
 PRODUCTION_SUBMIT_CELLS: tuple[tuple[int, int, int], ...] = ((1, 20, 4),)
 
+# Local campaign host supplementary benchmark (paper appendix; not full publish matrix).
+LOCAL_CAMPAIGN_SUBMIT_CELLS: tuple[tuple[int, int, int], ...] = (
+    (1, 8, 1),
+    (1, 16, 4),
+    (1, 16, 16),
+)
+
 
 def percentiles(values: Sequence[float], ps: Iterable[int] = PERCENTILES) -> dict[str, float | None]:
     """Linear interpolation over sorted samples. Empty input yields None."""
@@ -81,6 +88,8 @@ def submit_cells_for_profile(profile: str) -> tuple[tuple[int, int, int], ...]:
         return PUBLISH_SUBMIT_CELLS
     if name == "production":
         return PRODUCTION_SUBMIT_CELLS
+    if name == "local-campaign":
+        return LOCAL_CAMPAIGN_SUBMIT_CELLS
     return SMOKE_SUBMIT_CELLS
 
 
