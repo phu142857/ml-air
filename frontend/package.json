@@ -73,7 +73,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
     "jsdom": "^27.0.1",
-    "postcss": "^8.5.13",
+    "postcss": "^8.5.23",
     "tailwindcss": "^4.1.17",
     "typescript": "^6.0.3",
     "vitest": "^3.2.4"
