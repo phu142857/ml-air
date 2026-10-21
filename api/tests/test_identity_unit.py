@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -14,6 +15,17 @@ class TestIdentityPassword(unittest.TestCase):
         stored = hash_password("secret-pass")
         self.assertTrue(verify_password("secret-pass", stored))
         self.assertFalse(verify_password("wrong", stored))
+
+
+class TestIdentityBootstrap(unittest.TestCase):
+    @patch("app.domains.governance.identity_bootstrap.repo.count_global_admins", return_value=0)
+    @patch("app.domains.governance.identity_bootstrap.repo.identity_tables_available", return_value=True)
+    @patch.dict(os.environ, {"ML_AIR_ENVIRONMENT": "production"}, clear=True)
+    def test_production_requires_explicit_bootstrap_password(self, _tables, _count) -> None:
+        from app.domains.governance.identity_bootstrap import maybe_bootstrap_global_admin
+
+        with self.assertRaisesRegex(RuntimeError, "ML_AIR_BOOTSTRAP_ADMIN_PASSWORD"):
+            maybe_bootstrap_global_admin()
 
 
 class TestIdentityToken(unittest.TestCase):

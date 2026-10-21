@@ -210,11 +210,30 @@ async def tracing_and_metrics_middleware(request: Request, call_next):  # type: 
         reset_event_request_context()
 
 
+def _cors_allowed_origins() -> list[str]:
+    raw = os.getenv("ML_AIR_CORS_ALLOWED_ORIGINS", "").strip()
+    if raw:
+        return sorted({origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()})
+    environment = os.getenv("ML_AIR_ENVIRONMENT", os.getenv("MLAIR_PROFILE", "development")).strip().lower()
+    return [] if environment in {"production", "staging"} else ["*"]
+
+
+def _cors_private_network_enabled() -> bool:
+    environment = os.getenv("ML_AIR_ENVIRONMENT", os.getenv("MLAIR_PROFILE", "development")).strip().lower()
+    default = "0" if environment in {"production", "staging"} else "1"
+    return os.getenv("ML_AIR_CORS_ALLOW_PRIVATE_NETWORK", default).strip() == "1"
+
+
+def _cors_origin_allowed(origin: str | None) -> bool:
+    allowed = _cors_allowed_origins()
+    return bool(origin) and ("*" in allowed or origin.rstrip("/") in allowed)
+
+
 def _install_cors_middleware(application: FastAPI) -> None:
     """Register CORS after tracing. Enables Private Network Access preflight when supported."""
-    _allow_pn = os.getenv("ML_AIR_CORS_ALLOW_PRIVATE_NETWORK", "1").strip() == "1"
+    _allow_pn = _cors_private_network_enabled()
     _common = {
-        "allow_origins": ["*"],
+        "allow_origins": _cors_allowed_origins(),
         "allow_credentials": False,
         "allow_methods": ["*"],
         "allow_headers": ["*"],
@@ -234,9 +253,11 @@ async def permissive_cors_bridge(request: Request, call_next):  # type: ignore[n
 
     Complements ``CORSMiddleware`` (PNA / missing ``Origin`` / odd preflights). Registered **last** so it runs **first**.
     """
-    allow_pn = os.getenv("ML_AIR_CORS_ALLOW_PRIVATE_NETWORK", "1").strip() == "1"
+    allow_pn = _cors_private_network_enabled()
     origin = request.headers.get("origin")
     if request.method == "OPTIONS" and request.headers.get("access-control-request-method"):
+        if not _cors_origin_allowed(origin):
+            return Response(status_code=403, content="CORS origin denied", media_type="text/plain")
         acrh = request.headers.get("access-control-request-headers")
         h: dict[str, str] = {
             "Access-Control-Allow-Methods": "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
@@ -246,22 +267,16 @@ async def permissive_cors_bridge(request: Request, call_next):  # type: ignore[n
             h["Access-Control-Allow-Headers"] = acrh
         else:
             h["Access-Control-Allow-Headers"] = "*"
-        if origin:
-            h["Access-Control-Allow-Origin"] = origin
-            h["Vary"] = "Origin"
-        else:
-            h["Access-Control-Allow-Origin"] = "*"
+        h["Access-Control-Allow-Origin"] = origin or ""
+        h["Vary"] = "Origin"
         if allow_pn and request.headers.get("access-control-request-private-network") is not None:
             h["Access-Control-Allow-Private-Network"] = "true"
         return Response(status_code=200, content="OK", media_type="text/plain", headers=h)
 
     response = await call_next(request)
-    if not response.headers.get("access-control-allow-origin"):
-        if origin:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers.append("Vary", "Origin")
-        else:
-            response.headers["Access-Control-Allow-Origin"] = "*"
+    if origin and _cors_origin_allowed(origin) and not response.headers.get("access-control-allow-origin"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers.append("Vary", "Origin")
     if origin and (response.headers.get("traceparent") or response.headers.get("tracestate")):
         expose = {
             h.strip()

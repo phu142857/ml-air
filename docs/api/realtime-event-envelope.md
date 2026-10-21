@@ -30,6 +30,7 @@ MLAir publishes UI realtime events to Redis channel **`mlair.events.{tenant_id}.
 | `buffer.threshold_met` | `dataset_id` | `dataset_id`, `current_size`, `target_threshold`, `accumulation_strategy`, `updated_at`, … |
 | `training.triggered` | `run_id` | `run_id`, `model_id`, `dataset_id`, `dataset_version_id`, `pipeline_id`, `blocked_by_gate`, `updated_at` |
 | `training.completed` | `run_id` | `run_id`, `pipeline_id`, `dataset_version_id`, optional `model_id` / `dataset_id`, `status`, `updated_at` |
+| `configuration.updated` | configuration scope | changed configuration scope and revision metadata |
 | `training.eligibility.updated` | `run_id` | `run_id`, `dataset_id`, `status`, `ready`, `updated_at` |
 | `eligibility.updated` | `run_id` or `model_id` | Same as training/model eligibility plus **`kind`**: `training` \| `model` |
 | `model.promoted` | `model_id` | `model_id`, `version`, `stage`, `updated_at`, … |

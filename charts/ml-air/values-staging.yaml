@@ -11,6 +11,13 @@ api:
     jwtIssuer: ""
     jwtAudience: ""
     jwtJwksUrl: ""
+  extraEnv:
+    MLAIR_PROFILE: staging
+    ML_AIR_ENVIRONMENT: staging
+    ML_AIR_NOTIFICATION_DELIVERY: "0"
+    ML_AIR_INTEGRATION_DELIVERY: "0"
+    ML_AIR_SIEM_EXPORT_ENABLED: "0"
+    ML_AIR_CORS_ALLOWED_ORIGINS: "https://ml-air-staging.internal"
   # Strict lifecycle OS for staging: merge deploy/env/staging-strict.env.example
   # into API/scheduler env (Helm template extension TBD) — see docs/configuration.md
   secret:
@@ -29,6 +36,10 @@ api:
     sealedSecret:
       enabled: false
       encryptedData: ""
+      identityJwtEncryptedData: ""
+      bootstrapAdminPasswordEncryptedData: ""
+      schedulerServiceAccountEncryptedData: ""
+      executorServiceAccountEncryptedData: ""
 
 scheduler:
   image:

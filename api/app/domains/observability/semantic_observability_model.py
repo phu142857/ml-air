@@ -23,6 +23,7 @@ SEMANTIC_OBSERVABILITY_DOCUMENTED_GAPS: tuple[str, ...] = (
     "dataset.updated",
     "training.eligibility.updated",
     "training.policy.updated",
+    "configuration.updated",
 )
 
 

@@ -40,6 +40,31 @@ _EXTRA_FEATURE_ENV: dict[str, str] = {
     "legacy_static_tokens": "ML_AIR_LEGACY_STATIC_TOKENS",
 }
 
+_FAIL_CLOSED_FEATURES = frozenset(
+    {
+        "domain_event_outbox",
+        "projections_enabled",
+        "timeline_projection_reads",
+        "dashboard_projection_reads",
+        "notification_delivery",
+        "integration_delivery",
+        "event_retention_enabled",
+        "siem_export_enabled",
+        "event_schema_registry_enabled",
+        "multi_cluster",
+        "multi_region",
+        "federation",
+        "edge_deployment",
+        "global_scheduler",
+        "cross_region_replication",
+        "disaster_recovery",
+        "global_identity",
+        "global_observability",
+        "extension_platform",
+        "experiments_enabled",
+    }
+)
+
 
 def _profile_bundle() -> dict[str, Any]:
     profile = os.getenv("MLAIR_PROFILE", "").strip() or None
@@ -62,7 +87,7 @@ def _parse_bool(raw: str | None, *, default: bool) -> bool:
     return default
 
 
-def _l1_feature_default(feature_key: str, *, fallback: bool = True) -> bool:
+def _l1_feature_default(feature_key: str, *, fallback: bool | None = None) -> bool:
     try:
         from mlair.config.loader import _BUILTIN_DEFAULTS
 
@@ -71,7 +96,9 @@ def _l1_feature_default(feature_key: str, *, fallback: bool = True) -> bool:
             return bool(features[feature_key])
     except ImportError:
         pass
-    return fallback
+    if fallback is not None:
+        return fallback
+    return feature_key not in _FAIL_CLOSED_FEATURES
 
 
 def _resolve_bool(

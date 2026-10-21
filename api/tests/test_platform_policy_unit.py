@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from app.domains.platform import system_settings_document as doc
-from app.settings.platform_policy import platform_quota_limits, platform_webhook_allowed_hosts
+from app.settings.platform_policy import is_webhook_url_allowed, platform_quota_limits, platform_webhook_allowed_hosts
 
 _L4_PATCH_TARGET = "app.settings.platform_policy.get_l4_overlay"
 
@@ -49,6 +49,14 @@ class PlatformPolicyTests(unittest.TestCase):
         mock_l4.return_value = seed
         hosts = platform_webhook_allowed_hosts()
         self.assertEqual(hosts, ["hooks.example.com", "localhost"])
+
+    @patch(_L4_PATCH_TARGET, return_value=None)
+    @patch.dict(os.environ, {"ML_AIR_WEBHOOK_ALLOWED_HOSTS": "hooks.example.com"}, clear=True)
+    def test_webhook_url_requires_allowlisted_host_and_http_scheme(self, _mock_l4) -> None:
+        self.assertTrue(is_webhook_url_allowed("https://hooks.example.com/events"))
+        self.assertFalse(is_webhook_url_allowed("https://127.0.0.1/admin"))
+        self.assertFalse(is_webhook_url_allowed("file:///etc/passwd"))
+        self.assertFalse(is_webhook_url_allowed("https://user:pass@hooks.example.com/events"))
 
     def test_validate_quota_defaults_patch(self) -> None:
         current = doc.build_seed_settings({"features": {}})

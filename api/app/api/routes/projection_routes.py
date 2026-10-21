@@ -156,7 +156,7 @@ def create_notification_channel_v1(
         enabled=payload.enabled,
     )
     if not row:
-        raise HTTPException(status_code=500, detail="notification_channel_create_failed")
+        raise HTTPException(status_code=422, detail="notification_webhook_target_not_allowed")
     return row
 
 
@@ -206,7 +206,7 @@ def create_integration_subscription_v1(
         enabled=payload.enabled,
     )
     if not row:
-        raise HTTPException(status_code=500, detail="integration_subscription_create_failed")
+        raise HTTPException(status_code=422, detail="integration_target_not_allowed")
     return row
 
 

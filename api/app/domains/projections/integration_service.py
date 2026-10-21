@@ -66,6 +66,10 @@ def create_subscription(
     enabled: bool = True,
 ) -> dict[str, Any] | None:
     from psycopg import connect
+    from app.settings.platform_policy import is_webhook_url_allowed
+
+    if not is_webhook_url_allowed(target_url):
+        return None
 
     sid = str(uuid.uuid4())
     actions = [str(x).strip() for x in (event_actions or []) if str(x).strip()] or None
@@ -153,6 +157,10 @@ def _deliver_loop(envelope: EventEnvelope) -> None:
             continue
         url = str(sub.get("target_url") or "").strip()
         if not url:
+            continue
+        from app.settings.platform_policy import is_webhook_url_allowed
+
+        if not is_webhook_url_allowed(url):
             continue
         try:
             req = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/json"})

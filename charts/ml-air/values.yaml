@@ -37,6 +37,14 @@ api:
     existingSecretName: ""
     key: jwtHs256Secret
     value: change-me-32-byte-secret
+    identityJwtKey: identityJwtSecret
+    identityJwtValue: change-me-identity-secret
+    bootstrapAdminPasswordKey: bootstrapAdminPassword
+    bootstrapAdminPasswordValue: admin-change-me
+    schedulerServiceAccountKey: schedulerServiceAccountSecret
+    schedulerServiceAccountValue: change-me-scheduler-secret
+    executorServiceAccountKey: executorServiceAccountSecret
+    executorServiceAccountValue: change-me-executor-secret
     externalSecret:
       enabled: false
       secretStoreRef:
@@ -48,6 +56,10 @@ api:
     sealedSecret:
       enabled: false
       encryptedData: ""
+      identityJwtEncryptedData: ""
+      bootstrapAdminPasswordEncryptedData: ""
+      schedulerServiceAccountEncryptedData: ""
+      executorServiceAccountEncryptedData: ""
 
 scheduler:
   replicaCount: 1

@@ -162,17 +162,20 @@ def create_siem_subscription_v1(
 ) -> dict[str, Any]:
     principal = authenticate_bearer(authorization)
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="maintainer")
-    return siem_svc.create_subscription(
-        tenant_id=tenant_id,
-        project_id=project_id,
-        name=payload.name,
-        sink_type=payload.sink_type,
-        target_url=payload.target_url,
-        export_format=payload.export_format,
-        secret_token=payload.secret_token,
-        event_actions=payload.event_actions,
-        enabled=payload.enabled,
-    )
+    try:
+        return siem_svc.create_subscription(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            name=payload.name,
+            sink_type=payload.sink_type,
+            target_url=payload.target_url,
+            export_format=payload.export_format,
+            secret_token=payload.secret_token,
+            event_actions=payload.event_actions,
+            enabled=payload.enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/tenants/{tenant_id}/projects/{project_id}/governance/siem/subscriptions/{subscription_id}")

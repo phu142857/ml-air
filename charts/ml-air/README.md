@@ -29,6 +29,8 @@ Frontend builds require `NEXT_PUBLIC_API_BASE_URL` at **image build time** (see 
 | `ML_AIR_REDIS_URL` | Redis for queues and run logs |
 | `ML_AIR_DATABASE_URL` | Postgres for control-plane state |
 | `ML_AIR_JWT_HS256_SECRET` | JWT / static auth material (via chart Secret) |
+| `ML_AIR_IDENTITY_JWT_SECRET` | Identity-session JWT signing key (via chart Secret) |
+| `ML_AIR_BOOTSTRAP_ADMIN_PASSWORD` | Required one-time admin password outside development |
 | `ML_AIR_RUNTIME_REALTIME_BASE_URL` | Browser WSS URL (`api.env.runtimeRealtimeBaseUrl` in values) |
 | `ML_AIR_TASK_EXECUTION_MODE` | `internal` (default) or `external` for lease-based workers |
 | `ML_AIR_WORKER_TOKEN` | Bearer for `POST /v1/tasks/lease` when using external workers |
@@ -40,7 +42,10 @@ See [`docs/guides/model-governance.md`](../../docs/guides/model-governance.md).
 
 ## Executor / scheduler
 
-Executor commonly needs `ML_AIR_API_BASE_URL` and `ML_AIR_TRACKING_TOKEN` to call back into the API (see chart templates under `templates/` for defaults).
+Executor and scheduler receive `ML_AIR_API_BASE_URL` plus their IAM service-account
+secrets from the chart-managed, existing, sealed, or external Secret. Existing and
+external Secrets must contain `schedulerServiceAccountSecret` and
+`executorServiceAccountSecret` alongside the JWT and bootstrap keys.
 
 ## Install
 

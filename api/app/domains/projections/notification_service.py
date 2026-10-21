@@ -24,7 +24,7 @@ def _database_url() -> str:
     return os.getenv("ML_AIR_DATABASE_URL", "postgresql://mlair:mlair@postgres:5432/mlair")
 
 
-def list_channels(tenant_id: str, project_id: str) -> list[dict[str, Any]]:
+def list_channels(tenant_id: str, project_id: str, *, include_secrets: bool = False) -> list[dict[str, Any]]:
     from psycopg import connect
 
     try:
@@ -45,12 +45,17 @@ def list_channels(tenant_id: str, project_id: str) -> list[dict[str, Any]]:
         return []
     out = []
     for cid, ctype, name, config, actions, enabled, created_at, updated_at in rows:
+        safe_config = dict(config or {})
+        secret = str(safe_config.get("secret_hmac") or "").strip()
+        if not include_secrets:
+            safe_config.pop("secret_hmac", None)
+            safe_config["secret_hmac_configured"] = bool(secret)
         out.append(
             {
                 "channel_id": str(cid),
                 "channel_type": str(ctype),
                 "name": str(name),
-                "config": config or {},
+                "config": safe_config,
                 "event_actions": list(actions) if actions else None,
                 "enabled": bool(enabled),
                 "created_at": created_at,
@@ -71,6 +76,11 @@ def create_channel(
     enabled: bool = True,
 ) -> dict[str, Any] | None:
     from psycopg import connect
+    from app.settings.platform_policy import is_webhook_url_allowed
+
+    webhook_url = str((config or {}).get("webhook_url") or "").strip()
+    if webhook_url and not is_webhook_url_allowed(webhook_url):
+        return None
 
     cid = str(uuid.uuid4())
     actions = [str(x).strip() for x in (event_actions or []) if str(x).strip()] or None
@@ -135,7 +145,7 @@ def _deliver_loop(envelope: EventEnvelope) -> None:
     tenant_id = activity["tenant_id"]
     project_id = activity["project_id"]
     verb = activity["verb"]
-    channels = [c for c in list_channels(tenant_id, project_id) if c.get("enabled")]
+    channels = [c for c in list_channels(tenant_id, project_id, include_secrets=True) if c.get("enabled")]
     if not channels:
         return
     body = json.dumps(
@@ -157,6 +167,10 @@ def _deliver_loop(envelope: EventEnvelope) -> None:
             continue
         url = str((ch.get("config") or {}).get("webhook_url") or "").strip()
         if not url:
+            continue
+        from app.settings.platform_policy import is_webhook_url_allowed
+
+        if not is_webhook_url_allowed(url):
             continue
         secret = str((ch.get("config") or {}).get("secret_hmac") or "").strip() or None
         try:

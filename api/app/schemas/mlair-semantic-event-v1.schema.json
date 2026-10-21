@@ -35,7 +35,8 @@
         "eligibility.updated",
         "training.policy.updated",
         "training.triggered",
-        "training.completed"
+        "training.completed",
+        "configuration.updated"
       ]
     },
     "tenant_id": { "type": "string", "minLength": 1, "maxLength": 128 },

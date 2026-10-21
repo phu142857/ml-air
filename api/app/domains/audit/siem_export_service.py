@@ -61,6 +61,10 @@ def create_subscription(
     event_actions: list[str] | None = None,
     enabled: bool = True,
 ) -> dict[str, Any]:
+    from app.settings.platform_policy import is_webhook_url_allowed
+
+    if not is_webhook_url_allowed(target_url):
+        raise ValueError("siem_target_url_not_allowed")
     sid = str(uuid.uuid4())
     actions = [str(x).strip() for x in (event_actions or []) if str(x).strip()] or None
     fmt = str(export_format or "jsonl").strip().lower()
@@ -112,7 +116,9 @@ def push_subscription(sub: dict[str, Any]) -> int:
     if not body.strip():
         return 0
     url = str(sub.get("target_url") or "").strip()
-    if not url:
+    from app.settings.platform_policy import is_webhook_url_allowed
+
+    if not url or not is_webhook_url_allowed(url):
         return 0
     headers = {"Content-Type": "application/x-ndjson"}
     token = str(sub.get("secret_token") or "").strip()

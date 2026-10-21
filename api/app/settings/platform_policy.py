@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import urllib.parse
 from typing import Any
 
 from app.settings.l4_overlay import get_l4_overlay
@@ -133,3 +134,18 @@ def platform_webhook_allowed_hosts() -> list[str]:
     if l4_hosts is not None:
         return l4_hosts
     return []
+
+
+def is_webhook_url_allowed(url: str) -> bool:
+    value = str(url or "").strip()
+    if len(value) < 8 or len(value) > 2048:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(value)
+    except ValueError:
+        return False
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    if parsed.username or parsed.password:
+        return False
+    return parsed.hostname.lower() in platform_webhook_allowed_hosts()

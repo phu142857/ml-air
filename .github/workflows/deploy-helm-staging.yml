@@ -42,15 +42,56 @@ jobs:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
 
       - name: Validate required secrets
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          JWT_SECRET: ${{ secrets.ML_AIR_JWT_HS256_SECRET }}
+          IDENTITY_JWT_SECRET: ${{ secrets.ML_AIR_IDENTITY_JWT_SECRET }}
+          BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.ML_AIR_BOOTSTRAP_ADMIN_PASSWORD }}
+          SCHEDULER_SECRET: ${{ secrets.ML_AIR_SA_SCHEDULER_SECRET }}
+          EXECUTOR_SECRET: ${{ secrets.ML_AIR_SA_EXECUTOR_SECRET }}
         run: |
-          if [ -z "${{ secrets.KUBE_CONFIG_DATA }}" ]; then
+          if [ -z "${KUBE_CONFIG_DATA}" ]; then
             echo "Missing secret: KUBE_CONFIG_DATA"
             exit 1
           fi
-          if [ -z "${{ secrets.ML_AIR_JWT_HS256_SECRET }}" ]; then
+          if [ -z "${JWT_SECRET}" ]; then
             echo "Missing secret: ML_AIR_JWT_HS256_SECRET"
             exit 1
           fi
+          if [ -z "${IDENTITY_JWT_SECRET}" ]; then
+            echo "Missing secret: ML_AIR_IDENTITY_JWT_SECRET"
+            exit 1
+          fi
+          if [ -z "${BOOTSTRAP_ADMIN_PASSWORD}" ]; then
+            echo "Missing secret: ML_AIR_BOOTSTRAP_ADMIN_PASSWORD"
+            exit 1
+          fi
+          if [ -z "${SCHEDULER_SECRET}" ]; then
+            echo "Missing secret: ML_AIR_SA_SCHEDULER_SECRET"
+            exit 1
+          fi
+          if [ -z "${EXECUTOR_SECRET}" ]; then
+            echo "Missing secret: ML_AIR_SA_EXECUTOR_SECRET"
+            exit 1
+          fi
+
+      - name: Reconcile application secret
+        env:
+          JWT_SECRET: ${{ secrets.ML_AIR_JWT_HS256_SECRET }}
+          IDENTITY_JWT_SECRET: ${{ secrets.ML_AIR_IDENTITY_JWT_SECRET }}
+          BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.ML_AIR_BOOTSTRAP_ADMIN_PASSWORD }}
+          SCHEDULER_SECRET: ${{ secrets.ML_AIR_SA_SCHEDULER_SECRET }}
+          EXECUTOR_SECRET: ${{ secrets.ML_AIR_SA_EXECUTOR_SECRET }}
+        run: |
+          kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic ml-air-api-secrets \
+            --namespace "${NAMESPACE}" \
+            --from-literal=jwtHs256Secret="${JWT_SECRET}" \
+            --from-literal=identityJwtSecret="${IDENTITY_JWT_SECRET}" \
+            --from-literal=bootstrapAdminPassword="${BOOTSTRAP_ADMIN_PASSWORD}" \
+            --from-literal=schedulerServiceAccountSecret="${SCHEDULER_SECRET}" \
+            --from-literal=executorServiceAccountSecret="${EXECUTOR_SECRET}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Resolve image tag
         id: tag
@@ -65,7 +106,6 @@ jobs:
 
       - name: Helm upgrade --install
         run: |
-          kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
           helm upgrade --install "${RELEASE_NAME}" charts/ml-air \
             --namespace "${NAMESPACE}" \
             --values charts/ml-air/values-staging.yaml \
@@ -77,7 +117,6 @@ jobs:
             --set api.image.tag=${{ steps.tag.outputs.value }} \
             --set scheduler.image.tag=${{ steps.tag.outputs.value }} \
             --set executor.image.tag=${{ steps.tag.outputs.value }} \
-            --set-string api.secret.value=${{ secrets.ML_AIR_JWT_HS256_SECRET }} \
             --wait --timeout 10m
 
       - name: Rollback on failure

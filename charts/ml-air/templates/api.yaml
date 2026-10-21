@@ -28,6 +28,26 @@ spec:
                 secretKeyRef:
                   name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
                   key: {{ .Values.api.secret.key }}
+            - name: ML_AIR_IDENTITY_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
+                  key: {{ .Values.api.secret.identityJwtKey }}
+            - name: ML_AIR_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
+                  key: {{ .Values.api.secret.bootstrapAdminPasswordKey }}
+            - name: ML_AIR_SA_SCHEDULER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
+                  key: {{ .Values.api.secret.schedulerServiceAccountKey }}
+            - name: ML_AIR_SA_EXECUTOR_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "ml-air-api-secrets" .Values.api.secret.existingSecretName }}
+                  key: {{ .Values.api.secret.executorServiceAccountKey }}
             - name: ML_AIR_JWT_ISSUER
               value: {{ .Values.api.env.jwtIssuer | quote }}
             - name: ML_AIR_JWT_AUDIENCE

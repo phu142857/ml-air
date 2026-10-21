@@ -24,6 +24,9 @@ const STRIP_FROM_UPSTREAM = new Set([
   "transfer-encoding"
 ]);
 
+const REFRESH_COOKIE_NAME = "mlair_refresh_token";
+const REFRESH_TOKEN_SENTINEL = "__http_only_cookie__";
+
 function primaryUpstreamBase(): string {
   const raw =
     process.env.MLAIR_NEXT_INTERNAL_API_URL ||
@@ -119,6 +122,7 @@ function forwardRequestHeaders(req: NextRequest): Headers {
     const lk = key.toLowerCase();
     if (lk.startsWith("x-forwarded-")) return;
     if (lk === "host") return;
+    if (lk === "cookie") return;
     if (HOP_BY_HOP.has(lk)) return;
     out.set(key, value);
   });
@@ -129,6 +133,29 @@ function forwardRequestHeaders(req: NextRequest): Headers {
     out.set("x-forwarded-proto", proto);
   }
   return out;
+}
+
+function refreshCookieOptions(req: NextRequest) {
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim();
+  const secure = req.nextUrl.protocol === "https:" || forwardedProto === "https";
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: "strict" as const,
+    path: "/v1",
+  };
+}
+
+function isRefreshAwarePath(path: string): boolean {
+  return path === "/v1/auth/sessions" || path === "/v1/identity/sessions";
+}
+
+async function requestBody(req: NextRequest, path: string, refreshToken: string | undefined): Promise<BodyInit> {
+  if ((path === "/v1/auth/refresh" || path === "/v1/auth/logout") && refreshToken) {
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    return JSON.stringify({ ...body, refresh_token: refreshToken });
+  }
+  return req.body as BodyInit;
 }
 
 function filterResponseHeaders(src: Headers): Headers {
@@ -149,15 +176,22 @@ function toUpstreamResponse(upstream: Response): Response {
 }
 
 async function proxy(req: NextRequest, segments: string[] | undefined): Promise<Response> {
+  const path = pathFromSegments(segments);
   const headers = forwardRequestHeaders(req);
+  const refreshToken = req.cookies.get(REFRESH_COOKIE_NAME)?.value;
+  if (refreshToken && isRefreshAwarePath(path)) {
+    headers.set("X-MLAir-Refresh-Token", refreshToken);
+  }
   const init: RequestInit = {
     method: req.method,
     headers,
     cache: "no-store"
   };
   if (req.method !== "GET" && req.method !== "HEAD") {
-    init.body = req.body;
-    (init as { duplex?: string }).duplex = "half";
+    init.body = await requestBody(req, path, refreshToken);
+    if (init.body === req.body) {
+      (init as { duplex?: string }).duplex = "half";
+    }
   }
 
   const readOnly = req.method === "GET" || req.method === "HEAD";
@@ -171,6 +205,26 @@ async function proxy(req: NextRequest, segments: string[] | undefined): Promise<
     const url = buildUpstreamUrl(req, segments, base);
     try {
       const upstream = await fetch(url, { ...init, signal });
+      if (["/v1/auth/login", "/v1/auth/mfa/verify", "/v1/auth/refresh"].includes(path) && upstream.ok) {
+        const body = await upstream.json() as Record<string, unknown>;
+        const rotatedRefreshToken = typeof body.refresh_token === "string" ? body.refresh_token : "";
+        if (rotatedRefreshToken) {
+          body.refresh_token = REFRESH_TOKEN_SENTINEL;
+        }
+        const response = NextResponse.json(body, {
+          status: upstream.status,
+          headers: filterResponseHeaders(upstream.headers),
+        });
+        if (rotatedRefreshToken) {
+          response.cookies.set(REFRESH_COOKIE_NAME, rotatedRefreshToken, refreshCookieOptions(req));
+        }
+        return response;
+      }
+      if (path === "/v1/auth/logout" && upstream.ok) {
+        const response = toUpstreamResponse(upstream) as NextResponse;
+        response.cookies.set(REFRESH_COOKIE_NAME, "", { ...refreshCookieOptions(req), maxAge: 0 });
+        return response;
+      }
       return toUpstreamResponse(upstream);
     } catch (e) {
       lastError = e;

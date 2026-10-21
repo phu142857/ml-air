@@ -38,6 +38,9 @@ def maybe_bootstrap_global_admin() -> None:
     username = os.getenv("ML_AIR_BOOTSTRAP_ADMIN_USERNAME", "admin").strip()
     password = os.getenv("ML_AIR_BOOTSTRAP_ADMIN_PASSWORD", "").strip()
     if not password:
+        environment = os.getenv("ML_AIR_ENVIRONMENT", os.getenv("MLAIR_PROFILE", "development")).strip().lower()
+        if environment in {"production", "staging"}:
+            raise RuntimeError("ML_AIR_BOOTSTRAP_ADMIN_PASSWORD is required outside development")
         password = os.getenv("ML_AIR_BOOTSTRAP_ADMIN_PASSWORD_DEFAULT", "admin-change-me").strip()
     if not username or not password:
         return

@@ -23,7 +23,7 @@ Use `charts/ml-air/values-staging.yaml` as a baseline for staging rollout.
 
 Use `charts/ml-air/values-production.yaml` for production-shaped installs:
 
-- **External Secrets Operator** for JWT (`api.secret.externalSecret.enabled=true`)
+- **External Secrets Operator** for application credentials (`api.secret.externalSecret.enabled=true`)
 - **WSS** via `api.env.runtimeRealtimeBaseUrl` (`wss://…/ws`)
 - Ingress TLS + WebSocket timeouts (`ingress.tls`, `ingress.annotations`)
 
@@ -32,7 +32,7 @@ helm upgrade --install ml-air charts/ml-air \
   -f charts/ml-air/values-production.yaml
 ```
 
-JWT secret options:
+Application secret options:
 
 - **Chart-managed Secret** (default):
   - set `api.secret.value`
@@ -48,6 +48,7 @@ JWT secret options:
   - set `api.secret.sealedSecret.encryptedData` (output from `kubeseal`)
   - keep `api.secret.externalSecret.enabled=false`
 
-CI injects JWT secret via:
-
-`--set-string api.secret.value=<secret>`
+Every secret source must provide these keys: `jwtHs256Secret`, `identityJwtSecret`,
+`bootstrapAdminPassword`, `schedulerServiceAccountSecret`, and
+`executorServiceAccountSecret`. The staging workflow reconciles all five from
+GitHub Actions secrets before the Helm rollout.
