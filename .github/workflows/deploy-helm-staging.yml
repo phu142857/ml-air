@@ -22,7 +22,7 @@ jobs:
       RELEASE_NAME: ml-air
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Helm
         uses: azure/setup-helm@v5
