@@ -70,8 +70,10 @@ class TestImmutableTrainingAnchorInvariants(unittest.TestCase):
     @patch("app.api.routes.v1.pipeline_version_service.get_latest_version_id", return_value="pv-1")
     @patch("app.api.routes.v1.authorize_scope")
     @patch("app.api.routes.v1.authenticate_bearer")
+    @patch("app.api.routes.v1._enforce_tenant_quota")
     def test_unpinned_generic_post_runs_allowed_when_all_post_runs_off(
         self,
+        _quota,
         mock_auth,
         _authz,
         _gl,

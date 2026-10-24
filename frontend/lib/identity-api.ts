@@ -70,6 +70,8 @@ export type MfaStatusResponse = {
 };
 
 const AUTH_STORAGE_KEY = "ml-air:auth-session";
+const UI_CONTEXT_STORAGE_KEY = "ml-air:ui-context";
+const HTTP_ONLY_TOKEN_SENTINEL = "__http_only_cookie__";
 
 export type AuthSession = {
   accessToken: string;
@@ -77,13 +79,32 @@ export type AuthSession = {
   username?: string;
 };
 
+function scrubLegacyUiContextToken(): void {
+  try {
+    const raw = localStorage.getItem(UI_CONTEXT_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed.token !== "string" || !parsed.token) return;
+    localStorage.setItem(UI_CONTEXT_STORAGE_KEY, JSON.stringify({ ...parsed, token: "" }));
+  } catch {
+    localStorage.removeItem(UI_CONTEXT_STORAGE_KEY);
+  }
+}
+
 export function loadAuthSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
+  scrubLegacyUiContextToken();
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AuthSession;
-    if (!parsed.accessToken?.trim() || !parsed.refreshToken?.trim()) return null;
+    if (
+      parsed.accessToken !== HTTP_ONLY_TOKEN_SENTINEL ||
+      parsed.refreshToken !== HTTP_ONLY_TOKEN_SENTINEL
+    ) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -91,11 +112,19 @@ export function loadAuthSession(): AuthSession | null {
 }
 
 export function saveAuthSession(session: AuthSession): void {
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  localStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({
+      accessToken: HTTP_ONLY_TOKEN_SENTINEL,
+      refreshToken: HTTP_ONLY_TOKEN_SENTINEL,
+      username: session.username,
+    }),
+  );
 }
 
 export function clearAuthSession(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  scrubLegacyUiContextToken();
 }
 
 async function identityFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -150,6 +179,16 @@ export async function refreshIdentity(refreshToken: string): Promise<{
   return identityFetch("/auth/refresh", {
     method: "POST",
     body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+}
+
+export async function createWebSocketTicket(
+  tenantId: string,
+  projectId: string,
+): Promise<{ ticket: string; expires_in: number }> {
+  return identityFetch("/auth/ws-ticket", {
+    method: "POST",
+    body: JSON.stringify({ tenant_id: tenantId, project_id: projectId }),
   });
 }
 

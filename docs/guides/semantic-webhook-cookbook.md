@@ -22,7 +22,7 @@ This path is **separate** from the [downstream model promote webhook](./downstre
 
 ### 1. Pick a receiver URL
 
-Use **HTTPS** in production. The URL’s **hostname** must appear in `ML_AIR_WEBHOOK_ALLOWED_HOSTS` (for example `hooks.internal.example.com`).
+Use **HTTPS**. The URL’s hostname must appear in `ML_AIR_WEBHOOK_ALLOWED_HOSTS` and every DNS answer must be a public address. Redirects, URL credentials, loopback/private/reserved addresses, and process HTTP proxies are rejected.
 
 ### 2. Register a subscription
 

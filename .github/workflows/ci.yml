@@ -99,6 +99,22 @@ jobs:
 
   api-python-check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mlair
+          POSTGRES_PASSWORD: mlair
+          POSTGRES_DB: mlair
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mlair -d mlair"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ML_AIR_DATABASE_URL: postgresql://mlair:mlair@127.0.0.1:5432/mlair
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -111,7 +127,7 @@ jobs:
       - name: Install API requirements
         run: |
           python -m pip install --upgrade pip
-          pip install -r api/requirements.txt
+          pip install -r api/requirements-test.txt
 
       - name: Syntax check
         run: |
@@ -120,17 +136,15 @@ jobs:
       - name: Architecture invariants (Phase 4)
         run: python scripts/check_architecture_invariants.py
 
-      - name: Phase 4 governance unit tests
+      - name: Apply database migrations
         run: |
-          cd api && PYTHONPATH=. python -m unittest tests.test_phase4_governance -q
+          cd api && alembic upgrade head
 
-      - name: Security and semantic contract unit tests
+      - name: Full API test suite
         run: |
-          PYTHONPATH=api:. python -m unittest \
-            api.tests.test_identity_unit.TestIdentityBootstrap \
-            api.tests.test_platform_policy_unit \
-            api.tests.test_semantic_event_type_schema_parity \
-            api.tests.test_semantic_observability_model -q
+          ML_AIR_RUN_DB_INTEGRATION_TESTS=1 \
+          PYTHONPATH=api:. \
+          python -m unittest discover -s api/tests -t api -p 'test_*.py' -q
 
   frontend-check:
     runs-on: ubuntu-latest

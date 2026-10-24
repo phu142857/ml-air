@@ -12,7 +12,7 @@ from contextvars import ContextVar, Token
 from typing import Any
 from uuid import uuid4
 
-from app.domains.observability.trace_service import get_trace_id
+from app.trace_provider import get_trace_id
 from app.domains.shared.events.context import ActorRef, EventContext
 
 _actor_ctx: ContextVar[ActorRef | None] = ContextVar("mlair_event_actor", default=None)
@@ -102,17 +102,15 @@ def actor_ref_from_principal(principal: Any) -> ActorRef:
     actor_name = subject
     if user_id:
         try:
-            from app.domains.governance import identity_repository as identity_repo
+            from app.application.identity_gateway import get_active_user
 
-            if identity_repo.identity_tables_available():
-                user = identity_repo.get_user_by_id(str(user_id))
-                if user:
-                    display = str(user.get("display_name") or "").strip()
-                    username = str(user.get("username") or "").strip()
-                    actor_name = display or username or subject
+            user = get_active_user(str(user_id))
+            if user:
+                display = str(user.get("display_name") or "").strip()
+                username = str(user.get("username") or "").strip()
+                actor_name = display or username or subject
         except Exception:
             pass
-
     return ActorRef(
         actor_type="USER",
         actor_id=actor_id,

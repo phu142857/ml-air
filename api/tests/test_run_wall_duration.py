@@ -33,7 +33,7 @@ class RunWallDurationTests(unittest.TestCase):
         mock_list_tasks.return_value = []
         fixed_now = datetime(2026, 1, 1, 0, 2, 0, tzinfo=timezone.utc)
         with patch(
-            "app.domains.orchestration.tracking_service.datetime.now",
+            "app.domains.orchestration.tracking_service._utcnow",
             return_value=fixed_now,
         ):
             seconds = _run_duration_seconds(

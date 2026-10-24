@@ -163,8 +163,10 @@ def _deliver_loop(envelope: EventEnvelope) -> None:
         if not is_webhook_url_allowed(url):
             continue
         try:
+            from app.settings.platform_policy import open_webhook_request
+
             req = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            with open_webhook_request(req, timeout=10) as resp:
                 resp.read(256)
             logger.info("integration_ok sub=%s type=%s action=%s", sub["subscription_id"], sub["integration_type"], action)
         except Exception as exc:  # noqa: BLE001

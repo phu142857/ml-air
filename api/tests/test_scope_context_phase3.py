@@ -27,11 +27,12 @@ from app.api.routes import v1
 
 
 class TestScopeContextPhase3(unittest.TestCase):
+    @patch("app.api.routes.v1.scope_context_service.resolve_source_tenant_for_mapping_check", return_value="default")
     @patch("app.api.routes.v1.scope_context_service.upsert_scope_override")
     @patch("app.api.routes.v1.scope_context_service.resolve_mapping_version", return_value=42)
     @patch("app.api.routes.v1.authorize_scope")
     @patch("app.api.routes.v1.authenticate_bearer")
-    def test_switch_context_success(self, mock_auth, _authz, _resolve, mock_upsert) -> None:
+    def test_switch_context_success(self, mock_auth, _authz, _resolve, mock_upsert, _source) -> None:
         mock_auth.return_value = SimpleNamespace(subject="user-1")
         payload = v1.ScopeSwitchIn(tenant_id="default", project_id="default_project")
         out = v1.switch_context_v1(payload, authorization="Bearer maintainer-token")

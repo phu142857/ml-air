@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from app.domains.governance.slo_service import _compare
 from app.domains.governance.agent_integration_service import get_lifecycle_recommendations
@@ -19,7 +20,8 @@ class TestSloCompare(unittest.TestCase):
 
 
 class TestAgentIntegrationStub(unittest.TestCase):
-    def test_recommendations_shape(self) -> None:
+    @patch("app.domains.governance.agent_integration_service._models_with_monitoring", return_value=[])
+    def test_recommendations_shape(self, _models) -> None:
         out = get_lifecycle_recommendations(
             tenant_id="default",
             project_id="default_project",

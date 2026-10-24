@@ -94,9 +94,11 @@ class TestWorkerTaskTracking(unittest.TestCase):
             metrics={"mAP50": 0.91, "loss": {"value": 0.1, "step": 3}},
             artifacts=[{"path": "train/best.pt", "uri": "minio://x/best.pt"}],
         )
-        mock_metric.assert_called_once()
-        self.assertEqual(mock_metric.call_args.kwargs["key"], "train.mAP50")
-        self.assertEqual(mock_metric.call_args.kwargs["value"], 0.91)
+        self.assertEqual(mock_metric.call_count, 2)
+        self.assertEqual(mock_metric.call_args_list[0].kwargs["key"], "train.mAP50")
+        self.assertEqual(mock_metric.call_args_list[0].kwargs["value"], 0.91)
+        self.assertEqual(mock_metric.call_args_list[1].kwargs["key"], "train.loss")
+        self.assertEqual(mock_metric.call_args_list[1].kwargs["step"], 3)
         mock_artifact.assert_called_once()
         self.assertEqual(mock_artifact.call_args.kwargs["path"], "train/best.pt")
 

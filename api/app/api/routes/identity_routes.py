@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.domains.governance import identity_repository as repo
 from app.domains.governance import identity_service as svc
-from app.domains.governance.auth_service import Principal, authenticate_bearer
+from app.domains.governance.auth_service import Principal, authenticate_bearer, authorize_scope
 from app.domains.governance.identity_errors import forbidden, not_found, validation_error
 from app.domains.governance.identity_token_service import decode_identity_access_token, hash_opaque
 
@@ -103,6 +103,11 @@ class MfaVerifyIn(BaseModel):
     recovery_code: str | None = None
 
 
+class WebSocketTicketIn(BaseModel):
+    tenant_id: str = Field(min_length=1, max_length=128)
+    project_id: str = Field(min_length=1, max_length=128)
+
+
 def _client_meta(request: Request) -> tuple[str | None, str | None]:
     return request.client.host if request.client else None, request.headers.get("user-agent")
 
@@ -175,6 +180,31 @@ def logout_all_v1(authorization: str | None = Header(default=None)) -> None:
 def me_v1(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     token = (authorization or "").removeprefix("Bearer ").strip()
     return svc.get_me_from_access_token(token)
+
+
+@router.post("/auth/ws-ticket")
+def websocket_ticket_v1(
+    payload: WebSocketTicketIn,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from app.domains.governance.identity_token_service import issue_websocket_ticket
+
+    principal = authenticate_bearer(authorization)
+    authorize_scope(
+        principal,
+        tenant_id=payload.tenant_id,
+        project_id=payload.project_id,
+        min_role="viewer",
+    )
+    ticket, expires_in = issue_websocket_ticket(
+        subject=principal.subject,
+        tenant_id=payload.tenant_id,
+        project_id=payload.project_id,
+        role=principal.role,
+        user_id=principal.user_id,
+        is_global_admin=principal.is_global_admin,
+    )
+    return {"ticket": ticket, "expires_in": expires_in}
 
 
 @router.patch("/auth/me")

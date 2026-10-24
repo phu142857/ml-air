@@ -11,9 +11,10 @@ from app.domains.governance.identity_token_service import hash_opaque
 
 
 class TestIdentitySelfService(unittest.TestCase):
+    @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service.repo.update_user")
     @patch("app.domains.governance.identity_service.repo.get_user_by_id")
-    def test_change_password_success(self, mock_get, mock_update) -> None:
+    def test_change_password_success(self, mock_get, mock_update, _audit) -> None:
         pw = hash_password("old-pass-12")
         mock_get.return_value = {"id": "usr_1", "password_hash": pw}
         svc.change_password(user_id="usr_1", current_password="old-pass-12", new_password="new-pass-12")
@@ -82,6 +83,7 @@ class TestIdentitySelfService(unittest.TestCase):
 
 
 class TestMfaFlow(unittest.TestCase):
+    @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service._create_mfa_challenge", return_value="challenge_123")
     @patch("app.domains.governance.identity_service.repo.get_active_totp_for_user")
     @patch("app.domains.governance.identity_service.repo.update_user")
@@ -92,6 +94,7 @@ class TestMfaFlow(unittest.TestCase):
         _mock_update,
         mock_get_totp,
         _mock_challenge,
+        _audit,
     ) -> None:
         mock_get_user.return_value = {
             "id": "usr_1",
@@ -107,6 +110,7 @@ class TestMfaFlow(unittest.TestCase):
         self.assertEqual(out.get("challenge_token"), "challenge_123")
         self.assertNotIn("access_token", out)
 
+    @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service._issue_user_session_tokens")
     @patch("app.domains.governance.identity_service._mfa_allow_attempt", return_value=True)
     @patch("app.domains.governance.identity_service.repo.consume_recovery_code", return_value=True)
@@ -121,6 +125,7 @@ class TestMfaFlow(unittest.TestCase):
         _mock_consume_code,
         _mock_allow,
         mock_issue_tokens,
+        _audit,
     ) -> None:
         mock_challenge.return_value = {"id": "mfac_1", "user_id": "usr_1"}
         mock_user.return_value = {
@@ -141,6 +146,7 @@ class TestMfaFlow(unittest.TestCase):
         self.assertEqual(out["access_token"], "a")
         self.assertEqual(out["refresh_token"], "r")
 
+    @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service._mfa_allow_attempt", return_value=False)
     @patch("app.domains.governance.identity_service.repo.get_active_totp_for_user")
     @patch("app.domains.governance.identity_service.repo.get_user_by_id")
@@ -151,6 +157,7 @@ class TestMfaFlow(unittest.TestCase):
         mock_user,
         mock_totp,
         _mock_allow,
+        _audit,
     ) -> None:
         mock_challenge.return_value = {"id": "mfac_1", "user_id": "usr_1"}
         mock_user.return_value = {
@@ -171,6 +178,7 @@ class TestMfaFlow(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertIn("Too many MFA attempts", str(ctx.exception.detail))
 
+    @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service._mfa_allow_challenge_attempt", return_value=False)
     @patch("app.domains.governance.identity_service.repo.get_active_totp_for_user")
     @patch("app.domains.governance.identity_service.repo.get_user_by_id")
@@ -181,6 +189,7 @@ class TestMfaFlow(unittest.TestCase):
         mock_user,
         mock_totp,
         _mock_allow_challenge,
+        _audit,
     ) -> None:
         mock_challenge.return_value = {"id": "mfac_1", "user_id": "usr_1"}
         mock_user.return_value = {

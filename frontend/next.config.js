@@ -13,9 +13,22 @@ const hasFrontendLockfile = fs.existsSync(path.join(__dirname, "package-lock.jso
 const outputFileTracingRoot =
   hasRootLockfile && hasFrontendLockfile ? monorepoRoot : undefined;
 
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https: wss: ws:${process.env.NODE_ENV === "production" ? "; upgrade-insecure-requests" : ""}` },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   ...(outputFileTracingRoot ? { outputFileTracingRoot } : {})
 };
 

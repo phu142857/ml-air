@@ -4,6 +4,7 @@ import hashlib
 import os
 import time
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import jwt
 from jwt import InvalidTokenError
@@ -11,6 +12,8 @@ from jwt import InvalidTokenError
 from app.domains.governance.identity_errors import invalid_token
 
 IDENTITY_ISSUER = "mlair-identity"
+WS_TICKET_AUDIENCE = "mlair-websocket"
+WS_TICKET_TTL_SECONDS = 30
 ROLE_WEIGHT = {"viewer": 1, "approver": 2, "maintainer": 2, "admin": 3}
 
 
@@ -93,6 +96,52 @@ def decode_identity_access_token(token: str) -> dict:
     if not isinstance(payload, dict):
         raise invalid_token()
     if str(payload.get("principal_type")) != "USER":
+        raise invalid_token()
+    return payload
+
+
+def issue_websocket_ticket(
+    *,
+    subject: str,
+    tenant_id: str,
+    project_id: str,
+    role: str,
+    user_id: str | None = None,
+    is_global_admin: bool = False,
+) -> tuple[str, int]:
+    now = int(time.time())
+    payload = {
+        "sub": subject,
+        "principal_type": "WS_TICKET",
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "role": role,
+        "user_id": user_id,
+        "is_global_admin": is_global_admin,
+        "iss": IDENTITY_ISSUER,
+        "aud": WS_TICKET_AUDIENCE,
+        "jti": str(uuid4()),
+        "iat": now,
+        "exp": now + WS_TICKET_TTL_SECONDS,
+    }
+    return jwt.encode(payload, _secret(), algorithm="HS256"), WS_TICKET_TTL_SECONDS
+
+
+def decode_websocket_ticket(token: str) -> dict:
+    try:
+        payload = jwt.decode(
+            token,
+            _secret(),
+            algorithms=["HS256"],
+            audience=WS_TICKET_AUDIENCE,
+            issuer=IDENTITY_ISSUER,
+            options={
+                "require": ["exp", "iat", "sub", "jti", "principal_type", "tenant_id", "project_id", "role"]
+            },
+        )
+    except InvalidTokenError as exc:
+        raise invalid_token() from exc
+    if not isinstance(payload, dict) or payload.get("principal_type") != "WS_TICKET":
         raise invalid_token()
     return payload
 

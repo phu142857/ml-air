@@ -13,10 +13,10 @@ from app.domains.lifecycle.workers import readiness_queue
 
 
 class TestReadinessQueue(unittest.TestCase):
-    def test_async_queue_disabled_by_default(self) -> None:
+    def test_async_queue_enabled_by_default(self) -> None:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ML_AIR_READINESS_ASYNC_QUEUE", None)
-            self.assertFalse(readiness_queue.async_queue_enabled())
+            self.assertTrue(readiness_queue.async_queue_enabled())
 
     def test_enqueue_payload(self) -> None:
         mock_redis = MagicMock()

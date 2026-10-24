@@ -118,7 +118,8 @@ class TestMaterializationConcurrencyDB(unittest.TestCase):
                 )
                 row = cur.fetchone()
                 self.assertIsNotNone(row)
-                self.assertEqual(int(row[0] or -1), 0, "buffer should reset after materialization")
+                self.assertIsNotNone(row)
+                self.assertEqual(int(row[0]), 0, "buffer should reset after materialization")
                 self.assertTrue(str(row[1] or "").strip(), "buffer should store last_materialized_version_id")
 
         # At least one thread should get the created version tuple.

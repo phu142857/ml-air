@@ -300,15 +300,14 @@ def _maybe_trigger_retrain(
     mode = str(policy.get("trigger_mode") or "manual")
     if mode not in {"drift", "slo_breach", "auto_ready"}:
         return {"action": "retrain_skipped", "reason": f"trigger_mode={mode}"}
-    from app.domains.orchestration import pipeline_version_service
+    from app.application import orchestration_gateway
     from app.domains.governance.model_registry_service import resolve_model_pipeline
-    from app.domains.orchestration.run_service import create_run
 
     rp = resolve_model_pipeline(tenant_id=tenant_id, project_id=project_id, model_id=model_id)
     pipeline_id = str(rp.get("pipeline_id") or "").strip()
     if not pipeline_id:
         return {"action": "retrain_skipped", "reason": "no_pipeline"}
-    latest_pv = pipeline_version_service.get_latest_version_id(tenant_id, project_id, pipeline_id)
+    latest_pv = orchestration_gateway.get_latest_pipeline_version_id(tenant_id, project_id, pipeline_id)
     if not latest_pv:
         return {"action": "retrain_skipped", "reason": "no_pipeline_version"}
     plugin_ctx = {
@@ -318,7 +317,7 @@ def _maybe_trigger_retrain(
     }
     if rp.get("artifact_uri"):
         plugin_ctx["artifact_uri"] = rp["artifact_uri"]
-    run = create_run(
+    run = orchestration_gateway.create_run(
         tenant_id=tenant_id,
         project_id=project_id,
         pipeline_id=pipeline_id,

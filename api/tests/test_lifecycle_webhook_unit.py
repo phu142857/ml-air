@@ -30,7 +30,7 @@ class LifecycleWebhookTests(unittest.TestCase):
         self.assertEqual(sig, expected)
 
     @patch.dict("os.environ", {"ML_AIR_LIFECYCLE_WEBHOOK_URL": "http://example/hook"})
-    @patch("urllib.request.urlopen")
+    @patch("app.settings.platform_policy.open_webhook_request")
     def test_notify_posts_json(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value.__enter__.return_value.status = 200
         mock_urlopen.return_value.__enter__.return_value.read.return_value = b"ok"

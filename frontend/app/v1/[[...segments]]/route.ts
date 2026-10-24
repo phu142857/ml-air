@@ -25,7 +25,9 @@ const STRIP_FROM_UPSTREAM = new Set([
 ]);
 
 const REFRESH_COOKIE_NAME = "mlair_refresh_token";
+const ACCESS_COOKIE_NAME = "mlair_access_token";
 const REFRESH_TOKEN_SENTINEL = "__http_only_cookie__";
+const ACCESS_TOKEN_SENTINEL = "__http_only_cookie__";
 
 function primaryUpstreamBase(): string {
   const raw =
@@ -146,6 +148,13 @@ function refreshCookieOptions(req: NextRequest) {
   };
 }
 
+function accessCookieOptions(req: NextRequest, maxAge?: number) {
+  return {
+    ...refreshCookieOptions(req),
+    maxAge: maxAge && maxAge > 0 ? Math.floor(maxAge) : undefined,
+  };
+}
+
 function isRefreshAwarePath(path: string): boolean {
   return path === "/v1/auth/sessions" || path === "/v1/identity/sessions";
 }
@@ -179,6 +188,10 @@ async function proxy(req: NextRequest, segments: string[] | undefined): Promise<
   const path = pathFromSegments(segments);
   const headers = forwardRequestHeaders(req);
   const refreshToken = req.cookies.get(REFRESH_COOKIE_NAME)?.value;
+  const accessToken = req.cookies.get(ACCESS_COOKIE_NAME)?.value;
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
   if (refreshToken && isRefreshAwarePath(path)) {
     headers.set("X-MLAir-Refresh-Token", refreshToken);
   }
@@ -208,8 +221,12 @@ async function proxy(req: NextRequest, segments: string[] | undefined): Promise<
       if (["/v1/auth/login", "/v1/auth/mfa/verify", "/v1/auth/refresh"].includes(path) && upstream.ok) {
         const body = await upstream.json() as Record<string, unknown>;
         const rotatedRefreshToken = typeof body.refresh_token === "string" ? body.refresh_token : "";
+        const rotatedAccessToken = typeof body.access_token === "string" ? body.access_token : "";
         if (rotatedRefreshToken) {
           body.refresh_token = REFRESH_TOKEN_SENTINEL;
+        }
+        if (rotatedAccessToken) {
+          body.access_token = ACCESS_TOKEN_SENTINEL;
         }
         const response = NextResponse.json(body, {
           status: upstream.status,
@@ -218,11 +235,16 @@ async function proxy(req: NextRequest, segments: string[] | undefined): Promise<
         if (rotatedRefreshToken) {
           response.cookies.set(REFRESH_COOKIE_NAME, rotatedRefreshToken, refreshCookieOptions(req));
         }
+        if (rotatedAccessToken) {
+          const expiresIn = typeof body.expires_in === "number" ? body.expires_in : undefined;
+          response.cookies.set(ACCESS_COOKIE_NAME, rotatedAccessToken, accessCookieOptions(req, expiresIn));
+        }
         return response;
       }
       if (path === "/v1/auth/logout" && upstream.ok) {
         const response = toUpstreamResponse(upstream) as NextResponse;
         response.cookies.set(REFRESH_COOKIE_NAME, "", { ...refreshCookieOptions(req), maxAge: 0 });
+        response.cookies.set(ACCESS_COOKIE_NAME, "", { ...accessCookieOptions(req), maxAge: 0 });
         return response;
       }
       return toUpstreamResponse(upstream);

@@ -139,7 +139,7 @@ class TestDatasetLifecycleRefactor(unittest.TestCase):
         mock_db_conn.return_value = _Ctx()
         out = lineage_service.materialize_scheduled_buffers(tenant_id="t", project_id="p", limit=10)
         self.assertEqual(out["checked"], 2)
-        self.assertEqual(out["materialized_count"], 1)
+        self.assertEqual(out["materialized_count"], 2)
         self.assertEqual(out["materialized"][0]["dataset_id"], "ds2")
 
     @patch(

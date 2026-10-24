@@ -6,13 +6,13 @@ from fastapi import HTTPException
 
 
 def decode_principal(raw_token: str):
-    from app.domains.governance.auth_service import authenticate_bearer
+    from app.domains.governance.auth_service import authenticate_websocket_ticket
 
     token = (raw_token or "").strip()
     if not token:
         return None
     try:
-        return authenticate_bearer(f"Bearer {token}")
+        return authenticate_websocket_ticket(token)
     except HTTPException:
         return None
 

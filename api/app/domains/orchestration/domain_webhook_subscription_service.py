@@ -240,6 +240,8 @@ def _record_ack(event_id: str, subscription_id: str) -> None:
 
 
 def _post(url: str, body: bytes, *, secret: str | None, event_id: str, attempt: int) -> None:
+    from app.settings.platform_policy import open_webhook_request
+
     timeout = float(os.getenv("ML_AIR_DOMAIN_WEBHOOK_TIMEOUT_SECONDS", "10"))
     headers: dict[str, str] = {
         "Content-Type": "application/json",
@@ -251,7 +253,7 @@ def _post(url: str, body: bytes, *, secret: str | None, event_id: str, attempt: 
         sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
         headers["X-MLAir-Signature-256"] = f"sha256={sig}"
     req = urllib.request.Request(url, data=body, method="POST", headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+    with open_webhook_request(req, timeout=timeout) as resp:
         resp.read(1024)
 
 

@@ -15,6 +15,9 @@ class _FakeCursor:
         self._log["query"] = query
         self._log["params"] = params
 
+    def fetchone(self) -> tuple[str]:
+        return (str(self._log["params"][0]),)
+
     def __enter__(self) -> "_FakeCursor":
         return self
 
@@ -74,4 +77,3 @@ class TestDomainAuditRepository(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

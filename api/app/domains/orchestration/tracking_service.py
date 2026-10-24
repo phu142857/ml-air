@@ -384,6 +384,10 @@ def _parse_iso_dt(value: Any) -> datetime | None:
 _ACTIVE_RUN_STATUSES = frozenset({"RUNNING", "PENDING", "QUEUED"})
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _run_duration_seconds(run: dict[str, Any]) -> float | None:
     """Wall-clock run duration aligned with trace waterfall: created_at → max(task.finished_at)."""
     created = _parse_iso_dt(run.get("created_at"))
@@ -399,7 +403,7 @@ def _run_duration_seconds(run: dict[str, Any]) -> float | None:
 
     status = str(run.get("status") or "").upper()
     if status in _ACTIVE_RUN_STATUSES:
-        ended = datetime.now(timezone.utc)
+        ended = _utcnow()
     else:
         task_ends = [_parse_iso_dt(task.get("finished_at")) for task in tasks]
         task_ends = [dt for dt in task_ends if dt is not None]
@@ -494,7 +498,13 @@ def compare_runs(run_ids: list[str], *, baseline_run_id: str | None = None) -> d
             )
             rows = cur.fetchall()
     flat_items = [
-        {"run_id": row[0], "key": row[1], "value": float(row[2]), "step": row[3], "logged_at": row[4].isoformat()}
+        {
+            "run_id": row[0],
+            "key": row[1],
+            "value": float(row[2]),
+            "step": row[3],
+            "logged_at": row[4].isoformat() if row[4] else None,
+        }
         for row in rows
     ]
     metrics_by_run: dict[str, list[dict[str, Any]]] = {run_id: [] for run_id in ids}

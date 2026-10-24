@@ -1774,7 +1774,9 @@ def search_project_logs_v1(
 async def run_logs_ws_v1(websocket: WebSocket, tenant_id: str, project_id: str, run_id: str) -> None:
     await websocket.accept()
     token = websocket.query_params.get("token")
-    principal = authenticate_bearer(f"Bearer {token}" if token else None)
+    from app.domains.governance.auth_service import authenticate_websocket_ticket
+
+    principal = authenticate_websocket_ticket(token or "")
     authorize_scope(principal, tenant_id=tenant_id, project_id=project_id, min_role="viewer")
     run = get_run(run_id)
     if not run or run["tenant_id"] != tenant_id or run["project_id"] != project_id:

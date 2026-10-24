@@ -142,7 +142,8 @@ class TestTrackingPhase5(unittest.TestCase):
                 return _Cursor()
 
         mock_db.return_value = _Conn()
-        out = compare_runs(["run-a", "run-b"], baseline_run_id="run-a")
+        with patch("app.domains.orchestration.task_service.list_tasks_by_run", return_value=[]):
+            out = compare_runs(["run-a", "run-b"], baseline_run_id="run-a")
         self.assertEqual(out["baseline_run_id"], "run-a")
         run_b = next(item for item in out["runs"] if item["run_id"] == "run-b")
         self.assertTrue(any(r["type"] == "metric" for r in run_b["regressions"]))

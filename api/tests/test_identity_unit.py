@@ -7,7 +7,12 @@ from unittest.mock import patch
 
 from app.domains.governance.identity_password import hash_password, verify_password
 from app.domains.governance.identity_service import _assignment_key, replace_user_assignments
-from app.domains.governance.identity_token_service import issue_access_token, decode_identity_access_token
+from app.domains.governance.identity_token_service import (
+    decode_identity_access_token,
+    decode_websocket_ticket,
+    issue_access_token,
+    issue_websocket_ticket,
+)
 
 
 class TestIdentityPassword(unittest.TestCase):
@@ -41,6 +46,23 @@ class TestIdentityToken(unittest.TestCase):
         self.assertEqual(payload["sub"], "usr_1")
         self.assertEqual(payload["principal_type"], "USER")
         self.assertEqual(payload["sid"], "ses_test_1")
+
+    def test_websocket_ticket_is_scoped_and_not_an_access_token(self) -> None:
+        from fastapi import HTTPException
+
+        token, ttl = issue_websocket_ticket(
+            subject="alice",
+            user_id="usr_1",
+            tenant_id="tenant-1",
+            project_id="project-1",
+            role="viewer",
+        )
+        self.assertEqual(ttl, 30)
+        payload = decode_websocket_ticket(token)
+        self.assertEqual(payload["tenant_id"], "tenant-1")
+        self.assertEqual(payload["project_id"], "project-1")
+        with self.assertRaises(HTTPException):
+            decode_identity_access_token(token)
 
 
 class TestAccessSessionValidation(unittest.TestCase):
@@ -80,10 +102,11 @@ class TestAssignmentKey(unittest.TestCase):
 
 
 class TestReplaceAssignmentsValidation(unittest.TestCase):
+    @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service.repo.delete_assignments_for_user")
     @patch("app.domains.governance.identity_service.repo.insert_assignment")
     @patch("app.domains.governance.identity_service.list_assignments_for_user", return_value=[])
-    def test_replace_inserts_rows(self, _list, mock_insert, _delete) -> None:
+    def test_replace_inserts_rows(self, _list, mock_insert, _delete, _audit) -> None:
         mock_insert.return_value = {"id": "ura_1"}
         out = replace_user_assignments(
             "usr_1",

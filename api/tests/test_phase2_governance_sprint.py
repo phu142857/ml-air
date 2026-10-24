@@ -27,7 +27,7 @@ class TestProcessRbac(unittest.TestCase):
         return Principal(**base)
 
     @patch("app.domains.governance.process_rbac_service._effective_scope_role", return_value="maintainer")
-    @patch("app.domains.governance.model_stakeholder_service.user_is_executor_stakeholder", return_value=True)
+    @patch("app.domains.governance.process_rbac_service.user_is_executor_stakeholder", return_value=True)
     def test_executor_cannot_final_approve(self, *_mocks) -> None:
         p = self._principal()
         with self.assertRaises(HTTPException) as ctx:
@@ -42,7 +42,8 @@ class TestProcessRbac(unittest.TestCase):
         self.assertEqual(ctx.exception.detail, "separation_of_duties_executor_cannot_approve")
 
     @patch("app.domains.governance.process_rbac_service._effective_scope_role", return_value="maintainer")
-    @patch("app.domains.governance.model_stakeholder_service.user_is_executor_stakeholder", return_value=False)
+    @patch("app.domains.governance.process_rbac_service.user_is_executor_stakeholder", return_value=False)
+    @patch("app.domains.governance.process_rbac_service.user_has_stakeholder_role", return_value=False)
     def test_maintainer_can_approve(self, *_mocks) -> None:
         p = self._principal()
         authorize_model_process_action(

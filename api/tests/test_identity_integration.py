@@ -11,11 +11,12 @@ from app.domains.governance.identity_password import hash_password, verify_passw
 
 
 class TestIdentityLoginFlow(unittest.TestCase):
+    @patch("app.domains.governance.identity_service.repo.get_active_totp_for_user", return_value=None)
     @patch("app.domains.governance.identity_service.repo.insert_audit_event")
     @patch("app.domains.governance.identity_service.repo.insert_session")
     @patch("app.domains.governance.identity_service.repo.update_user")
     @patch("app.domains.governance.identity_service.repo.get_user_by_username")
-    def test_login_success(self, mock_get_user, mock_update, mock_insert_session, _audit) -> None:
+    def test_login_success(self, mock_get_user, mock_update, mock_insert_session, _audit, _totp) -> None:
         pw_hash = hash_password("good-pass")
         mock_get_user.return_value = {
             "id": "usr_1",

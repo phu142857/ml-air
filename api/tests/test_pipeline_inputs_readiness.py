@@ -9,8 +9,9 @@ from app.domains.lifecycle import readiness_service as rs
 
 
 class PipelineInputsReadinessTests(unittest.TestCase):
+    @patch("app.domains.lifecycle.lineage_service.get_dataset_version", return_value=None)
     @patch("app.domains.lifecycle.readiness_service._dataset_actual_size", return_value=("ds-example", 30))
-    def test_blocks_when_actual_below_pipeline_required_size(self, _mock_size) -> None:
+    def test_blocks_when_actual_below_pipeline_required_size(self, _mock_size, _mock_version) -> None:
         out = rs.evaluate_pipeline_inputs_readiness(
             tenant_id="t",
             project_id="p",

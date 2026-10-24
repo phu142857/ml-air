@@ -26,7 +26,7 @@ def _running_row() -> dict:
         "project_id": "default_project",
         "run_id": "run-lineage-1",
         "status": "RUNNING",
-        "leased_by": "worker-1",
+        "leased_by": "worker-cv-1",
         "attempt": 1,
         "pipeline_id": "example-pipeline",
         "plugin": "detect",

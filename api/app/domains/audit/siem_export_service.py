@@ -116,7 +116,7 @@ def push_subscription(sub: dict[str, Any]) -> int:
     if not body.strip():
         return 0
     url = str(sub.get("target_url") or "").strip()
-    from app.settings.platform_policy import is_webhook_url_allowed
+    from app.settings.platform_policy import is_webhook_url_allowed, open_webhook_request
 
     if not url or not is_webhook_url_allowed(url):
         return 0
@@ -125,7 +125,7 @@ def push_subscription(sub: dict[str, Any]) -> int:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, data=body, method="POST", headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310
+    with open_webhook_request(req, timeout=15) as resp:
         resp.read(256)
     with db_conn() as conn:
         with conn.cursor() as cur:

@@ -52,7 +52,10 @@ def evaluate_metrics_against_gates(
         if "max" in rule and value > float(rule["max"]):
             passed = False
             reasons.append({"type": "above_max", "key": key, "value": value, "max": float(rule["max"])})
+    for key, raw_value in metrics.items():
         if baseline_metrics and key in baseline_metrics:
+            value = float(raw_value)
+            direction = _metric_direction(key)
             base = float(baseline_metrics[key])
             if direction == "higher" and value < base:
                 passed = False

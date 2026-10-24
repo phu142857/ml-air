@@ -318,7 +318,16 @@ def authenticate_bearer(authorization: str | None) -> Principal:
 
     principal: Principal | None = None
 
-    if identity_repo.identity_tables_available():
+    try:
+        payload = decode_identity_access_token(token)
+        principal = _principal_from_identity_user(token, payload)
+    except HTTPException as exc:
+        if exc.status_code != 401:
+            raise
+    except Exception:
+        pass
+
+    if principal is None and identity_repo.identity_tables_available():
         sa = authenticate_sa_secret(token)
         if sa:
             principal = _principal_from_service_account(token, sa)
@@ -328,15 +337,6 @@ def authenticate_bearer(authorization: str | None) -> Principal:
             pat = authenticate_pat(token)
             if pat:
                 principal = _principal_from_pat_user(token, pat["user"])
-            else:
-                try:
-                    payload = decode_identity_access_token(token)
-                    principal = _principal_from_identity_user(token, payload)
-                except HTTPException as exc:
-                    if exc.status_code != 401:
-                        raise
-                except Exception:
-                    pass
 
     if principal is None:
         jwt_payload = _decode_jwt_token(token)
@@ -358,6 +358,26 @@ def authenticate_bearer(authorization: str | None) -> Principal:
 
     bind_actor_from_principal(principal)
     return principal
+
+
+def authenticate_websocket_ticket(token: str) -> Principal:
+    from app.domains.governance.identity_token_service import decode_websocket_ticket
+
+    payload = decode_websocket_ticket((token or "").strip())
+    tenant_id = str(payload["tenant_id"])
+    project_id = str(payload["project_id"])
+    return Principal(
+        token="",
+        subject=str(payload["sub"]),
+        token_issuer="ws_ticket",
+        scope_mapping_version=1,
+        role=str(payload["role"]),
+        tenant_id=tenant_id,
+        project_ids=[project_id],
+        principal_kind="ws_ticket",
+        user_id=str(payload.get("user_id") or "").strip() or None,
+        is_global_admin=bool(payload.get("is_global_admin")),
+    )
 
 
 def authorize_scope(principal: Principal, tenant_id: str, project_id: str, min_role: str = "viewer") -> None:

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient, type InfiniteData, type QueryKey } from "@tanstack/react-query";
 
 import { buildRunLogsWsUrl, type CursorPage, type LogItem } from "@/lib/api";
+import { createWebSocketTicket } from "@/lib/identity-api";
 
 const BASE_BACKOFF_MS = 800;
 const MAX_BACKOFF_MS = 30_000;
@@ -90,7 +91,7 @@ export function useRunLogsLiveStream(opts: {
       return String(tid || "") === taskIdFilter;
     };
 
-    const connect = () => {
+    const connect = async () => {
       if (shouldHaltRef.current) return;
       setLiveStatus("connecting");
       if (reconnectTimer.current) {
@@ -98,7 +99,16 @@ export function useRunLogsLiveStream(opts: {
         reconnectTimer.current = null;
       }
 
-      const ws = new WebSocket(buildRunLogsWsUrl(tenantId, projectId, runId, tokenRef.current));
+      let ticket: string;
+      try {
+        ticket = (await createWebSocketTicket(tenantId, projectId)).ticket;
+      } catch {
+        setLiveStatus("polling");
+        reconnectTimer.current = setTimeout(() => void connect(), backoffRef.current);
+        return;
+      }
+      if (shouldHaltRef.current) return;
+      const ws = new WebSocket(buildRunLogsWsUrl(tenantId, projectId, runId, ticket));
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -130,11 +140,11 @@ export function useRunLogsLiveStream(opts: {
         setLiveStatus("polling");
         const delay = backoffRef.current;
         backoffRef.current = Math.min(MAX_BACKOFF_MS, delay * 1.6);
-        reconnectTimer.current = setTimeout(connect, delay);
+        reconnectTimer.current = setTimeout(() => void connect(), delay);
       };
     };
 
-    connect();
+    void connect();
 
     return () => {
       shouldHaltRef.current = true;

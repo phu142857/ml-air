@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 import urllib.parse
+import urllib.request
 from typing import Any
 
 from app.settings.l4_overlay import get_l4_overlay
@@ -149,3 +152,42 @@ def is_webhook_url_allowed(url: str) -> bool:
     if parsed.username or parsed.password:
         return False
     return parsed.hostname.lower() in platform_webhook_allowed_hosts()
+
+
+def validate_webhook_destination(url: str) -> None:
+    """Reject non-allowlisted or non-public webhook destinations before connecting."""
+    if not is_webhook_url_allowed(url):
+        raise ValueError("webhook_target_url_not_allowed")
+    parsed = urllib.parse.urlparse(url)
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("webhook_target_url_not_allowed")
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        addresses = {
+            str(info[4][0]).split("%", 1)[0]
+            for info in socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+        }
+    except (OSError, ValueError) as exc:
+        raise ValueError("webhook_target_dns_unavailable") from exc
+    if not addresses:
+        raise ValueError("webhook_target_dns_unavailable")
+    for address in addresses:
+        try:
+            parsed_address = ipaddress.ip_address(address)
+        except ValueError as exc:
+            raise ValueError("webhook_target_dns_invalid") from exc
+        if not parsed_address.is_global:
+            raise ValueError("webhook_target_private_address")
+
+
+class _NoWebhookRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201, ARG002
+        return None
+
+
+def open_webhook_request(req: urllib.request.Request, *, timeout: float):
+    """Open an allowlisted public webhook directly, without proxying or redirects."""
+    validate_webhook_destination(req.full_url)
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoWebhookRedirects())
+    return opener.open(req, timeout=timeout)

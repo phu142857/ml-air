@@ -90,8 +90,9 @@ class TestProjectRegistry(unittest.TestCase):
     @patch("app.api.routes.v1.authenticate_bearer")
     @patch("app.api.routes.v1.authorize_scope")
     @patch("app.api.routes.v1.register_project")
+    @patch("app.api.routes.v1.tenant_quota_service.tenant_project_exists", return_value=True)
     def test_register_project_v1_success(
-        self, mock_reg: MagicMock, _authz: MagicMock, mock_auth: MagicMock
+        self, _exists: MagicMock, mock_reg: MagicMock, _authz: MagicMock, mock_auth: MagicMock
     ) -> None:
         mock_auth.return_value = SimpleNamespace(role="maintainer")
         mock_reg.return_value = {"tenant_id": "t1", "project_id": "p1", "name": "p1"}

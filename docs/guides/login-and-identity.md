@@ -6,6 +6,8 @@ Sign in to the Hub, secure your account, obtain API access (PATs or login tokens
 
 MLAir uses **login-first** human identity. Static `viewer-token` / `maintainer-token` paste is **legacy dual-run only** when `ML_AIR_LEGACY_STATIC_TOKENS=1`.
 
+The Hub keeps access and refresh tokens in same-origin **HttpOnly, SameSite=Strict** cookies. Browser storage contains only non-secret session markers. WebSocket clients request a tenant/project-scoped ticket that expires after 30 seconds; login access tokens are never placed in WebSocket URLs.
+
 Deployment secrets: [Configuration](../configuration.md).
 
 ## Steps

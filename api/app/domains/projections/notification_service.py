@@ -181,12 +181,14 @@ def _deliver_loop(envelope: EventEnvelope) -> None:
 
 
 def _post(url: str, body: bytes, *, secret: str | None, event_id: str) -> None:
+    from app.settings.platform_policy import open_webhook_request
+
     headers = {"Content-Type": "application/json", "X-MLAir-Event-Id": event_id}
     if secret:
         sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
         headers["X-MLAir-Signature-256"] = f"sha256={sig}"
     req = urllib.request.Request(url, data=body, method="POST", headers=headers)
-    with urllib.request.urlopen(req, timeout=float(os.getenv("ML_AIR_NOTIFICATION_TIMEOUT_SECONDS", "10"))) as resp:  # noqa: S310
+    with open_webhook_request(req, timeout=float(os.getenv("ML_AIR_NOTIFICATION_TIMEOUT_SECONDS", "10"))) as resp:
         resp.read(512)
 
 

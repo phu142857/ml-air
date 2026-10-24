@@ -7,7 +7,13 @@ import unittest
 from unittest.mock import patch
 
 from app.domains.platform import system_settings_document as doc
-from app.settings.platform_policy import is_webhook_url_allowed, platform_quota_limits, platform_webhook_allowed_hosts
+from app.settings.platform_policy import (
+    _NoWebhookRedirects,
+    is_webhook_url_allowed,
+    platform_quota_limits,
+    platform_webhook_allowed_hosts,
+    validate_webhook_destination,
+)
 
 _L4_PATCH_TARGET = "app.settings.platform_policy.get_l4_overlay"
 
@@ -57,6 +63,25 @@ class PlatformPolicyTests(unittest.TestCase):
         self.assertFalse(is_webhook_url_allowed("https://127.0.0.1/admin"))
         self.assertFalse(is_webhook_url_allowed("file:///etc/passwd"))
         self.assertFalse(is_webhook_url_allowed("https://user:pass@hooks.example.com/events"))
+
+    @patch("app.settings.platform_policy.socket.getaddrinfo")
+    @patch(_L4_PATCH_TARGET, return_value=None)
+    @patch.dict(os.environ, {"ML_AIR_WEBHOOK_ALLOWED_HOSTS": "hooks.example.com"}, clear=True)
+    def test_webhook_destination_rejects_private_dns_answers(self, _mock_l4, mock_getaddrinfo) -> None:
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("127.0.0.1", 443))]
+        with self.assertRaisesRegex(ValueError, "private_address"):
+            validate_webhook_destination("https://hooks.example.com/events")
+
+    @patch("app.settings.platform_policy.socket.getaddrinfo")
+    @patch(_L4_PATCH_TARGET, return_value=None)
+    @patch.dict(os.environ, {"ML_AIR_WEBHOOK_ALLOWED_HOSTS": "hooks.example.com"}, clear=True)
+    def test_webhook_destination_accepts_public_dns_answers(self, _mock_l4, mock_getaddrinfo) -> None:
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 443))]
+        validate_webhook_destination("https://hooks.example.com/events")
+
+    def test_webhook_redirect_handler_never_follows_location(self) -> None:
+        handler = _NoWebhookRedirects()
+        self.assertIsNone(handler.redirect_request(None, None, 302, "Found", {}, "http://127.0.0.1"))
 
     def test_validate_quota_defaults_patch(self) -> None:
         current = doc.build_seed_settings({"features": {}})

@@ -50,9 +50,6 @@ export function runtimeConfigApiBaseFallback(): string {
 
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
-    const g = window as unknown as RuntimeConfigGlobal;
-    const raw = String(g.__ML_AIR_RUNTIME_CONFIG__?.api_base_url || "").trim();
-    if (raw) return raw;
     // Same-origin ``/v1/*`` via Next proxy (``app/v1/[[...segments]]/route.ts``) — avoids browser↔API CORS.
     if (process.env.NODE_ENV !== "test") {
       return "";

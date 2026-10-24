@@ -308,6 +308,8 @@ def _post_one(
     secret: str | None,
     extra_headers: dict[str, str] | None = None,
 ) -> None:
+    from app.settings.platform_policy import open_webhook_request
+
     timeout = float(os.getenv("ML_AIR_SEMANTIC_WEBHOOK_TIMEOUT_SECONDS", "10"))
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if secret:
@@ -318,7 +320,7 @@ def _post_one(
             if v:
                 headers[str(k)] = str(v)
     req = urllib.request.Request(url, data=body, method="POST", headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+    with open_webhook_request(req, timeout=timeout) as resp:
         resp.read(1024)
 
 

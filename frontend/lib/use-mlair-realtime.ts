@@ -29,6 +29,7 @@ import {
 } from "./execution-sequence";
 import { setMlairRealtimeUiStatus } from "./mlair-realtime-status";
 import { mlairKeys } from "./query-keys";
+import { createWebSocketTicket } from "./identity-api";
 
 const DEBOUNCE_MS = 150;
 const RECONCILE_MS = 30_000;
@@ -836,7 +837,7 @@ export function useMlairRealtime() {
 
     shouldHaltRef.current = false;
 
-    const connect = () => {
+    const connect = async () => {
       if (shouldHaltRef.current) return;
       if (!token?.trim()) {
         setMlairRealtimeUiStatus({ kind: "polling" });
@@ -854,7 +855,16 @@ export function useMlairRealtime() {
         reconnectTimer.current = null;
       }
 
-      const url = buildWsUrl(base, tenantId, projectId, token);
+      let ticket: string;
+      try {
+        ticket = (await createWebSocketTicket(tenantId, projectId)).ticket;
+      } catch {
+        setMlairRealtimeUiStatus({ kind: "polling" });
+        scheduleReconnect();
+        return;
+      }
+      if (shouldHaltRef.current) return;
+      const url = buildWsUrl(base, tenantId, projectId, ticket);
       const ws = new WebSocket(url);
       wsRef.current = ws;
       connectTimeoutRef.current = setTimeout(() => {
@@ -927,12 +937,12 @@ export function useMlairRealtime() {
         reconnectTimer.current = null;
       }
       abortPendingConnection();
-      connect();
+      void connect();
     };
 
     window.addEventListener("mlair-runtime-config-updated", onRuntimeConfig);
 
-    connect();
+      void connect();
 
     return () => {
       shouldHaltRef.current = true;

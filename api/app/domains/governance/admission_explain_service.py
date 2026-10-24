@@ -75,14 +75,14 @@ def explain_run_admission(
     if resolved_pipeline_id:
         try:
             from app.domains.lifecycle.readiness_service import evaluate_pipeline_inputs_readiness
-            from app.domains.orchestration import pipeline_version_service
+            from app.application import orchestration_gateway
 
             pipeline_cfg: dict[str, Any] = {}
-            latest_pv = pipeline_version_service.get_latest_version_id(
+            latest_pv = orchestration_gateway.get_latest_pipeline_version_id(
                 tenant_id, project_id, resolved_pipeline_id
             )
             if latest_pv:
-                pv_row = pipeline_version_service.get_pipeline_version(latest_pv)
+                pv_row = orchestration_gateway.get_pipeline_version(latest_pv)
                 if pv_row and isinstance(pv_row.get("config"), dict):
                     pipeline_cfg = pv_row.get("config") or {}
 

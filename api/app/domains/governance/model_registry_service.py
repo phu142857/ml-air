@@ -1542,7 +1542,7 @@ def get_model_provenance(
     version: int | None = None,
 ) -> dict[str, Any] | None:
     from app.domains.lifecycle import lineage_service
-    from app.domains.orchestration import run_service
+    from app.application import orchestration_gateway
 
     model = get_model(tenant_id, project_id, model_id)
     if not model:
@@ -1571,7 +1571,7 @@ def get_model_provenance(
     lineage: dict[str, Any] | None = None
     run_id = str(mv.get("run_id") or "").strip() if mv else ""
     if run_id:
-        run = run_service.get_run(run_id)
+        run = orchestration_gateway.get_run(run_id)
         if run and str(run.get("tenant_id")) == tenant_id and str(run.get("project_id")) == project_id:
             run_summary = {
                 "run_id": run_id,

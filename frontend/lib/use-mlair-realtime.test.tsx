@@ -21,6 +21,10 @@ vi.mock("./api", async (importOriginal) => {
   };
 });
 
+vi.mock("./identity-api", () => ({
+  createWebSocketTicket: vi.fn().mockResolvedValue({ ticket: "ws-ticket", expires_in: 30 }),
+}));
+
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
 
@@ -53,12 +57,13 @@ function HookHarness() {
   return null;
 }
 
-function renderWithQueryClient(queryClient: QueryClient): { unmount: () => void } {
+async function renderWithQueryClient(queryClient: QueryClient): Promise<{ unmount: () => void }> {
   const view = render(
     <QueryClientProvider client={queryClient}>
       <HookHarness />
     </QueryClientProvider>
   );
+  await Promise.resolve();
   return { unmount: view.unmount };
 }
 
@@ -84,10 +89,10 @@ describe("useMlairRealtime", () => {
     delete window.__ML_AIR_RUNTIME_CONFIG__;
   });
 
-  it("invalidates pipeline dag when run.updated includes pipeline_id", () => {
+  it("invalidates pipeline dag when run.updated includes pipeline_id", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -111,10 +116,10 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("deduplicates by event_id before invalidation", () => {
+  it("deduplicates by event_id before invalidation", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     const evt = {
@@ -136,7 +141,7 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("ignores stale run.updated payload by updated_at", () => {
+  it("ignores stale run.updated payload by updated_at", async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(["run", "run-1"], {
       run_id: "run-1",
@@ -147,7 +152,7 @@ describe("useMlairRealtime", () => {
       updated_at: "2025-01-01T00:00:10.000Z"
     });
 
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -164,10 +169,10 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("invalidates model keys for model.promoted", () => {
+  it("invalidates model keys for model.promoted", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -187,10 +192,10 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("invalidates project eligibility prefix for model.eligibility.updated", () => {
+  it("invalidates project eligibility prefix for model.eligibility.updated", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -209,10 +214,10 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("invalidates same project eligibility prefix for eligibility.updated kind=model", () => {
+  it("invalidates same project eligibility prefix for eligibility.updated kind=model", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -236,10 +241,10 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("ignores unsupported envelope version and ping event", () => {
+  it("ignores unsupported envelope version and ping event", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -260,12 +265,12 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("patches dataset cache on dataset.updated with newer timestamp", () => {
+  it("patches dataset cache on dataset.updated with newer timestamp", async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(["datasets", "t1", "p1"], {
       items: [{ dataset_id: "d1", name: "train", created_at: "2025-01-01T00:00:00.000Z", updated_at: "2025-01-01T00:00:01.000Z" }]
     });
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws = FakeWebSocket.instances[0];
 
     ws.emitJson({
@@ -285,22 +290,22 @@ describe("useMlairRealtime", () => {
     unmount();
   });
 
-  it("reconnects after non-fatal close", () => {
+  it("reconnects after non-fatal close", async () => {
     const queryClient = new QueryClient();
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws1 = FakeWebSocket.instances[0];
     expect(FakeWebSocket.instances).toHaveLength(1);
 
     ws1.emitClose(1006);
-    vi.advanceTimersByTime(2000);
+    await vi.advanceTimersByTimeAsync(2000);
 
     expect(FakeWebSocket.instances.length).toBeGreaterThan(1);
     unmount();
   });
 
-  it("halts reconnect after policy close 1008", () => {
+  it("halts reconnect after policy close 1008", async () => {
     const queryClient = new QueryClient();
-    const { unmount } = renderWithQueryClient(queryClient);
+    const { unmount } = await renderWithQueryClient(queryClient);
     const ws1 = FakeWebSocket.instances[0];
     expect(FakeWebSocket.instances).toHaveLength(1);
 

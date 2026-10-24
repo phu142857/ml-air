@@ -266,7 +266,7 @@ def admit_create_run(create_kwargs: dict[str, Any], *, create_fn=None) -> dict[s
                 "resource_state": state,
             },
         }
-    from app.domains.orchestration.run_service import create_run as _default_create
+    from app.application.orchestration_gateway import create_run as _default_create
 
     run = (create_fn or _default_create)(**create_kwargs)
     record_admission_decision(
@@ -343,7 +343,7 @@ def flush_deferred_admissions(*, limit: int = 8) -> int:
             )
             continue
         try:
-            from app.domains.orchestration.run_service import create_run
+            from app.application.orchestration_gateway import create_run
 
             run = create_run(**kwargs)
         except Exception:

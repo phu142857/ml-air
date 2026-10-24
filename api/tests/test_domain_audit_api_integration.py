@@ -15,8 +15,7 @@ except Exception:
     _psycopg_ok = False
 
 try:
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
+    import fastapi  # noqa: F401
 except Exception:
     _fastapi_ok = False
 
@@ -24,14 +23,8 @@ except Exception:
 class TestDomainAuditAPIIntegration(unittest.TestCase):
     @unittest.skipUnless(_psycopg_ok and _fastapi_ok, "integration deps missing")
     def test_list_audit_events_filters_and_dto_shape(self) -> None:
-        from app.api.routes.audit_events_routes import router as audit_router
+        from app.api.routes.audit_events_routes import list_domain_audit_events_v1
         from app.domains.shared.pagination import PageResult, encode_cursor
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        app = FastAPI()
-        app.include_router(audit_router, prefix="/v1")
-        client = TestClient(app)
 
         with patch("app.api.routes.audit_events_routes.authorize_scope") as _authorize_scope, patch(
             "app.api.routes.audit_events_routes.authenticate_bearer"
@@ -65,21 +58,19 @@ class TestDomainAuditAPIIntegration(unittest.TestCase):
                 offset=0,
             )
 
-            resp = client.get(
-                "/v1/audit/events",
-                params={
-                    "tenant": "t1",
-                    "project": "p1",
-                    "actor": "u1",
-                    "action": "model_version.created",
-                    "target_type": "model_version",
-                    "target_id": "mv1",
-                    "limit": 10,
-                },
-                headers={"Authorization": "Bearer whatever"},
+            body = list_domain_audit_events_v1(
+                tenant="t1",
+                project="p1",
+                actor="u1",
+                action="model_version.created",
+                target_type="model_version",
+                target_id="mv1",
+                date=None,
+                limit=10,
+                offset=0,
+                cursor=None,
+                authorization="Bearer whatever",
             )
-            self.assertEqual(resp.status_code, 200)
-            body = resp.json()
             self.assertIn("items", body)
             self.assertEqual(len(body["items"]), 1)
             self.assertTrue(body["has_more"])
@@ -108,14 +99,8 @@ class TestDomainAuditAPIIntegration(unittest.TestCase):
 
     @unittest.skipUnless(_psycopg_ok and _fastapi_ok, "integration deps missing")
     def test_list_preserves_cursor_without_mutating_page(self) -> None:
-        from app.api.routes.audit_events_routes import router as audit_router
+        from app.api.routes.audit_events_routes import list_domain_audit_events_v1
         from app.domains.shared.pagination import PageResult, encode_cursor
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        app = FastAPI()
-        app.include_router(audit_router, prefix="/v1")
-        client = TestClient(app)
 
         next_cur = encode_cursor({"occurred_at": "2026-01-02T03:04:05+00:00", "id": "e0"})
         page = PageResult(
@@ -150,13 +135,19 @@ class TestDomainAuditAPIIntegration(unittest.TestCase):
             "app.api.routes.audit_events_routes.repo.list_domain_audit_events_page",
             return_value=page,
         ):
-            resp = client.get(
-                "/v1/audit/events",
-                params={"tenant": "t1", "project": "p1", "limit": 1},
-                headers={"Authorization": "Bearer whatever"},
+            body = list_domain_audit_events_v1(
+                tenant="t1",
+                project="p1",
+                actor=None,
+                action=None,
+                target_type=None,
+                target_id=None,
+                date=None,
+                limit=1,
+                offset=0,
+                cursor=None,
+                authorization="Bearer whatever",
             )
-            self.assertEqual(resp.status_code, 200)
-            body = resp.json()
             self.assertEqual(body["next_cursor"], next_cur)
             self.assertTrue(body["has_more"])
             # Original frozen page must be untouched (still raw DB-shaped items).
@@ -167,13 +158,7 @@ class TestDomainAuditAPIIntegration(unittest.TestCase):
 
     @unittest.skipUnless(_psycopg_ok and _fastapi_ok, "integration deps missing")
     def test_get_audit_event_by_id_returns_dto(self) -> None:
-        from app.api.routes.audit_events_routes import router as audit_router
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        app = FastAPI()
-        app.include_router(audit_router, prefix="/v1")
-        client = TestClient(app)
+        from app.api.routes.audit_events_routes import get_domain_audit_event_v1
 
         with patch("app.api.routes.audit_events_routes.authorize_scope") as _authorize_scope, patch(
             "app.api.routes.audit_events_routes.authenticate_bearer"
@@ -198,9 +183,7 @@ class TestDomainAuditAPIIntegration(unittest.TestCase):
                 "metadata": {"version": 1},
             }
 
-            resp = client.get("/v1/audit/events/e1", headers={"Authorization": "Bearer whatever"})
-            self.assertEqual(resp.status_code, 200)
-            body = resp.json()
+            body = get_domain_audit_event_v1("e1", authorization="Bearer whatever")
             self.assertEqual(body["id"], "e1")
             self.assertEqual(body["tenant"], "t1")
             self.assertEqual(body["project"], "p1")

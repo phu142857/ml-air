@@ -102,7 +102,9 @@ def notify_lifecycle_webhook(*, event_type: str, run_row: dict[str, Any]) -> Non
 
     req = urllib.request.Request(url, data=payload, method="POST", headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=_timeout_seconds()) as resp:  # noqa: S310
+        from app.settings.platform_policy import open_webhook_request
+
+        with open_webhook_request(req, timeout=_timeout_seconds()) as resp:
             raw = resp.read().decode("utf-8", errors="ignore")
             logger.info(
                 "Lifecycle webhook ok type=%s run_id=%s http=%s body=%s",

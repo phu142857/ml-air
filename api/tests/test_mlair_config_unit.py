@@ -45,7 +45,7 @@ class MlairConfigLoaderTests(unittest.TestCase):
         cfg = load_config(profile="staging")
         env = to_env_mapping(cfg)
         self.assertEqual(env["ML_AIR_STRICT_DATASET_VERSION_REQUIRED"], "1")
-        self.assertEqual(env["ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK"], "1")
+        self.assertEqual(env["ML_AIR_READINESS_ALLOW_LEGACY_FALLBACK"], "0")
 
     def test_user_yaml_overrides_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

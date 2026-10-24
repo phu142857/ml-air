@@ -84,7 +84,7 @@ class TestPromotionEligibility(unittest.TestCase):
         self.assertEqual(out["reasons"][-1]["code"], "approval_rejected")
 
     def test_rollback_production_to_staging_without_approval(self) -> None:
-        with patch.dict(os.environ, {"ML_AIR_SKIP_APPROVAL_FOR_PROMOTE": "0"}, clear=False):
+        with patch("app.domains.governance.model_registry_service.rollback_requires_approval", return_value=False):
             out = compute_promotion_eligibility(
                 model_id="m1",
                 version=3,
